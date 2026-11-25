@@ -5,7 +5,7 @@ import { and, eq, isNull, ne } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createMcpMutationParticipant } from './mcpMutationParticipant'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
+import { ConflictError, NotFoundError, staleConflictError } from '@/platform/errors/domainErrors'
 import type { McpAgentReference, McpProjection, McpRepository } from '../application/mcps/ports'
 import { mcpConfigHash, mcpFromPersistenceRow, mcpProjection } from './mcpPersistence'
 import {

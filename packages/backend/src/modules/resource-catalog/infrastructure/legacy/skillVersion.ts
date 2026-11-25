@@ -37,7 +37,7 @@ import {
   advancePhase,
   finishOperation,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
 import { parseFrontmatter } from '@/platform/content/frontmatter'
 

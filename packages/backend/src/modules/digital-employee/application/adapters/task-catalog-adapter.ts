@@ -10,7 +10,7 @@ import {
 } from '@agent-workflow/shared'
 
 import type { TaskCatalogSource } from '@/modules/task-catalog/composition/required-ports'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 type EmployeeCaseState = 'active' | 'waiting' | 'blocked' | 'terminal'
 type EmployeeTerminalCatalogStatus = Extract<TaskStatus, 'done' | 'canceled'>

@@ -279,7 +279,7 @@ export function validateDraftChangeset(
 
 import { ulid } from 'ulid'
 import { INTENT_SECRET_SENTINEL, intentHandleType as handleTypeOf } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /** A server-issued fillable slot (design-gate P1-3): commit decisions may only
  *  address slots derived HERE from the exact confirmed draft — anything else

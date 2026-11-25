@@ -40,7 +40,7 @@ import {
   workflowDraftSnapshotOf,
   workflowSnapshotHashOf,
 } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
-import { DomainError } from '../src/util/errors'
+import { DomainError } from '../src/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   resetBroadcastersForTests,

@@ -2,7 +2,7 @@ import type { RepositoryWorkspaceTaskPorts } from '../../composition/required-po
 import type { SecretBox } from '@/auth/secretBox'
 import type { BusinessEnvironmentValue } from '@/platform/crewstation/nativeMaterial'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import { createHostedRepositoryPublicationTransport } from './publicationTransport'
 import type { MaterializedSpace } from '../../application/workspaceMaterialization'
 import type { HostedVolumeActivity } from '../../public/participants'
@@ -41,7 +41,7 @@ import {
   parseHostedWorkspaceReference,
   joinHostedWorkspaceReference,
 } from './workspaceReference'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 /** Source Control owns both parent volumes, all interpretations of their
  * references and every non-node helper command run inside them (§9.2 V2),

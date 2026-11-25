@@ -28,7 +28,7 @@ import type {
   WebhookEndpointAdministrationPort,
   WebhookEndpointRecord,
 } from './ports/webhookEndpointAdministration'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 
 export interface WebhookEndpointServiceDeps {
   administration: WebhookEndpointAdministrationPort

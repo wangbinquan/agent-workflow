@@ -1,4 +1,4 @@
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 
 // RFC-480: the code vocabulary moved here from public/types — its only reader is this error (no other context names it).
 /** Safe failure codes; durable owner identities never cross here. */

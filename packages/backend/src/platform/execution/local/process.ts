@@ -1,5 +1,5 @@
 import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   adoptProcessTree,
   processTreeOwnershipDiagnosis,
@@ -287,7 +287,7 @@ export async function awaitProcessTreeQuiesced(
   }
 }
 
-/** 只用到 warn 的最小日志面——避免本文件依赖 util/log 的完整接口。 */
+/** 只用到 warn 的最小日志面——避免本文件依赖 platform/logging/logger 的完整接口。 */
 export interface TreeQuiesceLog {
   warn(msg: string, fields?: Record<string, unknown>): void
 }

@@ -43,7 +43,7 @@ import {
   type HostedExecution,
   type HostedExecutionSink,
 } from './execution'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export interface HostedAgentProfile {
   readonly protocol: 'opencode' | 'claude-code'

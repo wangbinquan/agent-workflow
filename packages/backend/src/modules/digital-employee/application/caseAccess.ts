@@ -14,7 +14,7 @@
 // `hasResourceAclBypass` 同义；digital-employee 不依赖 resource-catalog（DAG 只允许反向）。
 
 import type { Permission } from '@agent-workflow/shared'
-import { ForbiddenError, NotFoundError } from '@/util/errors'
+import { ForbiddenError, NotFoundError } from '@/platform/errors/domainErrors'
 
 /** The caller a case rule decides for: its user id and effective permissions, never a full actor. */
 export interface EmployeeCaseViewer {

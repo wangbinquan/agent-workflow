@@ -14,7 +14,7 @@ import { and, eq, isNull, ne } from 'drizzle-orm'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import type {
   DigitalEmployeeAclIdentityMutation,
   DigitalEmployeeAclIdentityPersistence,

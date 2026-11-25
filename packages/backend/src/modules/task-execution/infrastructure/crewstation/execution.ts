@@ -12,7 +12,7 @@
 //   observation; expired history or a rejected request ends it with an
 //   explicit unknown outcome and settles the binding so it never blocks a volume.
 import { DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import {
   isParentNotRunningError,
   type BusinessEvent,

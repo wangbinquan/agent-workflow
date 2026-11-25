@@ -15,7 +15,7 @@
 // `consumedTotalTokens` 已经变了，hash 跟着变，「同 round 同 ordinal ⇒ 同 hash」不成立。
 // 所以预算收敛必须在 `retryRound` 事务里写回 round（design.md §4.2），这里只读已冻结的值。
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 import type { ReactionAttemptMode } from './retrySchedule'
 

@@ -22,7 +22,7 @@ import {
   quickCheckOffThread,
   vacuumIntoOffThread,
 } from '@/platform/persistence/sqlite/systemProviderBackup'
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 
 async function digestFile(path: string): Promise<string> {
   const hash = createSha256DigestBuilder()

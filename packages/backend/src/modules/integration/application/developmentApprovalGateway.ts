@@ -2,7 +2,7 @@
 // submit / lookup / observe receipts), moved here unchanged from composition/approvalGateway.ts, where the same 66 lines
 // appeared twice (the legacy env-secret runner and the selected-binding runner); both runners now pass their execution here.
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { SelectedApprovalExecution } from './developmentApprovalAdapter'
 
 export function createDevelopmentApprovalGateway(execution: SelectedApprovalExecution) {

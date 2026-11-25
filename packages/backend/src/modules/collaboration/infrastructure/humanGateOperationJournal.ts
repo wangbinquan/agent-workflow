@@ -13,8 +13,8 @@ import {
 import { contentRefColumns, type ContentStore } from '@/platform/content/contentStore'
 import type { ContentRef } from '@/platform/content/contentRef'
 import type { HumanGateArtifactStore } from '../application/ports/humanGateArtifactStore'
-import { sha256Hex } from '@/util/hash'
-import { createLogger } from '@/util/log'
+import { sha256Hex } from '@/platform/contracts/hash'
+import { createLogger } from '@/platform/logging/logger'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-359 —— human-gate 操作日志（collaboration_gate_operations / _artifacts）的**唯一**事务内实现。
 //

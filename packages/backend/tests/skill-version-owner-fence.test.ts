@@ -47,7 +47,7 @@ import {
   commitSkillVersion,
   restoreSkillVersion,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
-import { ConflictError } from '../src/util/errors'
+import { ConflictError } from '../src/platform/errors/domainErrors'
 
 describeEachProvider(
   'RFC-170 (4th-review [high]) — version-write in-tx owner-drift fence',

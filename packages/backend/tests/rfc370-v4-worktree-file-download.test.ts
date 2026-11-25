@@ -19,7 +19,7 @@ import type {
   BoundedWorkspaceContent,
   WorkspaceReadRequest,
 } from '@/modules/source-control/public/types'
-import { errorHandler, NotFoundError } from '@/util/errors'
+import { errorHandler, NotFoundError } from '@/platform/errors/domainErrors'
 
 const TASK = '01M599DJXA50YPXWZR5TNNG2BW'
 const WORKTREE = `cs-workspace:${TASK}/worktrees/${TASK}`

@@ -16,7 +16,7 @@ import {
 import type { WsConnectionData } from '@/ws/registry'
 import { triggerRevalidationAndWait } from '@/ws/revalidationHook'
 import { PRESENCE_CHANNEL, presenceBroadcaster } from '@/ws/broadcaster'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeTestProviderRealtimeRuntime } from './helpers/realtimeRuntime'
 

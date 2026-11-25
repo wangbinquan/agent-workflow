@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
 import type { EmployeeInputArtifactPort } from '@/modules/digital-employee/composition'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const load = (path: string) =>

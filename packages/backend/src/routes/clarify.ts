@@ -24,7 +24,12 @@ import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import { assertExecutionAvailable } from '@/platform/http/executionAvailability'
 import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
-import { DomainError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  DomainError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
 
 function requireClarifyOperations(
   operations: CollaborationRouteOperations | undefined,

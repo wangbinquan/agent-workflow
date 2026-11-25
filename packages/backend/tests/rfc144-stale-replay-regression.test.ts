@@ -65,7 +65,7 @@ import { createIsolationMechanicsPorts } from '../src/modules/task-execution/com
 import { selectIsolationWorkspaceFactory } from '../src/modules/source-control/public/participants'
 import { deriveFrontier } from './helpers/frontierSelection'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { runGit } from '../src/util/git'
 import { Semaphore } from '../src/platform/contracts/semaphore'
 import {

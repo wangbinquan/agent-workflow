@@ -17,7 +17,7 @@ import type {
   TaskRecoveryOperations,
 } from '../ports/taskRecoveryOperations'
 import { bumpRecoveryCounter } from '@/platform/health/recoveryCounters'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('recovery')
 

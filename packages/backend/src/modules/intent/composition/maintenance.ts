@@ -1,5 +1,5 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import type { IntentMaintenancePersistence } from '../application/ports/intentPersistence'
 import type { IntentScratchStore } from '../application/ports/intentScratchStore'
 import { createFileIntentScratchStore } from '../infrastructure/local/fileIntentScratchStore'

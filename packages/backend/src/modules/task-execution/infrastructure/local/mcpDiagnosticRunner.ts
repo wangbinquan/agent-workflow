@@ -16,7 +16,7 @@ import {
   type StartupObservation,
   type StartupVerificationResult,
 } from '@agent-workflow/shared'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import type { NativeAgentCompiledPlan, NativeAgentPlan } from './agentInvocation'
 import {
   createNativeSystemAgentRun,

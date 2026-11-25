@@ -21,7 +21,7 @@ import {
   CrewStationApiError,
   type CrewStationPlatformApi,
 } from '@/platform/crewstation/platformApi'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import { selectExecutionInitialization } from '@/bootstrap/executionInitialization'
 import {
   assertExecutionAvailable,

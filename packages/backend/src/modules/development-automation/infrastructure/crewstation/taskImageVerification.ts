@@ -20,7 +20,7 @@ import { createRepoScriptResolver } from '../local/verificationCommandEffects'
 import { requireEvidenceWorkPath } from './taskImageEvidence'
 import { verificationStepSchema } from '../../domain/verificationProfile'
 import { assertEvidenceRelativePath } from './evidenceArtifacts'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { readVerificationEnvironment } from '../local/verificationEnvironment'
 
 const Request = z.discriminatedUnion('method', [

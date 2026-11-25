@@ -6,7 +6,7 @@ import {
   readFileSkillReferenceFile,
 } from './fileSkillReferences'
 import { existsSync } from 'node:fs'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type {
   SkillContentReader,
   SkillContentReference,

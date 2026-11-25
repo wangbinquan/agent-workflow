@@ -4,7 +4,7 @@ import { canonicalJson } from '@agent-workflow/shared'
 import { z } from 'zod'
 import { utf16MaxLength } from '@agent-workflow/shared'
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   DEVELOPMENT_APPROVAL_STATUS_CHANGED_EVENT_REF,
   decodeDevelopmentApprovalSubject,

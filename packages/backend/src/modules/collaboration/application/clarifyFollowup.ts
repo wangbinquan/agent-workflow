@@ -9,8 +9,8 @@ import {
   type ClarifyFollowupStart,
   type ClarifyFollowupStatus,
 } from '@agent-workflow/shared'
-import { ConflictError, DomainError, ValidationError } from '@/util/errors'
-import { createLogger } from '@/util/log'
+import { ConflictError, DomainError, ValidationError } from '@/platform/errors/domainErrors'
+import { createLogger } from '@/platform/logging/logger'
 import type {
   ClarifyFollowupActivity,
   ClarifyFollowupEvents,

@@ -21,7 +21,7 @@ import {
 } from '@/modules/source-control/infrastructure/local/repositoryIntrospection'
 import type { RepositoryMirrors } from '@/modules/source-control/public/types'
 import { mountRepoRoutes } from '@/routes/repos'
-import { DomainError, errorHandler } from '@/util/errors'
+import { DomainError, errorHandler } from '@/platform/errors/domainErrors'
 import { importEdges, sourceUnit } from './architecture/census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')

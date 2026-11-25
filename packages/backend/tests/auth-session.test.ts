@@ -19,7 +19,7 @@ import {
 import { createSession } from './helpers/auth/sessionStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { errorHandler } from '../src/util/errors'
+import { errorHandler } from '../src/platform/errors/domainErrors'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 
 const DAEMON_TOKEN = 'a'.repeat(64)

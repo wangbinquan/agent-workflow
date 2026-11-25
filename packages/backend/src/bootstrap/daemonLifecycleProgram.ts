@@ -8,7 +8,7 @@ import type {
 import { validateDaemonJobFactories } from './daemonProviderRuntimeSession'
 import { startOnExecutionActive } from './executionActivation'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 export type DaemonPhase = 'prepare' | 'execution-recovery' | 'post-ready'
 export type DaemonFailurePolicy = 'fail-closed' | 'best-effort' | 'tracked-detached'

@@ -28,7 +28,7 @@ import {
   type RepositoryWorkspaceReadQueries,
 } from '@/modules/source-control/public/queries'
 import { taskDiffProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { runGit } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { held } from './helpers/portArtifactContent'

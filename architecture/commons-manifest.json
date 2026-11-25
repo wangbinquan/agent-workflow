@@ -534,7 +534,7 @@
       "claimAudit": "Holds structurally, with one ad-hoc business branch: errorHandler duck-types the literal code 'illegal-node-run-transition' from the task-execution domain (errors.ts:143,157-161). staleConflictError (errors.ts:68-74) successfully unified 6 dialect conflict codes into resource-operation-stale, but its 7-member resource union is hand-written and has no compile link to shared ACL_RESOURCE_TYPES (12 members, shared/src/schemas/resourceAcl.ts:19-43).",
       "core": true,
       "files": [
-        "packages/backend/src/util/errors.ts"
+        "packages/backend/src/platform/errors/domainErrors.ts"
       ],
       "guards": [],
       "id": "error-taxonomy",

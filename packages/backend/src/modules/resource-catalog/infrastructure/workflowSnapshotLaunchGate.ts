@@ -10,7 +10,7 @@
 // RFC-470 (RFC-294 W9-D): moved here verbatim from `services/taskLaunchGate.ts` — the gate is resource-catalog's
 // static validation of its own snapshot; the assembly root takes it through `composition/agentLaunchResources.ts`.
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { loadWorkflowValidationContext } from './legacy/workflow.validator'
 import { validateWorkflowDef } from '../domain/workflowValidator'
 import type { TaskExecutionWorkflowSnapshot } from '@/modules/resource-catalog/public/types'

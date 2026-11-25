@@ -27,7 +27,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   abandonOperation,
   finishOperation,

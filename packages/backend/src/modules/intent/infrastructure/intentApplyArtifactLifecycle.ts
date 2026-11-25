@@ -16,7 +16,7 @@ import type {
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { IntentJournalArtifact } from '../domain/journalArtifacts'
 import { INTENT_APPLY_DIAGNOSTICS } from '../application/journalConvergence'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { IntentApplyArtifactLifecycle, IntentApplyRecoveryArtifact } from './intentApplyEngine'
 export type { IntentApplyRecoveryArtifact }
 

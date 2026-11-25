@@ -41,7 +41,7 @@ import type {
 import { structuralScopeSchema } from '@agent-workflow/shared'
 import type { TaskWorkspaceQueries } from '@/modules/task-execution/public/queries'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import type {
   TaskDiagnostics,

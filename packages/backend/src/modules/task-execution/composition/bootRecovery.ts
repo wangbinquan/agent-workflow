@@ -10,7 +10,7 @@
 // 每一步都只经 provider 中立端口：`TaskExecutionRecoveryPersistence`（prepare / finalize）、
 // `TaskRecoveryOperations`（孤儿快照与 CAS）、`RuntimeSessionLeaseOperations`。provider 只在 bootstrap 选。
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { runBootExecutionRecovery } from '../application/bootExecutionRecovery'
 import type {
   BootExecutionRecoveryFactory,

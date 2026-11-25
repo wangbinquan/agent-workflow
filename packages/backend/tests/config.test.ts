@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { applyConfigPatch, loadConfig, saveConfigRaw } from '../src/config'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 
 describe('config load/save', () => {
   let tmp: string

@@ -7,8 +7,8 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import type { WebhookEndpointRow } from '../application/ports/webhookDispatcher'
 import type { RepoResolution } from '../application/webhookDispatch'
-import { sha1Hex } from '@/util/hash'
-import { createLogger } from '@/util/log'
+import { sha1Hex } from '@/platform/contracts/hash'
+import { createLogger } from '@/platform/logging/logger'
 import {
   gitUrlCacheKeyWith,
   isFileSchemeUrl,

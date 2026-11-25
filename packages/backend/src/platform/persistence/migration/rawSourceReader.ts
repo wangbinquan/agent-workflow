@@ -1,6 +1,6 @@
 // RFC-395: codec-less storage evidence; rowid cursors belong only to this immutable copy.
 import type { Database, SQLQueryBindings } from 'bun:sqlite'
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 import { canonicalSchemaJson, digestSchemaContract } from '../schema/canonical'
 import { decodeLogicalValue, type CanonicalLogicalValue } from './legacy/logicalDatabaseArtifact'
 import { quoteSourceIdentifier as quote } from './sourceCatalog'

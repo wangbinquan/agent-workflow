@@ -8,7 +8,7 @@ import { createPostgresqlCapabilityTemplatePackageCommit } from './capabilityTem
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
 import type { PostgresqlResourceCatalogTransaction } from '@/modules/resource-catalog/infrastructure/postgresql/repositorySupport'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 type CapabilityTemplateOwnerPrepareContext = Parameters<
   PostgresqlCapabilityTemplatePackageMutationOwner['prepareOwnerNative']

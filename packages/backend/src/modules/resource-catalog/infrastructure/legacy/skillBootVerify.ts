@@ -27,7 +27,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { SkillSnapshotInspector } from '../../application/skills/lifecycleContentStore'
 import { createFileSkillSnapshotInspector } from '../local/fileSkillSnapshotInspector'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('skill-boot-verify')
 

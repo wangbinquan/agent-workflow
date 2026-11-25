@@ -25,8 +25,8 @@ import type {
   RepositoryPublicationTransport,
   WorkspaceChangeMessage,
 } from '@/modules/source-control/public/types'
-import { sha256Hex } from '@/util/hash'
-import { createLogger, type Logger } from '@/util/log'
+import { sha256Hex } from '@/platform/contracts/hash'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import { createLocalEffectAttemptObserver } from '../application/localEffectObserver'
 import { nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
 import type { AutoCommitPushRequest, GeneratedCommitMessage } from '../application/ports/commitPush'

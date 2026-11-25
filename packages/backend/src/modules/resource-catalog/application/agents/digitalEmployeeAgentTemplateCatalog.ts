@@ -12,7 +12,7 @@ import {
   reconcileCreatedAgentExecutionContractPorts,
   reconcileUpdatedAgentExecutionContractPorts,
 } from '@/modules/resource-catalog/domain/agentExecutionContractPorts'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 
 export interface DigitalEmployeeAgentTemplateFence {
   readonly expectedUpdatedAt: number

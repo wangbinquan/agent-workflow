@@ -13,7 +13,7 @@ import type {
   CrewStationBusinessExecution,
   CreateBusinessMaterial,
 } from '@/platform/crewstation/businessExecution'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { createHostedGitAgentEnvironment } from '@/modules/source-control/composition/crewstationGitCredentials'
 

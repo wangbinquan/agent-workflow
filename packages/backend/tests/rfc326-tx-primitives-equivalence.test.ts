@@ -48,7 +48,7 @@ import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infra
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { hasActingMembership } from '@/modules/collaboration/infrastructure/taskCollab'
 import { derivedSupersededIds } from './helpers/nodeRunSupersession'
-import { DomainError } from '../src/util/errors'
+import { DomainError } from '../src/platform/errors/domainErrors'
 
 const TASK = 'task-rfc326-eq'
 // Fixed ids sort BELOW every freshly generated ULID ('01…'), so a minted row is

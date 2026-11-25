@@ -1,4 +1,4 @@
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
 import type {
   ApplyResourcePackage,

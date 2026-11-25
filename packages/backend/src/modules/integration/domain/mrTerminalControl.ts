@@ -1,7 +1,7 @@
 // RFC-303 — provider-neutral MR/PR stream identity and state machine.
 // Domain-only: no DB, network, task, or filesystem dependency is allowed here.
 import type { CodeHostEvent, CodeHostEventType, CodeHostProvider } from '@agent-workflow/shared'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export const MR_STREAM_KEY_VERSION = 'mr-stream-v1' as const
 export const MR_TERMINATION_BINDING_VERSION = 'st1' as const

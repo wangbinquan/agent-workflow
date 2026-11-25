@@ -28,7 +28,7 @@ import {
   createWorkflowReferenceAdmissionPort,
   createWorkflowValidationPort,
 } from '@/modules/resource-catalog/infrastructure/workflowValidation'
-import { staleConflictError } from '@/util/errors'
+import { staleConflictError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 import { standaloneSkillVersionPresence } from './helpers/resourceCatalog'
 

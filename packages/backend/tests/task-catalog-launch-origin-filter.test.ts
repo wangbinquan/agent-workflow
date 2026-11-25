@@ -38,7 +38,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 describe('launch-origin filter maps to the stored column, once', () => {

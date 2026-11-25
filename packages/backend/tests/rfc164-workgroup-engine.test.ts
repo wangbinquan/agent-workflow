@@ -76,7 +76,7 @@ import {
   type WorkgroupTurnsTestHooks as WorkgroupEngineHooks,
 } from './helpers/workgroupTurns'
 import { gateViewOf, loadWorkgroupTaskState } from './helpers/legacyWorkgroupState'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { createAgent, createWorkgroup } from './helpers/model/resourceWrites'
 
 const log = createLogger('rfc164-engine-test')

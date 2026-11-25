@@ -11,7 +11,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
 import * as publicTypes from '@/modules/resource-catalog/public/types'
-import { ForbiddenError } from '@/util/errors'
+import { ForbiddenError } from '@/platform/errors/domainErrors'
 import { importEdges, sourceUnit } from './architecture/census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')

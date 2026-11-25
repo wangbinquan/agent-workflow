@@ -8,7 +8,7 @@ import {
   type ResolveAgentImportRefsRequest,
   type ResolveAgentImportRefsResult,
 } from '@agent-workflow/shared'
-import { ConflictError, ValidationError } from '@/util/errors'
+import { ConflictError, ValidationError } from '@/platform/errors/domainErrors'
 import type { AgentOperationContext } from '../../public/participants'
 import type { AgentImportQueries } from '../../public/queries'
 import type { AgentImportReferenceReadPort } from './importPorts'

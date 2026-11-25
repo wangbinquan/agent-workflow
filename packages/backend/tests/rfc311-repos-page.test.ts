@@ -32,7 +32,7 @@ import {
   createProviderHttpApplication,
   type ProviderHttpApplication,
 } from './helpers/providerHttpApplication'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 import {
   composeRepositoryWorkspaceStore,
   type RepositoryWorkspaceStore,

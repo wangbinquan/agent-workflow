@@ -23,7 +23,7 @@ import { afterAll, beforeEach, expect, test } from 'bun:test'
 import type { WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
 import { resolveUpstreamInputs } from '@/modules/task-execution/application/nodeInputs'
 import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const log = createLogger('test-picker-baseline')

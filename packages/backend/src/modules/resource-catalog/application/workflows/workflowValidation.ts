@@ -4,7 +4,7 @@ import {
   collectWorkgroupCallRefs,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type { WorkflowValidationQueries } from '../../public/queries'
 import type {
   ValidateStoredWorkflowCatalogInput,

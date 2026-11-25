@@ -5,7 +5,7 @@
 import type { SecretBox } from '@/auth/secretBox'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { unsealRepoUrl } from '@/services/repoCredentials'
-import { DomainError, NotFoundError } from '@/util/errors'
+import { DomainError, NotFoundError } from '@/platform/errors/domainErrors'
 import { resolveCachedRepo } from './repositoryMirrorCache'
 // RFC-531: the port both profiles implement lives in application/ports.
 import type { DevelopmentWorkspaceRepositoryPreparation } from '../../application/ports/developmentWorkspaceRepositoryPreparation'

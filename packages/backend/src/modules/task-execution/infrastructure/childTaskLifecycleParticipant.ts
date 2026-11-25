@@ -39,8 +39,13 @@ import { assertTriggerPreflight } from '@/modules/resource-catalog/public/querie
 import { loadRollbackTargetFrom, rollbackNodeRunWorktrees } from './nodeRollback'
 import { snapshotMissingDetail } from '../domain/nodeRunRollbackOutcome'
 import { reserveTaskReviewMutationSlot } from './reviewMutationQueue'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { createLogger } from '@/util/log'
+import {
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
+import { createLogger } from '@/platform/logging/logger'
 import {
   killStaleRunProcessTree,
   type StaleRunKillOutcome,

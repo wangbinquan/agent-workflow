@@ -27,7 +27,12 @@ import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { first } from '@/platform/persistence/queryHelpers'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+  staleConflictError,
+} from '@/platform/errors/domainErrors'
 import type {
   WorkgroupMutationParticipant,
   WorkgroupUpdateResult,

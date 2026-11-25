@@ -12,7 +12,7 @@ import {
   validateConfigurationPatch,
 } from '@/platform/configuration/configurationValues'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import type { ApplicationConfigurationPersistencePort } from '../application/ports/applicationConfiguration'
 
 const DOCUMENT_ID = 'global'

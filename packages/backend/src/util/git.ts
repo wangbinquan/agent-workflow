@@ -9,13 +9,18 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { mkdir, realpath, rm, stat, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
 import { removeDirectoryWithRetry } from '@/platform/workspace/local/fsReclaim'
 import { hardenGitArgs } from '@/util/gitHardening'
 import { NULL_DEVICE_FOR_HOST } from '@/platform/execution/local/platformExec'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
-import { sha1Hex } from '@/util/hash'
+import { sha1Hex } from '@/platform/contracts/hash'
 import { raceWithFallback } from '@/platform/execution/local/process'
 
 export interface GitRunResult {

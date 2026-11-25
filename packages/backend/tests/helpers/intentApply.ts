@@ -27,7 +27,7 @@ import type {
   ResourceRequestContext,
 } from '../../src/modules/resource-catalog/public/participants'
 import type { PersistenceDb } from '../../src/platform/persistence/persistenceDb'
-import type { Logger } from '../../src/util/log'
+import type { Logger } from '../../src/platform/logging/logger'
 
 /** The artifact lifecycle the compositions used to build (plugins under `appHome/plugins` unless a test names the directory). */
 export function composeStandaloneIntentArtifacts(input: {

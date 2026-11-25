@@ -12,7 +12,12 @@ import { actorOf, type Actor } from '@/auth/actor'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import type {
   DirectAuthorityBinding,

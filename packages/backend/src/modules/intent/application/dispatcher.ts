@@ -10,7 +10,7 @@ import type { IntentPersistence } from '@/modules/intent/application/ports/inten
 import type { IntentWorkflowGraphValidationPort } from '@/modules/intent/application/ports/intentWorkflowGraphValidation'
 import type { IntentOwnerAdmissionPort } from '@/modules/intent/application/ports/intentOwnerAdmission'
 import type { Config } from '@agent-workflow/shared'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type { IntentSessionEventPublisher } from '../ports/intentSessionEvents'
 import {
   resolveIntentTurnConfig,

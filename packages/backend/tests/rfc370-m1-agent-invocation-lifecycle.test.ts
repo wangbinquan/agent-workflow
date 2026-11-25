@@ -35,7 +35,7 @@ import type {
   BusinessResult,
   CrewStationBusinessExecution,
 } from '@/platform/crewstation/businessExecution'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const unavailable = (): never => {
   throw new Error('unexpected native effect')

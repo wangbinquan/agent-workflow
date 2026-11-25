@@ -7,7 +7,7 @@ import type {
   SystemAgentEventSinkV1,
   SystemAgentOutputEvidence,
 } from '@/modules/runtime-management/public/participants'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { AgentInvocationBinding } from './agentInvocation'
 import type { AgentInvocationPreparation } from './agentInvocationPreparation'
 import type {

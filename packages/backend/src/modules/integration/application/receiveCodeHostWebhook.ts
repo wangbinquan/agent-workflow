@@ -17,7 +17,7 @@ import type {
 import type { WebhookIngressPersistence } from './ports/webhookIngressPersistence'
 import { insertDelivery, type InsertDeliveryInput } from './webhookDeliveryStore'
 import type { WebhookRateLimiters } from './webhookRateLimiter'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('webhook-ingress')
 

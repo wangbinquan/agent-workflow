@@ -25,7 +25,7 @@ import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { assertFrozenTaskTriggerPreflight } from '../src/modules/task-execution/infrastructure/frozenTaskTriggerPreflight'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_788_278_400_000

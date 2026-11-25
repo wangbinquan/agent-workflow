@@ -33,7 +33,7 @@ import { fileSnapshotTrackerOf, liveSchemaOf } from '@/platform/persistence/sess
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { createPortableBackupApplicationAssets } from '@/platform/persistence/portableApplicationAssets'
 import { quickCheckSqlite } from './systemBackupVacuum'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { Paths } from '@/platform/configuration/installationPaths'
 
 import { type BackupKind, readDbMigrationIdentity } from './systemBackupManifest'

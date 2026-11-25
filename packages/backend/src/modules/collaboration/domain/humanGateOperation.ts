@@ -4,7 +4,7 @@
 // describe only review / clarify / question open and decision recovery.
 
 import type { PreparedHumanGateRef } from '@/modules/task-execution/public/types'
-import { sha256Hex as humanGateSha256Hex } from '@/util/hash'
+import { sha256Hex as humanGateSha256Hex } from '@/platform/contracts/hash'
 
 export { humanGateSha256Hex }
 

@@ -5,7 +5,7 @@ import {
   killStaleRunProcessTree as productionKillStaleRunProcessTree,
   type StaleRunKillOutcome,
 } from '@/platform/execution/local/process'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { startInterval } from '@/platform/background/intervalTimer'
 import { MCP_RUNTIME_TESTS_CHANNEL, mcpRuntimeTestsBroadcaster } from '@/ws/broadcaster'
 import {

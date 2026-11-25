@@ -4,7 +4,7 @@
 // digital-employee 自有的概念，判据随 HTTP 绑定归入本 context；错误码 `builtin-readonly` 是共享词汇
 // （resource-catalog 对内置工作流也各自给出），文案与原输出逐字相同。
 
-import { ForbiddenError } from '@/util/errors'
+import { ForbiddenError } from '@/platform/errors/domainErrors'
 
 /** Platform-catalog tools have no owner row; every write is refused with the shared read-only code. */
 export function assertEmployeeToolWritable(row: { readonly builtin: boolean }): void {

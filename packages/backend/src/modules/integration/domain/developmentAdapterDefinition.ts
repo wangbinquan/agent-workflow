@@ -10,7 +10,7 @@
 import { z } from 'zod'
 import { utf16MaxLength } from '@agent-workflow/shared'
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export const DEVELOPMENT_ADAPTER_PURPOSES = [
   'requirement-source',

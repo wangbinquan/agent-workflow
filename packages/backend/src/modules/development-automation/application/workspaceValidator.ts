@@ -21,7 +21,7 @@ import type {
 } from './ports/automationWorkspaceEffects'
 import { withSelectedAutomationWorkspaceEffects } from './automationWorkspaceEffectLifetime'
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { CapabilityWorkspaceMode } from '../domain/capabilityDefinition'
 import {
   diffProtectedRoots,

@@ -5,7 +5,7 @@
 import { candidateTree as legacyCandidateTree } from '@/platform/content/locations/skill'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type { SkillPackageContentEntry } from '../application/skills/packageContentReader'
 import {
   SKILL_CANDIDATE_ID,

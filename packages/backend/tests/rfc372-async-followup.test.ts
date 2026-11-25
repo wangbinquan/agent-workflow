@@ -20,7 +20,7 @@ import {
 import { buildActor } from '@/auth/actor'
 import { mountClarifyRoutes } from '@/routes/clarify'
 import { createClarifyRound } from '@/modules/collaboration/infrastructure/clarify/service'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import {
   CLARIFY_FOLLOWUP_FAILURE_TTL_MS,

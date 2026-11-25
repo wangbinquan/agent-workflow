@@ -27,7 +27,7 @@ import { isClarifyRerunCause } from '@agent-workflow/shared'
 import { agentRefOfNode } from '@agent-workflow/shared'
 import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/drivers'
 import { decideResumeSessionId } from '@/modules/task-execution/domain/sessionModeFallback'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 type Calls = Record<string, unknown[]>
 

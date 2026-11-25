@@ -16,7 +16,7 @@ import {
   snapshotNodeIsoFinal,
 } from '@/platform/workspace/local/isolation'
 import { type IsoHandle, type MergeBackConflict } from '@/platform/contracts/isolationWorkspace'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 type ScopeAcquisition = () => IsolationWorkspaceScope | Promise<IsolationWorkspaceScope>
 interface WorkspaceRecord {

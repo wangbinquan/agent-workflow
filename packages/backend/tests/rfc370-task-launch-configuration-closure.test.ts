@@ -37,7 +37,7 @@ import { createRepositoryPreparationJournal } from '@/modules/source-control/inf
 import { decodeRepositoryLaunchRef } from '@/modules/source-control/domain/repositoryLaunchRef'
 import { repositoryPreparationFactsJson } from '@/modules/source-control/domain/repositoryPreparationFacts'
 import type { RepositoryPreparationEffectFactory } from '@/modules/source-control/application/ports/repositoryPreparationEffects'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { awaitTaskDriverIdle } from './helpers/taskDriverLifecycle'

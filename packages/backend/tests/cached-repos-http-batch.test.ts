@@ -97,7 +97,7 @@ function registerProviderBatchHttpCases(provider: ProviderHarness): void {
       method: 'POST',
       body: JSON.stringify({ urls: [] }),
     })
-    expect(res.status).toBe(422) // ValidationError → 422 per util/errors
+    expect(res.status).toBe(422) // ValidationError → 422 per platform/errors/domainErrors
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('batch-request-invalid')
   })

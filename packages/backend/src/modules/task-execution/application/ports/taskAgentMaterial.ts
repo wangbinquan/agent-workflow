@@ -10,7 +10,7 @@ import type { AgentInvocationBinding } from './agentInvocation'
 import type { PortOutputContentValidation } from './portOutputValidation'
 import type { TaskExecutionEffectPersistence } from './taskExecutionEffectStore'
 import type { NodeExecutionPersistence } from './nodeExecutionPersistence'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { CompiledAgentInvocation } from './agentInvocationPreparation'
 import type { NodeStatusEvents } from './nodeExecutionSupport'
 

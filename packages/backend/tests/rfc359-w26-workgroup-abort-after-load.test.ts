@@ -7,7 +7,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { WORKGROUP_TURN_MEMBER_NODE_ID as WG_MEMBER_NODE_ID } from '@agent-workflow/shared'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'

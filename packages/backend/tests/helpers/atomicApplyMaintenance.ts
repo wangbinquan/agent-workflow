@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import type { AtomicApplyRecoveryScene } from '@/platform/contracts/atomicApply'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import {
   composeIntentMaintenanceCommandsForDatabase as composeIntentMaintenance,
   composeLocalIntentScratch,

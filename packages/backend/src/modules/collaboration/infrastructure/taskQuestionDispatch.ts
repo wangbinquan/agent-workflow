@@ -85,9 +85,9 @@ import {
   taskNodeHasRun,
   QUESTION_DISPATCH_CLOSED_TASK_STATUSES,
 } from './taskQuestions'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
-import { createLogger } from '@/util/log'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
+import { createLogger } from '@/platform/logging/logger'
 import { TASK_QUESTION_CONFLICT } from '../domain/taskQuestionConflicts'
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
 import type { GateDecisionReceipt } from '@/modules/collaboration/public/types'

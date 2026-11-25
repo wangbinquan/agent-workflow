@@ -37,7 +37,7 @@ import type { MemoryScopeAuthority } from '@/modules/memory/public/queries'
 import type { FusionTreeFile } from '../domain/fusionTree'
 import type { FusionEngineTaskOperations } from './ports/fusionEngineTasks'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 
 // Built-in resource identities live in resource-catalog's domain list (single source of truth
 // shared with the list-hiding filter and the RFC-104 read-only lock).

@@ -14,7 +14,7 @@ import { ulid } from 'ulid'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import type {
   UploadSessionPersistence,
   UploadSessionRow,

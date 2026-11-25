@@ -7,7 +7,7 @@
 // RFC-395: each launch freezes its synthesized definition. The host namespace
 // is projected only for compatibility and has no workflow catalog row.
 //
-// RFC-477: moved unchanged from services/agentLaunch.ts into task-execution's domain (pure: shared + util/errors only).
+// RFC-477: moved unchanged from services/agentLaunch.ts into task-execution's domain (pure: shared + platform/errors/domainErrors only).
 
 import {
   buildClarifyEdges,
@@ -17,7 +17,7 @@ import {
   type AgentLaunchForm,
   type StartAgentTask,
 } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 export const AGENT_HOST_INPUT_NODE_ID = '__agent_input__'
 export const AGENT_HOST_AGENT_NODE_ID = '__agent_main__'

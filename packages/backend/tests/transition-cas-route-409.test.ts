@@ -20,7 +20,7 @@ import {
   ConcurrentNodeRunTransition,
   transitionNodeRunStatus,
 } from '@/modules/task-execution/infrastructure/taskLifecycle'
-import { errorHandler } from '../src/util/errors'
+import { errorHandler } from '../src/platform/errors/domainErrors'
 
 async function seedNodeRun(
   db: PersistenceDb,

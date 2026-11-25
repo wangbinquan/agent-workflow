@@ -20,7 +20,7 @@ import {
   createUserAccessTransactionRunner,
 } from '@/modules/identity-access/infrastructure/userAccessPersistence'
 import { UserAccessError } from '@/modules/identity-access/public/types'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_700_000_000_000

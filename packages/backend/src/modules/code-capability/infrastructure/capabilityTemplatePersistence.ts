@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import type {
   CapabilityTemplatePersistence,
   CapabilityTemplateRecord,

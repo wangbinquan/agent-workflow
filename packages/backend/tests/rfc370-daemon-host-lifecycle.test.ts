@@ -14,7 +14,7 @@ import type {
   DaemonReadiness,
 } from '../src/modules/system-operations/application/ports/daemonHostLifecycle'
 import type { DaemonRuntimeInfo } from '../src/modules/system-operations/public/types'
-import type { Logger } from '../src/util/log'
+import type { Logger } from '../src/platform/logging/logger'
 
 function hostFixture(
   options: {

@@ -21,7 +21,7 @@ import {
 } from './helpers/userIdentities'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { applyEmailTrust } from '../src/auth/oidc/provisioning'
-import { DomainError } from '../src/util/errors'
+import { DomainError } from '../src/platform/errors/domainErrors'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createOidcProvidersService } from '../src/auth/oidc/providers'
 import { randomBytes } from 'node:crypto'

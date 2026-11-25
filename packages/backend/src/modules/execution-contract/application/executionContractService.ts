@@ -1,5 +1,5 @@
 import { validateProgramFixture } from './validateProgramFixture'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import type {
   ExecutionContractProgramFixturePort,
   ExecutionContractResourcePort,

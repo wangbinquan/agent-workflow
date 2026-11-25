@@ -13,7 +13,7 @@ import {
 import { developmentExecutionContractRegistrations } from '@/modules/development-automation/application/employeeTypePackage'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import { createProgramArtifactStore } from '@/modules/digital-employee/infrastructure/programArtifactStore'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 const registration = developmentExecutionContractRegistrations.find(
   (r) => r.contractRef.contractId === 'development.prepare-materials',

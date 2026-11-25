@@ -11,7 +11,7 @@ import { randomBytes } from 'node:crypto'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createOidcProvidersService, type OidcProvidersService } from '../src/auth/oidc/providers'
 import { createIdentity } from './helpers/userIdentities'
-import { DomainError } from '../src/util/errors'
+import { DomainError } from '../src/platform/errors/domainErrors'
 
 async function expectCode(promise: Promise<unknown>, code: string): Promise<void> {
   try {

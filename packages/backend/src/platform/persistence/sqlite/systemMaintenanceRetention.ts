@@ -18,7 +18,7 @@
 
 import type { RetentionSweepPhase } from '@/platform/background/retentionSweepPhase'
 import { BOUNDED_DELETE_MAX_ROWS } from '@/platform/persistence/capabilities'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('maintenance-retention')
 

@@ -171,9 +171,14 @@ import { loadTaskFailureCodes } from './taskDetailRead'
 import { createWorkflowSyncPreviewReads } from './workflowSyncPreviewReads'
 
 import { deleteTask } from './taskDelete'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
 import { createInFlightCoalescer, type InFlightCoalescer } from '@/platform/contracts/inFlight'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { Paths } from '@/platform/configuration/installationPaths'
 import { killStaleRunProcessTree } from '@/platform/execution/local/process'
 import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'

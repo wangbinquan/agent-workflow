@@ -1,6 +1,6 @@
 import { createIntentApplyRecoveryScene } from '../infrastructure/intentApplyRecovery'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import type { IntentApplyArtifactLifecycle } from '../infrastructure/intentApplyEngine'
 
 /** Recovery-only composition (both providers); it never constructs apply resources. */

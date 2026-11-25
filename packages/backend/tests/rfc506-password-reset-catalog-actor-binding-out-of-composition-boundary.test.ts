@@ -6,7 +6,7 @@
 // ② 两个组合文件没有 if / for / while / do / switch / try / throw 语句，各自从新位置取实现：`createResetUserPassword` 与
 //    `createIntentCatalogActorBinding` 在生产代码里都只在各自的组合文件调用一次，改密的系统用户 id 与认证运行时原样交入、时钟以函数
 //    交出；组合文件不再建 `WeakMap`，`Date.now()` 只作为交出的函数体出现（带负对照）。
-// ③ 新代码的依赖面是闭集：identity-access 的新文件只取 `@/util/errors` 的 `ValidationError`，不用进程全局；intent 的
+// ③ 新代码的依赖面是闭集：identity-access 的新文件只取 `@/platform/errors/domainErrors` 的 `ValidationError`，不用进程全局；intent 的
 //    `application/resourceCatalog.ts` 的 import 与此前相同、新函数不用进程全局（带负对照）。
 // ④ 行为（直接调用新位置）：系统用户的改密被拒，且不哈希、不取时钟、不写、不撤销；普通用户先取一次时钟、哈希、写入，再以同一时刻撤销
 //    会话，`force` 缺省 false、给 true 时透传，两次写的接收者仍是交入的认证运行时；演员绑定登记后取回、未登记的上下文抛
@@ -24,7 +24,7 @@ import type { Actor } from '@/auth/actor'
 import { createResetUserPassword } from '@/modules/identity-access/application/commands/resetUserPassword'
 import type { QueryContext } from '@/modules/identity-access/public/participants'
 import { createIntentCatalogActorBinding } from '@/modules/intent/application/resourceCatalog'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const REPO = resolve(BACKEND, '..', '..')
@@ -77,8 +77,9 @@ const CALLS: Readonly<Record<string, { readonly at: string; readonly args: reado
   },
 }
 /** The identity-access command takes the shared validation error and nothing else (design §4 ③). */
-const RESET_IMPORTS = ['import util/errors: ValidationError']
-const RESET_SURFACE = (_file: string, specifier: string): boolean => specifier === '@/util/errors'
+const RESET_IMPORTS = ['import platform/errors/domainErrors: ValidationError']
+const RESET_SURFACE = (_file: string, specifier: string): boolean =>
+  specifier === '@/platform/errors/domainErrors'
 /** `application/resourceCatalog.ts`'s imports before RFC-506 (the new function adds none). */
 const CATALOG_IMPORTS = [
   'import @agent-workflow/shared: AclResourceType, FileNode',
@@ -458,7 +459,7 @@ describe('RFC-506 ② composition 只装配', () => {
 })
 
 describe('RFC-506 ③ 新代码的依赖面是闭集、不用进程全局', () => {
-  test('identity-access 的新文件只取 `@/util/errors` 的 ValidationError、不用进程全局；intent 的 application 文件 import 不变、新函数不用进程全局', () => {
+  test('identity-access 的新文件只取 `@/platform/errors/domainErrors` 的 ValidationError、不用进程全局；intent 的 application 文件 import 不变、新函数不用进程全局', () => {
     const reset = sourceOf(RESET)
     expect(moduleEdges(reset, text(reset))).toEqual(RESET_IMPORTS)
     expect(purityFindings(reset, text(reset), RESET_SURFACE, true)).toEqual([])
@@ -472,7 +473,7 @@ describe('RFC-506 ③ 新代码的依赖面是闭集、不用进程全局', () =
   test('负对照：越界 import、多出的 import 与进程全局都会被认出', () => {
     const file = join(SRC, `${IA}/application/commands/probe.ts`)
     const source = [
-      `import { ValidationError } from '@/util/errors'`,
+      `import { ValidationError } from '@/platform/errors/domainErrors'`,
       `import { SYSTEM_USER_ID } from '@/auth/actor'`,
       `import type { AuthRuntime } from '@/auth/application/authRuntime'`,
       `import { hashPassword } from '@/auth/passwords'`,

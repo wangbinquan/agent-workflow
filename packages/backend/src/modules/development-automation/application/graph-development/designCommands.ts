@@ -8,7 +8,7 @@ import {
   type GraphImplementationBasis,
   type GraphProposal,
 } from '@agent-workflow/shared'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import {
   applyGraphProposal,
   graphContentRefs,

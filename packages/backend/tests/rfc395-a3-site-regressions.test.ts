@@ -22,7 +22,7 @@ import {
   type RepositoryPreparationMechanicsPort,
 } from '@/modules/task-execution/application/drive/repositoryPreparationStep'
 import type { TaskDriveContext } from '@/modules/task-execution/application/drive/taskDriveCoordinator'
-import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
+import { ConflictError, DomainError, NotFoundError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskFixture, workflowFixture, nodeRunFixture, patchTaskFixture } from './helpers/model'
 import { wakeSnapshotOf } from './helpers/workgroupWake'

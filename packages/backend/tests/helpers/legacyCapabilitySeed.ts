@@ -96,7 +96,7 @@ import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
 import type { ContentRef } from '@/platform/content/contentRef'
 import type { SourceRow, TargetRow } from '@/platform/persistence/migration/conversion/types'
 import { contentRefColumns } from '@/platform/content/contentStore'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { createCodeHistoryPackageReader } from '@/modules/code-capability/infrastructure/history/packageReader'
 import {
   CODE_HISTORY_TABLES,

@@ -20,7 +20,7 @@ import {
 } from '@/modules/development-automation/public/operations'
 import { decodeOrInvalid, registerOperationRoute } from '@/routes/operationRoute'
 import { directOperationAuthority } from '@/routes/operationAuthority'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 interface ResourceHttpBinding {

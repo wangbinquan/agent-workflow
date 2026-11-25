@@ -16,7 +16,7 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { inArray } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import {
   HostedExecutionDetachedError,

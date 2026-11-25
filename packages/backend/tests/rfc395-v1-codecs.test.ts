@@ -8,7 +8,7 @@ import {
   assertSourceChunkRequest,
   sourceFilesDigest,
 } from '@/platform/persistence/migration/sourceReader'
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 import { SourceBlockedError } from '@/platform/persistence/migration/sourceTypes'
 import { openEpoch1LogicalArtifactSource } from '@/platform/persistence/migration/artifactSourceReader'
 import type { LogicalColumnContract } from '@/platform/persistence/schema/contractTypes'

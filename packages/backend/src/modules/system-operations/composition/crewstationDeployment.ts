@@ -27,7 +27,7 @@ import {
   createCrewStationPlatformApi,
   type CrewStationPlatformApi,
 } from '@/platform/crewstation/platformApi'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,

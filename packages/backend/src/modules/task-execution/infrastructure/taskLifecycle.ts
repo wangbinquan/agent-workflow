@@ -47,7 +47,7 @@ import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { driveAsyncProgram } from '@/platform/persistence/transactionProgram'
-import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
+import { ConflictError, DomainError, NotFoundError } from '@/platform/errors/domainErrors'
 import {
   allowedFromStatusesForEvent,
   isTaskWorkspaceUnbound,

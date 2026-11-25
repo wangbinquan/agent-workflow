@@ -1,6 +1,6 @@
 import type { z } from 'zod'
 
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /** 裸 ZodError 到中央 handler 会渲染成 500——统一折成 typed 422（仓内定式）。 */
 export function parseOr422<T>(

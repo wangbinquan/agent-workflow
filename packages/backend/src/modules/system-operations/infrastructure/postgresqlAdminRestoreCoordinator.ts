@@ -15,7 +15,7 @@ import {
 } from '@/platform/persistence/postgresqlPreflight'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { acquireLock, isProcessAlive, readPidFromLock } from '@/platform/execution/local/daemonLock'
 import type { AdminRestoreCoordinatorPort } from '../application/ports/adminRestoreCoordinator'
 import type { RestoreArtifactPathResolver } from './restoreArtifactIngress'

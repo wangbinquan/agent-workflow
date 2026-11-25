@@ -1006,7 +1006,7 @@ describe('RFC-287 G6 —— warm 路径失败同样进窗口', () => {
       .filter(
         (statement) =>
           ts.isStringLiteral(statement.moduleSpecifier) &&
-          statement.moduleSpecifier.text === '@/util/errors',
+          statement.moduleSpecifier.text === '@/platform/errors/domainErrors',
       )
       .flatMap((statement) => {
         const clause = statement.importClause
@@ -1018,8 +1018,11 @@ describe('RFC-287 G6 —— warm 路径失败同样进窗口', () => {
       })
     expect(importedDiagnostics).toEqual(['diagnosticTextOf'])
     const diagnosticSource = ts.createSourceFile(
-      'errors.ts',
-      readSrc(resolve(import.meta.dir, '..', 'src', 'util', 'errors.ts'), 'utf8'),
+      'domainErrors.ts',
+      readSrc(
+        resolve(import.meta.dir, '..', 'src', 'platform', 'errors', 'domainErrors.ts'),
+        'utf8',
+      ),
       ts.ScriptTarget.Latest,
       true,
     )
@@ -2053,7 +2056,7 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
 describe('RFC-287 五轮门 —— 对抗输入', () => {
   test('F1：合法仓库名不得与半成品目录同形（分隔符必须是 slug 产不出的字符）', async () => {
     const { gitUrlCacheKeyWith, parseGitUrl } = await import('@agent-workflow/shared')
-    const { sha1Hex } = await import('@/util/hash')
+    const { sha1Hex } = await import('@/platform/contracts/hash')
     const src = readSrc(
       resolve(
         import.meta.dir,

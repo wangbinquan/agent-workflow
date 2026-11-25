@@ -6,7 +6,7 @@ import {
   validateDynamicWorkflowDef,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { assertTriggerPreflight } from '../../domain/triggerPreflight'
 import { validateWorkflowDef, type ValidatorContext } from '../../domain/workflowValidator'
 import type {

@@ -136,7 +136,7 @@ describeEachProvider('RFC-212 T2 — credential fingerprint, never the raw token
   })
 
   test('WsConnectionData declares no raw-credential field', () => {
-    // util/log.ts formatVal JSON.stringifies arbitrary objects with no redaction,
+    // platform/logging/logger.ts formatVal JSON.stringifies arbitrary objects with no redaction,
     // so one `log.debug('…', { data: ws.data })` while debugging would write a
     // long-lived credential into the rotated daemon log. Keep the shape hostile
     // to that mistake.

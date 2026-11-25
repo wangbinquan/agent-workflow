@@ -67,7 +67,7 @@ import {
   submitReviewDecision,
   type SubmitReviewDecisionArgs,
 } from '@/modules/collaboration/infrastructure/review'
-import { DomainError } from '../src/util/errors'
+import { DomainError } from '../src/platform/errors/domainErrors'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'

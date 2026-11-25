@@ -17,7 +17,7 @@ import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   createProviderTaskExecutionModule,
   neverPruneTerminalWorkspaces,
@@ -65,7 +65,7 @@ import { resolveSyntheticTaskAgentInjection } from '@/modules/task-execution/inf
 import { composeLocalTaskAgentRunFamily } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { localTaskAgentRunProviders } from '@/bootstrap/runFamilyProviders'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import { Semaphore } from '@/platform/contracts/semaphore'
 import { describeEachProvider } from './helpers/eachProvider'
 import { held } from './helpers/portArtifactContent'

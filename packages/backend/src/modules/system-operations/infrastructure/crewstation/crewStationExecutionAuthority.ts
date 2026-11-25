@@ -27,7 +27,7 @@ import {
   isCrewStationApiError,
   type CrewStationPlatformApi,
 } from '@/platform/crewstation/platformApi'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type {
   ExecutionAuthorityPort,
   ExecutionAuthorityState,
@@ -39,7 +39,7 @@ import {
   type HostedExecutionControlStore,
 } from '../../application/ports/hostedExecutionControl'
 import { encodeHostedFenceToken } from '../hostedExecutionControl'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 const CONTROL_ROOT = '/v3/business-execution/control'
 

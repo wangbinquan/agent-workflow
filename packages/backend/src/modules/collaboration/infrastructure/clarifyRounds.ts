@@ -49,7 +49,7 @@ import { and, count, desc, eq, sql, type SQL } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { chunkedAll } from '@/platform/persistence/sqlChunk'
 
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import { readClarifyAnswerProjection } from './clarifyAnswerQueries'
 import { createClarifyAnswerWritePort } from './clarifyAnswerWrite'

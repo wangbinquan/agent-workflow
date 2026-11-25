@@ -24,7 +24,7 @@ import {
 } from '@/platform/persistence/databaseTransaction'
 import { contentRefColumns, type ContentPutRequest } from '@/platform/content/contentStore'
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { describeEachProvider } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'

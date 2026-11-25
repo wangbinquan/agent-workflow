@@ -10,7 +10,7 @@ import {
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
-import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import { DomainError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { ObservationQueries } from '../../application/observationQueries'
 import { ObservationPriceError, type ObservationPricing } from '../../application/pricing'
 

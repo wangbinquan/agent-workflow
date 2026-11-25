@@ -1,7 +1,7 @@
 import { existsSync, lstatSync, mkdirSync, realpathSync } from 'node:fs'
 import { isAbsolute, join, relative, sep } from 'node:path'
 import { platformWorkspacePath, type PlatformWorkspaceKind } from '@agent-workflow/shared'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 
 /** Create a canonical platform directory without following a repository symlink. */
 export function ensurePlatformWorkspaceDirectory(input: {

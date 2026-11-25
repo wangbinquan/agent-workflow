@@ -7,7 +7,7 @@ import {
   UnauthorizedError,
   ValidationError,
   errorHandler,
-} from '../src/util/errors'
+} from '../src/platform/errors/domainErrors'
 import { UserAccessError } from '../src/modules/identity-access/public/types'
 
 function buildApp(handler: () => never): Hono {

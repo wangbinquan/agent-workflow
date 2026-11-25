@@ -14,7 +14,7 @@
 
 import type { TaskStatus } from '@agent-workflow/shared'
 
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type {
   TerminalWorkspacePruneCandidate,
   TerminalWorkspacePrunePolicy,

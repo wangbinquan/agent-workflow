@@ -20,7 +20,7 @@ import { runDynamicWorkflowGenerate } from '../engine/task/dynamicWorkflowGenera
 import type { DynamicWorkflowGeneratePorts } from '../application/ports/dynamicWorkflowGenerate'
 import { triggerPreflightIssue } from '@/modules/resource-catalog/public/queries'
 import { requireDynamicWorkflowOperations } from '../application/dynamicWorkflowOperations'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import type { SchedulerRuntimeTopology } from '../application/ports/taskExecutionTopology'
 import {
   createTaskAgentResourceSession,

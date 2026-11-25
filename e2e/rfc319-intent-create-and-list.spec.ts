@@ -51,7 +51,7 @@
 //   packages/backend/src/services/intent/session.ts:101-137 —— keyset 排序与游标
 //   packages/backend/src/services/intent/session.ts:280-296 —— title 截断 / turnSeq=2
 //   packages/backend/src/services/intent/journey.ts:34-70 —— 阶段投影
-//   packages/backend/src/util/errors.ts:46-51 —— ValidationError ⇒ 422
+//   packages/backend/src/platform/errors/domainErrors.ts:46-51 —— ValidationError ⇒ 422
 //
 // 故障注入一律走请求层（page.route），不改 stub 文件：本仓既有手法，且
 // stub 是多条用例共用的编译产物。

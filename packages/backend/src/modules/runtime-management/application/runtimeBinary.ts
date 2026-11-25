@@ -1,5 +1,5 @@
 import { isAbsolute, resolve as resolvePath } from 'node:path'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /**
  * A runtime binary is one executable path or PATH token, not a shell command

@@ -738,6 +738,14 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
   的**链接**会被 CI 的 `Markdown link check (design/)`（lychee）逐条解析，目标文件挪走就红。挪文件前用
   `grep -rnoE "\]\([^)]*<旧路径>[^)]*\)" design docs` 查链接，有就只改链接目标（行号对一下新文件），不动正文。
 
+- **源码摘要锁**（RFC-575 查出）：`tests/fixtures/*.json` 里有按 SHA-256 钉住的已审读源码（例如 `rfc395-serialized-insert-source-locks.json`），
+  被挪文件的读者哪怕只改了 import 一行，摘要也失效，判据会把那几处当成新债。挪之前扫一遍 fixtures 里 `path` + `sha256` 的条目，对改动文件重算；
+  只改了 import 的就更新摘要并在提交说明里写清楚。
+- **按目录名判的规则**（RFC-575 查出）：`rfc371` 不许 platform 下路径匹配 `/observ/`。给新目录起名前，搜一下 `tests/architecture/` 里作用在路径上的
+  正则。
+- **`grep -E` 的 `\s`**：macOS 的 `/usr/bin/grep -E` 不认 `\s`，`'util',\s*'errors'` 一类的模式什么也搜不到却不报错（RFC-575 漏过一处分段路径）。
+  用 `[[:space:]]`。
+
 另一半教训是**检索本身没跑**：zsh 里一条命令只要有一个通配没有匹配（`grep -rn pat architecture/ tests/architecture/*.json`，后一个目录下没有
 JSON），整条命令在执行前就中止，只打印一行 `no matches found`，看上去和“没搜到”一样。查空结果时先确认输出里没有这一行；需要通配时用
 `for f in dir/*.json; do grep … "$f"; done`，或者直接给目录。

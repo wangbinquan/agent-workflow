@@ -1,6 +1,6 @@
 import type { TaskActorRole } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { hasResourceAclBypass } from '../domain/resourceAccess'
 
 /** Product default for every newly-created user ACL resource. */

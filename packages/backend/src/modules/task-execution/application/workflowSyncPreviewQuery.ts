@@ -11,7 +11,7 @@ import {
   type WorkflowSyncPreview,
 } from '@agent-workflow/shared'
 import { triggerPreflightIssue } from '@/modules/resource-catalog/public/queries'
-import { DomainError, ValidationError } from '@/util/errors'
+import { DomainError, ValidationError } from '@/platform/errors/domainErrors'
 import {
   buildSyncRunSummary,
   builtinWorkflowSyncPreview,

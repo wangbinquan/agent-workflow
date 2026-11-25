@@ -34,7 +34,7 @@ import { composeCodeHistoryQueries } from '../src/modules/code-capability/compos
 import { createCodeMetricsRead } from '../src/modules/code-capability/infrastructure/codeMetricsRead'
 import { mountCodeRoutes } from '../src/modules/code-capability/composition/routes'
 import { resetRouteMetaRegistry } from '../src/routes/registry'
-import { errorHandler } from '../src/util/errors'
+import { errorHandler } from '../src/platform/errors/domainErrors'
 
 const NOW = 1_700_000_000_000
 

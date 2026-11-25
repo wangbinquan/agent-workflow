@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import { requireWorkPathWithoutSymlinks } from '@/platform/crewstation/workVolumePath'
 import { assertWorkVolumeWritersSettled } from '@/platform/crewstation/workVolumeWriters'
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 
 const Request = z

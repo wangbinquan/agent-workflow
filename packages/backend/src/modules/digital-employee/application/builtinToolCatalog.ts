@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
 import { type DigitalEmployeePlatformToolCatalogParticipant } from '@/modules/digital-employee/public/types'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { normalizeDispatchRouteDefinitionsJson } from '../domain/dispatchRouteDefinitions'
 interface DigitalEmployeeBuiltinTemplateHelpers {
   readonly DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS: readonly string[]

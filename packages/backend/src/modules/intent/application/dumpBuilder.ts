@@ -45,7 +45,7 @@ import {
   extractWorkflowAgentRefs,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import { pickCallTarget } from '@agent-workflow/shared'
 import { platformOnlyResourceTypes } from '@/modules/intent/domain/teaching/platformMap'
 import { renderPlatformInventoryFile, type IntentPlatformInventory } from './platformInventory'
@@ -66,7 +66,7 @@ import {
   type IntentContextManifest,
   type IntentHandleWatermark,
 } from './manifest'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   listAllVisibleResourceSummaries,
   type IntentResourceCatalogBinding,

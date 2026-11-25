@@ -19,7 +19,7 @@ import type {
   WorkgroupTaskRoomTaskParticipantInTx,
 } from '@/modules/task-execution/public/commands'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { deriveBudgetUsed, roundedModeOf } from '../application/workgroups/workgroupRoomProjection'
 import {
   hasPrivateResourceAccess,

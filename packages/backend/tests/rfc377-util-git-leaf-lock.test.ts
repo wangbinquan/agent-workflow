@@ -11,7 +11,7 @@ import { importEdges, sourceUnit } from './architecture/census'
 
 /**
  * RFC-572: the two process / exec leaves git has always used moved from `util/` into platform's execution directory.
- * They stay leaves (RFC-572's lock pins their imports: each other, `util/log`, node built-ins and `bun:ffi`), so the git
+ * They stay leaves (RFC-572's lock pins their imports: each other, `platform/logging/logger`, node built-ins and `bun:ffi`), so the git
  * primitives may name exactly these two; every other platform file is still an upper layer here.
  */
 const PROCESS_LEAVES = new Set([
@@ -24,6 +24,16 @@ const PROCESS_LEAVES = new Set([
  * imports those primitives and stays an upper layer.
  */
 const WORKSPACE_LEAVES = new Set(['@/platform/workspace/local/fsReclaim'])
+/**
+ * RFC-575 moved the three base primitives — the domain error family, the logger and the digest helpers — from
+ * `util/` into platform. They import nothing above them (the error family takes only the logger), so the git primitives
+ * may name exactly these three.
+ */
+const BASE_PRIMITIVES = new Set([
+  '@/platform/errors/domainErrors',
+  '@/platform/logging/logger',
+  '@/platform/contracts/hash',
+])
 
 function forbiddenEdges(text: string): string[] {
   return importEdges(sourceUnit('packages/backend/src/util/git.ts', text))
@@ -39,7 +49,8 @@ function forbiddenEdges(text: string): string[] {
         !specifier.startsWith('@/util/') &&
         !specifier.startsWith('./') &&
         !PROCESS_LEAVES.has(specifier) &&
-        !WORKSPACE_LEAVES.has(specifier)
+        !WORKSPACE_LEAVES.has(specifier) &&
+        !BASE_PRIMITIVES.has(specifier)
       )
     })
 }
@@ -93,13 +104,20 @@ describe('RFC-377 util/git leaf', () => {
           "import { removeDirectoryWithRetry as viaRelative } from '../platform/workspace/local/fsReclaim'",
       ),
     ).toEqual(['@/platform/workspace/local/gitVersion', '../platform/workspace/local/fsReclaim'])
+    // RFC-575: of the error directory only the domain error family is admitted, not the public-error contract beside it.
+    expect(
+      forbiddenEdges(
+        "import { ValidationError } from '@/platform/errors/domainErrors'\n" +
+          "import { toPublicError } from '@/platform/errors/publicError'",
+      ),
+    ).toEqual(['@/platform/errors/publicError'])
   })
 
   test('accepts shared, sibling utilities and external primitives', () => {
     expect(
       forbiddenEdges(`
         import { redactGitUrl } from '@agent-workflow/shared'
-        import { sha1Hex } from '@/util/hash'
+        import { sha1Hex } from '@/platform/contracts/hash'
         import { killProcessTree } from '@/platform/execution/local/process'
         import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
         import { removeDirectoryWithRetry } from '@/platform/workspace/local/fsReclaim'

@@ -9,7 +9,7 @@ import {
   type TaskArchiveV3Manifest,
   type TaskArchiveLegacyRow,
 } from '@/platform/contracts/taskArchive'
-import { createSha256DigestBuilder, sha256Hex } from '@/util/hash'
+import { createSha256DigestBuilder, sha256Hex } from '@/platform/contracts/hash'
 
 export function encodeTaskArchiveValue(value: unknown): unknown {
   if (value instanceof Uint8Array)

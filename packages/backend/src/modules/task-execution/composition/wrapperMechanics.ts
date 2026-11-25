@@ -17,7 +17,7 @@ import {
   parseConsumedJson,
 } from '@/modules/task-execution/application/runProvenance'
 import { encodeWrapperProgress } from '@/modules/task-execution/domain/wrapperProgress'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import { workspaceRecord } from '../infrastructure/isolationWorkspaceView'
 import type { TaskMechanicsState } from './taskMechanicsState'
 import {

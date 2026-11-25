@@ -18,7 +18,7 @@
 // 收割 ≠ 出库：本模块只负责判终态，出库仍由既有 `taskArchive` 按 retentionDays 完成。
 // 两道开关各管一段（决策 D1/D10）。
 
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 import {
   idleTimeoutReason,

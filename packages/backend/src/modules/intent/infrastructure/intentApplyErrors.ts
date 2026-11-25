@@ -1,5 +1,5 @@
 import type { AtomicApplyErrors, AtomicApplyRow } from '@/platform/contracts/atomicApply'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE } from '../application/journalConvergence'
 
 export const intentApplyErrors: AtomicApplyErrors<AtomicApplyRow> = {

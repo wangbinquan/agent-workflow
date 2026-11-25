@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { requireWorkPath, requireWorkPathWithoutSymlinks } from './workVolumePath'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 function syncDirectory(directory: string) {
   if (process.platform === 'win32') return

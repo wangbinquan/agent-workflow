@@ -2,7 +2,7 @@
 
 import type { PublicErrorCode } from '@/platform/errors/publicError'
 import type { VersionedExactCodec } from '@/platform/operations/contracts'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 interface InvokableOperation<I, O, C> {
   readonly id: string

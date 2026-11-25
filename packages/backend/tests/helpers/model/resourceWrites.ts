@@ -57,7 +57,7 @@ import { workgroupDraftSnapshotOf } from '@/modules/resource-catalog/infrastruct
 import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { workflowCatalogFor } from '../workflowCatalog'
 
 /** 旧函数里 owner 为空的行在这里的 owner。 */

@@ -9,7 +9,7 @@ interface ExpectedMigration {
   readonly hash: string
   readonly folderMillis: number
 }
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   OBSERVATION_SOURCE_REVISION,
   OBSERVATION_SOURCE_REVISION_JOURNAL,

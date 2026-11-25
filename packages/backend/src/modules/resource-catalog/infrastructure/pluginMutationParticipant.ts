@@ -12,7 +12,7 @@ import { and, eq } from 'drizzle-orm'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { first } from '@/platform/persistence/queryHelpers'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
+import { ConflictError, NotFoundError, staleConflictError } from '@/platform/errors/domainErrors'
 import { monotonicNow } from '@/platform/contracts/monotonicNow'
 import type { PluginMutationParticipant } from '../application/ports/pluginMutation'
 import {

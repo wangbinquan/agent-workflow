@@ -46,7 +46,7 @@ import {
   trySetTaskStatus,
 } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
-import { ConflictError, NotFoundError } from '../src/util/errors'
+import { ConflictError, NotFoundError } from '../src/platform/errors/domainErrors'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'

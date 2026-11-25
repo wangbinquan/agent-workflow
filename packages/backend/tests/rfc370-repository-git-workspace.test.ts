@@ -31,7 +31,7 @@ import {
   type CommitPushDeps,
   type CommitPushParams,
 } from '@/modules/task-execution/infrastructure/commitPushAttempt'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { runGit } from '@/util/git'
 import { GitWorkspaceStore, MappedGitWorkspaceFactory } from './helpers/repositoryGitWorkspace'
 import { createTestRepositoryPublicationTransport } from './helpers/taskExecutionTestTopology'

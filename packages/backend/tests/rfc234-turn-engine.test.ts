@@ -43,7 +43,7 @@ import {
   recoverIntentTurnsOnBoot,
   sweepIntentScratch,
 } from '@/modules/intent/application/maintenance'
-import { sha256Hex } from '../src/util/hash'
+import { sha256Hex } from '../src/platform/contracts/hash'
 import { normalizeIntentWorkflowCreateLayouts } from '../src/modules/intent/domain/workflowCreateLayout'
 import { insertUserTurn } from '@/modules/intent/application/session'
 import {

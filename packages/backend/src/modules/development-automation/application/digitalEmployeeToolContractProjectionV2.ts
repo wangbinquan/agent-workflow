@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { utf16MinLength } from '@agent-workflow/shared'
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { isLexicallyInsideForHost } from '@/platform/execution/local/platformExec'
 import {
   developmentToolInputSchemasV2,

@@ -20,8 +20,8 @@ import {
   type CaseAclRow,
 } from '../../application/caseAccess'
 import { assertEmployeeToolWritable } from '../../application/toolAccess'
-import { NotFoundError } from '@/util/errors'
-import { ForbiddenError, ValidationError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
+import { ForbiddenError, ValidationError } from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import { jsonDocumentResponse } from '@/platform/http/jsonDocument'
 

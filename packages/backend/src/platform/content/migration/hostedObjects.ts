@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { legacyContentRef, type ContentRef } from '@/platform/content/contentRef'
 import type { SourceRow } from '@/platform/persistence/migration/conversion/types'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export const storedObject = z.object({
   id: z.string().min(1),

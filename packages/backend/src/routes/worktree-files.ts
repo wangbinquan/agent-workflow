@@ -26,7 +26,7 @@ import type {
   WorkspaceReadRequest,
 } from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 
 const MIME_BY_EXT: Record<string, string> = {
   '.png': 'image/png',

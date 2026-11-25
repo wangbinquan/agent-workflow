@@ -24,7 +24,7 @@ import { actorOf } from '@/auth/actor'
 import type { RepositoryGroups } from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { parseBoolQuery } from '@/platform/http/requestParsing'
 
 function assertNoRetiredMembers(raw: unknown): void {

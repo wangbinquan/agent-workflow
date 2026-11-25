@@ -56,7 +56,7 @@ import type { CallObservations } from '@/modules/run-observability/public/partic
 
 import type { NodeRunPromptOperations } from '@/modules/task-execution/public/types'
 
-import { type Logger } from '@/util/log'
+import { type Logger } from '@/platform/logging/logger'
 
 import type { PortArtifactOperations } from '@/modules/task-execution/public/types'
 

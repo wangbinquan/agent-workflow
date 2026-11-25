@@ -171,7 +171,7 @@ describe('rfc310 development-automation architecture lock', () => {
         if (inside.startsWith('domain/')) {
           const allowed =
             s === 'zod' ||
-            s === '@/util/hash' || // 纯 hash 函数（RFC-284 单步 idiom 唯一源）；其余 @/util 仍禁止
+            s === '@/platform/contracts/hash' || // 纯 hash 函数（RFC-284 单步 idiom 唯一源）；其余 @/util 仍禁止
             s.startsWith('@agent-workflow/shared') ||
             s.startsWith(`${MODULE_SPEC}/domain`) ||
             (s.startsWith('.') &&

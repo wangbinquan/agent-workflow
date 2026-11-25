@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import { parseExecutionContractRef } from '@/modules/execution-contract/public/types'
 import { registerRoute } from '@/routes/registry'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 const agentCandidateRequestSchema = z
   .object({

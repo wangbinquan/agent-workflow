@@ -5,7 +5,7 @@
 import { expect, test } from 'bun:test'
 import { Hono, type Context } from 'hono'
 import { buildActor, type Actor } from '@/auth/actor'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 import { ObservationPriceError } from '@/modules/run-observability/application/pricing'
 import type { ObservationPricing } from '@/modules/run-observability/application/pricing'
 import type { ObservationQueries } from '@/modules/run-observability/application/observationQueries'

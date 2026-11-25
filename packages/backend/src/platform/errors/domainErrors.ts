@@ -8,7 +8,7 @@
 import type { ErrorHandler } from 'hono'
 import { DrizzleQueryError } from 'drizzle-orm'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
-import { createLogger } from './log'
+import { createLogger } from '../logging/logger'
 
 const log = createLogger('errors')
 

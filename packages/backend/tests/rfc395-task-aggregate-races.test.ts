@@ -325,7 +325,7 @@ describeEachProvider('RFC-395 W1 owner fence and aggregate lock order', (harness
 })
 
 import { DatabaseHumanGateTaskLifecyclePersistence } from '@/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { HistoryRestrictionRequest } from '@/platform/contracts/historyRestriction'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'

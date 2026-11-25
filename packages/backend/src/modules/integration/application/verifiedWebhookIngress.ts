@@ -1,6 +1,6 @@
 // RFC-370: verified transport deliveries use the same admission/publication
 // path. Provider parsing and transport authentication belong to inbound adapters.
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type {
   VerifiedWebhookIngressCommands,
   VerifiedWebhookIngressDependencies,

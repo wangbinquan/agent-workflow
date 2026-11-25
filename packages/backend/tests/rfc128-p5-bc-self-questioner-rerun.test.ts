@@ -48,7 +48,7 @@ import {
 import { createClarifyRound } from '../src/modules/collaboration/infrastructure/clarify/service'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
-import { ConflictError } from '../src/util/errors'
+import { ConflictError } from '../src/platform/errors/domainErrors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 

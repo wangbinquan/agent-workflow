@@ -22,7 +22,7 @@ import {
   validateConfigurationPatch,
   mergeValidatedConfigurationPatch,
 } from './configurationValues'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('config')
 const DEPRECATED_RUNTIME_HARDENING_KEYS = [

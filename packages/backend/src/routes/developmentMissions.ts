@@ -10,7 +10,7 @@ import {
 } from '@/modules/development-automation/public/operations'
 import { decodeOrInvalid, registerOperationRoute } from '@/routes/operationRoute'
 import { directOperationAuthority } from '@/routes/operationAuthority'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '@/platform/http/requestParsing'
 
 export function mountDevelopmentMissionRoutes(

@@ -10,7 +10,7 @@ import { o2Ports } from './o2Closure'
 // RFC-386: direct engine fixtures compose the same drive factory as the daemon.
 import { createSqliteMemoryDistillEnqueuer } from './memoryDistill'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
 import { createTaskDriveCoordinatorFactory } from '@/modules/task-execution/application/drive/taskDriveCoordinatorFactory'

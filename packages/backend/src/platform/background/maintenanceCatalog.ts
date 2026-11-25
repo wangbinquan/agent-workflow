@@ -1,7 +1,7 @@
 import type { MaintenanceJobClass, MaintenanceJobKey } from '@agent-workflow/shared'
 
 import { DAEMON_CADENCE, HOUR_MS, MAINTENANCE_PHASE } from '@/platform/background/daemonCadence'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export interface MaintenanceJobSpec {
   readonly key: MaintenanceJobKey

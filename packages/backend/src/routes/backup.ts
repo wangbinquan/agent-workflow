@@ -12,7 +12,7 @@ import type { SystemOperationDescriptors } from '@/modules/system-operations/pub
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 import { safeJsonOrThrowInvalid } from '@/platform/http/requestParsing'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { z } from 'zod'
 
 interface BackupRouteSystemOperations {

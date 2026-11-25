@@ -16,7 +16,7 @@ import {
   DrizzleOidcProviderRepository,
   type OidcProviderRepository,
 } from '@/modules/identity-access/public/operations'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { timeoutSignal } from '@/platform/contracts/timeoutSignal'
 
 type OidcProviderDatabase = ConstructorParameters<typeof DrizzleOidcProviderRepository>[0]

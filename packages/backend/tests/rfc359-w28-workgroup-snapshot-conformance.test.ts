@@ -58,7 +58,7 @@ import {
 } from '@/modules/resource-catalog/infrastructure/workgroupPersistence'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { encodeZip } from '@/platform/content/zip'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { standaloneResourcePackageProviderSelections } from './helpers/resourceCatalog'

@@ -14,7 +14,7 @@ import type { EvidenceArtifactPort } from '../../application/ports/evidenceArtif
 import type { EvidenceDocumentCommands } from '../../application/evidenceDocumentCommands'
 import { EVIDENCE_READ_MAX_BYTES } from '../../application/pipelineEvidenceRead'
 import type { EvidenceBudget, EvidenceBundleRecord, EvidenceEntry } from '../../domain/evidence'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 const SHA = /^[a-f0-9]{64}$/
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/

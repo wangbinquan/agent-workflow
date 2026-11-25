@@ -24,7 +24,7 @@ import {
 } from './helpers/auth/loginPolicy'
 import { createUser } from './helpers/userFixture'
 import { createAuthRuntimeFor } from '../src/auth/composition'
-import { DomainError } from '../src/util/errors'
+import { DomainError } from '../src/platform/errors/domainErrors'
 import { freezeAt } from './migration-freeze'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

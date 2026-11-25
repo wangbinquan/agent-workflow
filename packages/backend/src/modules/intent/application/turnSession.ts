@@ -16,7 +16,7 @@ import type {
   IntentTurnEventSink,
   IntentTurnObservedEvent,
 } from '@/modules/intent/application/ports/intentSystemAgent'
-import { DomainError, NotFoundError } from '@/util/errors'
+import { DomainError, NotFoundError } from '@/platform/errors/domainErrors'
 
 export const INTENT_TURN_EVENT_ROW_LIMIT = 10_000
 export const INTENT_TURN_EVENT_BYTE_LIMIT = 8 * 1024 * 1024

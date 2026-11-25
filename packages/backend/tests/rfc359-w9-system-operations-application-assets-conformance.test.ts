@@ -73,7 +73,7 @@ import {
 } from '@/platform/persistence/portableApplicationAssets'
 import { createTaskStatusCounts } from '@/modules/task-execution/composition'
 import { extractTarGz } from '@/platform/persistence/archive'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const roots: string[] = []

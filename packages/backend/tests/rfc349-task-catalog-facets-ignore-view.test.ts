@@ -33,7 +33,7 @@ import { composeOwnerIdentityQueries } from '@/modules/identity-access/compositi
 import type { TaskCatalogSource } from '@/modules/task-catalog/composition/required-ports'
 import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 
 type Db = PersistenceDb

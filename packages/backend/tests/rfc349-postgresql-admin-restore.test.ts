@@ -7,7 +7,7 @@ import type { PostgresqlDatabaseRuntime } from '../src/platform/persistence/post
 import { PostgresqlPreflightError } from '../src/platform/persistence/postgresqlPreflight'
 import type { LogicalSchemaContract } from '../src/platform/persistence/schemaContract'
 import type { PostgresqlSchemaPlan } from '../src/platform/persistence/postgresqlSchema'
-import { DomainError } from '../src/util/errors'
+import { DomainError } from '../src/platform/errors/domainErrors'
 import {
   createPostgresqlAdminRestoreCoordinator,
   type CreatePostgresqlAdminRestoreCoordinatorInput,

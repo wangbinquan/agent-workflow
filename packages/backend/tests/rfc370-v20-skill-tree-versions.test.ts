@@ -27,7 +27,7 @@ import { createDatabaseSkillContent } from '@/modules/resource-catalog/infrastru
 import { createManagedSkill } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import { resetSkillBootVerifyForTest } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { restoreSkillVersion } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeStandaloneSkillVersionCommitParticipantFactory } from './helpers/resourceCatalog'
 

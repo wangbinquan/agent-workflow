@@ -10,7 +10,7 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 import { describeEachProvider, resolveTestProviders } from './helpers/eachProvider'
 import { withR2TargetHarness } from './helpers/rfc395R2Harness'
 

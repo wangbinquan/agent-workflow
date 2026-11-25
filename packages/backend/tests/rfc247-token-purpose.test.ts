@@ -15,7 +15,7 @@
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { buildActor, type Actor } from '@/auth/actor'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 import { registerRoute, resetRouteMetaRegistry, type RouteMeta } from '@/routes/registry'
 
 const OK = () => new Response('ok')

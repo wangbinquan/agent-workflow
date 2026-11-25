@@ -6,7 +6,7 @@ import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/per
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'

@@ -5,8 +5,8 @@
 import { expect, test } from 'bun:test'
 import { createHostedMcpDiagnosticSessions } from '@/modules/task-execution/infrastructure/crewstation/mcpDiagnosticSessions'
 import { createCrewStationMcpDiagnosticRunner } from '@/modules/task-execution/composition/crewstationMcpDiagnosticRunner'
-import { sha256Hex } from '@/util/hash'
-import { createLogger } from '@/util/log'
+import { sha256Hex } from '@/platform/contracts/hash'
+import { createLogger } from '@/platform/logging/logger'
 
 const ROOT = `/work/system/shared/${sha256Hex('session-1')}`
 

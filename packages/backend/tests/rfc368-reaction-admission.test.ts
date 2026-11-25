@@ -10,7 +10,7 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'

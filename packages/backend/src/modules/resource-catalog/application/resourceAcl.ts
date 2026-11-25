@@ -8,7 +8,12 @@ import {
 import type { GetResourceAclCatalogInput, UpdateResourceAclCatalogInput } from '../public/types'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
 import {
   canEditAccess,
   canGovernAccess,

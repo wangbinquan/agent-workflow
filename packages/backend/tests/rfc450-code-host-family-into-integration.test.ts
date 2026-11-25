@@ -21,7 +21,7 @@ import type {
 } from '@/modules/integration/application/ports/codeHostCalls'
 import type { CodeHostConnectionCredential } from '@/modules/integration/application/ports/codeHostConnections'
 import { composeCodeHostConnectionProbe } from '@/modules/integration/composition'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { importEdges, sourceUnit } from './architecture/census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')

@@ -15,7 +15,7 @@
 
 import type { Context } from 'hono'
 import type { ActorSource } from '@/auth/actor'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /**
  * Read a DELETE request body tolerantly. Empty / absent body → `{}` (so the

@@ -1,4 +1,4 @@
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 /** This is a log selection boundary matching the existing histogram bucket;
  * it does not change any maintenance budget or acceptance threshold. */

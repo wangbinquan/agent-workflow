@@ -1,5 +1,5 @@
 import { isAbsolute, relative, resolve, sep } from 'node:path'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { legacyContentRef, type ContentRef } from '../contentRef'
 
 export function skillRootRel(skillId: string): string {

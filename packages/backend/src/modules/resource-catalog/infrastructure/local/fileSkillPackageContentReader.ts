@@ -7,7 +7,7 @@ import {
 import { lstatSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SkillPackageContentReader } from '../../application/skills/packageContentReader'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /** Original snapshot preference, full-tree checks and byte reads. */
 export function createFileSkillPackageContentReader(

@@ -12,7 +12,7 @@ import type {
   SkillPackageContentReader,
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { encodeZip } from '@/platform/content/zip'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createFileSkillContentBinding } from '@/modules/resource-catalog/infrastructure/local/fileSkillContentBinding'

@@ -16,7 +16,7 @@ import {
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { listAgents } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { getAgent } from './helpers/resourceLookup'
-import { ConflictError, NotFoundError } from '../src/util/errors'
+import { ConflictError, NotFoundError } from '../src/platform/errors/domainErrors'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createAgent, renameAgent, updateAgent } from './helpers/model/resourceWrites'

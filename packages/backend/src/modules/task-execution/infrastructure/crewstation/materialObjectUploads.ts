@@ -11,7 +11,7 @@ import type {
   HostedObjectPublications,
   HostedObjectReceipt,
 } from '@/platform/content/hostedObjectPublications'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export const HOSTED_MATERIAL_OWNER = 'agent-material'
 

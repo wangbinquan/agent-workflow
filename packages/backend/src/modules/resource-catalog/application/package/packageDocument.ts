@@ -2,7 +2,7 @@
 // `services/resourcePackage/providerReadPort.ts`; the read port and snapshot types that file declared are the same
 // contracts as `./ports.ts`, which now holds the only copy.
 
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type { ResourcePackageResourceSnapshot } from './ports'
 
 /** Decode the private provider document at the legacy algorithm edge. */

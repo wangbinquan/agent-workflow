@@ -38,7 +38,7 @@ import type {
   AgentSpawnPlan,
   ResolvedSkill,
 } from '../src/modules/runtime-management/infrastructure/drivers/types'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 
 const capabilities: AgentMaterialEvidenceCapabilities = Object.freeze({
   usageMeter: true,

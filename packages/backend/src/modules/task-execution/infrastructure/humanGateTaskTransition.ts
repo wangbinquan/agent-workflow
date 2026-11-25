@@ -23,7 +23,7 @@ import { and, eq, sql } from 'drizzle-orm'
 import { ConcurrentTaskTransition } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
 import {
   appendTaskLifecycleTransitionCommittedEvent,

@@ -1,4 +1,4 @@
-import { sha256Hex } from './hash'
+import { sha256Hex } from '../platform/contracts/hash'
 
 /**
  * Map an arbitrary business identity to one Git-ref-safe path component.

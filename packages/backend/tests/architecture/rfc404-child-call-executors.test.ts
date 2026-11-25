@@ -212,7 +212,7 @@ test('negative fixtures: every call leaf rejects nested bags and imports outside
       '@/modules/task-execution/infrastructure/legacyCallClosure',
       '@/modules/task-execution/public/commands',
       '@/modules/identity-access/public/participants',
-      '@/util/errors',
+      '@/platform/errors/domainErrors',
       '@/auth/actor',
       'ulid',
     ])

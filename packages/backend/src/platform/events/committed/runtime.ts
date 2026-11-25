@@ -1,7 +1,7 @@
 import type { AfterCommitEventPump } from './afterCommitEventPump'
 import type { CommittedEventRef } from './types'
 import { afterCommitEventPumpSlotOf } from '@/platform/persistence/sessionTables'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('committed-event-runtime')
 

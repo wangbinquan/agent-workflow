@@ -22,7 +22,7 @@ import type {
   CrewStationStreamObjectStorage,
   HostedStoredObject,
 } from '@/platform/crewstation/objectStorage'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { HumanGateArtifactSnapshot } from '../../application/ports/humanGateOperationStore'
 import type { ReviewArtifactSelection } from '../../application/ports/reviewArtifactSelection'
 import { planReviewArtifact } from '../../application/reviewArtifactPlan'

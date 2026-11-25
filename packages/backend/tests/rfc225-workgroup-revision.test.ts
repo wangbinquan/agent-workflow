@@ -18,7 +18,7 @@ import {
   workgroupDraftSnapshotOf,
   workgroupSnapshotHashOf,
 } from '../src/modules/resource-catalog/infrastructure/legacy/workgroups'
-import { DomainError } from '../src/util/errors'
+import { DomainError } from '../src/platform/errors/domainErrors'
 import {
   createAgent,
   createWorkgroup,

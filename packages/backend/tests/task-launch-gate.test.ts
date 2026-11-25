@@ -14,7 +14,7 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { assertWorkflowLaunchable } from './helpers/workflowLaunchGate'
-import { ForbiddenError, NotFoundError } from '../src/util/errors'
+import { ForbiddenError, NotFoundError } from '../src/platform/errors/domainErrors'
 import { createWorkflow } from './helpers/model/resourceWrites'
 
 // Annotated (not a bare const) so `$schema_version`/`inputs` don't widen to

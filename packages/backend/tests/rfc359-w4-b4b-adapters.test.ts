@@ -20,7 +20,7 @@ import {
 } from '@/modules/integration/infrastructure/mrTerminalControlPersistence'
 import { createWebhookDeliveryQueries } from '@/modules/integration/infrastructure/webhookDeliveryQueries'
 import { createWebhookDispatchPersistence } from '@/modules/integration/infrastructure/webhookDispatchPersistence'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 

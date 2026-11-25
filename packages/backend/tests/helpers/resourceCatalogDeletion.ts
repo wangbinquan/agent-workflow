@@ -21,7 +21,7 @@ import {
   createWorkgroupEvents,
 } from '@/modules/resource-catalog/composition/workgroupOperations'
 import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { assertNotBuiltin } from '@/modules/resource-catalog/domain/systemResources'
 
 function authority(actor: Actor) {

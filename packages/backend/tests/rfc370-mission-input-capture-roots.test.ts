@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import ts from 'typescript'
 import type { MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { EvidenceStore } from '@/modules/development-automation/infrastructure/local/fileEvidenceStore'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 

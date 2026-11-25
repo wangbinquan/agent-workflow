@@ -6,7 +6,7 @@
 import type { PersistenceTables } from '@/platform/persistence/sessionTables'
 import { canonicalJson } from '@agent-workflow/shared'
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type {
   AppendCommittedEventInput,
   CommittedEventAggregateKind,

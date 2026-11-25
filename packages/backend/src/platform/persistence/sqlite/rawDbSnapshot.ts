@@ -27,7 +27,7 @@ import {
 import { join } from 'node:path'
 import { sqliteRawDbSnapshotMechanisms } from '@/platform/persistence/sqlite/rawDbSnapshotMechanisms'
 import { tarGz } from '@/platform/persistence/archive'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { Paths } from '@/platform/configuration/installationPaths'
 import {
   type BackupKind,

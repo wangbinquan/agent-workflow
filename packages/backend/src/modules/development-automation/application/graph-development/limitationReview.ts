@@ -4,7 +4,7 @@ import {
   GraphLimitationReviewRequestSchema,
   type GraphLimitationReviewRequest,
 } from '@agent-workflow/shared'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { graphDigest, staleGraphReads } from '../../domain/graph-development/model'
 import type { GraphDesignArtifacts } from '../ports/graphDesignArtifacts'
 import type { GraphDesignStore } from '../ports/graphDesignStore'

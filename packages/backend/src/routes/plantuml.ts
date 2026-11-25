@@ -20,7 +20,7 @@ import type { Hono } from 'hono'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { registerRoute } from '@/routes/registry'
 import { PLANTUML_SOURCE_MAX, hostOf, renderPlantuml } from '@/platform/http/plantuml'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 
 export interface PlantumlRouteDependencies {
   readonly configuration: ApplicationConfigurationQueries

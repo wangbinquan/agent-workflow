@@ -5,7 +5,7 @@
 
 import { Unzip, UnzipInflate, unzipSync, type UnzipFileInfo } from 'fflate'
 import { SKILL_ZIP_LIMITS, type ZipEntryRef } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 // Compatibility name retained for existing backend callers/tests. Safety
 // enforcement remains here; RFC-196 only moves the values to shared so the

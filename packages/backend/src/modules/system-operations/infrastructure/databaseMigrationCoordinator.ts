@@ -10,7 +10,7 @@ import { supportsProviderMove } from '@/platform/persistence/migrationSupport'
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { createDatabaseMigrationControlPlane } from '../application/databaseMigrationControlPlane'
 import {
@@ -57,7 +57,7 @@ import {
   PostgresqlRuntimeError,
 } from '@/platform/persistence/postgresqlRuntime'
 import { preflightPostgresqlTarget } from '@/platform/persistence/postgresqlPreflight'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import { type LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type {

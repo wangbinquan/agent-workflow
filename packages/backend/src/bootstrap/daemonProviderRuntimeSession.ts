@@ -10,7 +10,7 @@ import type {
   ManagedDaemonProviderSession,
 } from './daemonProviderSession'
 
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('daemon-runtime')
 

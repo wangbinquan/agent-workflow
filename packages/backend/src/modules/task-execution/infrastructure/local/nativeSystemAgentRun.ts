@@ -28,7 +28,7 @@
 // protocol view, evidence and reference table as before.
 
 import type { RuntimeKind } from '@/modules/runtime-management/public/types'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import type { DeclaredInjectionManifest } from '@agent-workflow/shared'
 import type {
   StartupInventory,

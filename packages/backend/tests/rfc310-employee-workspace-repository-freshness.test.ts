@@ -27,7 +27,7 @@ import {
   createDevelopmentWorkspaceRepositoryPreparation,
 } from '@/modules/source-control/infrastructure/local/developmentWorkspaceRepositoryPreparation'
 import { resolveCachedRepo } from '@/modules/source-control/infrastructure/local/repositoryMirrorCache'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 
 const root = mkdtempSync(join(tmpdir(), 'rfc310-workspace-freshness-'))
 

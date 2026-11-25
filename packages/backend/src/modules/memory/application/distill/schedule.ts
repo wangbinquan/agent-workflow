@@ -33,7 +33,7 @@ import {
   type RunDistillOptions,
   rowToDistillJob,
 } from '@/modules/memory/application/distill/memoryDistiller'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { agentRefOfNode } from '@agent-workflow/shared'
 import type {
   MemoryDistillReviewedArtifactReader,

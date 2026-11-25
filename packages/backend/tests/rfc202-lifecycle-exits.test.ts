@@ -45,7 +45,7 @@ import {
 } from '@/modules/collaboration/infrastructure/review'
 import { listClarifyRoundSummaries } from '../src/modules/collaboration/infrastructure/clarifyRounds'
 import { scheduledRowsReferencingWorkflow } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
-import { ConflictError } from '../src/util/errors'
+import { ConflictError } from '../src/platform/errors/domainErrors'
 import { buildActor } from '../src/auth/actor'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 

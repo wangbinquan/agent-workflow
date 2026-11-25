@@ -2,7 +2,7 @@ import { createAtomicApplyClaimStore } from '@/platform/atomic-apply/infrastruct
 import { atomicApplyRecoveryClaims } from '@/platform/atomic-apply/lease'
 import type { AtomicApplyRecoveryScene } from '@/platform/contracts/atomicApply'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import {
   INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
   INTENT_APPLY_DIAGNOSTICS,

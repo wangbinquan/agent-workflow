@@ -17,7 +17,7 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 //
 // 它顺带锁住了本产品的**部署密钥机制**：本仓没有「按仓登记 deploy key」这个功能
 // （`deploy_key` / `deployKey` 全仓零命中），运维交付私钥的唯一途径就是给 daemon
-// 环境设 `GIT_SSH_COMMAND="ssh -i <key>"`，由 util/git.ts:38-44 层叠保留下来。
+// 环境设 `GIT_SSH_COMMAND="ssh -i <key>"`，由 util/git.ts:43-49 层叠保留下来。
 // 既有的 git-noninteractive-env.test.ts 只验证了**那个 env 构造函数**本身会保留
 // `-i`；它证明不了真正 clone 的时候这份 env 有没有被用上。所以这里断言的是桩 ssh
 // **确实收到了** `-i <key>`——那是「部署密钥能不能用」的唯一机器判据。
@@ -144,7 +144,7 @@ describeEachProvider('RFC-319 REPO-42 —— ssh 传输的仓库接入', (harnes
 
   test('运维给的 `-i <私钥>` 一路活到 ssh 手里（本产品交付部署密钥的唯一途径）', async () => {
     // 本仓没有「按仓登记 deploy key」的功能（deploy_key 全仓零命中），私钥只能
-    // 从 daemon 环境的 GIT_SSH_COMMAND 进来，由 util/git.ts:38-44 层叠保留。
+    // 从 daemon 环境的 GIT_SSH_COMMAND 进来，由 util/git.ts:43-49 层叠保留。
     const keyPath = join(fixture, 'deploy_key')
     writeFileSync(keyPath, 'not-a-real-key\n', 'utf-8')
     process.env.GIT_SSH_COMMAND = `${stub.path} -i ${keyPath}`
@@ -166,7 +166,7 @@ describeEachProvider('RFC-319 REPO-42 —— ssh 传输的仓库接入', (harnes
         '所有靠部署密钥接入的部署会在毫无预警的情况下全部认证失败',
     ).toContain(`-i ${keyPath}`)
     // 覆盖式替换 vs 层叠：产品追加的非交互选项必须同时还在，否则首次连未知主机
-    // 时 ssh 会去读 /dev/tty 把 daemon 挂死（util/git.ts:26-34 记的正是那次事故）。
+    // 时 ssh 会去读 /dev/tty 把 daemon 挂死（util/git.ts:31-39 记的正是那次事故）。
     expect(calls).toContain('BatchMode=yes')
     expect(calls).toContain('StrictHostKeyChecking=accept-new')
   })

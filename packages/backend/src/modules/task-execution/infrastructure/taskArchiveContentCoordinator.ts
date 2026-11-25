@@ -1,4 +1,4 @@
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 import {
   TASK_ARCHIVE_SCHEMA_VERSION,
   TASK_ARCHIVE_V3_TABLES,
@@ -63,7 +63,7 @@ import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { chunkedAll, SQL_IN_CHUNK } from '@/platform/persistence/sqlChunk'
 import type {
   ArchivedTaskTreeReceipt,

@@ -12,8 +12,13 @@ import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
 import { canWriteFramework } from '../domain/templateLayers'
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type {
   CapabilityTemplatePersistence,
   CapabilityTemplateRecord,

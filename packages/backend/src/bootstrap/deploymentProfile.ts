@@ -51,7 +51,7 @@ import type { EvidenceArtifactPort } from '@/modules/development-automation/comp
 import type { BootExecutionRecoveryFactory } from '@/modules/task-execution/composition/bootRecovery'
 import type { DaemonDatabaseInstallation } from '@/modules/system-operations/composition/daemonDatabaseInstallation'
 import type { PluginInstallerPort } from '@/modules/resource-catalog/composition/pluginOperations'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { CustomObserverProgramFactory } from '@/modules/event-center/composition'
 import type { SignalledDaemonRuntimeOwner } from './daemonProviderRuntimeHandles'
 import type { MaintenanceWorkerEffectsDescriptor } from '@/platform/background/maintenanceWorkerEffects'

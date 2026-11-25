@@ -15,7 +15,7 @@
 //   routes/clarify.detail.tsx:147-168   locked 集合：仅**本轮**（originNodeRunId 相同）且已 seal / 已下发的题
 //   routes/clarify.detail.tsx:944-953   locked ⇒ 包一层 --locked 并打 data-locked
 //   routes/clarify.detail.tsx:503-505   提交前 `.filter((q) => !lockedQuestionIds.has(q.id))`
-//   routes/clarify.ts:245-258           控制通道才允许 questionIds 子集（B36 已锁）
+//   routes/clarify.ts:250-263           控制通道才允许 questionIds 子集（B36 已锁）
 //
 // 覆盖边界（如实记，别让读的人以为这条比实际更宽）：`lockedQuestionIds` 里还有一条
 // **轮次范围限定**（`originNodeRunId !== nodeRunId` 时跳过），防的是「兄弟轮复用了同名

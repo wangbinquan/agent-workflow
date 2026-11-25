@@ -26,7 +26,7 @@ import type {
   AgentProcessRequest,
   AgentProcessResult,
 } from '../src/platform/execution/local/agentProcess'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import {
   createLocalAgentMaterialCompiler,
   createNativeAgentMaterialReferences,

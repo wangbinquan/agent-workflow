@@ -1,5 +1,5 @@
 // RFC-395: physical PostgreSQL admission and row reads share one read-only snapshot.
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 import type { PostgresqlDatabaseRuntime, PostgresqlReservedConnection } from '../postgresqlRuntime'
 import { canonicalSchemaJson, digestSchemaContract } from '../schema/canonical'
 import { postgresqlHistoryConnection } from '../schema/history/connection'

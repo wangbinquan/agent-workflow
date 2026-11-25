@@ -50,7 +50,7 @@ export type { SystemAgentSessionSweepOutcome }
 // startLiveCapture? land in later PRs. Type-only imports below keep this a
 // compile-time module (no runtime edge into db/log/shared).
 
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type {
   Agent,
   FaceSupport,

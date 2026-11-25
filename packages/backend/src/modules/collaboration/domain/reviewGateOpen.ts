@@ -1,6 +1,6 @@
 // RFC-333 T6 — immutable review-open manifest consumed by TaskParkTx.
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { canonicalHumanGateValueJson } from './canonicalGateRequest'
 import { HumanGateOperationError } from './humanGateOperation'
 

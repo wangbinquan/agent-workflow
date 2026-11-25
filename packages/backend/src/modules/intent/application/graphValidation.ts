@@ -6,7 +6,7 @@
 
 import type { IntentChangeset, WorkflowValidationIssue } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   buildIntentGraphCandidates,
   type IntentGraphRefMode,

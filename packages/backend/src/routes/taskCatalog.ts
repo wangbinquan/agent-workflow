@@ -4,7 +4,7 @@ import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
 import type { TaskCatalogQueries } from '@/modules/task-catalog/public/queries'
 import { registerRoute } from '@/routes/registry'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { jsonDocumentResponse } from '@/platform/http/jsonDocument'
 
 // RFC-435: the catalog queries return typed documents; this inbound adapter owns their JSON encoding.

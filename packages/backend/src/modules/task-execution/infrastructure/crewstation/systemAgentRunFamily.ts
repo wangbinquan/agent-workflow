@@ -4,7 +4,7 @@
 // runtime-management contents arrive from the composition through the hosted provider port.
 import { randomUUID } from 'node:crypto'
 import type { AgentMaterialIntent } from '@/modules/runtime-management/public/participants'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { SystemAgentObservationFactory } from '../../application/ports/systemAgentObservation'
 import type { SystemAgentRunFamily } from '../../application/ports/systemAgentRunFamily'
 import { createSystemAgentRunFamily } from '../../application/systemAgentRun'

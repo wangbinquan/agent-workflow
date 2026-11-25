@@ -48,7 +48,7 @@ import {
 } from '../src/modules/resource-catalog/composition/resourceAcl'
 import { assertNameUnchangedForEditor } from '../src/modules/resource-catalog/application/resourceAccess'
 import type { Permission } from '@agent-workflow/shared'
-import { errorHandler } from '../src/util/errors'
+import { errorHandler } from '../src/platform/errors/domainErrors'
 import { createUnboundCodeHistoryReader } from './helpers/codeHistory'
 
 const NOW = 1_700_000_000_000

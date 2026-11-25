@@ -10,7 +10,7 @@ import type {
   EventObservationInput,
   EventObservationReceipt,
 } from '@/modules/event-center/public/types'
-import { ConflictError, DomainError } from '@/util/errors'
+import { ConflictError, DomainError } from '@/platform/errors/domainErrors'
 import type {
   CrewStationEventInboxPort,
   CrewStationInboundDelivery,

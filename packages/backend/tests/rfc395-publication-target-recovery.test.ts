@@ -11,7 +11,7 @@ import {
   createHostedObjectPublications,
   HOSTED_PUBLICATION_ABANDON_MS,
 } from '@/platform/content/infrastructure/hostedObjectPublications'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'
 

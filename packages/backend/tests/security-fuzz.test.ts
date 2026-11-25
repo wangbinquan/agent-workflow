@@ -31,7 +31,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 import { realpathInside, safeJoin } from '../src/util/safePath'
 import { redactSensitiveString } from '../src/util/redact'
 import { redactGitUrl } from '@agent-workflow/shared'

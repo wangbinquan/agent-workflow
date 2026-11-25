@@ -7,7 +7,7 @@ import {
   type RepositoryTransportMappingV1,
 } from '@agent-workflow/shared'
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type {
   RepositoryTransportConnectionProjectionInput,
   RepositoryTransportConnectionProjectionSource,

@@ -25,7 +25,7 @@ import {
 import { resolveTaskRole } from '../src/modules/resource-catalog/application/resourceDefaults'
 import { isVisibleRow, type AclRow } from '../src/modules/resource-catalog/domain/resourceAccess'
 import { listGrantedResourceIds } from '../src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
-import { ForbiddenError, NotFoundError } from '../src/util/errors'
+import { ForbiddenError, NotFoundError } from '../src/platform/errors/domainErrors'
 
 function actorOfUser(id: string, role: 'admin' | 'user' | 'guest', patScopes?: string[]): Actor {
   return buildActor({

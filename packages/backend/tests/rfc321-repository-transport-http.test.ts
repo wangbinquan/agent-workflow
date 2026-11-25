@@ -21,7 +21,7 @@ import { composeCodeHostConnectionProbe } from '../src/modules/integration/compo
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
 import { createUser } from './helpers/userFixture'
-import { errorHandler } from '../src/util/errors'
+import { errorHandler } from '../src/platform/errors/domainErrors'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 

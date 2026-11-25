@@ -2,7 +2,7 @@
 import { setDefaultTimeout, afterEach, beforeEach, expect, test } from 'bun:test'
 import { Hono, type Context } from 'hono'
 import { buildActor } from '@/auth/actor'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 import { mountCodeRoutes } from '@/modules/code-capability/composition/routes'
 import { resetRouteMetaRegistry } from '@/routes/registry'
 import {

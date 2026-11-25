@@ -32,7 +32,7 @@ import type {
   CommandContext,
   QueryContext,
 } from '../src/modules/identity-access/public/participants'
-import { errorHandler } from '../src/util/errors'
+import { errorHandler } from '../src/platform/errors/domainErrors'
 import { registerResourcePackageRoutes } from '../src/routes/resourcePackages'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'

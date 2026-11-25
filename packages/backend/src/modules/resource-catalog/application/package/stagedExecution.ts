@@ -4,7 +4,7 @@
 // function to the application's id factory).
 import type { Actor } from '@/auth/actor'
 import type { CommandContext } from '@/modules/identity-access/public/participants'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type {
   ResourcePackageExecutionPort,
   ResourcePackageHumanMemberMapping,

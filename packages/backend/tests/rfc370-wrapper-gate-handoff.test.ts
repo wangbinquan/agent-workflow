@@ -26,7 +26,7 @@ import { GitStrategy } from '../src/modules/task-execution/engine/wrapper/gitStr
 import { LoopStrategy } from '../src/modules/task-execution/engine/wrapper/loopStrategy'
 import { WrapperRuntime } from '../src/modules/task-execution/engine/wrapper/wrapperRuntime'
 import type { TaskMechanicsState } from '../src/modules/task-execution/composition/taskMechanicsState'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'

@@ -1,5 +1,5 @@
 import type { ScriptFailureCode, ScriptLanguage, WorkflowNode } from '@agent-workflow/shared'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { NodeExecutionPersistence } from './nodeExecutionPersistence'
 import type { TaskExecutionContextRef } from './taskExecutionTopology'
 import type { TaskExecutionEffectPersistence } from './taskExecutionEffectStore'

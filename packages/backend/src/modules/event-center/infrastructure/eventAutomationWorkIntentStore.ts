@@ -6,8 +6,8 @@ import { and, eq, isNull, or } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, ValidationError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import { ConflictError, ValidationError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   eventResponseMaterializedSubscriptionId,
   eventResponseRuleIdFromSubscriberRef,

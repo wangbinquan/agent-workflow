@@ -14,7 +14,7 @@ import {
   startMaintenanceTicker,
   type MaintenanceTickerHandle,
 } from '@/platform/background/maintenanceTicker'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { FIXED_MAINTENANCE_JOB_SPECS, maintenanceJobSpec } from './maintenanceCatalog'
 import { parseMaintenanceJobPayload } from './maintenanceJobPayload'
 import type { MaintenanceWorkerDelta, MaintenanceWorkerEvent } from './maintenanceProtocol'

@@ -13,7 +13,7 @@ import {
   getBatchSnapshot,
   type RepoBatchImportDeps,
 } from '../src/modules/source-control/infrastructure/local/repositoryBatchImport'
-import { DomainError, NotFoundError } from '../src/util/errors'
+import { DomainError, NotFoundError } from '../src/platform/errors/domainErrors'
 import type { resolveCachedRepo } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 

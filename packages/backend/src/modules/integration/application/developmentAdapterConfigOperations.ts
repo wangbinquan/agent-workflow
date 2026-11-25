@@ -7,7 +7,7 @@
 
 import type { ResourceAccess, ResourceGrantLevel } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import {
   archiveDevelopmentAdapter,
   createDevelopmentAdapter,

@@ -20,7 +20,7 @@
 
 import { cpSync, mkdirSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 /**
  * 2026-08-09 — the one directory name a staged skill tree may NOT carry.

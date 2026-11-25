@@ -11,7 +11,7 @@ import {
   type Permission,
   type Role,
 } from '@agent-workflow/shared'
-import { UnauthorizedError } from '@/util/errors'
+import { UnauthorizedError } from '@/platform/errors/domainErrors'
 
 export { SYSTEM_USER_ID } from './systemIdentity'
 

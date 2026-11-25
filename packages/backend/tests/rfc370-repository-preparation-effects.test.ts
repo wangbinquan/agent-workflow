@@ -7,7 +7,7 @@ import { repositoryPreparationFactsJson } from '@/modules/source-control/domain/
 import { createRepositoryPreparationJournal } from '@/modules/source-control/infrastructure/repositoryPreparationJournal'
 import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 import type { RepositoryPreparationEffectFactory } from '@/modules/source-control/application/ports/repositoryPreparationEffects'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('RFC-370 selected repository preparation effects', (harness) => {

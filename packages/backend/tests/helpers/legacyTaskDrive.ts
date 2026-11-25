@@ -52,7 +52,7 @@ import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { getTask } from './taskDetailRead'
 import { runtimeConfigOpts } from '@/modules/task-execution/composition/taskDriveRuntimeOptions'
 import type { TaskContinuationDependencies } from './taskContinuationDependencies'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { Paths } from '@/platform/configuration/installationPaths'
 import {
   awaitTaskDriverIdle,

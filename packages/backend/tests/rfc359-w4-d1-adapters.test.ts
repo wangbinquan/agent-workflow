@@ -17,7 +17,7 @@ import { createScheduledTaskPersistence } from '@/modules/integration/infrastruc
 import { composeIntegrationTriggerSnapshots } from '@/modules/resource-catalog/composition/integrationTrigger'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import { assertNotBuiltin } from '@/modules/resource-catalog/domain/systemResources'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_700_000_000_000

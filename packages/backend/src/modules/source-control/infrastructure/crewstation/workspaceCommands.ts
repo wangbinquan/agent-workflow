@@ -20,7 +20,7 @@ import { tablesOf, type PersistenceTables } from '@/platform/persistence/session
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
@@ -44,7 +44,7 @@ import {
   type WorkspaceHelperOptions,
   type WorkspaceHelperOutcome,
 } from '@/platform/crewstation/workspaceProtocol'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   isUnknownTaskImageOperation,
   NO_HOSTED_IMAGE_UPGRADES,

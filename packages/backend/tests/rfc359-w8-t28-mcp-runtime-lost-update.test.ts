@@ -61,7 +61,7 @@ import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createMcpRuntimeTestPersistence } from '@/modules/resource-catalog/infrastructure/mcpRuntimeTestPersistence'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const HASH = 'a'.repeat(64)

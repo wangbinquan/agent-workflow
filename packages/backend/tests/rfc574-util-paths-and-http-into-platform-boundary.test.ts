@@ -35,7 +35,7 @@ const MOVED: ReadonlyArray<readonly [string, string, readonly string[], readonly
     'util/http',
     'platform/http/requestParsing',
     ['parseBoolQuery', 'safeJsonOrEmpty', 'safeJsonOrThrowInvalid'],
-    ['@/util/errors', 'hono'],
+    ['@/platform/errors/domainErrors', 'hono'],
   ],
 ]
 const OLD = new Set(MOVED.map(([old]) => old))
@@ -186,7 +186,7 @@ describe('RFC-574 —— 两个文件离开 util/', () => {
           "mock.module('@/util/http', () => ({}))\n" +
           "type P = import('./util/paths').Paths\n" +
           "import { Paths as next } from './platform/configuration/installationPaths'\n" +
-          "import { createLogger } from './util/log'\n" +
+          "import { createLogger } from './platform/logging/logger'\n" +
           "import { Hono } from 'hono'\n",
       ).filter((target) => OLD.has(target)),
     ).toEqual([

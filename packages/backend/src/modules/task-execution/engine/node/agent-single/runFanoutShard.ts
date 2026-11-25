@@ -32,7 +32,7 @@ type ShardSpec = FanoutShardSpec
  * RFC-098 B3 (audit S-20): sha256 hex of a fanout shard's value — the
  * cross-generation reuse identity stamped into `node_runs.shard_value_hash`
  * (migration 0043) and re-derived at dispatch time for the
- * pickReusableShardRun match. sha256Hex（@/util/hash）precedent: util/git.ts 同款单步 hash 收口。
+ * pickReusableShardRun match. sha256Hex（@/platform/contracts/hash）precedent: util/git.ts 同款单步 hash 收口。
  */
 
 export interface DispatchShardArgs {

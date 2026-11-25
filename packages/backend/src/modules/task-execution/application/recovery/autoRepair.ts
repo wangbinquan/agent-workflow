@@ -26,7 +26,7 @@ import {
   listAllOpenLifecycleAlerts,
   type OpenLifecycleAlert,
 } from '../lifecycleAlerts/openLifecycleAlerts'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type { TaskLifecycleAutoRepairResult } from '../ports/taskLifecycleAutoRepairCommand'
 
 const log = createLogger('auto-repair')

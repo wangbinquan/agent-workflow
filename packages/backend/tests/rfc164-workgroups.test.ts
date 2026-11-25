@@ -42,7 +42,7 @@ import {
   listWorkgroups,
   workgroupDraftSnapshotOf,
 } from '../src/modules/resource-catalog/infrastructure/legacy/workgroups'
-import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '../src/platform/errors/domainErrors'
 import { createWorkgroup, renameWorkgroup, saveWorkgroup } from './helpers/model/resourceWrites'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps

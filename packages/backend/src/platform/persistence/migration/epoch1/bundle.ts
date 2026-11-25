@@ -6,7 +6,7 @@ import {
   resolveMigrationsFolder,
   resolvePostgresqlMigrationsFolder,
 } from '@/platform/persistence/migration/migrationsFolder'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { readPostgresqlMigrationHistoryPrefix } from '../legacy/postgresqlMigrationHistory'
 import type { PostgresqlMigrationHistory } from '../legacy/postgresqlMigrationSequence'
 import { digestSchemaContract } from '../../schema/canonical'

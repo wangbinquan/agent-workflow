@@ -1,4 +1,4 @@
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 import { canonicalSchemaJson } from '../../schema/canonical'
 import type { TargetRow } from './types'
 import { canonicalValue } from './migrationKey'

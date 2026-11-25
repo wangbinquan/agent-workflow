@@ -24,7 +24,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { resolveTaskRole } from '../src/modules/resource-catalog/application/resourceDefaults'
 import { createUser, patchUser } from './helpers/userFixture'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 

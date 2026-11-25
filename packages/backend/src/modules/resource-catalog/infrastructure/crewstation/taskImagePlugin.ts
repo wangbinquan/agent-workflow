@@ -29,7 +29,7 @@ import {
   readGenerationManifestForCachedPath,
   type InstallResult,
 } from '../local/filePluginInstallation'
-import { createSha256DigestBuilder, sha256Hex } from '@/util/hash'
+import { createSha256DigestBuilder, sha256Hex } from '@/platform/contracts/hash'
 import { assertSameFileIdentityForHost } from '@/util/fileTrust'
 
 const Request = z.discriminatedUnion('method', [

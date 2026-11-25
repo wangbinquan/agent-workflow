@@ -21,7 +21,7 @@ import type { TaskSessionReadModel, TaskSessionRunSource } from '../public/types
 import { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
 import type { NodeRunPromptOperations } from '../public/types'
 import { requireNodeRunPromptOperations } from '../application/nodeRunPrompt'
-import { DomainError, NotFoundError } from '@/util/errors'
+import { DomainError, NotFoundError } from '@/platform/errors/domainErrors'
 import { Paths } from '@/platform/configuration/installationPaths'
 
 /** 会话树是「读全历史」的视图,但仍要有界:单个 node_run 的归档回读封顶,

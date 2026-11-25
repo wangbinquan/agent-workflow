@@ -12,7 +12,7 @@ import {
 } from './helpers/rfc395V2/contentFixtures'
 import { conversion } from '@/platform/content/migration'
 import { runConversion } from '@/platform/persistence/migration/conversion/engine'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 // Slowest case took 3.93 s on CI run 40433510287 including hooks; allow 20 s.
 setDefaultTimeout(20_000)

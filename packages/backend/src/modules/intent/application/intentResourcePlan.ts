@@ -19,7 +19,7 @@
 import type { IntentManifestEntry } from '@/modules/intent/application/manifest'
 import type { VersionedIntentResourceChangesetPlan } from '@/modules/resource-catalog/public/types'
 import type { ResolvedIntentOp } from '@/modules/intent/application/resolveChangeset'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 
 /**
  * 把一个已解析的 op 映射成资源变更计划。

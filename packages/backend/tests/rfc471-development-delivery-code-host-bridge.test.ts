@@ -35,7 +35,7 @@ import {
   createRepositoryCodeHostClaimKeys,
 } from '@/modules/integration/application/developmentCodeHostDelivery'
 import { composeDevelopmentCodeHostDelivery } from '@/modules/integration/composition/codeHostEffects'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const SRC = resolve(import.meta.dir, '..', 'src')

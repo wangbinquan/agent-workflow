@@ -1,6 +1,6 @@
 import type { Actor } from '@/auth/actor'
 import type { QueryContext } from '@/modules/identity-access/public/participants'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type { CatalogResourceRef } from '../domain/resourceRef'
 import { CATALOG_SELECTOR_KINDS, type CatalogSelectorKind } from '../domain/resourceKinds'
 import type { ResourceCatalogQuery } from '../public/queries'

@@ -39,7 +39,7 @@ import {
   triggerSourceFromContext,
 } from '@/modules/resource-catalog/public/queries'
 import { buildDynamicWorkflowGenerateSnapshot } from '../domain/dynamicWorkflowOrchestrator'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import {
   CHILD_LAUNCH_FAILURE,
   type TaskDriveCoordinatorFactory,

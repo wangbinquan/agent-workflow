@@ -1,6 +1,6 @@
 // RFC-395 II-a A6 — 资源包场景保留 HEAD 的错误代码、状态与文案。
 import type { AtomicApplyErrors, AtomicApplyRow } from '@/platform/contracts/atomicApply'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 
 export function resourcePackageApplyErrorText(error: unknown): string {
   return error instanceof Error

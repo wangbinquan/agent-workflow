@@ -1,4 +1,4 @@
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type {
   RepositoryGitOutcome as GitRunResult,
   RepositoryGitWorkspaceScope,

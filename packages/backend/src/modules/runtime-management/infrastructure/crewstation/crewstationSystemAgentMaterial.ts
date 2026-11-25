@@ -8,7 +8,7 @@ import type {
   SystemAgentWorkspaceScope,
   SystemAgentWorkspaceScopes,
 } from '../../application/ports/systemAgentRetainedContents'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 /** System scratch namespaces share durable parent volumes; each invocation has
  * its own directory. Closing a scratch never closes another Agent's parent. */

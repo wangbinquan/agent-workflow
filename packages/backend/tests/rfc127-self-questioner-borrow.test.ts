@@ -36,7 +36,7 @@ import { monotonicFactory } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { resolveBorrowForNode } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { borrowDuplicateExecutionRejection } from '../src/modules/task-execution/application/agentNodeErrors'
-import { ConflictError } from '../src/util/errors'
+import { ConflictError } from '../src/platform/errors/domainErrors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -297,7 +297,7 @@ describeEachProvider(
 describe('RFC-127 borrow conflict — scheduler node-level failure (source lock)', () => {
   test('runOneNode catches ConflictError from resolveBorrowForNode → kind:failed', () => {
     // RFC-405: the agent body moved to engine/node/agent-single/ (which may not import
-    // @/util/errors); the ConflictError decision is application/agentNodeErrors.ts.
+    // @/platform/errors/domainErrors); the ConflictError decision is application/agentNodeErrors.ts.
     const src = readFileSync(
       resolve(
         import.meta.dir,

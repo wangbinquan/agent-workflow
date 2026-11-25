@@ -5,7 +5,7 @@
 // invocation id (derived from the observation demand when there is one) and release judgment, and the hosted probe's
 // shared smoke workspace, release judgment and budget.
 import { expect, test } from 'bun:test'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { createLocalSystemAgentRunFamily } from '@/modules/task-execution/infrastructure/local/systemAgentRunFamily'
 import { createLocalRuntimeSmokeRunFamily } from '@/modules/task-execution/infrastructure/local/runtimeSmokeRunFamily'
 import { createHostedSystemAgentRunFamily } from '@/modules/task-execution/infrastructure/crewstation/systemAgentRunFamily'

@@ -4,7 +4,7 @@
 import type { HumanGateOpenParticipantFactory } from '@/modules/task-execution/application/ports/humanGateOpenFactory'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { cancelTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { getTask } from './taskDetailRead'
 import { cancelAndReadTask } from '@/modules/task-execution/application/digitalEmployeeExecution'

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { ContentRef } from './contentRef'
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 
 const envelope = z.strictObject({
   version: z.literal(1),

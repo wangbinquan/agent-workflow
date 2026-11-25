@@ -5,8 +5,8 @@ import {
   type TaskStatus,
 } from '@agent-workflow/shared'
 
-import { DomainError } from '@/util/errors'
-import { createLogger } from '@/util/log'
+import { DomainError } from '@/platform/errors/domainErrors'
+import { createLogger } from '@/platform/logging/logger'
 import type {
   WorkspaceMaintenanceFilesystem,
   WorkspaceMaintenanceStore,

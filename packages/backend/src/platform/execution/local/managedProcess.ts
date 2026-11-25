@@ -7,7 +7,7 @@
 // identity policy. Callers pass the exact argv, cwd, and complete environment
 // that should reach the child.
 
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import { randomUUID } from 'node:crypto'
 import { closeSync, openSync, readSync } from 'node:fs'
 import {

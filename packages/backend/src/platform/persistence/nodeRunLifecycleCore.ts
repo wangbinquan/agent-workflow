@@ -14,12 +14,12 @@
 // 于是 `taskLifecycle.ts` 里那几处同步事务一直没法转成中立异步形态。把共用面下沉到这里之后，
 // 两份实现都**向下**依赖本文件，反向边消失，同步事务面才迈得动（W8：该文件 4 → 2 处）。
 //
-// ⚠️ 本文件必须保持叶子：只许依赖 `@agent-workflow/shared` / `@/db/schema` 的类型 / `@/util/errors`。
+// ⚠️ 本文件必须保持叶子：只许依赖 `@agent-workflow/shared` / `@/db/schema` 的类型 / `@/platform/errors/domainErrors`。
 // 往这里加任何指向 services/ 或 modules/ 的 import 都会把上面那条环装回来。
 
 import type { NodeRunStatus } from '@agent-workflow/shared'
 
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 
 const SOURCE_TERMINATION_BLOCKED_NODE_STATUSES: ReadonlySet<NodeRunStatus> = new Set([
   'pending',
@@ -48,7 +48,7 @@ export function assertNodeRunSourceTerminationAdmission(
 /**
  * Raised when CAS UPDATE affected 0 rows — the row's status is no longer
  * the value we read a moment ago (someone else wrote it concurrently), or
- * the row was deleted. Mapped to HTTP 409 by `util/errors`.
+ * the row was deleted. Mapped to HTTP 409 by `platform/errors/domainErrors`.
  */
 export class ConcurrentNodeRunTransition extends ConflictError {
   constructor(nodeRunId: string, expectedFrom: NodeRunStatus, eventKind: string) {

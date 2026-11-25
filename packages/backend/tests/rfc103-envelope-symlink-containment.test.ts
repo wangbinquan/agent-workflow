@@ -9,7 +9,7 @@ import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolvePortContent } from '../src/modules/task-execution/composition/portOutputValidation'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 
 describe('RFC-103 T7 端口 symlink realpath 包含', () => {
   let worktree: string

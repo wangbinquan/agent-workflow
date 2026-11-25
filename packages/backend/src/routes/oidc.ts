@@ -10,7 +10,7 @@ import {
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { redactedProvider, type OidcProvidersService } from '@/auth/oidc/providers'
 import { registerRoute } from '@/routes/registry'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { parseBoolQuery } from '@/platform/http/requestParsing'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 

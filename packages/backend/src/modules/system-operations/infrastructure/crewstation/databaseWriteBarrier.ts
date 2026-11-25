@@ -28,7 +28,7 @@
 // handoff in the middle of a merge-back stamped `merge-failed` on a node whose
 // workspace command it had only detached (2026-10-17 hosted acceptance).
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import type { ExecutionAuthorityState } from '../../application/ports/executionAuthority'
 import {
   holdHostedExecutionControl,

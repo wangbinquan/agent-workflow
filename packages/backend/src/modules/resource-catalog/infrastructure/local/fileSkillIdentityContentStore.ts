@@ -3,7 +3,7 @@ import { dirname } from 'node:path'
 import type { SkillIdentityContentStore } from '../../application/skills/identityContentStore'
 import { fingerprintTree } from '../legacy/skillHash'
 import { legacySkillRootAbs, skillRootAbs } from '../legacy/skillIdentityPaths'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /** Original sibling rename/fingerprint mechanism, shared by forward and recovery. */
 export function createFileSkillIdentityContentStore(appHome: string): SkillIdentityContentStore {

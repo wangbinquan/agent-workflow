@@ -11,7 +11,7 @@ import { createAuthRuntimeFor, createTokenCallAudit } from '@/auth/composition'
 import { Hono } from 'hono'
 import { DEFAULT_CONFIG, resolveTokenPermissions } from '@agent-workflow/shared'
 import { mountMcpTransport } from '@/mcp/server'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 import { composeHttpAuthenticationMiddleware } from '@/modules/identity-access/composition/authentication'
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type JWTVerifyGetKey } from 'jose'
 import {

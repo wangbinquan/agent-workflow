@@ -22,7 +22,7 @@ import {
   type CodeReference,
   type SymbolResolution,
 } from '@agent-workflow/shared'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { CodeWorkspaceTask } from '@/modules/task-execution/public/types'
 import { getTaskFileSymbols, resolveRepoTarget } from './fileSymbols'
 import {

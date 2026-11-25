@@ -3,7 +3,7 @@ import { clarifyQuestionSetKey, type ClarifyQuestion } from '@agent-workflow/sha
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import type { ClarifyAnswerWritePort } from '../application/ports/clarifyAnswerWrite'
 import { clarifyRoundTransition, projectClarifyAnswers } from '../domain/clarifyAnswers'
 

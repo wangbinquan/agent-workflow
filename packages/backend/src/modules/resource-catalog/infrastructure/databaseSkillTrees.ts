@@ -19,11 +19,11 @@ import {
   databaseContentPolicy,
   readDatabaseContent,
 } from '@/platform/content/infrastructure/contentStore'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { FileNode } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { digestSortedTree } from './legacy/skillHash'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'

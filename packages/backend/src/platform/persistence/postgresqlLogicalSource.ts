@@ -9,7 +9,7 @@ import { captureEpochMetadata, type EpochMetadataSnapshot } from './schema/histo
 // cross-table snapshot; a separate pool probe keeps the live generation fence
 // observable while a long backup or reverse migration is running.
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   decodeLogicalValue,
   encodeLogicalRow,

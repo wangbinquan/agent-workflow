@@ -9,7 +9,7 @@ import { createWrapperRunLedger } from '../engine/wrapper/wrapperRunLedger'
 import { WrapperRuntime } from '../engine/wrapper/wrapperRuntime'
 import { prepareConsumedInputs } from '../infrastructure/consumedInputsParticipant'
 import { broadcastNodeStatus } from '../infrastructure/nodeStatusEvents'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 /** RFC-413 — the wrapper run ledger's ports over one execution state; every value is read on use. */
 export function createWrapperRunLedgerPorts(state: TaskMechanicsState): WrapperRunLedgerPorts {

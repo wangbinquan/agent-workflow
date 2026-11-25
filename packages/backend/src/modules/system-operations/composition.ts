@@ -68,7 +68,7 @@ import type {
 } from './application/ports/applicationConfiguration'
 import { createFileApplicationConfiguration } from './infrastructure/local/fileApplicationConfiguration'
 import type { ConfigAppliedListeners } from '@/platform/configuration/configAppliedListeners'
-import { configureLogger } from '@/util/log'
+import { configureLogger } from '@/platform/logging/logger'
 
 // RFC-346 — bootstrap-only System Operations composition.
 

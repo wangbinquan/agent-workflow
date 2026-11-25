@@ -53,7 +53,7 @@ import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evoluti
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { listWorkflows } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { ForbiddenError } from '../src/util/errors'
+import { ForbiddenError } from '../src/platform/errors/domainErrors'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'

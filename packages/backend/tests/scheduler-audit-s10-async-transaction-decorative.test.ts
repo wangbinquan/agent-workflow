@@ -325,7 +325,7 @@ describe('S-10 guard: `.transaction(async` inventory in packages/backend/src', (
  *   2. `{ behavior: 'immediate' }`（RFC-338 AC-2）：在事务边界预占 writer。deferred 事务
  *      先读取快照、再去升级成写，只要别的连接在这中间完成一次短提交，升级就以
  *      `SQLITE_BUSY_SNAPSHOT` **立即**失败并**绕过 busy_timeout**（`db/txSync.ts:51-57`）。
- *      裸 `SQLiteError` 不是 `DomainError`，`util/errors.ts` 于是兜成 500 `internal-error`。
+ *      裸 `SQLiteError` 不是 `DomainError`，`platform/errors/domainErrors.ts` 于是兜成 500 `internal-error`。
  *
  * 只答第 1 条的理由会让第 2 条看起来「已评估」。2026-09-02 主干 CI run `33638907352` 上
  * DE-07 的两次工具发布 500 就是第 2 条：`sqliteAuthoringStore.publishTool` 当时正是一处裸

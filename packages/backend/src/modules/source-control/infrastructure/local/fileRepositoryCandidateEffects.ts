@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 import { runGit as defaultRunGit } from '@/util/git'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type {
   RepositoryCandidateStepEffectsFactory,
   RepositoryCandidateFileFacts,

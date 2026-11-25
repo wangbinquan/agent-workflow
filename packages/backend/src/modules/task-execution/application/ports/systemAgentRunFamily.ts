@@ -6,7 +6,7 @@ import type {
   SystemAgentWorkspaceScopes,
 } from '@/modules/runtime-management/public/participants'
 import type { RuntimeKind } from '@/modules/runtime-management/public/types'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type {
   PreparedSystemAgentRunResult,
   SystemAgentCoreInvocation,

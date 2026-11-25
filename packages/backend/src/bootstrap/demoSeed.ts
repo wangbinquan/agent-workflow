@@ -9,7 +9,7 @@ import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { CodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/public/types'
 import type { DemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/public/participants'
 import type { InstallationSeedCompletionPort } from '@/modules/system-operations/public/participants'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('demo-seed')
 

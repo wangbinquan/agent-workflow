@@ -28,7 +28,7 @@ import { buildInlineConfig } from '../src/modules/runtime-management/infrastruct
 import { toClaudeAgents } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/inject'
 import { renderClaudeMcpInjection } from '../src/modules/runtime-management/infrastructure/drivers/agentInjection'
 import { claudeBusinessGate } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/permissionMap'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import type { RuntimeProfile } from './helpers/runtimeRegistryApplication'
 import { assembleOpencodeBusinessSpawn } from '../src/modules/runtime-management/infrastructure/drivers/opencode/driver'
 import { assembleClaudeBusinessSpawn } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'

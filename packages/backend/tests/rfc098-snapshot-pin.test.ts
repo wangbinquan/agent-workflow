@@ -39,7 +39,7 @@ import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { rollbackNodeRunWorktrees } from '../src/modules/task-execution/infrastructure/nodeRollback'
 import type { RollbackTarget } from '../src/modules/task-execution/infrastructure/nodeRollback'
 import { createWorktree, runGit, snapshotRefName, snapshotRefPrefix } from '../src/util/git'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 
 const ulid = monotonicFactory()
 const log = createLogger('test.rfc098-snapshot-pin')

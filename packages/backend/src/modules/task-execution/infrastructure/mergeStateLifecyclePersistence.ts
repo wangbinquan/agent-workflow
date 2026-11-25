@@ -10,7 +10,7 @@ import {
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import type { MergeStateLifecyclePersistence } from '../application/ports/mergeStateLifecyclePersistence'
 import { holdsExplicitTransaction } from '@/db/transactionScope'
 import { isSupersedableMergeState } from '../domain/nodeRunSupersession'

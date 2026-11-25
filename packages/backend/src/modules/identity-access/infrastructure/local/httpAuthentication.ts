@@ -1,6 +1,6 @@
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { hashAuthToken } from '@/auth/application/authRuntime'
-import { ForbiddenError, UnauthorizedError } from '@/util/errors'
+import { ForbiddenError, UnauthorizedError } from '@/platform/errors/domainErrors'
 import { createInFlightCoalescer } from '@/platform/contracts/inFlight'
 import type { DirectAuthorityIdentity } from '../../public/participants'
 import type { HttpAuthenticationParticipant } from '../../public/participants'

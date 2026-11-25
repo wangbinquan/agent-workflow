@@ -414,7 +414,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     for (const forbiddenImport of [
       "from '@/auth/",
       "from '@/db/",
-      "from '@/util/errors'",
+      "from '@/platform/errors/domainErrors'",
       "from 'drizzle-orm'",
     ]) {
       expect(domain).not.toContain(forbiddenImport)
@@ -1090,7 +1090,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(repository).toContain('runResourceCatalogTransaction(')
     expect(repository).toContain('createAgentMcpReferenceLookup(transaction).find(mutation.id)')
     expect(repository).toContain("from './mcpPersistence'")
-    expect(persistence).toContain("import { sha256Hex } from '@/util/hash'")
+    expect(persistence).toContain("import { sha256Hex } from '@/platform/contracts/hash'")
     expect(repository).not.toContain("createHash('sha256')")
     expect(repository).not.toContain("from '@/services/")
     expect(repository).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|dbTxSync/)
@@ -1181,7 +1181,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(repository).toContain('fullPluginRowWhere')
     expect(repository).toContain('createAgentPluginReferenceLookup(transaction).find(deletion.id)')
     expect(repository).toContain("from './pluginPersistence'")
-    expect(persistence).toContain("import { sha256Hex } from '@/util/hash'")
+    expect(persistence).toContain("import { sha256Hex } from '@/platform/contracts/hash'")
     expect(repository).not.toContain("createHash('sha256')")
     expect(repository).not.toContain("from '@/services/")
     expect(composition).toContain('createPluginRepository')
@@ -1296,7 +1296,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(repository).toContain('scheduledReferences')
     expect(repository).toContain("from './workgroupPersistence'")
     expect(repository).toContain('workgroupRevisionOf as revisionOf')
-    expect(persistence).toContain("import { sha256Hex } from '@/util/hash'")
+    expect(persistence).toContain("import { sha256Hex } from '@/platform/contracts/hash'")
     expect(repository).not.toContain("from '@/services/")
     expect(composition).toContain('createWorkgroupRepository')
     expect(composition).toContain('createWorkgroupApplication')

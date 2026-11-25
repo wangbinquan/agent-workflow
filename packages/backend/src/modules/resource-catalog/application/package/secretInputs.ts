@@ -22,7 +22,7 @@ import {
   type PackageSecretRef,
   type ResourceBundle,
 } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /**
  * Derived from the shared constant, not restated.

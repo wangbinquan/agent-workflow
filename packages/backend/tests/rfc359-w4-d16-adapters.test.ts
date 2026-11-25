@@ -20,7 +20,7 @@ import { mcpConfigHash } from '@/modules/resource-catalog/infrastructure/mcpPers
 import { createMcpRepository } from '@/modules/resource-catalog/infrastructure/mcpRepository'
 import { transitionMcpAclRuntimeTests } from '@/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/infrastructure/mcpTransactionLifecycle'
-import { staleConflictError } from '@/util/errors'
+import { staleConflictError } from '@/platform/errors/domainErrors'
 import { bindDescribeEachProviderLifecycle } from './helpers/eachProvider'
 
 const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })

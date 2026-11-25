@@ -1,4 +1,4 @@
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 /** One selected attempt; implementation identities and receipts stay opaque. */
 export interface ExecutionStartReceipt {

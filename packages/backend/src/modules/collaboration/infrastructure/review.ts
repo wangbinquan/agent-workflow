@@ -177,9 +177,9 @@ import {
   ForbiddenError,
   NotFoundError,
   ValidationError,
-} from '@/util/errors'
-import { createLogger } from '@/util/log'
-import { sha256Hex } from '@/util/hash'
+} from '@/platform/errors/domainErrors'
+import { createLogger } from '@/platform/logging/logger'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   appendHumanGateDecisionCommittedEvent,
   appendReviewCommentsChangedCommittedEvent,

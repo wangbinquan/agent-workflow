@@ -2,7 +2,7 @@
 import { expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { canonicalJson } from '@agent-workflow/shared'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { appendCommittedEvent, readCommittedEventCutover } from '@/platform/events/committed/append'
 import { appendCommittedEventProgram } from '@/platform/events/committed/appendProgram'

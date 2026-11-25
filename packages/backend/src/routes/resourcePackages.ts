@@ -31,7 +31,7 @@ import type {
 } from '@/modules/resource-catalog/public/types'
 import { invokeOperation } from '@/platform/operations/invoke'
 import { registerOperationRoute } from '@/routes/operationRoute'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { z } from 'zod'
 import { utf16MaxLength } from '@agent-workflow/shared'
 

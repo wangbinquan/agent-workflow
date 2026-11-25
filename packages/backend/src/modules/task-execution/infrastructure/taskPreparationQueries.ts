@@ -1,7 +1,7 @@
 import { projectTaskMountReadRow } from './taskRepositorySql'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { mountDepth } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import type { TaskPreparationQueries } from '../application/ports/taskPreparation'

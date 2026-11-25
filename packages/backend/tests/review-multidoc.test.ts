@@ -51,7 +51,7 @@ import {
   setDocumentSelection,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import { ConflictError } from '../src/util/errors'
+import { ConflictError } from '../src/platform/errors/domainErrors'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { acquireWriterLease } from '../src/platform/persistence/writerLease'
 import { __hasTaskReviewMutationQueueForTesting } from '../src/modules/task-execution/infrastructure/reviewMutationQueue'

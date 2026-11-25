@@ -24,7 +24,7 @@ import {
   type PluginServiceBinding,
 } from './helpers/pluginServiceBinding'
 import { resetNpmProbeCacheForTests } from '../src/modules/resource-catalog/infrastructure/local/filePluginInstallation'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 import { createAgent, updateAgent } from './helpers/model/resourceWrites'
 
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')

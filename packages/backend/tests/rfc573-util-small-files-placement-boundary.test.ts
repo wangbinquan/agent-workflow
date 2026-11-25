@@ -54,7 +54,7 @@ const MOVED: ReadonlyArray<readonly [string, string, readonly string[], readonly
     'util/fsReclaim',
     'platform/workspace/local/fsReclaim',
     ['DEFAULT_RECLAIM_DELAYS_MS', 'RemoveDirectoryWithRetryResult', 'removeDirectoryWithRetry'],
-    ['@/util/log', 'node:fs', 'node:fs/promises'],
+    ['@/platform/logging/logger', 'node:fs', 'node:fs/promises'],
   ],
   [
     'util/migrationsFolder',
@@ -214,7 +214,7 @@ describe('RFC-573 —— 四个文件离开 util/', () => {
           "mock.module('@/util/migrationsFolder', () => ({}))\n" +
           "type Info = import('./util/daemonInfo').DaemonInfo\n" +
           "import { timeoutSignal as next } from './platform/contracts/timeoutSignal'\n" +
-          "import { createLogger } from './util/log'\n",
+          "import { createLogger } from './platform/logging/logger'\n",
       ).filter((target) => OLD.has(target)),
     ).toEqual([
       'util/timeoutSignal',

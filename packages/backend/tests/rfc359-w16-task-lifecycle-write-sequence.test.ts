@@ -32,7 +32,7 @@ import { writeTaskRuntimeLifecycleInTx } from '@/modules/task-execution/infrastr
 import { attachAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 

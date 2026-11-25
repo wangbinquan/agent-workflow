@@ -7,7 +7,7 @@ import { compileHostedNativeMaterial } from '@/modules/task-execution/infrastruc
 import { createHostedNativePluginReader } from '@/modules/resource-catalog/infrastructure/crewstation/crewstationNativePlugin'
 import { createCrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
 import { EMPTY_RUNTIME_PROFILE } from '@/modules/runtime-management/public/types'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const agent: Agent = {
   id: 'root-id',

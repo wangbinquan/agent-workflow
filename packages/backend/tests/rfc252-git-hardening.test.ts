@@ -149,7 +149,7 @@ describe('RFC-252 G1 · 纯函数', () => {
   test('gitSubcommandIndex 跳过 -c/-C 这类 git 自身选项', () => {
     expect(gitSubcommandIndex(['diff'])).toBe(0)
     expect(gitSubcommandIndex(['-C', '/x', 'status'])).toBe(2)
-    // 生产里真实存在的形态（util/git.ts:1598、gitSubmodule.ts:560）。
+    // 生产里真实存在的形态（util/git.ts:1603、gitSubmodule.ts:560）。
     expect(gitSubcommandIndex(['-c', 'core.quotepath=false', 'diff', '--name-only'])).toBe(2)
     expect(gitSubcommandIndex(['-c', 'a=b', '-C', '/x', '-c', 'c=d', 'worktree', 'add'])).toBe(6)
     expect(gitSubcommandIndex(['-c', 'a=b'])).toBe(-1)

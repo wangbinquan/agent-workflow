@@ -17,7 +17,7 @@ import { CrossContextTransactionError } from '@/db/transactionScope'
 import { dbTxSync } from '@/db/txSync'
 import { createSqliteDatabaseSession } from '@/platform/persistence/databaseTransaction'
 import { acquireWriterLease, WriterLeaseTimeoutError } from '@/platform/persistence/writerLease'
-import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '@/util/log'
+import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '@/platform/logging/logger'
 
 function scratchDb(): DbClient {
   const db = createInMemoryDb()

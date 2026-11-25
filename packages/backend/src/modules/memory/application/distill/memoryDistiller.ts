@@ -63,7 +63,7 @@ import {
 } from './distillerOutput'
 import { generateEnvelopeNonce } from '@/platform/contracts/envelopeNonce'
 import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/modules/memory/domain/sourceContext'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type {
   MemoryDistillClarifyWorkRecord,
   MemoryDistillReviewedArtifactReader,

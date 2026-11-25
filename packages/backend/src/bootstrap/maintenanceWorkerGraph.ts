@@ -60,7 +60,7 @@ import { createPostgresqlDatabaseOperationalAdapter } from '@/platform/persisten
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   MaintenanceWorkerGraph,

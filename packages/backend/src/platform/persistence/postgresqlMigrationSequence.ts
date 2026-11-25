@@ -4,7 +4,7 @@
 
 import type { ExpectedMigration } from '@/db/schemaAdmission'
 import type { SchemaEdge } from './schema/history/types'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   OBSERVATION_SOURCE_REVISION,
   OBSERVATION_SOURCE_REVISION_JOURNAL,

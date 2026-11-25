@@ -10,7 +10,7 @@ import type { ProgramArtifactPort } from '@/modules/digital-employee/composition
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
 import { createDigitalEmployeeAuthoringPersistence } from '@/modules/digital-employee/infrastructure/authoringStore'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
 
 const roots: string[] = []

@@ -17,7 +17,7 @@ import type {
 } from '../ports/taskExecutionShutdownOperations'
 import type { TaskRecoveryOperations } from '../ports/taskRecoveryOperations'
 import { recordRecoveryEvent } from './recoveryEvents'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('shutdown')
 

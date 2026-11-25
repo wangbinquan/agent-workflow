@@ -13,7 +13,7 @@ import {
   composeLocalHttpAuthentication,
 } from '@/modules/identity-access/composition/authentication'
 import type { HttpAuthenticationParticipant } from '@/modules/identity-access/public/participants'
-import { UnauthorizedError, errorHandler } from '@/util/errors'
+import { UnauthorizedError, errorHandler } from '@/platform/errors/domainErrors'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeEachProvider } from './helpers/eachProvider'
 

@@ -25,7 +25,7 @@ import type {
   CallObservationStart,
   CallObservations,
 } from '@/modules/run-observability/public/participants'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 function meterWith(finish?: () => RuntimeUsageSnapshot | null) {
   let input = 0

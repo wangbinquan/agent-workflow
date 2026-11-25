@@ -10,7 +10,7 @@ import type {
   RepositoryGitWorkspaceScope,
 } from '@/modules/source-control/application/ports/repositoryGitWorkspace'
 import { runGit } from '@/util/git'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { GitWorkspaceStore, MappedGitWorkspaceFactory } from './helpers/repositoryGitWorkspace'
 
 const roots: string[] = []

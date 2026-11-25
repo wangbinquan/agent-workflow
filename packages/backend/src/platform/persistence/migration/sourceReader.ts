@@ -1,5 +1,5 @@
 // RFC-395 II-b V1: common frozen-codec chunks and artifact presence evidence.
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 import { createReadStream, existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import {

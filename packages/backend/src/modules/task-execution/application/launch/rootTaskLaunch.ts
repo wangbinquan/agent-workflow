@@ -20,7 +20,7 @@ import {
 } from '@/modules/resource-catalog/public/queries'
 import { attachWorkspaceCleanupToMultipartError, bufferUploadParts } from '../launchUploads'
 import { layoutBuiltinWorkflowSnapshot } from '../../domain/builtinWorkflowLayout'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type { TaskDriveCoordinator } from '../drive/taskDriveTypes'
 import type { WorkspaceCleanupReport } from '../ports/preparedWorkspace'
 import type { TaskExecutionResourceAuthority } from '../ports/taskExecutionResourceSnapshots'

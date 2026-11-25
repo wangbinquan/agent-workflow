@@ -22,7 +22,7 @@
 // set from the DB so restarts cannot leak or double-count units.
 import type { ChildTaskBudgetQueries } from '../application/ports/childTaskBudgetQueries'
 import { DrizzleChildTaskBudgetQueries } from './childTaskBudgetQueries'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { startInterval, type IntervalTimer } from '@/platform/background/intervalTimer'
 import type { TaskStatus } from '@agent-workflow/shared'
 

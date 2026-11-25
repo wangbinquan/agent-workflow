@@ -19,7 +19,7 @@ import type { TaskExecutionReadModels } from '@/modules/task-execution/public/ty
 import { registerRoute } from '@/routes/registry'
 import type { PortArtifactReader } from '@/modules/task-execution/public/queries'
 import { selectPortArtifactReader } from '@/modules/task-execution/public/participants'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 
 const MIME_BY_EXT: Record<string, string> = {
   '.png': 'image/png',

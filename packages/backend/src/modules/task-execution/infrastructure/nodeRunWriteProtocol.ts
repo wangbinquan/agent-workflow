@@ -7,7 +7,7 @@ import { tablesOf, type PersistenceTables } from '@/platform/persistence/session
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { contentRefColumns } from '@/platform/content/contentStore'
 import type { ContentRef } from '@/platform/content/contentRef'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import type { TaskMountKey } from '../application/ports/taskMountKeys'
 import type {
   NodeRunCheckpointWrite,

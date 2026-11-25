@@ -18,7 +18,7 @@ import type {
   WorkspaceEntryPage,
   BoundedWorkspaceContent,
 } from '@/modules/source-control/public/types'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const token = 'b'.repeat(64)

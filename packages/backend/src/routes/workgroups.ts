@@ -43,7 +43,7 @@ import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 // RFC-243 T2: workgroup launches go through the unified executor facade — this
 // route must not call startWorkgroupTask directly (source-text lock).
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import type { WorkgroupRouteTaskLaunchOperations } from '@/modules/task-execution/public/commands'
 

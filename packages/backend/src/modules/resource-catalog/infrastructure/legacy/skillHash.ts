@@ -6,7 +6,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, lstatSync, readFileSync, readlinkSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 export const NUL = '\x00'
 

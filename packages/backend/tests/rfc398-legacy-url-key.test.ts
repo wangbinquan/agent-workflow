@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { epochMigrationKeys } from '@/bootstrap/epochMigrationKeys'
 import type { BootUpgradeCaptureInput } from '@/platform/persistence/migration/freeze/bootUpgradeEnvironment'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 const ESCROW = `aw-legacy-url-hex-v1:${Buffer.from('https://example.test/repo.git').toString('hex')}`
 const homes: string[] = []

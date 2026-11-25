@@ -16,7 +16,7 @@ import { listAgents } from './agent'
 import { createPluginRepository } from '@/modules/resource-catalog/infrastructure/pluginRepository'
 import { listSkills } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import { getWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import { validateWorkflowDefinition, withValidationOverlays } from '../../domain/workflowValidator'
 import type {
   ValidatorContext,

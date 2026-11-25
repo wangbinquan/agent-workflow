@@ -20,7 +20,7 @@ import type {
   SystemAgentRetainedContents,
   SystemAgentWorkspaceScopes,
 } from '@/modules/runtime-management/public/participants'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import type { SystemAgentObservationRun } from './ports/systemAgentObservation'
 import type {
   SystemAgentInvocationFamily,

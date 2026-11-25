@@ -14,7 +14,7 @@ import { z } from 'zod'
 import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { canonicalStringify } from './canonicalJson'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export const AGENT_ATTEMPT_STATUSES = [
   'claimed',

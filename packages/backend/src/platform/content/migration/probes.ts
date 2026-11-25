@@ -1,6 +1,6 @@
 import type { ReadOnlyProbe } from '@/platform/persistence/migration/run/types'
 import { contentRefColumns } from '../contentStore'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 /** Target-only read probes; no source reader or daemon recovery is started. */
 export const readOnlyProbes: readonly ReadOnlyProbe[] = [

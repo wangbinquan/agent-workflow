@@ -21,7 +21,7 @@ import {
   checkForbiddenCandidatePaths,
   verifyUploadLineage,
 } from '../src/modules/source-control/domain/changeCandidate'
-import { sha256Hex } from '../src/util/hash'
+import { sha256Hex } from '../src/platform/contracts/hash'
 import { createLocalRepositoryCandidateEffects } from '@/modules/source-control/composition'
 
 const { derive: deriveChangeCandidate } = bindChangeCandidateParticipant({

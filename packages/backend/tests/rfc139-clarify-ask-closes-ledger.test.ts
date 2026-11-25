@@ -43,7 +43,7 @@ import { encodeLineageSlotPath } from '../src/modules/task-execution/domain/exec
 import { describeEachProvider } from './helpers/eachProvider'
 import { resolveBorrowForNode } from '../src/modules/collaboration/infrastructure/taskQuestionDispatch'
 import { isDispatchedEntryConsumed } from '../src/modules/collaboration/infrastructure/clarify/rerunLedger'
-import { ConflictError } from '../src/util/errors'
+import { ConflictError } from '../src/platform/errors/domainErrors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { RunLineageView, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 const ulid = monotonicFactory()

@@ -80,7 +80,7 @@ interface SeededAccount {
 /**
  * 建号一律走 `POST /api/users`（产品自己的入口），不直接写库。
  * `withPassword: false` ⇒ 服务端把状态定为 `invited`
- * （`packages/backend/src/routes/users.ts:219`），
+ * （`packages/backend/src/routes/users.ts:224`），
  * 这正是 /users 目录里「等待首次登录」那一档的唯一真实来源。
  */
 async function createAccount(opts: {

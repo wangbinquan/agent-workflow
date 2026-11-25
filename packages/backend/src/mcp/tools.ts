@@ -109,7 +109,7 @@ export class McpCallError extends Error {
   readonly code: string
   constructor(res: OperationResult) {
     // The daemon's error envelope is FLAT — `{ok:false, code, message, details}`
-    // (util/errors.ts `toPayload`), not `{error:{…}}`. Reading the wrong shape
+    // (platform/errors/domainErrors.ts `toPayload`), not `{error:{…}}`. Reading the wrong shape
     // would degrade every business refusal to a generic "request failed",
     // throwing away the one part a model can act on.
     const body = res.body as { code?: string; message?: string } | null
@@ -665,7 +665,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
       'clarify switch — see set_clarify_directive).',
     // RFC-329 A4 — this used to say 412. The route deliberately answers 409
     // (routes/clarify.ts header; ConflictError is hard-coded to 409 in
-    // util/errors.ts), and a wrong status here sends the caller down the wrong
+    // platform/errors/domainErrors.ts), and a wrong status here sends the caller down the wrong
     // retry branch. `rfc329-mcp-dead-paths.test.ts` now pins the number in this
     // description to `new ConflictError(...).status` so it cannot drift again.
     permissions: ['tasks:execute'],

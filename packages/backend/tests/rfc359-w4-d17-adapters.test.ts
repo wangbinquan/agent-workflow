@@ -19,7 +19,7 @@ import type { PluginCreateRecord } from '@/modules/resource-catalog/application/
 
 import { pluginConfigHash } from '@/modules/resource-catalog/infrastructure/pluginPersistence'
 import { createPluginRepository } from '@/modules/resource-catalog/infrastructure/pluginRepository'
-import { staleConflictError } from '@/util/errors'
+import { staleConflictError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const T0 = 1_700_000_000_000

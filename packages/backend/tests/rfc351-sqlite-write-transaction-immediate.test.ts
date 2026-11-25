@@ -9,7 +9,7 @@
 // 取读快照，再 INSERT/UPDATE 去升级；只要另一个连接在这中间完成一次短提交，升级就以
 // `SQLITE_BUSY_SNAPSHOT` **立即**失败——`db/txSync.ts:51-57`（RFC-338 AC-2）写明它会
 // **绕过 busy_timeout**，实测 0ms。裸 `SQLiteError` 不是 `DomainError`，于是
-// `util/errors.ts` 把它兜成 500 `internal-error`，调用方只看到「内部服务器错误」。
+// `platform/errors/domainErrors.ts` 把它兜成 500 `internal-error`，调用方只看到「内部服务器错误」。
 //
 // `dbTxSync` 传 `{ behavior: 'immediate' }`，在事务边界就取 writer：竞争者还在写时它
 // 在 BEGIN 处等（此时 busy_timeout 生效），拿到锁后读到的是最新快照，不存在升级这一步。
@@ -110,7 +110,7 @@ describe('RFC-351 —— 竞争提交下的 store 写事务', () => {
       const released = nextMessage()
       const startedAt = performance.now()
       // 改造前：这里抛 SQLiteError code=SQLITE_BUSY_SNAPSHOT（0ms，不等 busy_timeout），
-      // 经 util/errors.ts 兜底就是一个没有任何解释的 500。
+      // 经 platform/errors/domainErrors.ts 兜底就是一个没有任何解释的 500。
       // RFC-359 W4-D6c：publish 是异步的统一事务原语；BEGIN IMMEDIATE 仍在 busy_timeout 内等竞争者释放。
       const publish = store.publishTool(publishInput())
       expect(await released).toEqual({ type: 'released' })

@@ -3,7 +3,7 @@ import { reviewAbsolutePath } from '@/platform/content/locations/review'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type {
   HumanGateArtifactStore,
   PlannedReviewArtifact,

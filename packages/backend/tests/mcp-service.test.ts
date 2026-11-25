@@ -26,7 +26,7 @@ import {
   updateMcpForTest as updateMcp,
 } from './helpers/mcpServiceBinding'
 import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
-import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '../src/platform/errors/domainErrors'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.

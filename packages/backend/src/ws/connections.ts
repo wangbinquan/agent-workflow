@@ -25,7 +25,7 @@ import type { ServerWebSocket } from 'bun'
 import type { WsControlMessage } from '@agent-workflow/shared'
 import type { DirectAuthorityIdentity } from '@/modules/identity-access/public/participants'
 import type { RealtimeCredentialAccess } from '@/modules/runtime-management/public/participants'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import {
   checkUpgradeGate,
   releasePresence,

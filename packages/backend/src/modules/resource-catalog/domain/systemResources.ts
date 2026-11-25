@@ -35,7 +35,7 @@
 // fusion approval).
 
 import { QUARANTINED_FUSION_SKILL_ID, type AclResourceType } from '@agent-workflow/shared'
-import { ForbiddenError } from '@/util/errors'
+import { ForbiddenError } from '@/platform/errors/domainErrors'
 
 export const SKILL_MERGER_AGENT_NAME = 'aw-skill-merger'
 export const SKILL_FUSION_WORKFLOW_NAME = 'aw-skill-fusion'

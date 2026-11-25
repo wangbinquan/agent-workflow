@@ -79,7 +79,7 @@ import {
 } from '@/modules/event-center/domain/model'
 import { createCustomEventSourceStore } from '@/modules/event-center/infrastructure/customEventSourceStore'
 import { createEventStore } from '@/modules/event-center/infrastructure/eventStore'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const NOW = 1_788_970_000_000

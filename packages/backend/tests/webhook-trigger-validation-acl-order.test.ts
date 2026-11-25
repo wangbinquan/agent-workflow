@@ -27,7 +27,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { assertWebhookTriggerSaveable } from '../src/modules/integration/application/webhookAdmission'
 import { createUser } from './helpers/userFixture'
-import { NotFoundError, ValidationError } from '../src/util/errors'
+import { NotFoundError, ValidationError } from '../src/platform/errors/domainErrors'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {
   integrationTriggerResourceAuthority,

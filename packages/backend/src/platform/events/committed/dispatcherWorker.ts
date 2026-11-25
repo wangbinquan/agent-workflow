@@ -1,6 +1,6 @@
 // RFC-341 — bounded durable committed-event delivery driver.
 
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type { CommittedEventDeliveryPersistencePort } from './persistence'
 import {
   createCommittedEventProjectionLedger,

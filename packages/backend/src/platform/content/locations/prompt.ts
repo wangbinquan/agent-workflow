@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { legacyContentRef, type ContentRef } from '../contentRef'
 
 export interface PromptStorage {

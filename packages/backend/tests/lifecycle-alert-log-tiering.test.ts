@@ -33,8 +33,12 @@ import {
   type LifecycleAlertRow,
   type OpenAlertSummary,
 } from '../src/modules/task-execution/application/lifecycleAlerts/lifecycleInvariants'
-import { configureLogger, resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/util/log'
-import { createLogger } from '../src/util/log'
+import {
+  configureLogger,
+  resetLoggerForTest,
+  setLoggerStdoutWriterForTest,
+} from '../src/platform/logging/logger'
+import { createLogger } from '../src/platform/logging/logger'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'

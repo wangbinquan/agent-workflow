@@ -30,7 +30,7 @@ import type {
 } from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { describeEachProvider } from './helpers/eachProvider'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import {

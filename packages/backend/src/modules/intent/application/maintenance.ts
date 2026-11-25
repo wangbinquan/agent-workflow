@@ -4,7 +4,7 @@ import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import { INTENT_SCRATCH_DIRNAME } from './turnEngine'
 
 export async function listIntentTurnIdsForBootRecovery(

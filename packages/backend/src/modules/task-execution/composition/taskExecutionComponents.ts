@@ -1,5 +1,5 @@
 import type { TaskMechanicsState } from './taskMechanicsState'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { WrapperNodeExecutionPort } from '../application/ports/wrapperNodeExecution'
 import type { ExecutionMergeRecovery } from '../application/recovery/executionMergeRecovery'
 

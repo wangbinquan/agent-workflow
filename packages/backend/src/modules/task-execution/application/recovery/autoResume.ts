@@ -26,7 +26,7 @@ import {
   isAutoRecoverySuspended,
   recordAutoRecoveryAttempt,
 } from './autoRecoveryBreaker'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('auto-resume')
 

@@ -13,8 +13,8 @@ import {
   NotFoundError,
   ValidationError,
   staleConflictError,
-} from '@/util/errors'
-import { createLogger } from '@/util/log'
+} from '@/platform/errors/domainErrors'
+import { createLogger } from '@/platform/logging/logger'
 import type { McpAclIdentityParticipant, McpOperationContext } from '../../public/participants'
 import type { McpQueries } from '../../public/queries'
 import type { McpCatalogResource } from '../../public/types'

@@ -10,7 +10,7 @@ import {
 import { resolveTaskUploadLimits } from '../launchConfiguration'
 import { type Actor } from '@/auth/actor'
 import { assertWorkflowLaunchInputs } from '@/modules/resource-catalog/public/queries'
-import { ConflictError, ValidationError } from '@/util/errors'
+import { ConflictError, ValidationError } from '@/platform/errors/domainErrors'
 import type { TaskExecutionResourceAuthority } from '../ports/taskExecutionResourceSnapshots'
 import { collectUploadInputDefs, DEFAULT_UPLOAD_LIMITS } from '../../domain/uploads'
 import type { ExecutionInvoker, TaskRouteMultipartFilePart } from '../../public/commands'

@@ -19,7 +19,7 @@ import {
 } from '../src/platform/background/daemonCadence'
 import { MAINTENANCE_JOB_CATALOG } from '../src/platform/background/maintenanceCatalog'
 import { startMaintenanceTicker, type TimerApi } from '../src/platform/background/maintenanceTicker'
-import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/util/log'
+import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/platform/logging/logger'
 
 // ---------------------------------------------------------------------------
 // 虚拟时钟：错峰的判据必须能实证，不能靠等一小时。

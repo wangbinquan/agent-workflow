@@ -17,7 +17,7 @@ import {
 import { actorOf } from '@/auth/actor'
 import type { CodeHostConnectionAdministration } from '@/modules/integration/public/types'
 import { registerRoute } from '@/routes/registry'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '@/platform/http/requestParsing'
 
 function providerOf(raw: string): CodeHostProvider {

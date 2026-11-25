@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SystemAgentSpawnContext } from '@/modules/runtime-management/infrastructure/drivers/types'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { assembleOpencodePersonaSpawn } from '../src/modules/runtime-management/infrastructure/drivers/opencode/driver'
 import { assembleClaudePersonaSpawn } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
 

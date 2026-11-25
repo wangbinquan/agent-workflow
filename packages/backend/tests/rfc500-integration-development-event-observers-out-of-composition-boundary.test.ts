@@ -9,7 +9,7 @@
 //    （带负对照）。
 // ③ 全部生产文件、用例与 e2e 不从旧位置取迁走的名字（那里只剩装配函数）：命名 import、type-only、默认与副作用 import、re-export、
 //    命名空间成员与动态 import 都认，带负对照。
-// ④ 新文件的依赖面是闭集：只取 shared、zod、`@/util/hash`、development-automation 的 `public/types` 与同目录的 `mrFacts` /
+// ④ 新文件的依赖面是闭集：只取 shared、zod、`@/platform/contracts/hash`、development-automation 的 `public/types` 与同目录的 `mrFacts` /
 //    `mrEnsure`；不取 infrastructure、composition、IO 包，不用进程全局（带负对照）。
 //
 // 覆盖范围（C12）：① ③ 读全部生产文件（语料下限 3,000）、全部用例（语料下限 2,500）与仓库根的 e2e，先按名字或路径文本筛、再逐个解析
@@ -354,7 +354,11 @@ const isShared = (specifier: string) =>
   specifier === '@agent-workflow/shared' || specifier.startsWith('@agent-workflow/shared/')
 /** The closed dependency surface of the new file (design §4 ④). */
 const SURFACE = (file: string, specifier: string): boolean => {
-  if (['zod', '@/util/hash', '@/modules/development-automation/public/types'].includes(specifier))
+  if (
+    ['zod', '@/platform/contracts/hash', '@/modules/development-automation/public/types'].includes(
+      specifier,
+    )
+  )
     return true
   if (isShared(specifier)) return true
   const rel = resolveSpecifier(file, specifier)
@@ -585,7 +589,7 @@ describe('RFC-500 ③ 没有文件从旧位置取迁走的名字', () => {
 describe('RFC-500 ④ 新文件的依赖面是闭集、不用进程全局', () => {
   const observersPath = sourceOf(OBSERVERS)
 
-  test('只取 shared、zod、@/util/hash、development-automation 的 public/types 与同目录的 mrFacts / mrEnsure', () => {
+  test('只取 shared、zod、@/platform/contracts/hash、development-automation 的 public/types 与同目录的 mrFacts / mrEnsure', () => {
     expect(purityFindings(observersPath, text(observersPath), SURFACE)).toEqual([])
   })
 
@@ -594,7 +598,7 @@ describe('RFC-500 ④ 新文件的依赖面是闭集、不用进程全局', () =
     const source = [
       `import { canonicalJson } from '@agent-workflow/shared'`,
       `import { z } from 'zod'`,
-      `import { sha256Hex } from '@/util/hash'`,
+      `import { sha256Hex } from '@/platform/contracts/hash'`,
       `import { decodeDevelopmentApprovalSubject } from '@/modules/development-automation/public/types'`,
       `import { collectMergeRequestFacts } from './mrFacts'`,
       `import type { MrEnsureConnectionDeps } from './mrEnsure'`,

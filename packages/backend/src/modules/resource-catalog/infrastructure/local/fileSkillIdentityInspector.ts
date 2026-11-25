@@ -15,7 +15,7 @@ import {
   skillVersionAbs,
 } from '../legacy/skillIdentityPaths'
 import { hashRegularFileTree } from '../legacy/skillHash'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /** Existing physical proofs; row/version/operation authority is selected by AW. */
 export function createFileSkillIdentityInspector(appHome: string): SkillIdentityInspector {

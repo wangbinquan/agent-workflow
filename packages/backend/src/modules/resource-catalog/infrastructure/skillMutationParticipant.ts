@@ -17,7 +17,7 @@ import { first } from '@/platform/persistence/queryHelpers'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from './ownerScopedName'
-import { ConflictError, staleConflictError } from '@/util/errors'
+import { ConflictError, staleConflictError } from '@/platform/errors/domainErrors'
 
 import type {
   SkillCreateMutation,

@@ -30,7 +30,7 @@ import {
   type IntentQuestion,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import { Semaphore } from '@/platform/contracts/semaphore'
 import { generateEnvelopeNonce } from '@/platform/contracts/envelopeNonce'
 import { extractLastEnvelope, parseEnvelope } from '@agent-workflow/shared'
@@ -47,7 +47,7 @@ import { validateChangesetWorkflowGraphs } from './graphValidation'
 import { draftGraphResolution } from '@/modules/intent/domain/workflowGraphCandidate'
 import type { IntentWorkflowGraphValidationPort } from './ports/intentWorkflowGraphValidation'
 import { sessionManifest, type ReservedIntentTurn, type IntentTurnRow } from './session'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { normalizeIntentWorkflowCreateLayouts } from '@/modules/intent/domain/workflowCreateLayout'
 import type { IntentResourceCatalogBinding } from './resourceCatalog'
 import type {

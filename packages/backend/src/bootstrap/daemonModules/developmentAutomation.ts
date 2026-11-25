@@ -23,7 +23,7 @@ import {
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { SelectedDevelopmentPurposeRoot } from '../developmentPurposeRoot'
 import {
   type DevelopmentWriterCutover,

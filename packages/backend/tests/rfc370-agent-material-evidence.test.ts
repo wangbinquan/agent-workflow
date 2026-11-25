@@ -27,7 +27,7 @@ import type {
   SessionCaptureContext,
   SystemAgentSessionSweepContext,
 } from '../src/modules/runtime-management/infrastructure/drivers/types'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 
 const log = createLogger('rfc370-material-evidence')
 const persistence: RuntimeSessionCapturePersistence = {

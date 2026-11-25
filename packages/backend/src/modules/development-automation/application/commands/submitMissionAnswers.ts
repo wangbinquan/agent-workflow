@@ -17,7 +17,7 @@ import {
   checkMissionTransition,
   type MissionStatus,
 } from '../../domain/mission'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { MissionPersistence } from '../ports/missionStore'
 import type {
   FactSnapshotReader,

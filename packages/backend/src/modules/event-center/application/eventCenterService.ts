@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { utf16MaxLength } from '@agent-workflow/shared'
 import { createTriggerContext } from '@agent-workflow/shared'
 
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type {
   CustomEventObserverProgramPort,
   EventDeliveryConsumerPort,

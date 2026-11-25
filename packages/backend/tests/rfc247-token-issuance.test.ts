@@ -13,7 +13,7 @@
 import { describe, expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { buildActor, type Actor } from '@/auth/actor'
-import { errorHandler, ForbiddenError, ValidationError } from '@/util/errors'
+import { errorHandler, ForbiddenError, ValidationError } from '@/platform/errors/domainErrors'
 import { registerRoute, resetRouteMetaRegistry, type RouteMeta } from '@/routes/registry'
 import { assertMatrixGrantable, PatMatrixError } from './helpers/auth/patStore'
 

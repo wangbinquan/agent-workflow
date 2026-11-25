@@ -1,5 +1,5 @@
 import type { MergeConflictEntry, MergeConflictManifest } from '../../domain/isolationConflict'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 type Effect<T> = T | Promise<T>
 

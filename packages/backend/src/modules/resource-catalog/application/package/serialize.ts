@@ -32,7 +32,7 @@ import {
   type PackageSecretRef,
   type RedactionSink,
 } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type { ClosureResource, ExportClosure } from './closure'
 import { packagedSkillFileRef, type SkillTree } from './skillTree'
 

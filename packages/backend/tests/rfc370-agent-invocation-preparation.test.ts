@@ -23,7 +23,7 @@ import type {
 } from '../src/modules/runtime-management/application/ports/agentMaterial'
 import type { AgentMaterialWorkspace } from '../src/modules/runtime-management/application/ports/agentMaterialWorkspace'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 
 // RFC-535: a material definition owns its reference table; these fixtures stand in for one definition.
 const materialReferences = createNativeAgentMaterialReferences()

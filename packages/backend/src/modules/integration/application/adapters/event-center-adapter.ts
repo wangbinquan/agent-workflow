@@ -5,7 +5,7 @@ import type {
   EventRoutingValue,
   FilteredEventSubscriptionDefinition,
 } from '@/modules/event-center/composition/required-ports'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type {
   CodeHostEventContinuationPort,
   CodeHostEventResponseDirectoryPort,

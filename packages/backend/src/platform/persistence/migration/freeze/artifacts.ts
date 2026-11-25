@@ -9,7 +9,7 @@ import {
 } from 'node:fs'
 import { open, rename, rm } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { canonicalSchemaJson } from '../../schema/canonical'
 import type { EpochSwitchArtifactPort } from '../run/types'
 

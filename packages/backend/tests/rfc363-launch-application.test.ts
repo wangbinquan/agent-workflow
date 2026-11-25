@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 // RFC-363: lock the irreversible Task admission boundary independently of adapters.
 import { expect, test } from 'bun:test'
 import { launchTask } from '@/modules/task-execution/application/launch/launchTask'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { readTaskServiceSuccessors } from './helpers/taskServiceSuccessors'
 
 function fixture(failAt?: string, failedWorkspace = false) {

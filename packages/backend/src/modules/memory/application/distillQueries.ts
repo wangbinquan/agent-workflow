@@ -14,8 +14,8 @@ import {
 } from '@agent-workflow/shared'
 
 import { DISTILL_CAPTURE_FAILED_KIND } from '@/modules/memory/domain/distillCapture'
-import { NotFoundError } from '@/util/errors'
-import { createLogger } from '@/util/log'
+import { NotFoundError } from '@/platform/errors/domainErrors'
+import { createLogger } from '@/platform/logging/logger'
 import type {
   MemoryDistillCandidateRecord,
   MemoryDistillEventRecord,

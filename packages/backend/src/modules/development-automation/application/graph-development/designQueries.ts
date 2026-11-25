@@ -6,7 +6,7 @@ import {
   type GraphPresentation,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import { graphDigest, graphModelMembers } from '../../domain/graph-development/model'
 import { renderGraphModel } from '../../domain/graph-development/renderViews'
 import { graphViewCapability } from '../../domain/graph-development/viewCapabilities'

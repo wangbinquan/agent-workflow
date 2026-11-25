@@ -11,7 +11,7 @@ import { liveSqlitePath } from './storage'
 //   packages/backend/src/services/task.ts:6700               rowToTask 投影脱敏
 //   packages/frontend/src/routes/tasks.detail.tsx:1121       详情页再脱敏一次
 //   packages/backend/src/modules/task-execution/infrastructure/nodeRollback.ts:rollbackNodeRunWorktrees  pre_snapshot 回滚
-//   packages/backend/src/util/git.ts:2434-2456               rollbackToSnapshot
+//   packages/backend/src/util/git.ts:2439-2461               rollbackToSnapshot
 //   packages/backend/src/services/scheduler.ts:2201-2203     `status --porcelain` 空 ⇒ 不生成 commit&push 行
 //   packages/backend/src/modules/source-control/application/workspaceChangePublication.ts:253-262
 //                                                           排除后为空 ⇒ skipped-excluded（RFC-475 前在 services/commitPushRunner.ts）

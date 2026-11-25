@@ -15,7 +15,7 @@
 // 计算全部走这一份**。provider 侧剩下的是「怎么读怎么写怎么开事务」，正是 RFC-294 给
 // infrastructure 划的职责。
 
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import {
   applyCommitMounts,
   createHandleAllocator,

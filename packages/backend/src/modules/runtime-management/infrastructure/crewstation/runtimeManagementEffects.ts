@@ -9,7 +9,7 @@ import type {
 } from '../../application/ports/runtimeManagement'
 import type { HostedRuntimeCapabilities, RuntimeKind } from '../../public/types'
 import type { McpRuntimeTestReconciliationParticipant } from '@/modules/resource-catalog/public/participants'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export const HostedRuntimeCapabilitiesSchema = z.object({
   protocolVersion: z.literal(3),

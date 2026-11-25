@@ -1,5 +1,5 @@
 import { decodePrompt, encodePrompt, promptNeedsFile } from '@/platform/content/locations/prompt'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type {
   NodeRunPromptContentEffects,
   NodeRunPromptOperations,

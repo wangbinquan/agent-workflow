@@ -1,7 +1,7 @@
 // RFC-395 U-5: runtime-only code-history@1 decoding, independent of the source reader.
 import { z } from 'zod'
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export const CODE_HISTORY_TABLES = [
   'code_ai_attempts',

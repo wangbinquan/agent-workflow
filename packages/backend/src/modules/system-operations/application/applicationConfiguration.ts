@@ -5,7 +5,7 @@ import type {
   ApplicationConfigurationPersistencePort,
 } from './ports/applicationConfiguration'
 import type { RuntimeStatusEntry } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 export function createApplicationConfiguration(
   deps: ApplicationConfigurationDependencies,

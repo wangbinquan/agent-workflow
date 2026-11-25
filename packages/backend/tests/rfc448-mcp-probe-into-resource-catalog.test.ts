@@ -25,7 +25,7 @@ import type {
 } from '@/modules/resource-catalog/public/participants'
 import type { McpQueries } from '@/modules/resource-catalog/public/queries'
 import type { McpCatalogResource } from '@/modules/resource-catalog/public/types'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { importEdges, sourceUnit } from './architecture/census'
 import type {
   McpProbeStore,
@@ -225,8 +225,10 @@ describe('RFC-448 —— 位置与引用', () => {
       // RFC-550: the probe records take their store port and DTOs from the module's own MCP ports file (one target).
       expect(targets.length, file).toBeGreaterThan(0)
       for (const target of targets) {
+        // RFC-575: the two base primitives the probe code uses (the domain error family, the logger) left util/ for platform;
+        // the allowance names them instead of the whole util/ directory.
         const allowed =
-          target.startsWith('util/') ||
+          ['platform/errors/domainErrors', 'platform/logging/logger'].includes(target) ||
           target.startsWith(`${RC}/public/`) ||
           target.startsWith(`${RC}/application/`)
         expect(allowed, `${file} -> ${target}`).toBe(true)

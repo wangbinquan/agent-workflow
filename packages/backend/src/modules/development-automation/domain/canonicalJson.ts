@@ -4,9 +4,9 @@
 // replay oracle。规则：对象键按码点排序、数组保序、只接受 JSON-safe 值
 // （undefined/NaN/±Infinity/函数/bigint/循环引用都是编程错误，直接抛），
 // 不做任何浮点归一（合同层禁止非整数预算，schema 已挡）。
-// hash 走 util/hash 的单步 idiom（RFC-284 T7 锁），domain 白名单精确放行该纯函数。
+// hash 走 platform/contracts/hash 的单步 idiom（RFC-284 T7 锁），domain 白名单精确放行该纯函数。
 
-import { sha256Hex } from '../../../util/hash'
+import { sha256Hex } from '../../../platform/contracts/hash'
 
 export type CanonicalJsonValue =
   | null

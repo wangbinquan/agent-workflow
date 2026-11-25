@@ -9,7 +9,7 @@ import { buildActor } from '../src/auth/actor'
 import { describeEachProvider } from './helpers/eachProvider'
 import { assertWebhookTriggerSaveable } from '../src/modules/integration/application/webhookAdmission'
 import { createUser } from './helpers/userFixture'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 import {
   integrationTriggerResourceAuthority,
   scheduledTaskRuntime,

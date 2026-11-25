@@ -22,7 +22,7 @@ import {
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
 import { getSkillVersionContent } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 
 describeEachProvider('readSkillFile symlink containment', (harness) => {
   let db: PersistenceDb

@@ -36,7 +36,7 @@
 import { parseSkillMarkdown } from '@agent-workflow/shared'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 import type { ResourcePackageSkillTree } from '../application/package/ports'
 import { getSkillById } from './legacy/skill'

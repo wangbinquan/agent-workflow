@@ -22,7 +22,7 @@ import {
   getActiveOp,
   listActiveOps,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
-import { ConflictError, ValidationError } from '../src/util/errors'
+import { ConflictError, ValidationError } from '../src/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('skillOperations primitives', (harness) => {

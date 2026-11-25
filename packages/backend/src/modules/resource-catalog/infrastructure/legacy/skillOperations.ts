@@ -27,7 +27,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, ValidationError } from '@/util/errors'
+import { ConflictError, ValidationError } from '@/platform/errors/domainErrors'
 
 /**
  * The managed structural op kinds. RFC-178 removed `replace` (source-conflict —

@@ -5,7 +5,7 @@ import {
   type Lock,
 } from '@/platform/execution/local/daemonLock'
 import { readControlFile, requestShutdown } from '@/platform/execution/local/controlListener'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { DaemonStartupLeasePort } from '../../application/ports/daemonStartupLease'
 import { dirname } from 'node:path'
 import { liveAutoUpgrade } from './autoUpgradeState'

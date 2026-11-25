@@ -7,7 +7,7 @@ import { tryGetRuntimeDriver, isKnownRuntimeKind } from '../drivers'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import type { RuntimeProfile, RuntimeObservationIdentity } from '../../public/types'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type { TaskRuntimeFreezePersistence } from '../../application/ports/taskRuntimeFreezePersistence'
 
 /** RFC-112/113: the frozen runtime snapshot a node_run dispatches/resumes on. */

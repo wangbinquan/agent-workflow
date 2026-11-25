@@ -48,8 +48,8 @@ import {
   type WorktreeCaptureResult,
   type WorktreeReconstructResult,
 } from '@/platform/persistence/worktreeBackup'
-import { ValidationError } from '@/util/errors'
-import { createLogger } from '@/util/log'
+import { ValidationError } from '@/platform/errors/domainErrors'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('portableApplicationAssets')
 

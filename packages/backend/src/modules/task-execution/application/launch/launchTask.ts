@@ -1,4 +1,4 @@
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import type { TaskLaunchGuard } from '../ports/taskLaunchGuard'
 
 interface PreparedWorkspace {

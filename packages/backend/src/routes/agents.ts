@@ -47,7 +47,7 @@ import { SKILL_MERGER_AGENT_ID } from '@/modules/resource-catalog/public/types'
 // RFC-243 T2: agent launches go through the unified executor facade — this
 // route must not call startAgentTask directly (source-text lock).
 import { parseMultipartLaunch } from '@/platform/http/multipartLaunch'
-import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import { DomainError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { Agent } from '@agent-workflow/shared'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import type {

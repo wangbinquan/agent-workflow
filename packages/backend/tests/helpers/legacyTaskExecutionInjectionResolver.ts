@@ -35,8 +35,8 @@ import {
 } from '@agent-workflow/shared'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { Logger } from '@/util/log'
-import { ConflictError, SkillQuarantinedError } from '@/util/errors'
+import type { Logger } from '@/platform/logging/logger'
+import { ConflictError, SkillQuarantinedError } from '@/platform/errors/domainErrors'
 import { resolveDependsClosure, type AgentDependencyLookup } from './agentDeps'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from './mcpClosure'
 import { collectPluginIdsFromClosure, loadPluginsByIds } from './pluginClosure'

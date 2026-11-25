@@ -13,7 +13,12 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { ConflictError, ForbiddenError, NotFoundError, staleConflictError } from '@/util/errors'
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  staleConflictError,
+} from '@/platform/errors/domainErrors'
 import {
   canEditAccess,
   canGovernAccess,

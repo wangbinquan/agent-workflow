@@ -10,7 +10,7 @@ import {
 } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { GraphDevelopment } from '../../composition/graphDevelopment'
 
 const id = z.string().min(1).check(utf16MaxLength(200)),

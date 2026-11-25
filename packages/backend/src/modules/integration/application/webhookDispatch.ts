@@ -36,9 +36,9 @@ import {
   streamKeyOf,
   type TriggerRule,
 } from '../domain/webhookTriggerMatching'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { KeyedSerialQueue } from '@/platform/contracts/keyedSerialQueue'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   CodeHostEventTypeSchema,
   WebhookRepoScopeSchema,
@@ -66,7 +66,7 @@ import {
 import { z } from 'zod'
 import { decideProtectedLaunch, type MrStreamState } from '../domain/mrTerminalControl'
 import type { WorkStartTarget } from '../public/participants'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import type {
   WebhookDispatchPersistencePort,
   WebhookTriggerRecord,

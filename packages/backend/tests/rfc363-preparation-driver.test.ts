@@ -2,7 +2,7 @@
 // Injected effects isolate failure windows; real Git is covered separately.
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { composeRepositoryPreparationParticipant } from '@/modules/source-control/infrastructure/repositoryPreparationParticipant'
 import { cleanupRepositoryWorkspace } from '@/modules/source-control/application/repositoryPreparationCleanup'
 import { prepareRepositoryWorkspace } from '@/modules/source-control/application/repositoryPreparation'

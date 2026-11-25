@@ -26,7 +26,7 @@ import type { HostedStartupInventory } from '@/platform/crewstation/startupInven
 import { hostedEventRecord } from '@/modules/task-execution/infrastructure/crewstation/runtimeEvents'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/drivers'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { broadcastNodeStatus } from '../src/modules/task-execution/infrastructure/nodeStatusEvents'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'

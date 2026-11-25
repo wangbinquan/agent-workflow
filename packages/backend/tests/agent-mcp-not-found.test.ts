@@ -8,7 +8,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 import {
   composeMcpServiceBindingForTest,
   createMcpForTest,

@@ -89,7 +89,7 @@ describe('RFC-371 v2 observation boundaries', () => {
       '@/platform/persistence/schema/drizzle',
       '@/platform/persistence/databaseTransaction',
       '@/routes/registry',
-      '@/util/errors',
+      '@/platform/errors/domainErrors',
       // RFC-400: the task-facts port names the caller with identity-access's
       // public authority snapshot (type-only) instead of the legacy Actor.
       '@/modules/identity-access/public/participants',

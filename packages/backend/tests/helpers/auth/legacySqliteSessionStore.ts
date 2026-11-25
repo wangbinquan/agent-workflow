@@ -17,7 +17,7 @@ import { SESSION_TOKEN_PREFIX } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { triggerRevalidation } from '@/ws/revalidationHook'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 /** 7 days by default — matches design.md §R4. */
 export const SESSION_DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000

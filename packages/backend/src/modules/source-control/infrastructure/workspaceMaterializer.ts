@@ -8,7 +8,12 @@ import { resolveSubmoduleParams } from '@/platform/workspace/local/submodulePara
 import { listAvailableRefs, resolveCachedRepo } from './local/repositoryMirrorCache'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import { resolveRepoGroupLayout } from '../application/repositoryGroups'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
 import {
   cleanupCreatedWorktree,
   createWorktree,
@@ -17,7 +22,7 @@ import {
   type WorktreeCleanupProvenance,
   type WorktreeLifecycleHookEvent,
 } from '@/util/git'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type {
   GitCommitIdentity,
   PlannedDirectoryNode,

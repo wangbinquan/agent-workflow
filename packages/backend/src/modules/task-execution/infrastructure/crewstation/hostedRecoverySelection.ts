@@ -6,7 +6,7 @@ import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFe
 import type { CrewStationPlatformApi } from '@/platform/crewstation/platformApi'
 import { createCrewStationRecoveryApi } from '@/platform/crewstation/recovery'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import { createHostedRecoveryConsumer } from './recoveryConsumer'
 import { createHostedRecoveryJournal } from './recoveryJournal'
 import { readTaskStatus } from '../taskExecutionTaskReads'

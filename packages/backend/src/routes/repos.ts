@@ -18,7 +18,7 @@
 import type { Hono } from 'hono'
 import type { RepositoryMirrors } from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 export function mountRepoRoutes(app: Hono, mirrors: RepositoryMirrors): void {
   async function read<T>(

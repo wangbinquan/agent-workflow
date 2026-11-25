@@ -40,7 +40,7 @@ import {
 import type { UploadPlan } from '../src/modules/task-execution/infrastructure/local/nativeWorkspaceUploads'
 // RFC-527: the native entry moved to a test helper (only tests used it).
 import { applyUploadsToWorktree } from './helpers/nativeWorkspaceUploads'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 
 let root = ''
 let outside = ''

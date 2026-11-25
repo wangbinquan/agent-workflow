@@ -25,7 +25,7 @@ import type {
   QueryContext,
 } from '../src/modules/identity-access/public/participants'
 import { registerResourcePackageRoutes } from '../src/routes/resourcePackages'
-import { errorHandler } from '../src/util/errors'
+import { errorHandler } from '../src/platform/errors/domainErrors'
 import { encodeZip } from '../src/platform/content/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'

@@ -5,7 +5,7 @@ import {
   type UploadOnConflict,
   type WorkflowInput,
 } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /** Hard defaults; routes override via config when caller wires settings. */
 export const DEFAULT_UPLOAD_LIMITS = {

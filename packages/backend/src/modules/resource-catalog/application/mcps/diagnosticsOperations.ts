@@ -1,6 +1,6 @@
 import type { Mcp } from '@agent-workflow/shared'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import type { McpDiagnosticsCommands } from '../../public/commands'
 import type { McpDiagnosticsQueries } from '../../public/queries'
 import type { McpDiagnosticsApplication, McpDiagnosticsCaller } from './runtimeDiagnostics'

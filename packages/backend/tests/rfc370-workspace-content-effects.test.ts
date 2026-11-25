@@ -12,7 +12,7 @@ import type {
   BoundedWorkspaceContent,
 } from '@/modules/source-control/public/types'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 
 function held() {
   let release!: () => void

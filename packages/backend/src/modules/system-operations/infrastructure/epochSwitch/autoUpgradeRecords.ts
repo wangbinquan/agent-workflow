@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { AutoUpgradeRecordPort } from '../../application/ports/epochSwitch'
 import {
   foldAutoUpgradeSession,

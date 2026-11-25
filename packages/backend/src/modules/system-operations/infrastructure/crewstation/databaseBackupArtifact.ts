@@ -24,7 +24,7 @@ import {
   HostedBackupSidecar,
   type HostedBackupContents,
 } from './databaseBackupFormat'
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 
 export interface HostedBackupArchive {
   readonly path: string

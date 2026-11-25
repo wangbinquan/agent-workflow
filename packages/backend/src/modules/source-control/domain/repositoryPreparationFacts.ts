@@ -4,7 +4,7 @@ import {
   PlannedRepoSchema,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { CachedRepositoryRecord } from '../ports/repositoryWorkspaceStore'
 
 /** Content configuration identity. Cache paths, fetch clocks and secrets are not revisions. */

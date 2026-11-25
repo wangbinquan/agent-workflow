@@ -9,7 +9,7 @@ import { and, eq, inArray, isNull, lt } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import type {
   EmployeeInputUploadPersistence,
   EmployeeInputUploadRecord,

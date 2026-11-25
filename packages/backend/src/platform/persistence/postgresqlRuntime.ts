@@ -4,7 +4,7 @@
 
 import { SQL } from 'bun'
 import type { DatabaseConfig, DatabaseRuntimeTelemetry } from '@agent-workflow/shared'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { timeoutSignal } from '@/platform/contracts/timeoutSignal'
 import type { DatabaseHealth, DatabaseRuntime } from './runtime'
 

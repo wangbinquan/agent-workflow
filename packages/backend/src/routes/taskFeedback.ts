@@ -16,7 +16,7 @@ import type { MemoryOperations } from '@/modules/memory/public/operations'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import { createTaskFeedback } from '@/modules/collaboration/public/commands'
 import { canViewTaskFeedback, listTaskFeedback } from '@/modules/collaboration/public/queries'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 
 export function mountTaskFeedbackRoutes(
   app: Hono,

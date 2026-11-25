@@ -3,7 +3,7 @@
 // Reported versions are telemetry only; runtime execution uses the configured
 // command directly and does not make semver an admission boundary.
 
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { extractVersion } from '@/platform/contracts/semver'
 import { recordOpencodeBinaryVersion } from './versionRegistry'
 import {

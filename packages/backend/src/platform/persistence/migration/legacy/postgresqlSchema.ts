@@ -3,7 +3,7 @@
 // SQL is never replayed: the canonical logical contract produces a fresh PG
 // schema, with constraints/indexes applied after logical copy.
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { retainedOutputRevisionStatements } from './retainedOutputRevisionSchema'
 import { observationSourceRevisionStatements } from './observationSourceRevisionSchema'
 import { observationProjectionChangeStatements } from './observationProjectionChangeSchema'

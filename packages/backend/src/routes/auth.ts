@@ -25,7 +25,7 @@ import {
   NotFoundError,
   UnauthorizedError,
   ValidationError,
-} from '@/util/errors'
+} from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import type { UpdateOwnProfile } from '@/modules/identity-access/public/commands'
 import type {

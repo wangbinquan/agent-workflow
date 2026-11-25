@@ -6,7 +6,7 @@ import { and, eq, isNull } from 'drizzle-orm'
 import type { WorkspaceMaintenanceCommand } from '@/modules/source-control/public/commands'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   compensatePreMaterializedRepository,
   preMaterializedAdmissionPrefix,

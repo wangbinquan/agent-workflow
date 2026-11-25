@@ -9,7 +9,7 @@ import {
 import type { WorkspaceUploadContentFactory } from '../../application/ports/workspaceUploadContent'
 import type { HostedTaskWorkspaces } from './taskWorkspace'
 import { hostedWorkspaceReference, parseHostedWorkspaceReference } from './workspaceReference'
-import { createSha256DigestBuilder, sha256Hex } from '@/util/hash'
+import { createSha256DigestBuilder, sha256Hex } from '@/platform/contracts/hash'
 
 /** One command carries one chunk inside its argv; the protocol budget keeps
  * argv + env below the task container's ARG_MAX (§9.2 V2). */

@@ -24,7 +24,7 @@ import type {
 } from '@/modules/task-execution/domain/nodeExecution'
 import type { CodeHostRecoveryDescriptor } from '@/modules/task-execution/domain/codeHostRecovery'
 import { Semaphore } from '@/platform/contracts/semaphore'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 /** Missing capabilities fail at the point of use; no permissive no-op fallback. */
 function strictPort<T extends object>(members: Partial<T> = {}): T {

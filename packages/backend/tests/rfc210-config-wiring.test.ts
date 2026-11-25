@@ -3,7 +3,7 @@
 // 为什么这条测试存在：
 //
 // RFC-034 定义了 `gitRecurseSubmodules` / `gitSubmoduleJobs` 两个 settings，
-// `util/git.ts:416` 还留了一句注释宣称 "Caller (services/task.ts startTask) wires
+// `util/git.ts:421` 还留了一句注释宣称 "Caller (services/task.ts startTask) wires
 // this through from settings.gitRecurseSubmodules"。**那条接线从未存在**：全仓没有
 // 任何生产代码读 `config.gitRecurseSubmodules`，实际行为恒为 'auto' / jobs=4。
 //

@@ -1,4 +1,9 @@
-import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+  staleConflictError,
+} from '@/platform/errors/domainErrors'
 import type { Mcp } from '@agent-workflow/shared'
 import { assertInitialResourceOwner, initialPrivateResourceAcl } from '../resourceDefaults'
 import type {

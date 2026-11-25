@@ -19,7 +19,7 @@ import {
   writeSkillContent,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { describeEachProvider } from './helpers/eachProvider'
-import { ConflictError, ValidationError } from '../src/util/errors'
+import { ConflictError, ValidationError } from '../src/platform/errors/domainErrors'
 
 async function getSkill(db: PersistenceDb, name: string) {
   return (await listSkills(db)).find((skill) => skill.name === name) ?? null

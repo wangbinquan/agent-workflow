@@ -51,7 +51,7 @@ import {
 } from '../application/lifecycleAlerts/lifecycleInvariants'
 import { buildWorkflowScopeParentMap } from '@agent-workflow/shared'
 import { runStuckTaskDetector } from '../application/lifecycleAlerts/stuckTaskDetector'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import type { TaskRouteOperations } from '../public/commands'

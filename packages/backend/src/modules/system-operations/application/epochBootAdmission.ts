@@ -3,7 +3,7 @@
 // restore. The decisions are this module's epoch policy (domain); the composition hands in the effects — reading the
 // installation facts, the upgrade child, re-reading the configuration, the pending restore and the upgrade log.
 import type { DatabaseConfig } from '@agent-workflow/shared'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import { autoUpgradeTrigger } from '../domain/epochSwitch/autoUpgrade'
 import {
   classifyEpochInstallation,

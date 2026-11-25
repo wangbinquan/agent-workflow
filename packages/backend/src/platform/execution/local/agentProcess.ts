@@ -14,7 +14,7 @@
 // 分类（smoke 的 auth-missing / system agent 的 result-error 等）也归调用方——
 // 本层只保证进程级 outcome 准确。
 
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import {
   runManagedProcess,
   type ManagedProcessRequest,

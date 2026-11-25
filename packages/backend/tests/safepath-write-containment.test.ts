@@ -13,7 +13,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { assertWriteAncestorInside, realpathWriteInside } from '../src/util/safePath'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 
 describe('realpathWriteInside', () => {
   let root: string

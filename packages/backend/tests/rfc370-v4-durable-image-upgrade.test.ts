@@ -54,8 +54,8 @@ import {
   decodeWorkspaceHelperArguments,
   WorkspaceCommandFailedError,
 } from '@/platform/crewstation/workspaceProtocol'
-import { DomainError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import { DomainError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const OLD = 'image-old'

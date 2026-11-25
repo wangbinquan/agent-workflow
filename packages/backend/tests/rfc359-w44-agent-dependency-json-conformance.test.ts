@@ -5,7 +5,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import { assertAgentDependencyGraph } from '../src/modules/resource-catalog/domain/agentDependencies'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 
 // RFC-401 A1: the ordinary semantics and the package arm no longer carry their own graph check — every agent
 // writer goes through the one Agent mutation participant, so its `assertDependencyGraph` is the owner exercised

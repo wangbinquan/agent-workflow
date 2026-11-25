@@ -38,7 +38,7 @@ import {
 } from '@/modules/resource-catalog/infrastructure/workflowPersistence'
 import { createWorkflowPersistenceSemantics } from '@/modules/resource-catalog/infrastructure/workflowPersistenceSemantics'
 import { createWorkflowRepository } from '@/modules/resource-catalog/infrastructure/workflowRepository'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const T0 = 1_700_000_000_000

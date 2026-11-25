@@ -28,7 +28,7 @@ import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 import { serializePluginFor } from '@/auth/tokenRedaction'
 import { assertDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 export interface PluginRouteDependencies {

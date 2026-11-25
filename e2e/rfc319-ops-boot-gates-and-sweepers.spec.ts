@@ -527,7 +527,7 @@ test('RFC-319 OPS-029: git 低于 2.38 时拒绝启动，并把实测版本与�
   const home = await readyHome('gitfloor')
   const shimDir = join(home, 'rfc319-git-shim')
   try {
-    // 产品探测 git 的方式是 `Bun.spawn({ cmd: ['git', …] })`（`util/git.ts:170`），
+    // 产品探测 git 的方式是 `Bun.spawn({ cmd: ['git', …] })`（`util/git.ts:175`），
     // 也就是**走 PATH**。所以把一个假 git 排在 PATH 最前面就能压低它读到的版本，
     // 不需要改产品一行代码。垫片只对 `--version` 撒谎（判据要扫遍 argv：产品那条
     // 探测命令被 `hardenGitArgs` 塞进了一长串 `-c k=v`，`--version` 落在最后）。

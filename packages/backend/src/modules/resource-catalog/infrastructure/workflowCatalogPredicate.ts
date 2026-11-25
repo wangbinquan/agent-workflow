@@ -1,7 +1,7 @@
 import type { SQL, SQLWrapper } from 'drizzle-orm'
 import { isTaskDefinitionHostId } from '@agent-workflow/shared'
 import { workflowCatalogPredicate } from '@/platform/persistence/workflowCatalogPredicate'
-import { ForbiddenError } from '@/util/errors'
+import { ForbiddenError } from '@/platform/errors/domainErrors'
 
 export { workflowCatalogPredicate }
 

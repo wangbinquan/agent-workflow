@@ -4,7 +4,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { bumpRecoveryCounter } from '@/platform/health/recoveryCounters'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type {
   ResourceLimitAudit,
   ResourceLimitCancellationAudit,

@@ -18,7 +18,7 @@ import type {
   CodeHostConnectionResolver,
   CodeHostRequestPort,
 } from '../application/ports/codeHostNodeExecution'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
 import type { TaskExecutionResourceBinding } from '../application/ports/taskExecutionResourceSnapshots'

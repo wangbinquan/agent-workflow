@@ -1,8 +1,8 @@
 // RFC-512 — registered repository reads, remote registration and refresh (RFC-370 §10 V17) as use cases. The
 // effects come from the assembly: the mirror directory reads, the known-path reads and the mirror cache.
 import { gitUrlCacheKeyWith, parseGitUrl } from '@agent-workflow/shared'
-import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { sha1Hex } from '@/util/hash'
+import { DomainError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
+import { sha1Hex } from '@/platform/contracts/hash'
 import type {
   CachedRepositoryRecord,
   RepositoryWorkspaceStore,

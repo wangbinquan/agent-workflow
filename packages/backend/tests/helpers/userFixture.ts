@@ -15,7 +15,12 @@ import {
   createUserAccessRepository,
 } from '@/modules/identity-access/infrastructure/userAccessPersistence'
 import { UserAccessError } from '@/modules/identity-access/public/types'
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
 
 export type UserRow = PersistenceTables['users']['$inferSelect']
 export interface CreateUserInput extends Omit<CreateUserBody, 'additionalPermissions'> {

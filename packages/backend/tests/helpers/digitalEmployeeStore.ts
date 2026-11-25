@@ -27,7 +27,7 @@ import {
   type EmployeePublishLookup,
 } from '@/modules/development-automation/domain/digitalEmployee'
 import { createDevelopmentConfigPersistence } from '@/modules/development-automation/infrastructure/developmentConfigPersistence'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 
 export type { DevelopmentResourceIdentity }
 

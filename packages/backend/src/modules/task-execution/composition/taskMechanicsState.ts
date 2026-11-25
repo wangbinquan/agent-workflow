@@ -6,7 +6,7 @@ import type { SchedulerRuntimeTopology } from '../application/ports/taskExecutio
 import type { WrapperScopeReadModel } from '../engine/node/wrapperDelegatingNodeExecutors'
 import type { TaskEngineTaskSnapshot } from '../application/ports/taskEngineApplicationPersistence'
 import type { TaskScopeOutcome } from '../domain/taskEngine'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { Semaphore } from '@/platform/contracts/semaphore'
 import type { BoundRunTaskOptions } from './taskEngineRuntimeOptions'
 import type { DagScopeArgs } from '../application/ports/dagScope'

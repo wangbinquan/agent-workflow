@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { PLATFORM_WORKSPACE_DIR, utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { stableIdentityComponent } from '@/util/gitRef'
 import { repoRelativePathSchema } from '../domain/requirementManifest'
 import { encodeDevelopmentApprovalSubject } from '../domain/approvalSubject'

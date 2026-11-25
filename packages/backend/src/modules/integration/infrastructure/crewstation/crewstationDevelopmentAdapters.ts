@@ -19,7 +19,7 @@ import type {
   PipelineAdapterEffects,
   ApprovalAdapterEffects,
 } from '../../application/ports/developmentAdapterEffects'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export function composeCrewStationDevelopmentAdapters(input: {
   readonly helper: WorkspaceHelper

@@ -24,7 +24,7 @@ import {
   listClarifyRoundSummaries,
   listClarifyRounds,
 } from '../src/modules/collaboration/infrastructure/clarifyRounds'
-import { NotFoundError } from '../src/util/errors'
+import { NotFoundError } from '../src/platform/errors/domainErrors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 

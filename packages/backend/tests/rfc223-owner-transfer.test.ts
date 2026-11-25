@@ -15,7 +15,7 @@ import {
   updateResourceAcl,
 } from '../src/modules/resource-catalog/composition/resourceAcl'
 import type { AclRow } from '../src/modules/resource-catalog/domain/resourceAccess'
-import { ConflictError, ForbiddenError, NotFoundError } from '../src/util/errors'
+import { ConflictError, ForbiddenError, NotFoundError } from '../src/platform/errors/domainErrors'
 
 // RFC-304 — the two capability template layers carry owner+name unique indexes
 // exactly like the five above, so a transfer into an occupied name bucket must

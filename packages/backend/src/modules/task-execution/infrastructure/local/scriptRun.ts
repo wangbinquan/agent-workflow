@@ -28,7 +28,7 @@ import {
   type ScriptLanguage,
   type WorkflowNode,
 } from '@agent-workflow/shared'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import {
   runManagedProcess,
   type ManagedProcessResult,

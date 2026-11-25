@@ -18,7 +18,7 @@ import {
   createObjectContentTransport,
 } from '@/platform/content/infrastructure/contentStore'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { objectFixture } from './helpers/rfc370Objects'
 
 type MaintenanceWorkerGraph = Awaited<ReturnType<typeof composeMaintenanceWorkerGraph>>

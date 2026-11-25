@@ -19,7 +19,7 @@ import {
   type WorkflowNode,
 } from '@agent-workflow/shared'
 import { assertScriptAuthorAllowed } from '@/modules/resource-catalog/domain/scriptAuthorGate'
-import { ForbiddenError } from '@/util/errors'
+import { ForbiddenError } from '@/platform/errors/domainErrors'
 
 /** Minimal Actor shape the gate reads: nothing but the permission set. */
 function principalWith(perms: readonly string[]) {

@@ -33,7 +33,7 @@ import { createPluginRepository } from '../../src/modules/resource-catalog/infra
 import { createLocalPluginInstaller } from '../../src/modules/resource-catalog/infrastructure/local/localPluginInstaller'
 import type { PluginOperationContext } from '../../src/modules/resource-catalog/public/participants'
 import { ResourceOperationCoordinator } from '../../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
-import { NotFoundError } from '../../src/util/errors'
+import { NotFoundError } from '../../src/platform/errors/domainErrors'
 import { monotonicNow } from '../../src/platform/contracts/monotonicNow'
 import type { PluginCatalogModule } from '@/modules/resource-catalog/application/catalogModules'
 

@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
 import { z } from 'zod'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { ProgramToolSource } from '../../application/ports/scriptFixture'
 
 const parameterValuesSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]))

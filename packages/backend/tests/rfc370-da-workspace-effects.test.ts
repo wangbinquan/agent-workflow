@@ -27,7 +27,7 @@ import { createWorkspaceValidationAdapter } from '@/modules/development-automati
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
 import { runMissionReconcile } from '@/modules/development-automation/application/missionReconciler'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'

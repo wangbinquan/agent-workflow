@@ -44,7 +44,7 @@ import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifec
 import { getTask } from './helpers/taskDetailRead'
 import { isTaskActive } from './helpers/taskDriverRegistry'
 import { createWebhookDispatcher } from '../src/modules/integration/application/webhookDispatch'
-import { sha1Hex } from '../src/util/hash'
+import { sha1Hex } from '../src/platform/contracts/hash'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { createUser } from './helpers/userFixture'
 import { createWorkflow } from './helpers/model/resourceWrites'

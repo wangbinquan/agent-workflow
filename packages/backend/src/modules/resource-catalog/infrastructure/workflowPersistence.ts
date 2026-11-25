@@ -14,8 +14,8 @@ import {
   type WorkflowDraftSnapshot,
   type WorkflowRevision,
 } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import { ValidationError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export interface WorkflowPersistenceRow {
   readonly id: string

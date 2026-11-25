@@ -16,7 +16,7 @@
 // 虽然会被丢掉，但路径改写不依赖行是否保留）；R4 必须在 R3 之后（丢掉栈帧之后才会暴露出
 // 真正相邻的重复行）；R5 必须最后（前面每一步都在减长度）。
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export type ReactionArtifactKind = 'retry-feedback' | 'diagnostics'
 

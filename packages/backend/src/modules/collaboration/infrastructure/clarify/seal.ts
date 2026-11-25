@@ -54,7 +54,7 @@ import {
 import { readClarifyAnswerProjection } from '../clarifyAnswerQueries'
 import { createClarifyAnswerWritePort, lockClarifyRound } from '../clarifyAnswerWrite'
 import type { ClarifySealDecisionParticipantInTx } from '../../application/ports/clarifySealDecisionParticipant'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import {
   clarifyQuestionSetKey,
   isClarifyAnswerConfirmed,

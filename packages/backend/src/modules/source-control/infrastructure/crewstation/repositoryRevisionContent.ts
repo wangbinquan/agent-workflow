@@ -4,7 +4,7 @@
 // registration is looked up first (`find`) and file reads resume an existing
 // parent only (`open`). A volume created by a release that predates this
 // operation answers a typed 410 instead of falling back to per-file commands.
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
 import { isCrewStationApiError } from '@/platform/crewstation/platformApi'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'

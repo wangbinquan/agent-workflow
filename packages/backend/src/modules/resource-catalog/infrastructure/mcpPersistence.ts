@@ -12,8 +12,13 @@ import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+  staleConflictError,
+} from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   assertInitialResourceOwner,
   initialPrivateResourceAcl,

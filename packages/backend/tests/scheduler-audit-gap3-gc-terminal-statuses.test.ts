@@ -11,7 +11,7 @@
 //   恢复，见 S-11 爆炸半径一节）与该集合直接冲突。
 //
 // 另锁多仓盲区（缺口3 后半段）：多仓任务的 worktreePath 是普通 mkdir 容器目录而非
-// git worktree，gc.ts:73 对它跑 `git worktree remove --force` 恒失败（util/git.ts:810-821
+// git worktree，gc.ts:73 对它跑 `git worktree remove --force` 恒失败（util/git.ts:815-826
 // 抛 worktree-remove-failed）→ 被 gc.ts:76-82 catch 计入 skipped → 容器目录与其中的
 // 子仓 worktree 永久泄漏（确认走"恒失败泄漏"分支，不是"force 误删"分支）。
 //

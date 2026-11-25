@@ -21,7 +21,7 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 import { mountCodeRoutes } from '@/modules/code-capability/composition/routes'
 import { resetRouteMetaRegistry } from '@/routes/registry'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 const CODE_ROUTE_SOURCE = resolve(

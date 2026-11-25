@@ -28,7 +28,7 @@ import { first } from '@/platform/persistence/queryHelpers'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { assertCodeHostAuthorAllowed } from '../domain/codeHostAuthorGate'
 import { assertScriptAuthorAllowed, type ScriptAuthorPrincipal } from '../domain/scriptAuthorGate'
-import { NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import { NotFoundError, ValidationError, staleConflictError } from '@/platform/errors/domainErrors'
 import type { Actor } from '@/auth/actor'
 import type { WorkflowDefinitionWriteParticipant } from '../application/ports/workflowDefinitionWrite'
 import type {

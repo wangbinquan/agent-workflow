@@ -19,7 +19,7 @@ import type { EpochSwitchArtifactPort } from '@/platform/persistence/migration/r
 import { epochArtifactFileName } from '@/platform/persistence/migration/artifactFileName'
 import { dirname, join } from 'node:path'
 import { acquireLock } from '@/platform/execution/local/daemonLock'
-import { sha256Hex, createSha256DigestBuilder } from '@/util/hash'
+import { sha256Hex, createSha256DigestBuilder } from '@/platform/contracts/hash'
 const bytesDigest = (bytes: Uint8Array) => `sha256:${sha256Hex(bytes)}`
 import type { EpochSwitchJournalPort } from '../../application/ports/epochSwitch'
 import {

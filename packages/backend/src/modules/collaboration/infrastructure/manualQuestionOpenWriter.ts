@@ -17,8 +17,8 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import { ConflictError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type {
   CreateManualQuestionOpenInput,
   CreatedManualQuestionOpen,

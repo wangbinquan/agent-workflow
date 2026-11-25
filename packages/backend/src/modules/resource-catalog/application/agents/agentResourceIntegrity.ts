@@ -27,7 +27,7 @@ import type {
   AgentOperationContext,
 } from '../../public/participants'
 import { agentLaunchResourceIntegrityParticipantBrand } from '../../domain/participantBrands'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 export type { AgentResourceStatus } from '../../public/types'
 

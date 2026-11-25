@@ -10,7 +10,7 @@ import type {
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { NotFoundError, staleConflictError } from '@/util/errors'
+import { NotFoundError, staleConflictError } from '@/platform/errors/domainErrors'
 import type { WorkflowAclIdentity, WorkflowRepository } from '../application/workflows/ports'
 import type { WorkflowOperationContext } from '../public/participants'
 import {

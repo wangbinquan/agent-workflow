@@ -391,8 +391,8 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // RFC-563: the material intent's logger was first reached from Resource Catalog's material references (they named the
   // intent type); those are declared with Resource Catalog's own shapes now, so the same deviation is recorded at the
   // intent owner's own public root.
-  'modules/runtime-management/application/ports/agentMaterial.ts#AgentMaterialCompiler: forbidden type import @/util/log#Logger',
-  'modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentMaterialEvidence: forbidden type import @/util/log#Logger',
+  'modules/runtime-management/application/ports/agentMaterial.ts#AgentMaterialCompiler: forbidden type import @/platform/logging/logger#Logger',
+  'modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentMaterialEvidence: forbidden type import @/platform/logging/logger#Logger',
   'modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentMaterialEvidence: unsafe/open type FunctionType',
   // RFC-465: newly visible once the session capture / sweep contracts moved into the module (it replaces the three
   // `services/runtime/types` forbidden imports) — the sweep outcome's caught `failureReason?: unknown`.
@@ -407,7 +407,7 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/runtime-management/public/commands.ts#RuntimeProfileCommands: unsafe/open type UnknownKeyword',
   // RFC-570: the workgroup run selection projection is declared by its owner (task-execution's domain) instead of a
   // platform file, and source-control's two receiver completeness checks take the port types; three entries settled.
-  'modules/source-control/composition/isolationWorkspaces.ts#selectIsolationWorkspaceFactory: forbidden type import @/util/log#Logger',
+  'modules/source-control/composition/isolationWorkspaces.ts#selectIsolationWorkspaceFactory: forbidden type import @/platform/logging/logger#Logger',
   'modules/source-control/composition/isolationWorkspaces.ts#selectIsolationWorkspaceFactory: unsafe/open type FunctionType',
   'modules/source-control/composition/repositoryGitWorkspaces.ts#selectRepositoryGitWorkspaceFactory: unsafe/open type FunctionType',
   // RFC-565: `readHostedWorkspaceOwnerForBusinessTask`, `existingRepositoryIds` and the fragment `repositoryExistsExpression`
@@ -429,7 +429,7 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // RFC-562: the hosted object publication journal is the content owner's contract (platform/content) and the restore
   // normalization participant is a System Operations required port; neither is on a module's public surface any more.
   'modules/system-operations/public/commands.ts#ApplicationConfigurationCommands: unsafe/open type UnknownKeyword',
-  'modules/task-execution/application/ports/systemAgentRunFamily.ts#SystemAgentRunFamily: forbidden type import @/util/log#Logger',
+  'modules/task-execution/application/ports/systemAgentRunFamily.ts#SystemAgentRunFamily: forbidden type import @/platform/logging/logger#Logger',
   // RFC-399 A8: the clarify directive route port moved from TE public/types into TE application/ports
   // (public/types re-exports it); same Actor debt, new declaration site.
   // RFC-480: public/operations (exempt from this scan as an RFC-344 operation entrypoint) was retired; the consumer-owned prune

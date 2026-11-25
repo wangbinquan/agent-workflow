@@ -8,11 +8,11 @@ import type {
 } from '@/modules/runtime-management/public/participants'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { isTerminalSubtaskState } from '@/platform/crewstation/businessExecution'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { SystemAgentCoreInvocation } from '../../application/ports/systemAgentRun'
 import type { SystemAgentObservationRun } from '../../application/ports/systemAgentObservation'
 import { createHostedAgentInvocationPreparation } from './agentInvocationPreparation'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 type Turn = { readonly sessionId: string; readonly id: string }
 

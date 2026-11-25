@@ -10,7 +10,7 @@
 // operator's, so it stays strict and a typo fails at startup.
 import { z } from 'zod'
 import type { CodeHostEventType } from '@agent-workflow/shared'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import type { NormalizeResult } from '../../domain/codeHostNormalization'
 import { githubNormalize } from '../../domain/githubNormalization'
 import { gitlabNormalize } from '../../domain/gitlabNormalization'
@@ -18,7 +18,7 @@ import type {
   CrewStationEventRoute,
   CrewStationInboundDelivery,
 } from '../../application/ports/crewStationEventInbox'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 /** The transport receipt of a delivery fact admitted from a frozen CrewStation target. */
 export const CREWSTATION_TARGET_RECEIPT_PREFIX = 'cs-event-target:'

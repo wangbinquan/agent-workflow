@@ -1,6 +1,6 @@
 import type { ResourceAccess } from '@agent-workflow/shared'
 import { isResourceNameSubmissionAllowed } from '../domain/resourceAccess'
-import { ForbiddenError } from '@/util/errors'
+import { ForbiddenError } from '@/platform/errors/domainErrors'
 
 /** Application error mapping for the domain's owner-only rename rule. */
 export function assertNameUnchangedForEditor(

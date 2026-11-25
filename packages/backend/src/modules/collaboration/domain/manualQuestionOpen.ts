@@ -1,6 +1,6 @@
 // RFC-333 T7 — durable manual-question row + park obligation manifest.
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { canonicalHumanGateValueJson } from './canonicalGateRequest'
 import { HumanGateOperationError } from './humanGateOperation'
 

@@ -69,7 +69,7 @@ import {
 import type { IntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 // ─────────────────────────────────────────────────────────────────────────────

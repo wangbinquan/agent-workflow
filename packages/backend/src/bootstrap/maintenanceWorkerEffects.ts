@@ -5,7 +5,7 @@ import type { IntentArtifactContentPort, IntentScratchStore } from '@/modules/in
 import type { WorkspaceMaintenanceEffects } from '@/modules/source-control/public/types'
 import type { PostgresqlDatabaseClientOptions } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { EventsArchiveContent } from '@/platform/background/eventsArchiveContent'
 import type { DatabaseBackupMaintenance } from '@/modules/system-operations/public/commands'
 import type { HostedObjectPublicationMaintenance } from '@/platform/content/hostedObjectPublications'

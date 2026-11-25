@@ -16,7 +16,7 @@ import {
   createContentStore,
   databaseContentPolicy,
 } from '@/platform/content/infrastructure/contentStore'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskFixture } from './helpers/model'
 

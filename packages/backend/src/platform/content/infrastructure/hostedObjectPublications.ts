@@ -39,8 +39,8 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/objectStorage'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { sha256Hex } from '@/util/hash'
-import { createLogger } from '@/util/log'
+import { sha256Hex } from '@/platform/contracts/hash'
+import { createLogger } from '@/platform/logging/logger'
 import type {
   HostedBackupReleaseHorizon,
   HostedObjectContent,

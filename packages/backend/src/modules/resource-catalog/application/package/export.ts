@@ -15,7 +15,7 @@ import type { BundleResourceType } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { isVisibleRow } from '../../domain/resourceAccess'
 import { encodeZip, type ZipFile } from '@/platform/content/zip'
-import { ConflictError, ValidationError } from '@/util/errors'
+import { ConflictError, ValidationError } from '@/platform/errors/domainErrors'
 import {
   assertPrivilegedNodesExportable,
   isBuiltinRow,

@@ -12,7 +12,7 @@ import { isolatedRunBinding } from './executionMechanismBindings'
 import { workspaceSessionFor } from './executionWorkspaceBinding'
 import { bindMergeConflictPorts } from './mergeConflictResolution'
 import type { TaskMechanicsState } from './taskMechanicsState'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 export function createIsolationMechanicsPorts(state: TaskMechanicsState): IsolationMechanicsPorts {
   return {

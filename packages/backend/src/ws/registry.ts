@@ -61,7 +61,7 @@ import type {
   RealtimeCredentialAccess,
   RealtimeIdentityAccess,
 } from '@/modules/runtime-management/public/participants'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   AUTHORITY_CHANNEL,
   authorityBroadcaster,

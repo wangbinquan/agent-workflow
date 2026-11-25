@@ -23,7 +23,7 @@ import {
   type SkillFsOptions,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
-import { ConflictError } from '../src/util/errors'
+import { ConflictError } from '../src/platform/errors/domainErrors'
 
 describe('isProtectedSkillMainFile (lexical, shared)', () => {
   test('rejects the root main file and its pure aliases', () => {

@@ -16,7 +16,7 @@ import type {
 } from '../../application/ports/isolationWorkspace'
 import { mergeLocalIsolationWorkspace } from '../local/localIsolationWorkspace'
 import { assertTargetDirInsideWorktree } from '@/platform/content/local/uploadPaths'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 interface MergeCheckpoint {
   version: 1

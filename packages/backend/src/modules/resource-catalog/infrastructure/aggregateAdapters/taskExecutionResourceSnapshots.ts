@@ -28,7 +28,11 @@ import { asc, eq, inArray } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { NotFoundError, SkillQuarantinedError, ValidationError } from '@/util/errors'
+import {
+  NotFoundError,
+  SkillQuarantinedError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
 import { loadAgentPersistenceRow } from '../agentPersistence'
 import { mcpFromPersistenceRow } from '../mcpPersistence'
 import { pluginFromPersistenceRow } from '../pluginPersistence'

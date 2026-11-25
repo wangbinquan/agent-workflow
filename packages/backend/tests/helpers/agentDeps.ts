@@ -29,7 +29,7 @@
 import { validateAgentDependencies } from '@/modules/resource-catalog/application/agents/agentDependencyValidation'
 import type { Agent, RefCallPolicy } from '@agent-workflow/shared'
 import { agentReferenceIds, resourceRefKey } from '@agent-workflow/shared'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 
 export interface AgentDependencyLookup {
   get(id: string): Promise<Agent | null>

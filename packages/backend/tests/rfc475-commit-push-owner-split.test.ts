@@ -363,7 +363,7 @@ describe('RFC-475 —— source-control 的发布合同', () => {
       sourceUnit(
         BACKEND_PREFIX + 'modules/probe/public/types.ts',
         [
-          "import type { Logger } from '@/util/log'",
+          "import type { Logger } from '@/platform/logging/logger'",
           'export interface WorkspaceChangeProbe {',
           '  readonly acquire: () => Promise<() => void>',
           '  readonly log: Logger',
@@ -372,7 +372,7 @@ describe('RFC-475 —— source-control 的发布合同', () => {
       ),
     ]
     expect(publicSurfaceViolations(probe)).toEqual([
-      'modules/probe/public/types.ts#WorkspaceChangeProbe: forbidden type import @/util/log#Logger',
+      'modules/probe/public/types.ts#WorkspaceChangeProbe: forbidden type import @/platform/logging/logger#Logger',
       'modules/probe/public/types.ts#WorkspaceChangeProbe: unsafe/open type FunctionType',
     ])
   }, 120_000)

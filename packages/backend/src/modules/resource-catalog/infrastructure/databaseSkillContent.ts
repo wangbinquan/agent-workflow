@@ -17,8 +17,8 @@ import {
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { sha256Hex } from '@/util/hash'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { sha256Hex } from '@/platform/contracts/hash'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { SkillContentReader, SkillContentReference } from '../application/skills/contentReader'
 import type {
   SkillCreationContentStore,

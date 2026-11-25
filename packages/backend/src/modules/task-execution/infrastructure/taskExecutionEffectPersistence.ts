@@ -45,7 +45,7 @@ import { ulid } from 'ulid'
 
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import type {
   CodeHostNodeSettlementProjection,
   GateRollbackSettlement,

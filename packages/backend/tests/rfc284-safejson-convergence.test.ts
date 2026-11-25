@@ -12,7 +12,7 @@ import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '../src/platform/http/requestParsing'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 
 const SRC_ROOT = join(import.meta.dir, '../src')
 

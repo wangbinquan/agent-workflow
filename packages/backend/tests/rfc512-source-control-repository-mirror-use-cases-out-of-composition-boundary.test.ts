@@ -23,8 +23,8 @@ import {
 } from '@/modules/source-control/application/repositoryMirrors'
 import type { CachedRepositoryRecord } from '@/modules/source-control/ports/repositoryWorkspaceStore'
 import type { RepositoryMirrorRegistration } from '@/modules/source-control/application/ports/repositoryMirrors'
-import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { sha1Hex } from '@/util/hash'
+import { DomainError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
+import { sha1Hex } from '@/platform/contracts/hash'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const REPO = resolve(BACKEND, '..', '..')
@@ -61,22 +61,24 @@ const LISTED: readonly (readonly [string, string])[] = [
 /** design §4 ③: the exact imports of the new file. */
 const APP_IMPORTS = [
   'import @agent-workflow/shared: gitUrlCacheKeyWith, parseGitUrl',
-  'import util/errors: DomainError, NotFoundError, ValidationError',
-  'import util/hash: sha1Hex',
+  'import platform/errors/domainErrors: DomainError, NotFoundError, ValidationError',
+  'import platform/contracts/hash: sha1Hex',
   `import ${SC}/ports/repositoryWorkspaceStore: CachedRepositoryRecord, RepositoryWorkspaceStore`,
   `import ${PORT}: RepositoryDirectoryReads, RepositoryMirrorCache, RepositoryMirrors, RepositoryRemoteEffects`,
 ]
 const APP_ALLOWED = new Set([
   '@agent-workflow/shared',
-  'util/errors',
-  'util/hash',
+  'platform/errors/domainErrors',
+  'platform/contracts/hash',
   `${SC}/ports/repositoryWorkspaceStore`,
   PORT,
 ])
 const allowedForApp = (file: string, specifier: string): boolean =>
   APP_ALLOWED.has(resolveSpecifier(file, specifier) ?? specifier)
 /** design §3: what the composition file may no longer take (the use cases' own vocabulary). */
-const LEFT_COMPOSITION = /^import (@agent-workflow\/shared|util\/errors|util\/hash):/
+// RFC-575: the error family and the digest helpers moved from util/ into platform.
+const LEFT_COMPOSITION =
+  /^import (@agent-workflow\/shared|platform\/errors\/domainErrors|platform\/contracts\/hash):/
 /** The tests below read every production file, test and e2e file; the first pays the cold read. */
 const CORPUS_TIMEOUT = 30_000
 
@@ -344,7 +346,7 @@ describe('RFC-512 ② composition 只装配', () => {
     const probe = join(SRC, `${SC}/composition/probe.ts`)
     const source = [
       `import { parseGitUrl } from '@agent-workflow/shared'`,
-      `import { NotFoundError } from '@/util/errors'`,
+      `import { NotFoundError } from '@/platform/errors/domainErrors'`,
       `import { createLocalRepositoryMirrors } from '../application/repositoryMirrors'`,
       `export function compose(row: unknown) {`,
       `  if (row === null) throw new NotFoundError('cached-repo-not-found', 'x')`,
@@ -354,7 +356,7 @@ describe('RFC-512 ② composition 只装配', () => {
     expect(checkShapes(probe, source)).toEqual(['if', 'throw', 'NotFoundError', 'try'])
     expect(moduleEdges(probe, source).filter((edge) => LEFT_COMPOSITION.test(edge))).toEqual([
       'import @agent-workflow/shared: parseGitUrl',
-      'import util/errors: NotFoundError',
+      'import platform/errors/domainErrors: NotFoundError',
     ])
   })
 })
@@ -369,7 +371,7 @@ describe('RFC-512 ③ 新文件的依赖面是闭集、不用进程全局', () =
   test('负对照：基础设施、旧服务层与进程全局都会被认出', () => {
     const file = sourceOf(APP)
     const source = [
-      `import { sha1Hex } from '@/util/hash'`,
+      `import { sha1Hex } from '@/platform/contracts/hash'`,
       `import { rowToCached } from '../infrastructure/local/repositoryMirrorCache'`,
       `import { unsealRepoUrl } from '@/services/repoCredentials'`,
       `export function run() { return [Date.now(), process.env, rowToCached, unsealRepoUrl, sha1Hex] }`,

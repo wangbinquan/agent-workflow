@@ -27,7 +27,12 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { migrateTriggerRowTemplateToV2, parseTriggerRow } from './webhookDispatch'
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
 import type { IntegrationTriggerResourceAuthority } from './ports/scheduledTaskPersistence'
 import type {
   WebhookDispatchPersistencePort,

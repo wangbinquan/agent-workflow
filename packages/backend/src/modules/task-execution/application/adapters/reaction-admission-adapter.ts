@@ -25,7 +25,7 @@
 
 import { ulid } from 'ulid'
 
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import type { ReactionAdmissionStore } from '../ports/reactionAdmissionStore'
 import type {
   ReactionClaimEpoch,

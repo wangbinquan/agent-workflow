@@ -8,7 +8,7 @@
 import type { MemoryListFilter, MemorySummary } from '@agent-workflow/shared'
 import { matchesTagFilter } from '@agent-workflow/shared'
 
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 import { narrowCandidateRows } from '../domain/candidateVisibility'
 import {

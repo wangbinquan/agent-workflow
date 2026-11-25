@@ -19,7 +19,7 @@ import {
   type CustomEventSourceDraft,
 } from '@/modules/event-center/domain/customEventSource'
 import { dedupeKey, normalizedCursor } from '@/modules/event-center/domain/customObserverProgram'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const members = [

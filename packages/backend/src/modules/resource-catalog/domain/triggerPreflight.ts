@@ -14,7 +14,7 @@ import {
   type TriggerDependencySource,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { parseCallClosure } from './callClosure'
 
 export function triggerSourceFromContext(

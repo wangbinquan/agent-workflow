@@ -26,7 +26,7 @@ import { createRoundAttemptsRead } from '@/modules/code-capability/infrastructur
 import { INITIAL_CUTOVER_STATE } from '@/modules/development-automation/domain/cutover'
 import { createCutoverStore } from '@/modules/development-automation/infrastructure/cutoverStore'
 import { createEmployeeWorkspacePersistence } from '@/modules/development-automation/infrastructure/employeeWorkspacePersistence'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_700_000_000_000

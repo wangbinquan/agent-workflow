@@ -8,7 +8,7 @@ import {
   type TaskSourceId,
 } from '@agent-workflow/shared'
 
-import { ForbiddenError, ValidationError } from '@/util/errors'
+import { ForbiddenError, ValidationError } from '@/platform/errors/domainErrors'
 import type { TaskCatalogSource } from '../composition/required-ports'
 import type { TaskCatalogListQuery, TaskCatalogViewer } from '../public/types'
 import type { TaskCatalogQueries } from './ports/taskCatalogQueries'

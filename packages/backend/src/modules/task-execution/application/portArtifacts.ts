@@ -6,7 +6,7 @@ import {
 import type { TaskArtifactPathQueries } from './ports/taskArtifactPathQueries'
 import { extname } from 'node:path'
 import { WORKTREE_FILE_MAX_BYTES, tryParseKind, splitPortItems } from '@agent-workflow/shared'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { parseArchiveJson, truncationNotice } from '../domain/portArtifacts'
 import type {
   ArchivePortArtifactsResult,

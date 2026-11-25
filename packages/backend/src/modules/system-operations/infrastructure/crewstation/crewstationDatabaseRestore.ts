@@ -15,7 +15,7 @@ import type { HostedRestoreNormalizationParticipant } from '../../application/po
 import { parseHostedBackupReference } from './databaseBackupFormat'
 import { restoreHostedDatabaseInstallation } from './databaseRestoreInstallation'
 import { verifyHostedDatabaseRestore } from './databaseRestoreVerification'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export const HOSTED_RESTORE_REFERENCE_ENV = 'CS_DATABASE_RESTORE_REFERENCE'
 

@@ -3,7 +3,7 @@
 // 未传的字段回落到已保存的值，所以「先保存再测」与「边填边测」都成立；只有在「测的就是已保存的那套」时才回写结果。
 
 import type { CodeHostProvider, CodeHostTestResult } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { normalizeCodeHostRejectUnauthorized } from '../domain/codeHostTlsPolicy'
 import type {
   CodeHostConnectionProbe,

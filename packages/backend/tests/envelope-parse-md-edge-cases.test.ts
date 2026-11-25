@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolvePortContent } from '../src/modules/task-execution/composition/portOutputValidation'
 import { parseEnvelope, extractLastEnvelope } from '@agent-workflow/shared'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 
 describe('RFC-005 resolvePortContent', () => {
   let worktree: string

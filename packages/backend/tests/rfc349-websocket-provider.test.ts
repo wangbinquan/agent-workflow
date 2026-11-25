@@ -34,7 +34,7 @@ import type {
   DirectRequestAuthority,
   PresenceLease,
 } from '@/modules/identity-access/public/participants'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { revalidateAllConnections, trackConnection } from '@/ws/connections'
 import type { WsConnectionData } from '@/ws/registry'
 import { buildWebSocketAdapter } from '@/ws/server'

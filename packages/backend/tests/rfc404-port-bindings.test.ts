@@ -11,7 +11,7 @@ import type {
 } from '@/modules/task-execution/application/ports/childCallNodeExecution'
 import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 import { createChildTaskBudgetRuntime } from '@/modules/task-execution/infrastructure/childBudget'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 
 interface Recorded {
   launchWorkflow: Record<string, unknown>[]

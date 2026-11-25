@@ -11,7 +11,7 @@ import type {
 import { createLocalDevelopmentAdapterEffects } from '../local/developmentAdapterProgram'
 import { developmentAdapterContentSchema } from '../../domain/developmentAdapterDefinition'
 import type { AdapterProcessObservation } from '../../application/ports/developmentAdapterEffects'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 const text = z.string()
 const operation = z.discriminatedUnion('kind', [

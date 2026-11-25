@@ -22,7 +22,7 @@ import {
   resolveEmployeeSelection,
   type EmployeeSelectionRule,
 } from '../../engine/policy/workSelection'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { parseOr422 } from './commandInput'
 import type { AdmissionLookup } from '../ports/admissionLookup'
 import type { MissionRow, MissionPersistence } from '../ports/missionStore'

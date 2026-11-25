@@ -4,7 +4,7 @@
 
 import { existsSync, lstatSync, readlinkSync, realpathSync } from 'node:fs'
 import { dirname, isAbsolute, normalize, resolve, sep } from 'node:path'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /**
  * Join `relPath` onto `root` and assert the result stays inside `root`.

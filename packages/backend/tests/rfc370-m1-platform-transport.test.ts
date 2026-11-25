@@ -19,7 +19,7 @@ import {
   WorkspaceCommandFailedError,
   WorkspaceCommandInputTooLargeError,
 } from '@/platform/crewstation/workspaceProtocol'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import {
   hostedWorkspaceReference,
   joinHostedWorkspaceReference,

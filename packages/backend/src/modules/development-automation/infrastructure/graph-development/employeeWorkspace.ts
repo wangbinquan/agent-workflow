@@ -12,8 +12,8 @@ import type {
 import type { EmployeeCaseWorkspaceParticipant } from '@/modules/source-control/public/types'
 import { stableIdentityComponent } from '@/util/gitRef'
 import { graphDigest } from '../../domain/graph-development/model'
-import { sha256Hex } from '@/util/hash'
-import { ValidationError } from '@/util/errors'
+import { sha256Hex } from '@/platform/contracts/hash'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type { GraphVerificationWorkspace } from '../../application/graph-development/verification'
 import {
   GRAPH_DESIGN_AUTHORING_RULES,

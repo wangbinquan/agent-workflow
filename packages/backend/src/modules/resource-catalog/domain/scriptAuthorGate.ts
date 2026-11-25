@@ -20,7 +20,7 @@ import {
   serializeScriptSensitiveProjectionV1,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { ForbiddenError } from '@/util/errors'
+import { ForbiddenError } from '@/platform/errors/domainErrors'
 import type { Actor } from '@/auth/actor'
 
 /**

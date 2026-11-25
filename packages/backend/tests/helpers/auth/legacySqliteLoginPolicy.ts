@@ -17,7 +17,12 @@ import { generateSessionToken, hashToken, SESSION_DEFAULT_TTL_MS } from './legac
 import type { DbClient } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, DomainError, ForbiddenError, UnauthorizedError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  ForbiddenError,
+  UnauthorizedError,
+} from '@/platform/errors/domainErrors'
 
 const GLOBAL_POLICY_ID = 'global'
 

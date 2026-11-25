@@ -30,7 +30,7 @@ import {
   untilDaemonShutdown,
   type HostedExecution,
 } from './execution'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 /** Same bound as the native runner's retained stdout (envelope parsing). */
 const RETAINED_STDOUT_LIMIT_BYTES = 32 * 1024 * 1024

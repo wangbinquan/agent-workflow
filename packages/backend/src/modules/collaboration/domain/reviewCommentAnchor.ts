@@ -23,7 +23,7 @@ import {
   resolveReviewAnchor,
   type ReviewAnchorFailure,
 } from './reviewAnchor'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 export interface OccurrenceRecomputeResult {
   /** 1-based occurrence index in the full document body. */

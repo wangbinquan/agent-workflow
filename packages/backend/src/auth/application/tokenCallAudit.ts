@@ -1,7 +1,7 @@
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { redactMcpRecord, redactRepoUrl } from './tokenSnapshotRedaction'
 
 const log = createLogger('token-audit')

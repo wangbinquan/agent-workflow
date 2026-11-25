@@ -22,7 +22,7 @@ import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrast
 import { assertAgentIdsUsableInTransaction } from '@/modules/resource-catalog/infrastructure/referenceUsability'
 import { runResourceCatalogTransaction } from '@/modules/resource-catalog/infrastructure/resourceCatalogTransaction'
 import { createWorkgroupRepository } from '@/modules/resource-catalog/infrastructure/workgroupRepository'
-import { staleConflictError } from '@/util/errors'
+import { staleConflictError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const T0 = 1_700_000_000_000

@@ -8,7 +8,7 @@ import { HostedBackupCatalogSchema, HostedBackupVerificationSchema } from '@agen
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/objectStorage'
 import { CrewStationApiError } from '@/platform/crewstation/platformApi'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import type { HostedBackupCatalogQueries } from '../../application/ports/adminBackupCoordinator'
 import { HostedBackupContents, hostedBackupReference } from './databaseBackupFormat'
 

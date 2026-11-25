@@ -41,7 +41,7 @@ import type {
 } from '@/modules/resource-catalog/public/participants'
 import type { IntentArtifactStage } from '@/modules/resource-catalog/application/intent/artifactOwners'
 import { encodeSkillToken } from '@/modules/resource-catalog/application/skills/skillToken'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   composeStandaloneIntentApply,

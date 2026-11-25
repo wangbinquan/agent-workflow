@@ -63,7 +63,7 @@ import type {
   AgentExecutionRecord,
 } from '@/modules/task-execution/application/ports/agentExecution'
 
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   BRANCH_MARKER_MALFORMED_PREFIX,
   BRANCH_PORT_NOT_DECLARED_PREFIX,
@@ -141,7 +141,7 @@ import {
   rotateRuntimeSessionLease,
   type RuntimeSessionLeaseToken,
 } from './runtimeSessionLease'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type {
   AgentWorkspaceGitControlSnapshot as GitControlSnapshot,
   AgentWorkspaceGitControlObservation,

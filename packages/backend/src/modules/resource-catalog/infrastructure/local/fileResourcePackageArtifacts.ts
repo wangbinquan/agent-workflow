@@ -21,7 +21,7 @@ import { eq } from 'drizzle-orm'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { resourcePackageSkillRecoveryDisposition } from '../../domain/resourcePackageSkillRecovery'
 
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { safeJoin } from '@/util/safePath'
 import { assertRegularDirectory, SKILL_MAIN } from '../packageSkillTree'
 import {

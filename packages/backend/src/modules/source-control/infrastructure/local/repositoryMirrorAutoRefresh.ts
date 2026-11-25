@@ -14,7 +14,7 @@ import { isFileSchemeUrl, type Config } from '@agent-workflow/shared'
 import type { SecretBox } from '@/auth/secretBox'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { refreshCachedRepo } from './repositoryMirrorCache'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { createManagedPeriodicJob } from '@/platform/background/managedPeriodicJob'
 
 const log = createLogger('submodule-refresh')

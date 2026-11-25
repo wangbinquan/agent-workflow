@@ -18,7 +18,7 @@ import type { CreateAgent } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 export function assertBranchPortsDeclared(
   agent: Pick<CreateAgent, 'outputs' | 'branchPorts'>,

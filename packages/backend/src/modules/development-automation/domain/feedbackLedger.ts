@@ -6,7 +6,7 @@
 // 可选集（policy 的 allowed/batch/latest-revision 语义）。bot/self 是否处理由
 // policy 决定，判定本身不做业务选择。
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 /** feedback 台账行（表结构的 domain 视图；store port re-export 本类型）。 */
 export interface FeedbackLedgerRow {

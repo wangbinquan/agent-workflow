@@ -7,7 +7,7 @@ import { and, eq, ne } from 'drizzle-orm'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
+import { ConflictError, NotFoundError, staleConflictError } from '@/platform/errors/domainErrors'
 import { monotonicNow } from '@/platform/contracts/monotonicNow'
 import type {
   DigitalEmployeeAgentTemplateFence,

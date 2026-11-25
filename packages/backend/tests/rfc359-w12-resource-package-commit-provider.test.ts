@@ -42,7 +42,7 @@ import type { ResourcePackageImportDecision } from '@/modules/resource-catalog/a
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { registerResourcePackageRoutes } from '@/routes/resourcePackages'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 import { encodeZip } from '@/platform/content/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'

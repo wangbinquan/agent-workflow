@@ -112,8 +112,8 @@ import { registerResourcePackageRoutes } from '@/routes/resourcePackages'
 import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
 import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
 import { mountPortArtifactRoutes } from '@/routes/port-artifacts'
-import { errorHandler } from '@/util/errors'
-import { createLogger } from '@/util/log'
+import { errorHandler } from '@/platform/errors/domainErrors'
+import { createLogger } from '@/platform/logging/logger'
 
 export type IntegrationTriggerIdentityAccess = IdentityAccessRuntime & {
   readonly integrationTriggerResources: IntegrationTriggerResourceQueries

@@ -27,7 +27,7 @@ import type {
   AgentLiveCaptureStats,
   AgentLiveCaptureHandle,
 } from '../../../application/ports/agentLiveCapture'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   loadSiblingsCapturedSessionIds,
   resolveOpencodeDbPath,

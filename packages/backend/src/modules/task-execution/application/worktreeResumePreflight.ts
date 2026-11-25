@@ -19,7 +19,7 @@
 // 反向 import legacy 层是 RFC-317 T23 的红。
 
 import { isSingleRootRepository, taskWorkspacePhase, type Task } from '@agent-workflow/shared'
-import { ConflictError, DomainError } from '@/util/errors'
+import { ConflictError, DomainError } from '@/platform/errors/domainErrors'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 
 import type { TaskRecoveryOperations } from './ports/taskRecoveryOperations'

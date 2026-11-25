@@ -37,7 +37,7 @@ import type { MemoryScopeAuthority } from '@/modules/memory/public/queries'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
 import { actorOf } from '@/auth/actor'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { parseBoolQuery } from '@/platform/http/requestParsing'
 import type {
   DirectAuthorityBinding,

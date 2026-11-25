@@ -1,4 +1,4 @@
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 
 /**
  * RFC-132 ③ / RFC-405 — the multi-ledger duplicate-execution reject of `resolveBorrowForNode`

@@ -37,7 +37,12 @@ import type {
   CachedRepositoryRecord,
   RepositoryWorkspaceStore,
 } from '@/modules/source-control/public/operations'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
 import {
   classifyBaseRef,
   GIT_ABORTED_EXIT_CODE,
@@ -46,7 +51,7 @@ import {
   runGit,
 } from '@/util/git'
 import { hardenGitArgs } from '@/util/gitHardening'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { leaseGitCredential } from '@/util/gitCredentialLease'
 import { redactSensitiveString } from '@/util/redact'
 import { Paths } from '@/platform/configuration/installationPaths'
@@ -62,7 +67,7 @@ import {
   rememberVolatileRepoUrl,
   unsealRepoUrl,
 } from '@/services/repoCredentials'
-import { sha1Hex } from '@/util/hash'
+import { sha1Hex } from '@/platform/contracts/hash'
 import { raceWithFallback } from '@/platform/execution/local/process'
 
 const log = createLogger('git-repo-cache')

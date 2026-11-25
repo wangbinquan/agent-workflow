@@ -17,7 +17,7 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { withTaskReviewMutationLock } from './reviewMutationQueue'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import type {
   SourceTerminationEffectCapability,
   TaskSourceTerminationEffectInput,

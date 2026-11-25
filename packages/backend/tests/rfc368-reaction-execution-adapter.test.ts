@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { composeReactionExecutionAdmissionParticipantInTx } from '@/modules/task-execution/application/adapters/reaction-admission-adapter'
 import { composeReactionExecutionPortV1 } from '@/modules/task-execution/application/adapters/reaction-execution-adapter'

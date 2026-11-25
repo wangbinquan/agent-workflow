@@ -19,7 +19,7 @@ import {
 } from '@/modules/source-control/domain/repositoryPreparationFacts'
 import { decodeRepositoryLaunchRef } from '@/modules/source-control/domain/repositoryLaunchRef'
 import { ensureCachedRepoIdentity } from '@/modules/source-control/infrastructure/local/repositoryMirrorCache'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 interface Input {

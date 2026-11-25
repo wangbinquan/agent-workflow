@@ -41,7 +41,7 @@ import {
   serializeWorkflowReceiptFor,
   workflowReadLensFor,
 } from '@/auth/tokenRedaction'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 export interface WorkflowRouteDependencies {

@@ -1,6 +1,6 @@
 // RFC-398 §3.8: lossless original-contract load; conversion rules remain untouched.
 import { Database, type SQLQueryBindings } from 'bun:sqlite'
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { canonicalSchemaJson, digestSchemaContract } from '../schema/canonical'

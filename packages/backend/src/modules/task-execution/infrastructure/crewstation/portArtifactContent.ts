@@ -24,7 +24,7 @@ import type {
   PortArtifactLinkTarget,
 } from '../../application/ports/portArtifactContent'
 import { HOSTED_TASK_ARTIFACT_OWNER, retainHostedTaskArtifactInTx } from './taskArtifacts'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export function createHostedPortArtifactContent(input: {
   readonly db: PersistenceDb

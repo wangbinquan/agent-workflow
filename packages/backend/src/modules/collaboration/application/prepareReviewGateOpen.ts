@@ -1,7 +1,7 @@
 // RFC-333 T6 — prepare the complete review round before TaskParkTx.
 
 import { ulid } from 'ulid'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { HumanGateArtifactStore, PlannedReviewArtifact } from './ports/humanGateArtifactStore'
 import type { HumanGateOperationStore } from './ports/humanGateOperationStore'
 import type { CanonicalHumanGateRequest } from '../domain/canonicalGateRequest'

@@ -47,7 +47,7 @@ import { launchTestTask } from './helpers/productionTaskLaunch'
 import { materializeSpace } from './helpers/legacyTaskWorkspace'
 
 import { nonInteractiveGitEnv } from '../src/util/git'
-import { DomainError } from '../src/util/errors'
+import { DomainError } from '../src/platform/errors/domainErrors'
 import { repoGroupNodesFromAttachments } from './helpers/repoGroupFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'

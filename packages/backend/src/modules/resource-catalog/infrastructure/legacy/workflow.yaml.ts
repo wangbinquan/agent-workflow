@@ -20,7 +20,7 @@ import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { filterVisibleRows } from '@/modules/resource-catalog/composition/resourceAcl'
 import { WORKFLOW_NAME_INVALID_MESSAGE } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 export interface YamlImportPreview {
   /** Workflow id parsed from YAML, if any. */

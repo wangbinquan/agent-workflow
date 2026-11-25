@@ -29,7 +29,7 @@ import {
   ForbiddenError,
   NotFoundError,
   ValidationError,
-} from '@/util/errors'
+} from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 const OPERATION_LIMIT_PER_MINUTE = 20

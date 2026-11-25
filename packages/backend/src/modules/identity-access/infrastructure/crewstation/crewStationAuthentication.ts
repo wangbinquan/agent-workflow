@@ -6,7 +6,7 @@
 // exactly like a standalone login session. Automation additionally presents a
 // PAT belonging to that same account; local sessions/passwords and the daemon
 // bootstrap token cannot replace the platform identity.
-import { ForbiddenError, UnauthorizedError } from '@/util/errors'
+import { ForbiddenError, UnauthorizedError } from '@/platform/errors/domainErrors'
 import { createInFlightCoalescer } from '@/platform/contracts/inFlight'
 import { PAT_TOKEN_PREFIX } from '@agent-workflow/shared'
 import type { AuthRuntime } from '@/auth/application/authRuntime'

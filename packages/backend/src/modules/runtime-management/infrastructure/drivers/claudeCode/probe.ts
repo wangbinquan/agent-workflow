@@ -3,7 +3,7 @@
 // absence/incompatibility is surfaced by explicit diagnostics and only fails
 // nodes that actually select the runtime (RFC-226).
 
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type { ProbeOpts } from '../types'
 // RFC-143 PR-5: shared best-effort semver extraction (display telemetry only).
 import { extractVersion } from '@/platform/contracts/semver'

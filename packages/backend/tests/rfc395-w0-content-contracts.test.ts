@@ -14,7 +14,7 @@ import {
   type SkillContentPublicationLocation,
   type SkillContentTree,
 } from '@/platform/content/contentStore'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 describe('RFC-395 W0 content contracts', () => {
   test.each(['local-file', 'database-bytes', 'object'] as const)(

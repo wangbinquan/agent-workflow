@@ -34,7 +34,7 @@ import {
   requireTaskOperator,
   updateTaskMembers,
 } from '@/modules/collaboration/infrastructure/taskCollab'
-import { ForbiddenError } from '../src/util/errors'
+import { ForbiddenError } from '../src/platform/errors/domainErrors'
 
 const NOW = 1_700_000_000_000
 

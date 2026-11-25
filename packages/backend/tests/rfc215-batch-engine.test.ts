@@ -31,7 +31,7 @@ import {
   runWorkgroupTurns as runWorkgroupEngine,
   type WorkgroupTurnsTestHooks as WorkgroupEngineHooks,
 } from './helpers/workgroupTurns'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { createAgent } from './helpers/model/resourceWrites'
 
 const log = createLogger('rfc215-batch-engine-test')

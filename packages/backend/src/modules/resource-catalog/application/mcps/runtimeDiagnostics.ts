@@ -17,8 +17,13 @@ import {
   type StartupVerificationResult,
 } from '@agent-workflow/shared'
 import type { McpDiagnosticRunResult } from './runtimeDiagnosticsEffects'
-import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
-import { createLogger } from '@/util/log'
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+  staleConflictError,
+} from '@/platform/errors/domainErrors'
+import { createLogger } from '@/platform/logging/logger'
 import type {
   McpRuntimeTestLeaseOperations,
   McpRuntimeTestLeaseToken,

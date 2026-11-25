@@ -23,7 +23,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { triggerChangeNarrative as triggerSelectedNarrative } from '@/modules/workspace-insight/application/changeNarrative'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { computeSummary, type StructuralDiff, type Task } from '@agent-workflow/shared'
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'

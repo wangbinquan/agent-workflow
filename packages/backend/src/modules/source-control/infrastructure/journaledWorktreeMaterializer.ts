@@ -12,7 +12,7 @@ import {
 } from '@/util/git'
 import { syncSubmodules } from '@/services/gitSubmodule'
 import { resolveSubmoduleParams } from '@/platform/workspace/local/submoduleParams'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { materializeWorktree } from './workspaceMaterializer'
 
 const provenanceSchema = z

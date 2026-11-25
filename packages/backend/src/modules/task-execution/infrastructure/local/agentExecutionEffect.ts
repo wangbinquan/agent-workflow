@@ -17,7 +17,7 @@ import {
   type AgentProcessRequest,
   type AgentProcessResult,
 } from '@/platform/execution/local/agentProcess'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 type NativeStartReceipt = Parameters<NonNullable<AgentProcessRequest['onSpawned']>>[0]
 

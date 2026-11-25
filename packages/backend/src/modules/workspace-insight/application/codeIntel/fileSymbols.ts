@@ -14,7 +14,7 @@ import {
   type FileSymbolsResult,
   type SymbolNode,
 } from '@agent-workflow/shared'
-import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import { DomainError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { CodeWorkspaceTask } from '@/modules/task-execution/public/types'
 import { FILE_CONTENT_MAX_BYTES } from '../fileContent'
 import { codeReviewReads, type CodeReviewReads } from '../structuralDiff/taskStructuralDiff'

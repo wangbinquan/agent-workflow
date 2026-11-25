@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, normalize, resolve } from 'node:path'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import {
   assertInsideWorktree,
   assertTargetDirInsideWorktree,

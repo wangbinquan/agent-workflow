@@ -22,8 +22,8 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { DomainError } from '@/util/errors'
-import { createLogger } from '@/util/log'
+import { DomainError } from '@/platform/errors/domainErrors'
+import { createLogger } from '@/platform/logging/logger'
 import { Paths } from '@/platform/configuration/installationPaths'
 import {
   restoreBackup,

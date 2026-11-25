@@ -6,7 +6,7 @@ import type { TaskAgentMaterialDeclaration } from '../src/modules/task-execution
 import type { AgentSpawnPlan } from '../src/modules/runtime-management/infrastructure/drivers/types'
 import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 
 function noRead(): never {
   throw new Error('premature native options read')

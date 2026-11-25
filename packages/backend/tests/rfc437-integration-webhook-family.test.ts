@@ -42,7 +42,7 @@ import {
 import { mountWebhookDeliveryRoutes } from '@/modules/integration/inbound/http/webhookDeliveryRoutes'
 import { mountWebhookIngressRoutes } from '@/modules/integration/inbound/http/webhookIngressRoutes'
 import { lookupRouteMeta } from '@/routes/registry'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createSession } from './helpers/auth/sessionStore'
 import {
@@ -130,8 +130,9 @@ describe('RFC-437 —— Webhook 家族的位置与依赖', () => {
         const allowed =
           (specifier.startsWith('.') && specifier.startsWith('../../application/')) ||
           /^@\/modules\/(?:task-execution|identity-access)\/public\/[a-z]+$/.test(specifier) ||
-          // RFC-574 moved the request-parsing helpers from util/http into platform's http directory.
-          /^@\/(?:auth\/actor|routes\/registry|routes\/operationAuthority|util\/[A-Za-z]+|platform\/http\/requestParsing)$/.test(
+          // RFC-574 / RFC-575 moved the two transport helpers the bindings use (request parsing, the domain error family)
+          // from util/ into platform; the allowance names them instead of the whole util/ directory.
+          /^@\/(?:auth\/actor|routes\/registry|routes\/operationAuthority|platform\/http\/requestParsing|platform\/errors\/domainErrors)$/.test(
             specifier,
           ) ||
           /^(?:hono|zod|@agent-workflow\/shared)$/.test(specifier)

@@ -1,4 +1,4 @@
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { VerificationProfileContent } from '../domain/verificationProfile'
 import type {
   VerificationCommandEffects,

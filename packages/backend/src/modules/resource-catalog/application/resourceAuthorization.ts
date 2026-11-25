@@ -1,6 +1,6 @@
 import type { AclResourceType, ResourceAccess, ResourceGrantLevel } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { ForbiddenError, NotFoundError } from '@/util/errors'
+import { ForbiddenError, NotFoundError } from '@/platform/errors/domainErrors'
 import {
   canEditAccess,
   canGovernAccess,

@@ -53,7 +53,7 @@ import type {
 
 import type { CallObservations } from '@/modules/run-observability/public/participants'
 
-import { type Logger } from '@/util/log'
+import { type Logger } from '@/platform/logging/logger'
 
 // RFC-111 PR-A/B + RFC-143 PR-4: agent runtime behind the driver seam. The
 // stdout pump uses `getRuntimeDriver(runtime).parseEvent` and the spawn goes

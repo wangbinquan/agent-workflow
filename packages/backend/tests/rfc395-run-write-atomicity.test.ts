@@ -24,8 +24,8 @@ import {
   createLocalFileContentTransport,
 } from '@/platform/content/infrastructure/contentStore'
 import { decodePrompt } from '@/platform/content/locations/prompt'
-import { sha256Hex } from '@/util/hash'
-import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '@/util/log'
+import { sha256Hex } from '@/platform/contracts/hash'
+import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '@/platform/logging/logger'
 import {
   readNodeRunPromptContent,
   storeNodeRunPromptContent,

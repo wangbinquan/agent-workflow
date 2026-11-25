@@ -33,8 +33,8 @@ import {
 import { taskWorkgroupNameExpression } from '../taskWorkgroupConfig'
 
 import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { ValidationError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import { ValidationError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { taskListOwnershipScopeCondition, type TaskListViewer } from './authorization'
 import type { TaskListPageDb } from './db'
 

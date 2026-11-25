@@ -32,7 +32,7 @@ import { composeIntentResourceCatalogBinding } from '@/modules/intent/compositio
 import type { IntentSessionRouteDependencies } from '@/modules/intent/composition/routes'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { directOperationAuthority } from '@/routes/operationAuthority'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { DaemonDigitalEmployeeModules } from './digitalEmployee'
 import type { DaemonObservationModules } from './observation'
 import type { DaemonProviderCore } from './providerCore'

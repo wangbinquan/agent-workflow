@@ -16,7 +16,7 @@
 
 import { parseIntentChangeset, type IntentChangeset } from '@agent-workflow/shared'
 
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /**
  * 解码 draft 里存着的 changeset。**两个 provider 共用这一处**。

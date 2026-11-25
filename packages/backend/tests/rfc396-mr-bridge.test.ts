@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { canonicalJson, repositoryMaterializationCommit } from '@agent-workflow/shared'
 import { stableIdentityComponent } from '@/util/gitRef'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import {

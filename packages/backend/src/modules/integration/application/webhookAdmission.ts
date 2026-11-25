@@ -22,7 +22,7 @@ import {
   type WebhookTriggerSaveCandidate,
 } from '../domain/webhookTriggerValidation'
 import type { WebhookTriggerServiceDeps } from './webhookTriggers'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { webhookPayloadTemplateSchemaFor, type WorkflowDefinition } from '@agent-workflow/shared'
 
 /**

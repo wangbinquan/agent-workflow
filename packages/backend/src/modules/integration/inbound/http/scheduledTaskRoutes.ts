@@ -36,7 +36,7 @@ import {
   type ScheduledTaskRuntime,
 } from '../../application/scheduledTasks'
 import { canEditAccess, canGovernAccess } from '@/modules/resource-catalog/public/types'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { safeJsonOrThrowInvalid } from '@/platform/http/requestParsing'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import { directRequestAuthority } from '@/routes/operationAuthority'

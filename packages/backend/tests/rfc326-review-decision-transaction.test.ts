@@ -74,7 +74,7 @@ import {
   hasActingMembership,
   updateTaskMembers,
 } from '@/modules/collaboration/infrastructure/taskCollab'
-import { DomainError } from '../src/util/errors'
+import { DomainError } from '../src/platform/errors/domainErrors'
 import { runGit } from '../src/util/git'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { registerRevalidationTrigger } from '../src/ws/revalidationHook'

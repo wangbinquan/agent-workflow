@@ -12,7 +12,7 @@ import {
 } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { scheduledRowsReferencing } from '../domain/scheduledTaskRefs'
 
 import { assertNameUnchangedForEditor } from '../application/resourceAccess'

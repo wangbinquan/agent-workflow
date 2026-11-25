@@ -14,7 +14,7 @@ import {
   createConfigAppliedListeners,
   type ConfigAppliedListeners,
 } from '@/platform/configuration/configAppliedListeners'
-import { configureLogger } from '@/util/log'
+import { configureLogger } from '@/platform/logging/logger'
 
 export interface ApplicationConfigurationBinding {
   readonly queries: ApplicationConfigurationQueries

@@ -13,7 +13,7 @@ import type { HostedObjectPublications } from '@/platform/content/hostedObjectPu
 import { createHostedBackupCatalog } from '../infrastructure/crewstation/databaseBackupCatalog'
 import { readHostedDatabaseBackupProvenance } from '../infrastructure/crewstation/databaseBackupProvenance'
 import { createHostedDatabaseBackups } from '../infrastructure/crewstation/databaseBackups'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export function composeCrewStationDatabaseBackups(input: {
   readonly contract: LogicalSchemaContract

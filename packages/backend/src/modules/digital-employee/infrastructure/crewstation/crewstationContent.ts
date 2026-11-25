@@ -16,7 +16,7 @@ import type {
   EmployeeInputArtifactPort,
   ProgramArtifactPort,
 } from '../../composition/required-ports'
-import { createSha256DigestBuilder, sha256Hex } from '@/util/hash'
+import { createSha256DigestBuilder, sha256Hex } from '@/platform/contracts/hash'
 
 const parameters = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
 const digest = (value: string) => sha256Hex(value)

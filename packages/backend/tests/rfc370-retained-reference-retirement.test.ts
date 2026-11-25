@@ -27,7 +27,7 @@ import type { IntentSystemAgentRunFamily } from '@/modules/intent/application/po
 import { createFileIntentScratchStore } from '@/modules/intent/infrastructure/local/fileIntentScratchStore'
 import { composeLocalSystemAgentRunFamilySelection } from '@/bootstrap/runFamilyProviders'
 import { createLocalSystemAgentRetainedContents } from '@/modules/runtime-management/composition/systemAgentMaterial'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createIntentSessionForTest,

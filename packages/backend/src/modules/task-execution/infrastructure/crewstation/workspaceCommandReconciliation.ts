@@ -1,6 +1,6 @@
 // RFC-417: the hosted workspace command reconciliation owner, moved verbatim from composition/crewstationExecution.ts.
 import type { HostedWorkspaceCommands } from '@/modules/source-control/public/participants'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 const SETTLEMENT_INTERVAL_MS = 60_000
 

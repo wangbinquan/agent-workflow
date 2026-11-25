@@ -8,7 +8,7 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { PostgresqlSchemaStatement } from './postgresqlSchema'
 import type { LogicalSchemaContract } from './schemaContract'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { DatabaseProvider } from '../../databaseProviders'
 
 export const OBSERVATION_SOURCE_REVISION = {

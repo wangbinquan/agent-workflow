@@ -17,7 +17,7 @@ import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { canonicalDigest, canonicalStringify } from '../../domain/canonicalJson'
 import { checkCommandAdmissible, checkMissionTransition } from '../../domain/mission'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { ReconcileDeps } from '../missionReconciler'
 import { parseOr422 } from './commandInput'
 

@@ -1,7 +1,7 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, isNull, inArray } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import type {
   WorkspacePreparationJournal,
   WorkspacePreparationState,

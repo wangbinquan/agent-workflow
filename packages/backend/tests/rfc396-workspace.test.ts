@@ -24,8 +24,8 @@ import { createGraphExecutionConsumption } from '@/modules/development-automatio
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { describeEachProvider } from './helpers/eachProvider'
 import { graphFixture } from './helpers/graphDesign'
-import { sha256Hex } from '@/util/hash'
-import { ValidationError } from '@/util/errors'
+import { sha256Hex } from '@/platform/contracts/hash'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import {
   bindChangeCandidateParticipant,
   bindCandidateDeliveryParticipant,

@@ -5,7 +5,7 @@ import type {
   CustomObserverProgramFactory,
   CustomObserverProgramResult,
 } from '../../application/ports/customObserverProgram'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 /** The ordinary observer policy owns envelopes, cursor validation and dedupe;
  * only the selected task-image receiver resolves interpreters or runs scripts. */

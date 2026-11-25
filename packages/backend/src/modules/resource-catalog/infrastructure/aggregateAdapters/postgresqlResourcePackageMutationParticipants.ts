@@ -27,7 +27,7 @@ import { decodeBundleIdentityRef, type ResourceVisibility } from '@agent-workflo
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
-import { ConflictError, ValidationError } from '@/util/errors'
+import { ConflictError, ValidationError } from '@/platform/errors/domainErrors'
 import type {
   ResourcePackageHumanMemberMapping,
   ResourcePackageImportDecision,

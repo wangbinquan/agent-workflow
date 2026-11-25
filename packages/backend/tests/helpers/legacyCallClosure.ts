@@ -27,7 +27,7 @@ import { isVisibleRow } from '@/modules/resource-catalog/domain/resourceAccess'
 import { listGrantedResourceIds } from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 import { getWorkgroupById } from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
 import { pickCallTarget } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import {
   collectWorkflowCallRefs,
   collectWorkgroupCallRefs,

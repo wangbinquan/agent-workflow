@@ -46,7 +46,7 @@ import {
   runtimeDriverCapabilities,
 } from '@/modules/runtime-management/public/queries'
 import type { RuntimeKind } from '@/modules/runtime-management/public/types'
-import { DomainError, NotFoundError } from '@/util/errors'
+import { DomainError, NotFoundError } from '@/platform/errors/domainErrors'
 
 /** RFC-029 快照 → 统一观测形状。字段 1:1 搬运，一个都不许丢（AC-2）。 */
 export function facesFromOpencodeSnapshot(snap: InventorySnapshotCaptured): ObservedInventoryFaces {

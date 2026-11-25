@@ -6,7 +6,7 @@
 // 静默取默认）。
 
 import type { Context } from 'hono'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 const TRUE_VALUES = new Set(['1', 'true'])
 const FALSE_VALUES = new Set(['0', 'false'])

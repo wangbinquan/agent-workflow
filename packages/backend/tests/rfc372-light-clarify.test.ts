@@ -12,7 +12,7 @@ import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import { buildActor } from '@/auth/actor'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 import { mountClarifyRoutes } from '@/routes/clarify'
 import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
 import {

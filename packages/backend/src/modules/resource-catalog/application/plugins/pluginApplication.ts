@@ -5,7 +5,12 @@ import {
   type PluginUpdateCheck,
   type PluginUpgradeResult,
 } from '@agent-workflow/shared'
-import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+  staleConflictError,
+} from '@/platform/errors/domainErrors'
 import { assertInitialResourceOwner, initialPrivateResourceAcl } from '../resourceDefaults'
 import type {
   CheckPluginUpdateCatalogInput,

@@ -8,7 +8,7 @@ import {
   requireWorkspaceUploadContent,
   selectWorkspaceUploadContentFactory,
 } from '@/modules/source-control/public/participants'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { validateUploadPlan } from '../domain/uploads'
 import type { WorkspaceUploadPlan, WorkspaceUploadResult } from './ports/workspaceUploads'
 

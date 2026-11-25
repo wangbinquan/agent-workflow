@@ -46,7 +46,7 @@ import {
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
 import { resolveMentions } from '../src/routes/workgroupTasks'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { createAgent } from './helpers/model/resourceWrites'
 
 void createLogger

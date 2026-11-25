@@ -32,7 +32,7 @@ import type {
 } from '@/modules/runtime-management/public/participants'
 import { emptySystemAgentOutputEvidence } from '@/modules/task-execution/application/systemAgentRun'
 import { createUser } from './helpers/userFixture'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createIntentSessionForTest,

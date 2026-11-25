@@ -12,8 +12,8 @@ import {
   type Permission,
   type UpdateAuthLoginPolicyBody,
 } from '@agent-workflow/shared'
-import { sha256Hex } from '@/util/hash'
-import { DomainError, ForbiddenError } from '@/util/errors'
+import { sha256Hex } from '@/platform/contracts/hash'
+import { DomainError, ForbiddenError } from '@/platform/errors/domainErrors'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from './authPersistence'
 import type {
   ActiveAuthPat,

@@ -9,7 +9,7 @@
 // (`domain/uploads`); limits from settings by `resolveUploadLimits`
 // (`infrastructure/local/fileTaskLaunchConfiguration`).
 
-import { DomainError, ValidationError } from '@/util/errors'
+import { DomainError, ValidationError } from '@/platform/errors/domainErrors'
 import type { UploadFile, UploadInputDef } from '../domain/uploads'
 import type { TaskRouteMultipartFilePart } from '../public/commands'
 

@@ -8,7 +8,7 @@ import { agentReferenceIds, type Agent } from '@agent-workflow/shared'
 import { inArray } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { isAgentLaunching } from '../application/agents/agentLaunchReservation'
 import { scheduledRowsReferencing } from '../domain/scheduledTaskRefs'
 

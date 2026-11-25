@@ -9,7 +9,7 @@ import {
   type DatabaseMigrationStartIdentity,
 } from '@agent-workflow/shared'
 import { canonicalSchemaJson, digestSchemaContract } from '@/platform/persistence/schemaContract'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export const DATABASE_MIGRATION_PHASES = [
   'planned',

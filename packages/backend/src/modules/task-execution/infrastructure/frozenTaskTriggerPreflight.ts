@@ -21,7 +21,7 @@ import { eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { assertTriggerPreflight } from '@/modules/resource-catalog/public/queries'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /** 只读一行 `tasks` 就够——两个 provider 的任何 db / tx 句柄都满足这个面。 */
 export type FrozenTaskTriggerReader = Pick<PersistenceDb, 'select'>

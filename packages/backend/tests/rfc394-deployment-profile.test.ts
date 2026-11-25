@@ -16,7 +16,7 @@ import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/dr
 import * as hosted from '@/modules/system-operations/composition/crewstationDeployment'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import { createStandbyExecutionAuthority } from '@/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   NULLABLE_SELECTIONS,

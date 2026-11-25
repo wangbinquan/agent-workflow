@@ -17,7 +17,7 @@ const ENTRY_IMPORTS: Readonly<Record<string, string>> = {
     'the process launcher runs before any assembly (RFC-328; RFC-457 dropped the services/ facade in between)',
   // RFC-571: the binary version identity moved from util/ into platform.
   './platform/execution/version': 'the `version` command',
-  './util/log': 'the startup failure log',
+  './platform/logging/logger': 'the startup failure log',
   // RFC-574: the installation paths moved from util/ into platform's configuration directory.
   './platform/configuration/installationPaths':
     'the application home handed to the legacy epoch command',

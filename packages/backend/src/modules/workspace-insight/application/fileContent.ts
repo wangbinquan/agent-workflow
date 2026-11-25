@@ -16,7 +16,7 @@
 
 import { basename } from 'node:path'
 import { canonicalRepoKeys, isSingleRootRepository, parseRepoKeyWire } from '@agent-workflow/shared'
-import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import { DomainError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { TaskWorktreeLocator } from '@/modules/task-execution/public/queries'
 import {
   composeLocalRepositoryRevisionContent,

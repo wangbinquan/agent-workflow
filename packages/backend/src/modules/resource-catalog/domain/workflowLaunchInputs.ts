@@ -1,7 +1,7 @@
 // RFC-454 — moved verbatim from `infrastructure/legacy/` (pure: shared types and `ValidationError`); exported
 // through `public/queries` for task-execution and integration.
 import type { WorkflowInput } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 export type WorkflowLaunchInputIssueCode =
   | 'unknown-input'

@@ -2,7 +2,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { AclResourceType, ResourceAccess, ResourceGrantLevel } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import {
   hasResourceAclBypass,
   isVisibleRow,

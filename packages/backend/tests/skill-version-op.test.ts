@@ -45,7 +45,7 @@ import {
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import { recoverSkillOperations } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
 import { SKILL_OP_RECOVERY_REGISTRY } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
-import { ConflictError } from '../src/util/errors'
+import { ConflictError } from '../src/platform/errors/domainErrors'
 import { isSkillBootVerified } from '../src/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'

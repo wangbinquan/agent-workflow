@@ -6,7 +6,7 @@ import {
 import type { GitCommitIdentity } from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { SecretBox } from '@/auth/secretBox'
-import { DomainError, ConflictError, ValidationError } from '@/util/errors'
+import { DomainError, ConflictError, ValidationError } from '@/platform/errors/domainErrors'
 import { runGit, type WorktreeLifecycleHookEvent } from '@/util/git'
 import { redactGitUrl } from '@agent-workflow/shared'
 import { listAvailableRefs } from './repositoryMirrorCache'

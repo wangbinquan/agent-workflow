@@ -1,7 +1,7 @@
 // Runtime-safe process boundary: no converter or migration application imports.
 import { resolve } from 'node:path'
 import { IS_EMBEDDED } from '@/embed'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
 
 export async function runAutoUpgradeChild(): Promise<void> {

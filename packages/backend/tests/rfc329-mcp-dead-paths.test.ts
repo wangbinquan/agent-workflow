@@ -16,7 +16,7 @@ import { ALL_TOOLS, describeResource, type McpToolContext } from '@/mcp/tools'
 import { MCP_OPERATIONS } from '@/mcp/operationBindings'
 import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import {
   recordingOperationHandles,
   type RecordedOperationCall,

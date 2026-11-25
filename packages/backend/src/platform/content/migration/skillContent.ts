@@ -5,7 +5,7 @@ import { artifactReceipt } from '@/platform/persistence/migration/conversion/con
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
 import { contentRefColumns } from '../contentStore'
 import type { ContentRef } from '../contentRef'
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 import { contentByteFacts, skillTreeManifestBytes } from '../inventory/treeDigest'
 
 export interface LegacySkillBytes {

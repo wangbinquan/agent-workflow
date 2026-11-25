@@ -5,7 +5,7 @@ import { Database, type Changes } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { chmodSync, mkdirSync, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   nativeTableSets,
   persistenceSchemaBinding,

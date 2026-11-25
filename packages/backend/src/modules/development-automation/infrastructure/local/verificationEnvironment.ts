@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { release } from 'node:os'
 import { join } from 'node:path'
 import { canonicalJson } from '@agent-workflow/shared'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { runManagedProcess } from '@/platform/execution/local/managedProcess'
 
 async function pathRuntime(command: string, workspacePath: string) {

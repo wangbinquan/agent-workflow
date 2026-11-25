@@ -1,7 +1,12 @@
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
 
 // RFC-404 — the error decisions of the call node (call-workflow / call-workgroup). The engine body may
-// not import `@/util/errors`; keeping them here leaves the decisions with task-execution instead of
+// not import `@/platform/errors/domainErrors`; keeping them here leaves the decisions with task-execution instead of
 // moving them into the composition bindings.
 
 /** A failed child launch settles with the domain error's own code; anything else is a generic launch failure. */

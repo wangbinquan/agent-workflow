@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 import type { StartupVerificationResult } from '@agent-workflow/shared'
-import { NotFoundError, ValidationError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 export interface McpDiagnosticSubject {
   readonly userId: string
   readonly canAudit: boolean

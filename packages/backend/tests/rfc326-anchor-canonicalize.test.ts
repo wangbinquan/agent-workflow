@@ -32,7 +32,7 @@ import {
   resolveCommentAnchor,
 } from '@/modules/collaboration/domain/reviewCommentAnchor'
 import { findAllOccurrences } from '@agent-workflow/shared'
-import { DomainError, ValidationError } from '../src/util/errors'
+import { DomainError, ValidationError } from '../src/platform/errors/domainErrors'
 
 // Design-gate F2 document: a heading, then four byte-identical 53-char table
 // rows. The quote starts at column 0 of every row, so its occurrences sit at

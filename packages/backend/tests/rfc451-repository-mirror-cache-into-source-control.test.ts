@@ -15,7 +15,7 @@ import {
 } from '@/modules/source-control/composition'
 import type { RepositoryMirrors } from '@/modules/source-control/public/types'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import { importEdges, sourceUnit } from './architecture/census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')

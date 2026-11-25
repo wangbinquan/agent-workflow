@@ -24,7 +24,7 @@ import {
 } from '@/platform/health/recoveryCounters'
 import { parseMultipartLaunch } from '@/platform/http/multipartLaunch'
 import * as recovery from '@/modules/task-execution/application/recovery/recoveryEvents'
-import { DomainError, ValidationError } from '@/util/errors'
+import { DomainError, ValidationError } from '@/platform/errors/domainErrors'
 import { importEdges, sourceUnit } from './architecture/census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')

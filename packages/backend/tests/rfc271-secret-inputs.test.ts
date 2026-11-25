@@ -19,7 +19,7 @@ import {
   type RedactionSink,
   type ResourceBundle,
 } from '@agent-workflow/shared'
-import { DomainError } from '../src/util/errors'
+import { DomainError } from '../src/platform/errors/domainErrors'
 import {
   applyPackageSecretInputs,
   type PackageSecretInput,

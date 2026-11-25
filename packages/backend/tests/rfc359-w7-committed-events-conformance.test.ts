@@ -46,7 +46,7 @@ import {
   committedEventGroupId,
 } from '@/platform/events/committed/types'
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const NOW = 1_789_488_100_000

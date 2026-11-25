@@ -14,7 +14,7 @@ import { DEFAULT_CONFIG_DIR_PROFILE, type Agent } from '@agent-workflow/shared'
 import { renderClaudeManagedSkillAttachments } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/config'
 import type { BusinessNodeSpawnContext } from '../src/modules/runtime-management/infrastructure/drivers/types'
 import type { RuntimeProfile } from './helpers/runtimeRegistryApplication'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { assembleClaudeBusinessSpawn } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
 
 const roots: string[] = []

@@ -2,7 +2,7 @@
 import { expect, test } from 'bun:test'
 import { gitUrlCacheKeyWith, parseGitUrl, redactGitUrl } from '@agent-workflow/shared'
 import { redactSensitiveString } from '@/util/redact'
-import { sha1Hex } from '@/util/hash'
+import { sha1Hex } from '@/platform/contracts/hash'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import {
   conversion,

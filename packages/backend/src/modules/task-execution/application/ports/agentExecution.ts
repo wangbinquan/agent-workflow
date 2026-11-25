@@ -10,7 +10,7 @@ import type {
   NormalizedEvent,
   SystemEventObservation,
 } from '@/modules/runtime-management/public/participants'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { AgentExecutionParticipants } from './agentExecutionBinding'
 
 /** One record of an execution's output stream, interpreted by the selected

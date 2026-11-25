@@ -37,7 +37,7 @@ import { ulid } from 'ulid'
 
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { TaskExecutionResourceBinding } from '@/modules/task-execution/public/commands'
 import {
   canEditAccess,

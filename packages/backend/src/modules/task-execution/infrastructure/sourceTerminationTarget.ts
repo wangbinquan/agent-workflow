@@ -7,7 +7,7 @@ import { CANCELABLE_TASK_STATUSES, allowedFromStatusesForEvent } from '@agent-wo
 import { and, eq, inArray } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import type {
   TaskSourceTerminationEffectInput,
   TaskSourceTerminationReceipt,

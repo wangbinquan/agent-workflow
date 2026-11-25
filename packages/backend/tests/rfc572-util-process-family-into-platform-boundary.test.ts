@@ -4,7 +4,7 @@
 // 是一个闭合的依赖集，RFC-572 把它们原样迁进 platform（五个进 `platform/execution/local/`，`lock.ts` 改名 `daemonLock.ts`；tar 封装进
 // `platform/persistence/`），读者一次改指，旧位置不留转出。锁四件事：
 // ① 六个旧路径不存在；`src` / `tests` / `scripts` 里没有任何说明符（别名、相对路径、动态 import、`mock.module`）再解析到它们（判据带负对照）。
-// ② 新位置的六个文件只取登记过的依赖：彼此、`util/log`、node 内置模块与 `bun:ffi`——不取模块。
+// ② 新位置的六个文件只取登记过的依赖：彼此、`platform/logging/logger`、node 内置模块与 `bun:ffi`——不取模块。
 // ③ 每个文件导出的名字与搬迁前相同（含 daemon 锁转出的 `isProcessAlive`）。
 // ④ Windows 平台工作流的 push 与 pull_request 两份路径清单都含执行目录的通配，都不含三个旧路径。
 //
@@ -103,7 +103,7 @@ const MOVED: ReadonlyArray<readonly [string, string, readonly string[], readonly
     [
       '@/platform/execution/local/platformExec',
       '@/platform/execution/local/windowsJobObject',
-      '@/util/log',
+      '@/platform/logging/logger',
     ],
   ],
   [
@@ -281,7 +281,7 @@ describe('RFC-572 —— 六个文件离开 util/', () => {
           "mock.module('@/util/spawnDiagnostics', () => ({}))\n" +
           "type K = import('./util/process').KillTreeSignal\n" +
           "import { acquireLock as next } from './platform/execution/local/daemonLock'\n" +
-          "import { createLogger } from './util/log'\n",
+          "import { createLogger } from './platform/logging/logger'\n",
       ).filter((target) => OLD.has(target)),
     ).toEqual([
       'util/process',
@@ -304,7 +304,7 @@ describe('RFC-572 —— 六个文件离开 util/', () => {
 })
 
 describe('RFC-572 —— 新位置的文件', () => {
-  test('只取登记过的依赖：彼此、util/log、node 内置模块与 bun:ffi；不取模块', () => {
+  test('只取登记过的依赖：彼此、platform/logging/logger、node 内置模块与 bun:ffi；不取模块', () => {
     for (const [, next, , specifiers] of MOVED) {
       const found = rawSpecifiers(join(SRC, `${next}.ts`)).sort()
       expect([next, found]).toEqual([next, [...specifiers].sort()])

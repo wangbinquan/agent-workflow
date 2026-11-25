@@ -13,7 +13,7 @@ import { ulid } from 'ulid'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 
 export type AssignmentScopeKind = 'repository' | 'repository-group' | 'global-default'
 

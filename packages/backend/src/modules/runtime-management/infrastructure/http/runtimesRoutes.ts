@@ -3,7 +3,7 @@ import type { Hono } from 'hono'
 import { z } from 'zod'
 import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type { RuntimeKind } from '@/modules/runtime-management/public/types'
 import type {
   RuntimeDiagnosticCommands,

@@ -37,7 +37,7 @@ import {
   CrewStationApiError,
   type CrewStationPlatformApi,
 } from '@/platform/crewstation/platformApi'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { describeEachProvider } from './helpers/eachProvider'
 
 async function until(condition: () => boolean, timeoutMs = 2_000): Promise<void> {

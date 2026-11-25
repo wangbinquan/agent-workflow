@@ -3,7 +3,7 @@
 // participant `taskReviewMutationQueue`; collaboration keeps the review-scope resolution (which task a
 // review node run belongs to) and its not-found error here, in the callback shape its call sites use.
 import { taskReviewMutationQueue } from '@/modules/task-execution/public/participants'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import type { ReviewMutationScopeResolver } from '../application/ports/reviewMutationScope'
 import { DatabaseReviewMutationScopeResolver } from './reviewMutationScope'
 

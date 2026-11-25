@@ -3,7 +3,7 @@
 //     resource-usage reader decodes it with; the oracle below is the deleted `parseCallLedger` /
 //     `JSON.stringify(ledger)` pair verbatim, so the persisted bytes cannot drift.
 //   - the call node's error decisions, moved to application so the engine body stays free of
-//     `@/util/errors`.
+//     `@/platform/errors/domainErrors`.
 import { describe, expect, test } from 'bun:test'
 import {
   childCallRefusal,
@@ -14,7 +14,12 @@ import {
   decodeCallHumanWait,
   encodeCallHumanWait,
 } from '@/modules/task-execution/domain/resourceLimitUsage'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
 
 /** The deleted nodeMechanics.ts parser (commit 2874dd182), kept as the oracle. */
 function historicalParseCallLedger(json: string | null): {

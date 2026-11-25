@@ -24,7 +24,7 @@ import {
   type ParsedPackage,
 } from '@/modules/resource-catalog/application/package/parse'
 import { signPreviewToken } from '@/modules/resource-catalog/application/package/preview'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const actor: Actor = {

@@ -18,7 +18,7 @@ import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import type { TaskClarifyDirectiveRouteOperations } from '@/modules/task-execution/public/types'
 import { isAskingNodeInSnapshot } from '@/modules/collaboration/public/queries'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 
 const SetDirectiveBodySchema = z.object({
   directive: ClarifyDirectiveSchema,

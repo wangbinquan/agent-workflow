@@ -21,7 +21,7 @@ import {
   cwdSlug,
 } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/sessionCapture'
 import { claudeCodeDriver } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
-import { createLogger, type Logger } from '../src/util/log'
+import { createLogger, type Logger } from '../src/platform/logging/logger'
 import { createRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence'
 
 const capturePersistence = (db: PersistenceDb) => createRuntimeSessionCapturePersistence(db)

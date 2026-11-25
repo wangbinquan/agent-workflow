@@ -4,7 +4,7 @@
 // used to run itself when the deployment had no installation; the hosted profile hands over the release's
 // installation port, which the release Job already installed.
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { applyLocalEpoch2PendingRestore } from '../composition'
 import {
   admitLocalEpochInstallation,

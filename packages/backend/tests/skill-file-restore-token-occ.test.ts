@@ -18,7 +18,7 @@ import {
   writeSkillFile,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { restoreSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
-import { ConflictError, ValidationError } from '../src/util/errors'
+import { ConflictError, ValidationError } from '../src/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('RFC-170 F3 — file/restore composite-token OCC', (harness) => {

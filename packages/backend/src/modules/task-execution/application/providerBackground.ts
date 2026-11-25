@@ -8,7 +8,7 @@ import {
   PROVIDER_SESSION_PAUSE_ABORT_REASON,
 } from '@agent-workflow/shared'
 
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type { TaskBackgroundConfigurationQuery } from './ports/taskBackgroundConfiguration'
 import type {
   ProviderBackgroundControl,

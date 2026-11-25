@@ -14,7 +14,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, sql } from 'drizzle-orm'
 
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import { taskListVisibilityCondition, type TaskListViewer } from './authorization'
 import type { TaskListPageDb } from './db'
 import type { WorkflowNameExpression } from '../taskRepositorySql'

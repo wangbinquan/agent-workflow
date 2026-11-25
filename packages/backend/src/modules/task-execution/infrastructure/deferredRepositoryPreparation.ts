@@ -19,10 +19,10 @@ import {
 import type { SecretBox } from '@/auth/secretBox'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
-import { ConflictError, diagnosticTextOf } from '@/util/errors'
+import { ConflictError, diagnosticTextOf } from '@/platform/errors/domainErrors'
 import { removeDirectoryWithRetry } from '@/platform/workspace/local/fsReclaim'
 import { reclaimStaleRefLocks, runGit, withWorktreeRegistryLock } from '@/util/git'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type {
   RepositoryPreparationDescriptorReader,
   RepositoryPreparationMechanicsPort,

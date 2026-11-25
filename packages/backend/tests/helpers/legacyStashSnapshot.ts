@@ -1,6 +1,6 @@
 // RFC-395 II-a A2: seed historical stash objects for surviving resume/review/GC behavior.
 import { runGit } from '@/util/git'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 export async function legacyStashSnapshotFixture(
   path: string,

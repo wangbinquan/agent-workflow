@@ -39,7 +39,7 @@ import {
 import { createPluginGenerationFilesystemGcPort } from '../src/modules/resource-catalog/composition/pluginGenerationGc'
 import { resetNpmProbeCacheForTests } from '../src/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
-import { ConflictError, NotFoundError } from '../src/util/errors'
+import { ConflictError, NotFoundError } from '../src/platform/errors/domainErrors'
 import type { PluginCatalogModule } from '@/modules/resource-catalog/application/catalogModules'
 
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')

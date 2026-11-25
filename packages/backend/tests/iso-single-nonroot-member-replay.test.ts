@@ -47,7 +47,7 @@ import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolation
 import { snapshotNodeIsoFinal } from '@/platform/workspace/local/isolation'
 import { type IsoHandle } from '@/platform/contracts/isolationWorkspace'
 import { runGit } from '@/util/git'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { Semaphore } from '@/platform/contracts/semaphore'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'

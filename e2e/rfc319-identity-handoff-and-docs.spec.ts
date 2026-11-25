@@ -34,7 +34,7 @@
 //   packages/frontend/src/routes/auth.tsx:40-45                deriveAuthMethods：bootstrap ⇒ 只有 token；ready ⇒ 密码/OIDC
 //   packages/frontend/src/components/AclPanel.tsx:396-421      加成员一律落 read 档
 //   packages/frontend/src/components/AclPanel.tsx:604-620      acl-save 只在 canManage 时渲染
-//   packages/backend/src/routes/users.ts:107-133               /api/tokens 与 /api/tokens/audit：users:read + tokenAccess never
+//   packages/backend/src/routes/users.ts:112-138               /api/tokens 与 /api/tokens/audit：users:read + tokenAccess never
 //   packages/backend/src/server.ts:371-385                     PAT 调用审计中间件（fire-and-forget）
 //   packages/backend/src/services/memory.ts:793-813            canManageMemory：repo/repo_group/global 仅 bypass；资源 scope 随写权
 //   packages/backend/src/platform/operations/apiDocs.ts:85-107            按有效权限裁剪端点表 + 逐工具算 grantable

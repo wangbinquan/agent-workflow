@@ -17,7 +17,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { resolvePortContent } from '../src/modules/task-execution/composition/portOutputValidation'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 
 describe('RFC-049 PR-B raw-passthrough (kind=undefined never reads file)', () => {
   let worktree: string

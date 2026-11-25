@@ -9,7 +9,7 @@
 //     agent prompt，评审的决定会推动任务往下走——两者都没有二次确认。
 //
 // 判据取自源码单一事实源：
-//   `ensureClarifyVisible`（routes/clarify.ts:90，RFC-285 B1：**不可见 ≡ 不存在**，
+//   `ensureClarifyVisible`（routes/clarify.ts:95，RFC-285 B1：**不可见 ≡ 不存在**，
 //     且同形基准是 detail 端点对真缺失产出的那个形状）；
 //   `ensureClarifyMember`（clarify.ts:54）/ `ensureReviewMember`（reviews.ts）
 //     —— 作答与拍板要求任务成员（或管理档）。

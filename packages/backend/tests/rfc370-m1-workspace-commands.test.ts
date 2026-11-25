@@ -30,7 +30,7 @@ import {
   WorkspaceCommandDetachedError,
   WorkspaceCommandUnknownError,
 } from '@/modules/source-control/infrastructure/crewstation/workspaceCommands'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const unused = async (): Promise<never> => {

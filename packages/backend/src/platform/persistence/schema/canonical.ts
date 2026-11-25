@@ -1,4 +1,4 @@
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 /**
  * Canonical fragments of objects that do not change while a cache is active, by the

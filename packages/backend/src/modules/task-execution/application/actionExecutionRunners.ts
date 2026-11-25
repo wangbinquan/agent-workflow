@@ -14,7 +14,7 @@
 import { ulid } from 'ulid'
 
 import { normalizeTaskPlatformInputPaths } from '../domain/taskPlatformInputPaths'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   isTerminalTaskStatus,
   ScriptNodeSchema,

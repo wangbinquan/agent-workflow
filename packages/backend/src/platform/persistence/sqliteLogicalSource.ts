@@ -8,7 +8,7 @@ import type { MetaTableDeclaration } from './schema/history/meta'
 
 import type { Database } from 'bun:sqlite'
 import { statSync } from 'node:fs'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   decodeLogicalValue,
   encodeLogicalRow,

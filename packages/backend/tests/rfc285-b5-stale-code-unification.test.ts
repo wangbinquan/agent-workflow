@@ -4,7 +4,7 @@
 // workflow/workgroup 的 version-conflict、workflow/workgroup 的 copy-stale、
 // repo-group-version-conflict）+ zip outcome 行的 skill-overwrite-stale，
 // 前后端消费方各记各的。归一后唯一形态 = `resource-operation-stale` +
-// `resource` 字段（util/errors.ts staleConflictError 单源）。本文件锁：
+// `resource` 字段（platform/errors/domainErrors.ts staleConflictError 单源）。本文件锁：
 //   ① 六方言码在 src 三包内灭绝（heritage 注释除外——逐行扫描跳过注释行）；
 //   ② 后端 src 里该码字符串的直接产出仅 staleConflictError 一处（agent/plugin/
 //      mcp 三个家族先行站点已收编，不得再散落 new ConflictError 直写）；
@@ -15,7 +15,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { staleConflictError, ConflictError } from '../src/util/errors'
+import { staleConflictError, ConflictError } from '../src/platform/errors/domainErrors'
 
 const OLD_CODES = [
   "'skill-version-conflict'",
@@ -70,7 +70,7 @@ describe('RFC-285 B5 — stale 方言码灭绝', () => {
       const text = readFileSync(file, 'utf8')
       direct += (text.match(/new ConflictError\(\s*'resource-operation-stale'/g) ?? []).length
     }
-    expect(direct).toBe(1) // util/errors.ts staleConflictError 内部那一处
+    expect(direct).toBe(1) // platform/errors/domainErrors.ts staleConflictError 内部那一处
   })
 
   test('helper 行为：统一码 + resource 字段 + details 透传 + 409', () => {

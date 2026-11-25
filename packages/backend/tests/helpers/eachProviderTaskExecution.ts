@@ -121,7 +121,7 @@ import { createTaskExecutionResourceBinding } from '@/modules/task-execution/inf
 import { taskExecutionResourceDependencies } from '@/bootstrap/taskExecutionResourceDependencies'
 
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { admitTestDirectAuthority } from './identityAccessAuthority'
 import type { ProviderHarness } from './eachProvider'
 import { createTestRepositoryPublicationTransport } from './taskExecutionTestTopology'

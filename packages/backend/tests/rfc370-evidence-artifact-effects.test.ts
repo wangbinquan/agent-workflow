@@ -16,7 +16,7 @@ import { EvidenceStore } from '@/modules/development-automation/infrastructure/e
 import { adoptActionWorkspace } from '@/modules/development-automation/infrastructure/actionWorkspace'
 import { placeUploadSeed } from '@/modules/development-automation/infrastructure/uploadPlacement'
 import type { UploadPlacementPersistence } from '@/modules/development-automation/application/ports/uploadPlacementStore'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { GatedEvidenceArtifacts } from './helpers/rfc370EvidenceArtifacts'
 
 const bytes = new Uint8Array([0, 255, 10, 65, 42])

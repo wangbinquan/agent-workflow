@@ -1,5 +1,5 @@
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export interface SkillTreeEntry {
   readonly path: string

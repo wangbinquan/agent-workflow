@@ -14,7 +14,7 @@ import type {
 } from '@/platform/operations/contracts'
 import { invokeOperation } from '@/platform/operations/invoke'
 import { registerRoute } from '@/routes/registry'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /** Decodes that destructure the body keep the operation codec's typed failure. */
 export function decodeOrInvalid<T>(

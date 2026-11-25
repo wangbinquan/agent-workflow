@@ -8,7 +8,7 @@ import {
   type CrewStationEventDelivery,
   type CrewStationEventSource,
 } from '@/modules/integration/infrastructure/crewstation/eventContract'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 import type {
   EventObservationInput,
   EventObservationReceipt,

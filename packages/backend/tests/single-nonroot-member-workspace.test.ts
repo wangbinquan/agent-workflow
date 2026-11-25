@@ -80,7 +80,7 @@ import {
   invalidateCallGraphIndex,
 } from '@/modules/workspace-insight/application/callGraph/callTargets'
 import { getTaskFileContent } from '@/modules/workspace-insight/application/fileContent'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { Semaphore } from '@/platform/contracts/semaphore'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'

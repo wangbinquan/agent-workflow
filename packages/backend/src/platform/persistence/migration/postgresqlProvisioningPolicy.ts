@@ -1,5 +1,5 @@
 // RFC-398 design §1 / §3: database naming and DDL belong to the provider adapter.
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 export type PostgresqlAllocationKind = 'target' | 'scratch'
 export interface PostgresqlDatabaseProperties {
   readonly major: number

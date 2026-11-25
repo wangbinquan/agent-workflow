@@ -18,7 +18,7 @@ import type {
 } from '@/platform/operations/contracts'
 import { resolveOperationId } from '@/platform/operations/catalog'
 import { takeDeleteSnapshot } from '@/platform/http/deleteSnapshot'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 
 interface BoundOperationHandler {
   readonly method: HttpMethod

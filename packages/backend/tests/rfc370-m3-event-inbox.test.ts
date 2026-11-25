@@ -48,7 +48,7 @@ import {
 import { createWebhookDeliveryPersistence } from '@/modules/integration/infrastructure/webhookDeliveryPersistence'
 import { createWebhookDeliveryQueries } from '@/modules/integration/infrastructure/webhookDeliveryQueries'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 

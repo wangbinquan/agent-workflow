@@ -9,7 +9,7 @@
 //    目录仍经工作流写入参与者建行（带负对照）。
 // ③ 全部生产文件、用例与 e2e 不从删除的位置取任何东西：命名 import、type-only、默认与副作用 import、re-export、命名空间成员与动态 import
 //    都认，带负对照。
-// ④ application 的新代码依赖面是闭集：两个新文件与两个既有文件只取 `@agent-workflow/shared`、`@/auth/actor`、`@/util/errors`、`@/util/hash`、
+// ④ application 的新代码依赖面是闭集：两个新文件与两个既有文件只取 `@agent-workflow/shared`、`@/auth/actor`、`@/platform/errors/domainErrors`、`@/platform/contracts/hash`、
 //    identity-access 的 `public/participants` 与本模块 domain / application / public，不用进程全局；infrastructure 的两个文件不取任何
 //    composition（带负对照）。
 //
@@ -370,8 +370,8 @@ const APPLICATION_SURFACE = (file: string, specifier: string): boolean => {
     [
       '@agent-workflow/shared',
       '@/auth/actor',
-      '@/util/errors',
-      '@/util/hash',
+      '@/platform/errors/domainErrors',
+      '@/platform/contracts/hash',
       '@/modules/identity-access/public/participants',
     ].includes(specifier)
   )
@@ -619,7 +619,7 @@ describe('RFC-504 ③ 没有文件从删除的位置取任何东西', () => {
 })
 
 describe('RFC-504 ④ 新代码的依赖面是闭集、不用进程全局', () => {
-  test('application 的四个文件只取 shared、@/auth/actor、@/util/errors、@/util/hash、identity-access 的 public/participants 与本模块 domain / application / public；infrastructure 的两个文件不取 composition', () => {
+  test('application 的四个文件只取 shared、@/auth/actor、@/platform/errors/domainErrors、@/platform/contracts/hash、identity-access 的 public/participants 与本模块 domain / application / public；infrastructure 的两个文件不取 composition', () => {
     for (const location of APPLICATION_FILES) {
       const path = sourceOf(location)
       expect([location, purityFindings(path, text(path), APPLICATION_SURFACE, true)]).toEqual([
@@ -641,8 +641,8 @@ describe('RFC-504 ④ 新代码的依赖面是闭集、不用进程全局', () =
     const source = [
       `import type { Actor } from '@/auth/actor'`,
       `import type { CommandContext } from '@/modules/identity-access/public/participants'`,
-      `import { sha256Hex } from '@/util/hash'`,
-      `import { ConflictError } from '@/util/errors'`,
+      `import { sha256Hex } from '@/platform/contracts/hash'`,
+      `import { ConflictError } from '@/platform/errors/domainErrors'`,
       `import { canonicalJson } from '@agent-workflow/shared'`,
       `import type { ResourcePackageExecutionPort } from './ports'`,
       `import { PACKAGE_RESOURCE_KINDS } from '../../domain/resourceKinds'`,

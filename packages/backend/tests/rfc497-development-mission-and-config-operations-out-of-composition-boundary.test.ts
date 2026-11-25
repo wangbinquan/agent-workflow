@@ -10,8 +10,8 @@
 // ③ `composition.ts` 的 `DevelopmentAutomationModule` 继承端口、只声明其余 6 个成员；端口恰好声明 mission 用例用到的 10 个成员。
 // ④ 全部生产文件、用例与 e2e 不从旧位置取迁出的名字：两个 composition 文件只给 design §3 列的名字；命名 import、type-only、re-export、
 //    命名空间成员与动态 import 的解构都认，带负对照。
-// ⑤ 新文件的依赖面是闭集：mission 用例只取 zod、`ulid`、shared、`@/util/errors`、`@/util/log` 与本模块 domain / application；配置用例只取
-//    `ulid`、shared、`@/util/errors`、identity-access 的 `public/participants` 与本模块 domain / application / engine；端口只取本模块
+// ⑤ 新文件的依赖面是闭集：mission 用例只取 zod、`ulid`、shared、`@/platform/errors/domainErrors`、`@/platform/logging/logger` 与本模块 domain / application；配置用例只取
+//    `ulid`、shared、`@/platform/errors/domainErrors`、identity-access 的 `public/participants` 与本模块 domain / application / engine；端口只取本模块
 //    application；都不用进程全局（带负对照）。
 //
 // 覆盖范围（C12）：① ④ 读全部生产文件（语料下限 3,000）、全部用例（语料下限 2,500）与仓库根的 e2e，先按名字或路径文本筛、再逐个解析
@@ -348,13 +348,17 @@ const ownLayer =
 /** The closed dependency surface of each new file (design §4 ⑤). */
 const SURFACES: Readonly<Record<string, (file: string, specifier: string) => boolean>> = {
   [MISSION]: (file, specifier) =>
-    ['zod', 'ulid', '@/util/errors', '@/util/log'].includes(specifier) ||
+    ['zod', 'ulid', '@/platform/errors/domainErrors', '@/platform/logging/logger'].includes(
+      specifier,
+    ) ||
     isShared(specifier) ||
     ownLayer(['domain', 'application'])(file, specifier),
   [CONFIG]: (file, specifier) =>
-    ['ulid', '@/util/errors', '@/modules/identity-access/public/participants'].includes(
-      specifier,
-    ) ||
+    [
+      'ulid',
+      '@/platform/errors/domainErrors',
+      '@/modules/identity-access/public/participants',
+    ].includes(specifier) ||
     isShared(specifier) ||
     ownLayer(['domain', 'application', 'engine'])(file, specifier),
   [AUTOMATION_PORT]: ownLayer(['application']),
@@ -598,8 +602,8 @@ describe('RFC-497 ⑤ 新文件的依赖面是闭集、不用进程全局', () =
       `import { z } from 'zod'`,
       `import { ulid } from 'ulid'`,
       `import { DIGITAL_EMPLOYEE_MISSION_STATUSES } from '@agent-workflow/shared'`,
-      `import { ConflictError } from '@/util/errors'`,
-      `import { createLogger } from '@/util/log'`,
+      `import { ConflictError } from '@/platform/errors/domainErrors'`,
+      `import { createLogger } from '@/platform/logging/logger'`,
       `import { launchMission } from './commands/launchMission'`,
       `import { projectMissionJourney } from '../domain/journeyProjection'`,
       `import { evaluatePolicy } from '../engine/policy/evaluatePolicy'`,
@@ -628,7 +632,7 @@ describe('RFC-497 ⑤ 新文件的依赖面是闭集、不用进程全局', () =
     ])
     expect(purityFindings(file, source, SURFACES[CONFIG]!)).toEqual([
       'import zod',
-      'import @/util/log',
+      'import @/platform/logging/logger',
       ...outside,
       ...globals,
     ])
@@ -636,8 +640,8 @@ describe('RFC-497 ⑤ 新文件的依赖面是闭集、不用进程全局', () =
       'import zod',
       'import ulid',
       'import @agent-workflow/shared',
-      'import @/util/errors',
-      'import @/util/log',
+      'import @/platform/errors/domainErrors',
+      'import @/platform/logging/logger',
       'import ../domain/journeyProjection',
       'import ../engine/policy/evaluatePolicy',
       'import @/modules/identity-access/public/participants',

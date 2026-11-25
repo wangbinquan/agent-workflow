@@ -7,7 +7,7 @@ import {
   createLogger,
   resetLoggerForTest,
   setLoggerStdoutWriterForTest,
-} from '../src/util/log'
+} from '../src/platform/logging/logger'
 
 describe('logger', () => {
   let tmp: string
@@ -97,7 +97,7 @@ describe('logger', () => {
   })
 
   test('default stdout sink bypasses Bun lazy WriteStream materialization', () => {
-    const source = readFileSync(join(import.meta.dir, '../src/util/log.ts'), 'utf8')
+    const source = readFileSync(join(import.meta.dir, '../src/platform/logging/logger.ts'), 'utf8')
     expect(source).toContain('writeSync(STDOUT_FD, line)')
     expect(source).not.toContain('process.stdout.write(')
   })

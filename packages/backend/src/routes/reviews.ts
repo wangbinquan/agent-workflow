@@ -32,7 +32,7 @@ import { registerRoute } from '@/routes/registry'
 import { verifiedBodyLimit } from '@/routes/verifiedBodyLimit'
 import type { ReviewAccessDecision } from '@/modules/collaboration/public/types'
 import type { CollaborationRouteOperations } from '@/modules/collaboration/public/participants'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 
 /**
  * RFC-326 P10 — the two write routes accept batched comments (≤ 200 × 50 000

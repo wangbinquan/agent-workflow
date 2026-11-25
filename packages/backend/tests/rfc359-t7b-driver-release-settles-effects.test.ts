@@ -3,7 +3,7 @@ import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { nodeRunFixture, patchNodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 // RFC-359 W1-T7b（P0-10）—— 驱动释放时清算 process effect，两个引擎各跑一遍。
 //
 // dual-provider-parity-audit-2026-09-04 P0-10：PostgreSQL 的 driver lifecycle 直接

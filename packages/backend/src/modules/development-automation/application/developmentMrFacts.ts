@@ -6,7 +6,7 @@ import { canonicalDigest } from '../domain/canonicalJson'
 import { projectMrCells } from '../domain/mrFacts'
 import type { DevelopmentMrFactsSourcePort } from './ports/developmentDelivery'
 import type { MergeRequestFactsCollectorPort } from './ports/reconcilerPorts'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export interface DevelopmentMrFactsDependencies {
   readonly mrFacts: DevelopmentMrFactsSourcePort

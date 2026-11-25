@@ -8,7 +8,7 @@ import type { RepositoryContentBaseline } from '@agent-workflow/shared'
 // 阻断而非静默排除：`.agent-workflow/`、受保护路径出现在 changed 集合里是
 // 固定 refuse（§9.2 尾条），不允许「悄悄剔掉继续发布」。
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 /** 平台运行物目录：与 shared PLATFORM_WORKSPACE_DIR 同值；domain 保持零依赖面。 */
 export const CANDIDATE_PLATFORM_DIR = '.agent-workflow'

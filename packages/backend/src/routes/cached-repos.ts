@@ -21,7 +21,7 @@ import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { parseBoolQuery } from '@/platform/http/requestParsing'
 
 /** RFC-451: the operations, the selected mirrors and their settings come composed from source-control. */

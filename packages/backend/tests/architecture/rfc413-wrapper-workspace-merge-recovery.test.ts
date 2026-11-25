@@ -204,10 +204,10 @@ test('negative fixtures: fabricated sources alone are judged by the same checks'
     [RECOVERY, '../../application/frameChain'],
     [RECOVERY, '../node/shared/resolveMergeConflicts'],
     [ISOLATION, '@/modules/source-control/public/types'],
-    [ISOLATION, '@/util/log'],
+    [ISOLATION, '@/platform/logging/logger'],
     [WORKSPACE, '../../infrastructure/isolationWorkspaceView'],
     [WORKSPACE, '../../composition/taskMechanicsState'],
-    [LEDGER, '@/util/log'],
+    [LEDGER, '@/platform/logging/logger'],
     [LEDGER, '../../infrastructure/consumedInputsParticipant'],
     [LEDGER, '@/services/scheduler'],
   ] as const)

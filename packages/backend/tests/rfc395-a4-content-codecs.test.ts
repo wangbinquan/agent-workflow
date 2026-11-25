@@ -1,7 +1,7 @@
 // RFC-395 II-a A4: freeze HEAD's location formulas and exact legacy payload bytes for II-b conversion.
 import { expect, test } from 'bun:test'
 import { join } from 'node:path'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { encodeLegacyContent } from '@/platform/content/contentRef'
 import {
   decodePrompt,

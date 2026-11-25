@@ -14,7 +14,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { getAgent } from './helpers/resourceLookup'
 import { resolveInjection } from './helpers/legacyTaskExecutionInjectionResolver'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { createAgent } from './helpers/model/resourceWrites'
 
 let pluginsDir = ''

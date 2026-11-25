@@ -32,7 +32,7 @@ import {
   resetNpmProbeCacheForTests,
 } from '../src/modules/resource-catalog/infrastructure/local/filePluginInstallation'
 import { pluginOperationConfigHashOf } from '../src/modules/resource-catalog/domain/pluginOperationRevision'
-import { ConflictError } from '../src/util/errors'
+import { ConflictError } from '../src/platform/errors/domainErrors'
 
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 

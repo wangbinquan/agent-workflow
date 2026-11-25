@@ -34,7 +34,7 @@ import { createHostedExecutionStore } from '@/modules/task-execution/infrastruct
 import { createDatabaseHostedExecutionControl } from '@/modules/system-operations/infrastructure/hostedExecutionControl'
 import { createExclusiveDaemonLockProof } from '@/modules/task-execution/domain/ownership'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 

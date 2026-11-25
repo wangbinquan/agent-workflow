@@ -1,4 +1,4 @@
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { runSystemAgentCore } from '../application/systemAgentRun'
 import type { SystemAgentRunPolicy } from '../application/ports/systemAgentRun'
 import {

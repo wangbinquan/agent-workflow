@@ -23,7 +23,7 @@ import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { isTargetNodeConsumed } from './rerunLedger'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   renderFlatClarifyQueue,
   type ClarifyAnswer,

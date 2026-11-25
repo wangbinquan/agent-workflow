@@ -5,7 +5,7 @@ import { ulid } from 'ulid'
 import { z } from 'zod'
 
 import type { ProgramArtifactPort } from '../../composition/required-ports'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { realpathInside, safeJoin } from '@/util/safePath'
 
 const EXTENSION = {

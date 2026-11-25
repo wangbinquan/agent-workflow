@@ -28,7 +28,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { insertInBatches } from '@/platform/persistence/batchInsert'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { chunkedAll } from '@/platform/persistence/sqlChunk'
 import type {
   HumanGateNodeRunLifecycleParticipantInTx,

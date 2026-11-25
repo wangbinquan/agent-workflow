@@ -30,7 +30,7 @@ import {
 import { rawCopyDb } from '../src/platform/persistence/sqlite/rawDbSnapshot'
 import { quickCheckDbFile } from '../src/db/integrity'
 import { sqliteRawDbSnapshotMechanisms } from '../src/platform/persistence/sqlite/rawDbSnapshotMechanisms'
-import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/util/log'
+import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '../src/platform/logging/logger'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

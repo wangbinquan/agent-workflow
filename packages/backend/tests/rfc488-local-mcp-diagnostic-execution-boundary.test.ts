@@ -49,7 +49,7 @@ import {
 import { getRuntimeDriver } from '@/modules/runtime-management/infrastructure/drivers'
 import type { AgentSpawnPlan } from '@/modules/runtime-management/infrastructure/drivers/types'
 import type { SystemAgentRunResult } from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const SRC = resolve(import.meta.dir, '..', 'src')
 const slash = (path: string) => path.split('\\').join('/')

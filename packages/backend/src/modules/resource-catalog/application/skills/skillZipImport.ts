@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { SKILL_ZIP_LIMITS } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type { SkillZipImportParticipant } from '../../public/participants'
 import type { SkillZipArchiveSubmission } from '../../public/types'
 import type { SkillZipImportPort } from './ports'

@@ -17,7 +17,7 @@ import {
 } from 'node:fs'
 import type { Stats } from 'node:fs'
 import { join, relative, sep } from 'node:path'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import { assertSameDirectoryIdentityForHost, assertSameFileIdentityForHost } from '@/util/fileTrust'
 import { assertWriteAncestorInside, safeJoin } from '@/util/safePath'
 import { stringify as stringifyYaml } from 'yaml'

@@ -29,7 +29,7 @@ import { createNodeRunLifecycleParticipantInTx } from '@/modules/task-execution/
 import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
 import { resolveCollaborationCommandContext } from '@/modules/collaboration/application/commandContext'
 import { contentRefColumns } from '@/platform/content/contentStore'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { createCommittedHumanInputQueries } from '@/modules/collaboration/infrastructure/committedHumanInputQueries'
 import {
   ReviewGateOpenPreparation,

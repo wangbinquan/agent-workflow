@@ -39,7 +39,7 @@ import {
 import { createSkillTreeVersionParticipant } from '@/modules/resource-catalog/infrastructure/skillTreeVersionParticipant'
 import type { SkillVersionPresenceQueries } from '@/modules/resource-catalog/application/skills/contentAvailability'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 
 /** `composeSkillCatalog`'s former fallbacks, in their former order: the six local file stores under `appHome`. */
 export function standaloneSkillCatalogContent(input: {

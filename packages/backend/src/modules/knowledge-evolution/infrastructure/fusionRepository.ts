@@ -28,7 +28,7 @@ import {
   repairFusionWorkflowDefinition,
   resolveFusionSkillAccess,
 } from './fusionRepositorySupport'
-import { ConflictError, staleConflictError } from '@/util/errors'
+import { ConflictError, staleConflictError } from '@/platform/errors/domainErrors'
 import type {
   FusionPersistence,
   FusionDecisionRecoveryReceipt,

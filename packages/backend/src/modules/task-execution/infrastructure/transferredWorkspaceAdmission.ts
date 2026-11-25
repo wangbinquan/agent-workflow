@@ -1,7 +1,7 @@
 import { preparedArtifactLane } from './workspaceLaunchLane'
 import { canonicalJson } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { TaskWorkspaceLaunchLane } from '../application/ports/workspaceLaunch'
 import { createWorkspacePreparationJournal } from './workspacePreparationJournal'
 

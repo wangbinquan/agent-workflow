@@ -3,7 +3,7 @@ import type { Dirent } from 'node:fs'
 import { lstat, open, readdir, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, normalize, resolve, sep } from 'node:path'
 import { WORKTREE_FILE_MAX_BYTES, type WorktreeTreeEntry } from '@agent-workflow/shared'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type {
   WorkspaceContentEffects,
   WorkspaceContentEffectsFactory,

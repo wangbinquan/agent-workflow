@@ -3,8 +3,8 @@ import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/p
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
-import { ConflictError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import { ConflictError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { GitCommitIdentity } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import type {

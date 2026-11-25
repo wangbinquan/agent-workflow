@@ -15,7 +15,7 @@
 - [x] AC-1 两个旧路径不存在、没有说明符再解析到它们；`requestParsing.ts` 逐字节相同，`installationPaths.ts` 只差两处层数
 - [x] AC-2 行为不变；两条迁移目录仍解析到 `packages/backend/db/` 下
 - [x] AC-3 `legacy-horizontal-files` 上限 103 → 101；归属表删去两行；三个正则判据改认新位置并带自证；新增 RFC-574 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI：实现提交两格本 RFC 引入的红（已修），第二个修正提交 70 / 70
 
 ## 集中验证
 
@@ -63,7 +63,11 @@
   application 与传输工具”用 `/^@\/(?:…|util\/[A-Za-z]+)$/` 放行 webhook 绑定取 `@/util/` 下的任何文件，`util/http` 迁走后两个绑定取
   `@/platform/http/requestParsing`，不再被放行。**本 RFC 引入**：动手前按“正则里出现被挪文件的名字”找正则判据，这一条放行的是整个目录、不提
   任何文件名，没被找到。第二个修正提交在放行表里加上 `platform/http/requestParsing`（在 HEAD 上先复现 1 红、改后 36 / 36）；全仓再没有别的泛化
-  `util/` 放行。`9083e8331` 的 run 里这一格同样会红，归同一原因。其余 job 的结果见修正提交的记录。
+  `util/` 放行。`9083e8331` 的 run 里这一格同样会红，归同一原因。
+- 其余：`fd3126d20` 的 run 45522587218 另外 67 个 job 成功；按路径触发的 windows-platform（run 45522587093）、integration-opencode
+  （run 45522587069）、git-protocols-e2e（run 45522587084）与 maintenance-soak-nightly（run 45522587421）通过。`9083e8331`（链接修正）的
+  run 45523729470 里链接检查通过，分片 41/44 仍红，正是上一条的同一用例（job 138901762679）。
+- `62a3f20a4`（第二个修正）：exact SHA 主 CI run 45529694453 的 70 个 job 全部成功。本 RFC 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

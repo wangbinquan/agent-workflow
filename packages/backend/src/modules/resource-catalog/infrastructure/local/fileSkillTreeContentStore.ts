@@ -3,7 +3,7 @@ import { fileSkillTreeReference, readFileSkillReference } from './fileSkillRefer
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type { SkillPackageContentEntry } from '../../application/skills/packageContentReader'
 import {
   SKILL_CANDIDATE_ID,

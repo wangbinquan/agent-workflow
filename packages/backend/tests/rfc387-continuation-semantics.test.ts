@@ -28,7 +28,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
 import { composeDaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { createTaskDriveCoordinatorFactory } from '@/modules/task-execution/application/drive/taskDriveCoordinatorFactory'
 import {
   DefaultTaskDriveCoordinator,

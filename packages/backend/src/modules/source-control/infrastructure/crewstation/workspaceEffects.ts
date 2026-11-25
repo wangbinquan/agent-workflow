@@ -1,7 +1,7 @@
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
 import { isCrewStationApiError } from '@/platform/crewstation/platformApi'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import type {
   RepositoryGitWorkspaceFactory,
   RepositoryGitWorkspaceScope,

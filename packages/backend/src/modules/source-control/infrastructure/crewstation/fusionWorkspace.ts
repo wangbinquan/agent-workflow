@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type {
   FusionWorkspaceEffects,
   FusionWorkspacePreparation,

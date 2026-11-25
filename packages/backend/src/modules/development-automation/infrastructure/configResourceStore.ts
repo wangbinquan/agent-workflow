@@ -2,7 +2,7 @@
 // 一份实现，两个 provider 共用。
 //
 // 两个具体工厂共享同一实现骨架；表列集只差 actionTemplates 的 capability_id，所以 extra 的读写由各工厂
-// 各自给出。(owner, name) 撞唯一索引经能力矩阵归类（classifyError）后翻译成 typed 409（沿 util/errors 的
+// 各自给出。(owner, name) 撞唯一索引经能力矩阵归类（classifyError）后翻译成 typed 409（沿 platform/errors/domainErrors 的
 // ConflictError 惯例），不让 raw 驱动错误以 500 泄给 route。publishRevision 在统一事务原语里「插 revision 行 +
 // 推进 identity.publishedRevision」，不存在半发布状态；archive 只封存 identity，revision 行 immutable。
 
@@ -12,7 +12,7 @@ import { and, asc, eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import type {
   ActionTemplatePersistence,
   ConfigResourceRecord,

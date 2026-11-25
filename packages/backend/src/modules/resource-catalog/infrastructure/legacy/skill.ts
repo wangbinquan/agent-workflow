@@ -36,7 +36,12 @@ import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/l
 import { parseFrontmatter } from '@/platform/content/frontmatter'
 import { renderSkillMarkdown } from '../skillMarkdown'
 import { safeJoin } from '@/util/safePath'
-import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+  staleConflictError,
+} from '@/platform/errors/domainErrors'
 import { assertInitialResourceOwner } from '@/modules/resource-catalog/application/resourceDefaults'
 import { discloseRefs } from '@/modules/resource-catalog/composition/resourceAcl'
 import type { Actor } from '@/auth/actor'

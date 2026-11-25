@@ -5,7 +5,7 @@
 //    原有的装配入口，`pipelineEvidence.ts` 转出旧实现的两个名字不变。
 // ② 两个组合文件没有 if / for / while / do / switch / try / throw 语句，也不再用迁走的代码要的暂存核对、摘要、投影与哈希；`Date.now` 只在
 //    交给采集的时钟里出现一次；三个新入口在生产代码里都只在组合文件调用一次、实参逐字钉住；四个装配入口交出的对象字段不变（带负对照）。
-// ③ 新代码的依赖面是闭集：两个新文件只取本模块的 domain、application（含 ports）与 `@/util/hash`，import 逐条钉住，不用进程全局；
+// ③ 新代码的依赖面是闭集：两个新文件只取本模块的 domain、application（含 ports）与 `@/platform/contracts/hash`，import 逐条钉住，不用进程全局；
 //    新端口类型所在的 `reconcilerPorts.ts` 不取 integration（带负对照）。
 // ④ 行为（直接调用新位置，端口用内存替身）：暂存工厂的核对、collect / trigger / rerun 的暂存生命周期与返回字段、MR 事实读取的映射、
 //    MR 事实采集的四条错误与成功时的摘要、投影和线程摘要。
@@ -34,7 +34,7 @@ import type { SelectedPipelineEvidenceRunnerPort } from '@/modules/development-a
 import { createSelectedPipelineEvidence } from '@/modules/development-automation/application/selectedPipelineEvidence'
 import { canonicalDigest } from '@/modules/development-automation/domain/canonicalJson'
 import { projectMrCells } from '@/modules/development-automation/domain/mrFacts'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const REPO = resolve(BACKEND, '..', '..')
@@ -142,7 +142,7 @@ const IMPORTS: Readonly<Record<string, readonly string[]>> = {
     `import ${DA}/domain/mrFacts: projectMrCells`,
     `import ${DA}/application/ports/developmentDelivery: DevelopmentMrFactsSourcePort`,
     `import ${PORTS}: MergeRequestFactsCollectorPort`,
-    'import util/hash: sha256Hex',
+    'import platform/contracts/hash: sha256Hex',
   ],
 }
 /** The allowed surface: this module's domain and application (ports included), and the hash helper. */
@@ -150,7 +150,7 @@ const SURFACE = (file: string, specifier: string): boolean => {
   const resolved = resolveSpecifier(file, specifier)
   return (
     resolved !== null &&
-    (resolved === 'util/hash' ||
+    (resolved === 'platform/contracts/hash' ||
       resolved.startsWith(`${DA}/domain/`) ||
       resolved.startsWith(`${DA}/application/`))
   )
@@ -552,7 +552,7 @@ describe('RFC-508 ③ 新代码的依赖面是闭集、不用进程全局', () =
     const source = [
       `import { canonicalDigest } from '../domain/canonicalJson'`,
       `import type { MergeRequestFactsCollectorPort } from './ports/reconcilerPorts'`,
-      `import { sha256Hex } from '@/util/hash'`,
+      `import { sha256Hex } from '@/platform/contracts/hash'`,
       `import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/public/participants'`,
       `import type { DevelopmentDeliveryProvider } from '../infrastructure/developmentDeliveryProvider'`,
       `import { composeDevelopmentDeliveryDeps } from '../composition/developmentDelivery'`,

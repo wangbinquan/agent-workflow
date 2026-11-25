@@ -46,7 +46,7 @@ import type {
   TaskLifecycleInvariantSnapshot,
   TaskRecoveryOperations,
 } from '../ports/taskRecoveryOperations'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 
 const log = createLogger('lifecycle.invariants')
 

@@ -11,7 +11,7 @@ import { DistillJobStatusSchema } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { registerRoute } from '@/routes/registry'
 import type { MemoryDistillCommands } from '@/modules/memory/public/commands'
-import { ConflictError, ValidationError } from '@/util/errors'
+import { ConflictError, ValidationError } from '@/platform/errors/domainErrors'
 import type { MemoryDistillQueries } from '@/modules/memory/public/queries'
 
 export function mountMemoryDistillJobRoutes(

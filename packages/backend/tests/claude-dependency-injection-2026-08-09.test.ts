@@ -40,7 +40,7 @@ import { toClaudeAgents } from '../src/modules/runtime-management/infrastructure
 import { claudeExplicitPermissionArgv } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/spawn'
 import type { BusinessNodeSpawnContext } from '../src/modules/runtime-management/infrastructure/drivers/types'
 import type { RuntimeProfile } from './helpers/runtimeRegistryApplication'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { assembleClaudeBusinessSpawn } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
 
 const tempDirs: string[] = []

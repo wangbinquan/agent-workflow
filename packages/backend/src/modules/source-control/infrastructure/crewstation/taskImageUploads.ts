@@ -16,7 +16,7 @@ import { requireWorkPath } from '@/platform/crewstation/workVolumePath'
 import { assertTargetDirInsideWorktree } from '@/platform/content/local/uploadPaths'
 import { createFileWorkspaceUploadContentFactory } from '../local/fileWorkspaceUploadContent'
 import { HOSTED_UPLOAD_CHUNK_BYTES } from './workspaceUploads'
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 
 export const TASK_IMAGE_UPLOAD_OPERATIONS = [
   'workspace-upload',

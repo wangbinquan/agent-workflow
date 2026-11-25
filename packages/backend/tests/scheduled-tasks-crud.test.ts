@@ -22,7 +22,7 @@ import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
   updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,
 } from './helpers/integrationTriggerResourceBinding'
-import { NotFoundError, ValidationError } from '../src/util/errors'
+import { NotFoundError, ValidationError } from '../src/platform/errors/domainErrors'
 import type { CreateWorkflow } from '@agent-workflow/shared'
 import { createWorkflow } from './helpers/model/resourceWrites'
 

@@ -11,7 +11,7 @@ import type {
 } from './ports/mrTerminalControlPersistence'
 import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/public/participants'
 import type { mintSourceTerminationEffectCapability } from '@/modules/task-execution/application/sourceTerminationCapability'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { startInterval, type IntervalTimer } from '@/platform/background/intervalTimer'
 
 const log = createLogger('webhook-mr-terminal-control')

@@ -18,8 +18,8 @@ import type {
   CrewStationBusinessExecution,
 } from '@/platform/crewstation/businessExecution'
 import { type CrewStationApiError, isCrewStationApiError } from '@/platform/crewstation/platformApi'
-import { DomainError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import { DomainError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { hostedWorkspaceOwnerKind } from './workspaceOwnership'
 
 export interface HostedTaskWorkspace {

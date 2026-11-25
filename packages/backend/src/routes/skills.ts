@@ -44,7 +44,7 @@ import type {
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
-import { GoneError, NotFoundError, ValidationError } from '@/util/errors'
+import { GoneError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 export interface SkillRouteDependencies {

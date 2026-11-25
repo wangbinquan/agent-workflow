@@ -4,7 +4,7 @@
 // PostgreSQL migration chain (steps 0017–0031) replays plans built from this
 // code, so it must stay byte-stable; no live table carries these projections and
 // no new caller may use it.
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { OBSERVATION_SOURCE_REVISION } from './observationSourceRevisionSchema'
 import type { LogicalSchemaContract, LogicalTableContract } from './schemaContract'
 import type { PostgresqlSchemaStatement } from './postgresqlSchema'

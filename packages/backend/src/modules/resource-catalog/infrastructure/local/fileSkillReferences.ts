@@ -12,7 +12,7 @@ import {
 import type { SkillContentReference } from '../../application/skills/contentReader'
 import type { FileNode } from '@agent-workflow/shared'
 import { realpathInside, safeJoin } from '@/util/safePath'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /** File reads retain the original local semantics; a full-tree listing is not a file lookup. */
 export async function readFileSkillReferenceFile(

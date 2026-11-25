@@ -56,7 +56,7 @@ import { liveSqlitePath } from './storage'
 //   * 「重启才生效」的键集合与横幅：packages/frontend/src/routes/settings.tsx:3214-3232、3357-3366
 //   * 日志级别热应用：packages/backend/src/routes/config.ts:110-113
 //   * 逐请求 debug 日志：packages/backend/src/server.ts:349
-//   * 日志级别与 logFile 的关系：packages/backend/src/util/log.ts:57-65、100-110
+//   * 日志级别与 logFile 的关系：packages/backend/src/platform/logging/logger.ts:57-65、100-110
 //   * webhook 保留期保存门：packages/backend/src/routes/config.ts:79-90
 //   * 默认运行时 → 运行时行 → 冻结进 node_run：
 //     packages/backend/src/services/runtimeRegistry.ts:429-459、

@@ -66,7 +66,7 @@ import { createDevelopmentMrEffects } from '../src/modules/integration/applicati
 import { collectMergeRequestFacts } from '../src/modules/integration/application/mrFacts'
 import { projectMrCells } from '../src/modules/development-automation/domain/mrFacts'
 import type { MergeRequestFactsCollectorPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
-import { sha256Hex } from '../src/util/hash'
+import { sha256Hex } from '../src/platform/contracts/hash'
 import { eq } from 'drizzle-orm'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'

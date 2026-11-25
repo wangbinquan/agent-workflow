@@ -86,8 +86,8 @@ import {
   type DispatchTaskQuestionsResult,
 } from '../taskQuestionDispatch'
 import { loadSealedQuestionIds } from '../taskQuestions'
-import { ConflictError, NotFoundError } from '@/util/errors'
-import { createLogger } from '@/util/log'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
+import { createLogger } from '@/platform/logging/logger'
 import { TASK_QUESTION_CONFLICT } from '../../domain/taskQuestionConflicts'
 
 const log = createLogger('clarify-auto-dispatch')

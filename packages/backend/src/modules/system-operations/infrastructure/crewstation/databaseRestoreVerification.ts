@@ -14,7 +14,7 @@ import {
 } from '@/platform/persistence/schemaContract'
 import { POSTGRESQL_APPLICATION_SCHEMA } from '@/platform/persistence/postgresqlSchema'
 import { hostedRestoreCopyOperationId, parseHostedBackupReference } from './databaseBackupFormat'
-import { createSha256DigestBuilder, sha256Hex } from '@/util/hash'
+import { createSha256DigestBuilder, sha256Hex } from '@/platform/contracts/hash'
 
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`
 

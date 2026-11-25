@@ -67,7 +67,7 @@ import {
 // 夹具经 `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
 import { deriveWakeSet } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'

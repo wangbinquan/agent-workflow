@@ -24,7 +24,12 @@ import {
 } from '@/modules/resource-catalog/public/participants'
 import { buildDynamicWorkflowGenerateSnapshot } from '../../domain/dynamicWorkflowOrchestrator'
 import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
-import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+  staleConflictError,
+} from '@/platform/errors/domainErrors'
 import type { AgentLaunchResourceOperations } from '../ports/agentLaunchResourceOperations'
 import type { TaskExecutionResourceAuthority } from '../ports/taskExecutionResourceSnapshots'
 import { collectUploadInputDefs } from '../../domain/uploads'

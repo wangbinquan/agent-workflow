@@ -70,8 +70,8 @@ import {
   submoduleGitDir,
   worktreeRefName,
 } from '@/services/gitSubmodule'
-import type { Logger } from '@/util/log'
-import { sha256Hex } from '@/util/hash'
+import type { Logger } from '@/platform/logging/logger'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 /** One canonical repo + its isolated mirror for a single node run. */
 

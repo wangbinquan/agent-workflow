@@ -20,7 +20,7 @@ import {
   recentCommits,
   requireGitRepo,
 } from '@/util/git'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type { RepositoryMirrors } from '../../application/ports/repositoryMirrors'
 
 /**

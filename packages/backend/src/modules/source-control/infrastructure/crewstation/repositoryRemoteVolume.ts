@@ -11,7 +11,7 @@ import {
   type RepoFilesResponse,
   type RepoRefsResponse,
 } from '@agent-workflow/shared'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { runGit } from '@/util/git'
 import type { RepositoryRemoteFacts } from '../../application/ports/repositoryMirrors'
 import { assertHostedRepositoryUrl } from './repositoryUrl'

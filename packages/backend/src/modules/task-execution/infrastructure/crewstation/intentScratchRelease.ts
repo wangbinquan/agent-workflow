@@ -1,6 +1,6 @@
 // RFC-417: hosted (CrewStation) Intent scratch release, moved verbatim from composition/crewstationExecution.ts.
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { HostedExecution } from './execution'
 
 /** The maintenance Worker releases Intent scratch only after every hosted

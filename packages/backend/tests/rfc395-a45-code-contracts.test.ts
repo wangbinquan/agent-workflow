@@ -7,7 +7,7 @@ import { copyPortArchive, portArchiveTaskRoot } from '@/platform/content/locatio
 import { decodePrompt, encodePrompt } from '@/platform/content/locations/prompt'
 import { isHostedArchiveTemporary } from '@/platform/content/locations/hostedArchive'
 import { isHostedPluginReference } from '@/platform/content/locations/plugin'
-import * as hash from '@/util/hash'
+import * as hash from '@/platform/contracts/hash'
 import { bindOracleRow } from '@/modules/task-execution/infrastructure/migration/oracle/scope'
 import { join } from 'node:path'
 import {

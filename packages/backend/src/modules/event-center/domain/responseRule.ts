@@ -2,7 +2,7 @@ import { extractTemplateRefs } from '@agent-workflow/shared'
 import { z } from 'zod'
 import { utf16MaxLength } from '@agent-workflow/shared'
 
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { eventExactRefSchema } from './model'
 
 const templateText = z.string().check(utf16MaxLength(64 * 1024))

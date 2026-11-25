@@ -1,5 +1,5 @@
 import type { Mcp } from '@agent-workflow/shared'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import type { McpAclIdentityParticipant } from '../../public/participants'
 import type { McpAclIdentity } from '../../public/types'
 import type { McpMutationClock, McpRepository } from '../mcps/ports'

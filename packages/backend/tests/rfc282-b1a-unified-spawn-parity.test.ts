@@ -28,7 +28,7 @@ import type {
   BusinessNodeSpawnContext,
   SystemAgentSpawnContext,
 } from '../src/modules/runtime-management/infrastructure/drivers/types'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import type { RuntimeProfile } from './helpers/runtimeRegistryApplication'
 import {
   assembleOpencodeBusinessSpawn,

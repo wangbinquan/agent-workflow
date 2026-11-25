@@ -11,7 +11,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { buildActor } from '../src/auth/actor'
 import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { ConflictError } from '../src/util/errors'
+import { ConflictError } from '../src/platform/errors/domainErrors'
 import type { Agent } from '@agent-workflow/shared'
 import { createAgent, renameAgent, updateAgent } from './helpers/model/resourceWrites'
 

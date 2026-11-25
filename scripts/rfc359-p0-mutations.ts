@@ -629,7 +629,7 @@ export const sourceFiles = [
   'packages/backend/src/modules/task-execution/application/taskExecutionError.ts',
   'packages/backend/src/modules/task-execution/domain/ownership.ts',
   'packages/backend/src/platform/persistence/batchInsert.ts',
-  'packages/backend/src/util/errors.ts',
+  'packages/backend/src/platform/errors/domainErrors.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskDriverRelease.ts',
   'packages/backend/src/modules/task-execution/infrastructure/inMemoryTaskRuntimeRegistry.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskOwnershipPersistence.ts',

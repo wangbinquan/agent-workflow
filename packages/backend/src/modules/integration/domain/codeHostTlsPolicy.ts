@@ -2,7 +2,7 @@
 // 连接服务保存时、Bun fetch 的 TLS 片段与「测试连接」用例共用这一份。
 
 import type { CodeHostProvider } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /**
  * TLS 信任策略的唯一 provider 判据。GitHub 当前没有该能力；静默接受 false

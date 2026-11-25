@@ -13,7 +13,7 @@ import {
 } from '@agent-workflow/shared'
 
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { isVisibleToAudienceSnapshot } from '../domain/resourceAccess'
 import type { ResourceAclMutationLifecycle } from './resourceAclRepository'
 

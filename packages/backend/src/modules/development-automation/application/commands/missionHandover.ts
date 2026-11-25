@@ -30,7 +30,7 @@ import {
   terminalStatusForMr,
   type MissionStatus,
 } from '../../domain/mission'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import { invalidateInFlightAction } from '../actionInvalidation'
 import type { MissionRow, MissionPersistence } from '../ports/missionStore'
 import type { FactSnapshotReader, ReconcilerPorts } from '../ports/reconcilerPorts'

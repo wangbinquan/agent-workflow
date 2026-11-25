@@ -21,7 +21,7 @@ import {
   composeAgentLaunchResourceOperations,
 } from '@/modules/resource-catalog/composition/agentLaunchResources'
 import { PLUGIN_DISABLED_SITES } from '@/modules/resource-catalog/domain/disabledResourcePolicy'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createWorkflow } from './helpers/model/resourceWrites'
 

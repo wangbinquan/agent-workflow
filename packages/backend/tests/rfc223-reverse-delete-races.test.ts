@@ -33,7 +33,7 @@ import {
   getSkillById,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getActiveOp } from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
-import { ConflictError } from '../src/util/errors'
+import { ConflictError } from '../src/platform/errors/domainErrors'
 
 const ACTOR = buildActor({
   user: {

@@ -13,7 +13,7 @@ import { and, asc, desc, eq, inArray, isNull, lte, ne, or, sql } from 'drizzle-o
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type { DeferredWakeRow } from '../domain/deferredWake'
 import { MISSION_STATUSES } from '../domain/mission'
 import { canonicalDigest, canonicalStringify } from '../domain/canonicalJson'

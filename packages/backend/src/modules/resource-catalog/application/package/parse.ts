@@ -20,7 +20,7 @@ import {
 } from '@agent-workflow/shared'
 import { decodeZip } from '../../domain/zipArchive'
 import { resourceTypeOfOp } from '../../domain/bundlePlan'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { PACKAGE_FORMAT_VERSION } from './export'
 import { packagedSkillFileRef } from './skillTree'
 import { collectBundleBuiltins, collectPackageRequirements } from './requirements'

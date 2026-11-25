@@ -8,7 +8,7 @@
 // 候选树与技能同生同灭。
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 
 import type { SkillPackageContentEntry } from '../application/skills/packageContentReader'
 import type { SkillTreeContentStore } from '../application/skills/treeContentStore'

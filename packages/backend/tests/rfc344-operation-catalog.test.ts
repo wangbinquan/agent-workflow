@@ -35,7 +35,7 @@ import {
   errorHandler,
   NotFoundError,
   ValidationError,
-} from '../src/util/errors'
+} from '../src/platform/errors/domainErrors'
 import {
   registerRoute,
   registerRouteMiddleware,

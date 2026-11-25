@@ -1,6 +1,6 @@
 /** Logical live-evidence request and handle; native store locations stay private. */
 import type { RuntimeSessionCapturePersistence } from './runtimeSessionCapturePersistence'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 export interface AgentLiveCaptureRequest {
   nodeRunId: string

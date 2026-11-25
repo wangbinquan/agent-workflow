@@ -3,7 +3,7 @@ import { parseGenerationPointerV2 } from './generationPointerV2'
 // RFC-370 A-T2 — generation validation is independent of installation storage.
 // This preserves RFC-349/359 pointer, manifest, schema and recovery decisions.
 import { z } from 'zod'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { canonicalSchemaJson } from './schemaContract'
 
 const DigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/)

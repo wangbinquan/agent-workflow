@@ -33,7 +33,7 @@ import type {
   RealtimeIdentityAccess,
   RealtimeRuntime,
 } from '@/modules/runtime-management/public/participants'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   checkUpgradeGate,
   openWsChannel,

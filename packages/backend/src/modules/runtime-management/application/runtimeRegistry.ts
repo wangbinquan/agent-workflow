@@ -1,6 +1,6 @@
 import { ulid } from 'ulid'
 
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type {
   RuntimeKind,
   RuntimeProtocol,
@@ -24,7 +24,7 @@ import {
   validateConfigDirEnv,
   profilePatch,
 } from '../domain/runtimeProfile'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type {
   RuntimeRegistryOperations,
   RuntimeRegistryPersistence,

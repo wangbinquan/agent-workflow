@@ -22,7 +22,7 @@ import { listNodeClarifyDirectives } from './helpers/clarifyDirectives'
 import type { ClarifyDecisionCommandPort } from '@/modules/collaboration/application/ports/clarifyDecisionCommand'
 import type { EnqueueMemoryDistillJobInput } from '@/modules/memory/public/commands'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { resetBroadcastersForTests } from '@/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

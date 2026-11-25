@@ -15,8 +15,8 @@ import { createHostedWorkspaceCommandReconciliation } from '@/modules/task-execu
 import { createHostedIntentScratchRelease } from '@/modules/task-execution/infrastructure/crewstation/intentScratchRelease'
 import { openHostedTaskAgentRun } from '@/modules/task-execution/infrastructure/crewstation/taskAgentRunScope'
 import { createHostedAgentParticipants } from '@/modules/task-execution/infrastructure/crewstation/agentInvocationPreparation'
-import { sha256Hex } from '@/util/hash'
-import { createLogger } from '@/util/log'
+import { sha256Hex } from '@/platform/contracts/hash'
+import { createLogger } from '@/platform/logging/logger'
 
 const capabilitiesOf = (marker: string) =>
   ({

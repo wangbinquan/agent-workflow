@@ -39,7 +39,7 @@ import type {
   TaskRecoveryOperations,
   TaskRecoveryStuckRunSnapshot,
 } from '../ports/taskRecoveryOperations'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('lifecycle.stuck')
 

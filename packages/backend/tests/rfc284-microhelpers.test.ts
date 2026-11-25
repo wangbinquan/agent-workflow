@@ -3,7 +3,7 @@
 // hash：sha1Hex/sha256Hex 与 node:crypto 直算**逐字节对拍**（凭据链
 // patStore/sessionStore、webhook dedup 键、workflow 候选哈希等承重面靠它）；
 // monotonic：同毫秒/回拨语义；race：竞速语义。外加唯一性锁：
-//   - `createHash('sha1')` 在 src 仅 util/hash.ts 一处；
+//   - `createHash('sha1')` 在 src 仅 platform/contracts/hash.ts 一处；
 //   - `createHash('sha256')` 仅存合法集合（多步 builder 族 + raw-digest +
 //     shared 镜像桥），单步 idiom 副本若回潮此集合必涨；
 //   - `Math.max(Date.now(),` 仅 platform/contracts/monotonicNow.ts（RFC-571 自 util/time.ts 迁入）；drained-race 模式仅 platform/execution/local/process.ts（RFC-572 自 util/process.ts 迁入）。
@@ -12,7 +12,7 @@ import { describe, expect, test } from 'bun:test'
 import { createHash, randomBytes } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { sha1Hex, sha256Hex } from '../src/util/hash'
+import { sha1Hex, sha256Hex } from '../src/platform/contracts/hash'
 import { monotonicNow } from '../src/platform/contracts/monotonicNow'
 import { raceWithFallback } from '../src/platform/execution/local/process'
 
@@ -69,14 +69,14 @@ describe('RFC-284 T7 — 唯一性文本锁', () => {
     return out.sort()
   }
 
-  test("createHash('sha1') 仅 util/hash.ts", () => {
-    expect(hits(/createHash\('sha1'\)/)).toEqual(['util/hash.ts'])
+  test("createHash('sha1') 仅 platform/contracts/hash.ts", () => {
+    expect(hits(/createHash\('sha1'\)/)).toEqual(['platform/contracts/hash.ts'])
   })
 
   test("createHash('sha256') 仅存合法集合（builder 族/raw-digest/镜像桥）", () => {
     expect(hits(/createHash\('sha256'\)/)).toEqual(
       [
-        'util/hash.ts',
+        'platform/contracts/hash.ts',
         // 多步 builder（循环/链式多段 update）——不属单步 idiom：
         'modules/resource-catalog/infrastructure/legacy/skillHash.ts',
         // RFC-453: moved from services/structuralDiff/digest.ts and services/codeIntel/snapshot.ts.

@@ -14,7 +14,7 @@ import { OidcTokenError, exchangeCodeForTokens } from '@/auth/oidc/tokens'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { applyEmailTrust, decideProvisioning, type IdTokenClaims } from '@/auth/oidc/provisioning'
 import { registerRoute } from '@/routes/registry'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { BadRequestErrorOrFriendlyHtml, friendly } from '@/util/oidcResponse'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 

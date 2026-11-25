@@ -22,7 +22,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { assertDeleteConfirm, readDeleteBody } from '../src/platform/http/deleteConfirm'
 import { createUser } from './helpers/userFixture'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 

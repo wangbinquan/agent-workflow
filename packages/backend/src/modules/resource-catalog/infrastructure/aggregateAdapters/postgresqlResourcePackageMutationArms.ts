@@ -37,7 +37,7 @@ import {
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { McpTransactionLifecycle } from '../mcpRepository'
 import { type PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
 

@@ -235,7 +235,7 @@ test('negative fixtures: the agent leaf rejects nested bags and imports outside 
     '@/modules/task-execution/infrastructure/nodeStatusEvents',
     '@/modules/task-execution/public/queries',
     '@/modules/collaboration/public/participants',
-    '@/util/errors',
+    '@/platform/errors/domainErrors',
     'ulid',
   ])
     for (const text of [

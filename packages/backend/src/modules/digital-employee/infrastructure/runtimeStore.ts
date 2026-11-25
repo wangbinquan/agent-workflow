@@ -32,7 +32,7 @@ import { z } from 'zod'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import type {
   AttentionBindingRecord,
   EmployeeChannelRecord,

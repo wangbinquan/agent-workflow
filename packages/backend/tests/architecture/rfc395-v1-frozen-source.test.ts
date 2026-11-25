@@ -28,7 +28,7 @@ import {
 } from '@/platform/persistence/migration/epoch1/bundle'
 import { LEGACY_MIGRATION_HASHES as frozenAliases } from '@/platform/persistence/migration/epoch1/journalAliases'
 import { LEGACY_MIGRATION_HASHES as liveAliases } from '@/db/schemaAdmission'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { packageSrcUnits, sourceUnit, type SourceUnit } from './census'
 
 // Parsing every backend source took 5.52 s and timed out at the 5 s default on

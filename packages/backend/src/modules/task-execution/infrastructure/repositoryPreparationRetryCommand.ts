@@ -14,7 +14,7 @@ import {
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
+import { ConflictError, DomainError, NotFoundError } from '@/platform/errors/domainErrors'
 import {
   isTaskWorkspaceUnbound,
   REPO_PREP_NODE_ID,

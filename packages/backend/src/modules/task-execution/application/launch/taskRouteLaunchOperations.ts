@@ -2,7 +2,7 @@
 
 import { resolveTaskUploadLimits } from '../launchConfiguration'
 import { type Actor } from '@/auth/actor'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import type { TaskExecutionResourceAuthority } from '../ports/taskExecutionResourceSnapshots'
 import { DEFAULT_UPLOAD_LIMITS } from '../../domain/uploads'
 import type {

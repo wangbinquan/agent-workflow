@@ -19,7 +19,7 @@ import type {
 } from '@/modules/integration/application/developmentAdapterCommands'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import { postgresqlUniqueViolationConstraint } from '@/platform/persistence/capabilities'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 
 const OWNER_NAME_CONSTRAINT = 'development_adapter_definitions_owner_name_unique'
 

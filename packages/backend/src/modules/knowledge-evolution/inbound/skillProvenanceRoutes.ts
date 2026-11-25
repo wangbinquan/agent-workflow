@@ -19,7 +19,7 @@ import type { MemoryScopeAuthority } from '@/modules/memory/public/queries'
 import type { SkillOperationContext } from '@/modules/resource-catalog/public/participants'
 import type { SkillQueries, SkillVersionQueries } from '@/modules/resource-catalog/public/queries'
 import { registerRoute } from '@/routes/registry'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 
 export interface SkillProvenanceRouteDependencies {
   readonly skills: Pick<SkillQueries, 'get'>

@@ -2,7 +2,7 @@ import { canonicalJson } from '@agent-workflow/shared'
 import { z } from 'zod'
 import { utf16MaxLength } from '@agent-workflow/shared'
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { eventExactRefSchema, localizedEventTextSchema, machineIdSchema } from './model'
 
 export const CUSTOM_EVENT_OBSERVER_PROTOCOL = 'aw-event-observer@1' as const

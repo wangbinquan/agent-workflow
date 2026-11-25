@@ -8,7 +8,7 @@
 // from the served page; the platform probes answer without authority; and the
 // Manifest is rendered from a validated profile.
 import { expect, test } from 'bun:test'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { readFileSync } from 'node:fs'
 import { Hono } from 'hono'
 import { parse as parseYaml } from 'yaml'

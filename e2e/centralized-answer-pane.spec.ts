@@ -19,7 +19,7 @@
 //   components/clarify/CentralizedAnswerDialog.tsx:13     提交走 defer:true + questionIds 上限
 //   components/clarify/CentralizedAnswerDialog.tsx:100    重答走 resubmitQuestionIds（面板预填已封存答案）
 //   components/clarify/CentralizedAnswerDialog.tsx:538-551 只有填了才可提交，按钮带计数
-//   routes/clarify.ts:245-262                             这两个字段只在控制通道上合法（B36 已锁）
+//   routes/clarify.ts:250-267                             这两个字段只在控制通道上合法（B36 已锁）
 
 import { expect, test, type Page } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'

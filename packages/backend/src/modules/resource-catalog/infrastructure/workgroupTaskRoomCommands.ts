@@ -7,8 +7,8 @@ import {
   workgroupHasHumanMember,
 } from '@agent-workflow/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
-import { createLogger } from '@/util/log'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
+import { createLogger } from '@/platform/logging/logger'
 import type { WorkgroupTaskRoomCommands } from '../public/commands'
 import {
   ConfigPatchSchema,

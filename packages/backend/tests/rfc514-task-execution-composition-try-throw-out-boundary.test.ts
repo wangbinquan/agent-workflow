@@ -19,7 +19,7 @@ import { cancelAndReadTask } from '@/modules/task-execution/application/digitalE
 import { requireDynamicWorkflowOperations } from '@/modules/task-execution/application/dynamicWorkflowOperations'
 import { createTaskRunConfigurationReferences } from '@/modules/task-execution/application/taskRunSelection'
 import { driveTaskRun } from '@/modules/task-execution/engine/task/driveTaskRun'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const REPO = resolve(BACKEND, '..', '..')

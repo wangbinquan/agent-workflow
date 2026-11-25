@@ -6,7 +6,7 @@
 //
 // 可用性（事件中心与支持事件中心投递的分发器都已接线）由 composition 判定：不可用时
 // composition 不构造本用例，绑定直接报 409 `webhook-ingress-unavailable`。
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { CODE_HOST_ADAPTERS, replayHeaders } from '../domain/codeHostAdapters'
 import type { VerifiedWebhookIngressDependencies } from './ports/verifiedWebhookIngress'
 import type { WebhookDeliveryRuntime } from './ports/webhookDeliveryRuntime'

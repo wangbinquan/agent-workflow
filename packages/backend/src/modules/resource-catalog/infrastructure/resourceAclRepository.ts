@@ -9,7 +9,7 @@ import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { postgresqlUniqueViolationConstraint } from '@/platform/persistence/capabilities'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import type {
   ResourceCatalogAclMutationChange,
   ResourceCatalogAclMutationPort,

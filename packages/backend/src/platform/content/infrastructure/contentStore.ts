@@ -18,7 +18,7 @@ import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persis
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
-import { createSha256DigestBuilder, sha256Hex } from '@/util/hash'
+import { createSha256DigestBuilder, sha256Hex } from '@/platform/contracts/hash'
 import type {
   CrewStationStreamObjectStorage,
   HostedStoredObject,

@@ -3,7 +3,7 @@
 // references and host snapshots per implementation kind, launch, inspection (completed / failed / stopped, the plan path
 // and workspace semantic checks) and cancel. It runs on DigitalEmployeeExecutionPorts; the composition binds the
 // provider's root launch kernel behind `launchHost`.
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
 import {
   utf16MaxLength,

@@ -13,7 +13,7 @@ import { CodeHostEventTypeSchema, WEBHOOK_DELIVERY_STATUSES } from '@agent-workf
 
 import { actorOf } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import type { WebhookDeliveryRuntime } from '../../application/ports/webhookDeliveryRuntime'
 import type { WebhookDeliveryReplay } from '../../application/replayWebhookDelivery'
 

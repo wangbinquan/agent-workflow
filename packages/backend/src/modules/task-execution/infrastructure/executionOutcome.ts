@@ -29,7 +29,7 @@ import { type TaskWorkgroupConfig, workgroupLaunchMode } from '../domain/taskWor
 import type { TaskReadSubject } from '../domain/taskSubject'
 import type { TaskExecutionOutcomeReadModel } from '../public/types'
 import { createTaskExecutionReadModels } from './taskExecutionReadModels'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import { AGENT_HOST_AGENT_NODE_ID } from '../domain/agentHostWorkflow'
 import { CODE_ROUND_NODE_ID } from '@/services/codeRoundContract'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'

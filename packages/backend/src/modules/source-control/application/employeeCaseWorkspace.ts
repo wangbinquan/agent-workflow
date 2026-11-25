@@ -12,7 +12,7 @@ import type {
   EmployeeCaseWorkspaceEffects,
   EmployeeCaseWorkspaceStepEffectsFactory,
 } from './ports/employeeCaseWorkspaceEffects'
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 import { redactSensitiveString } from '@/util/redact'
 import { classifyRepositoryPushFailure } from '../domain/repositoryPushFailure'
 import {

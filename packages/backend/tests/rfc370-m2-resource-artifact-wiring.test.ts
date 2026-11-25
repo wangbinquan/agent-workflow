@@ -32,7 +32,7 @@ import { MAINTENANCE_CATALOG_DIGEST } from '@/platform/background/maintenanceCat
 import { MAINTENANCE_PROTOCOL_VERSION } from '@/platform/background/maintenanceProtocol'
 import { openMaintenanceWorkerEffectsScope } from '@/bootstrap/maintenanceWorkerEffects'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'
 import {

@@ -20,7 +20,7 @@ import { composeResourceCatalogFor } from '@/modules/resource-catalog/compositio
 import { createAgentImportReferenceReadPort } from '@/modules/resource-catalog/infrastructure/agentImportQueries'
 import { createAgentPersistenceSemantics } from '@/modules/resource-catalog/infrastructure/agentPersistenceSemantics'
 import { createAgentRepository } from '@/modules/resource-catalog/infrastructure/agentRepository'
-import { staleConflictError } from '@/util/errors'
+import { staleConflictError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const T0 = 1_700_000_000_000

@@ -17,7 +17,7 @@ import { join } from 'node:path'
 import { executeWorkspaceTaskImageOperation } from '@/bootstrap/workspaceTaskImage'
 import type { ResolvedRepoSource } from '@/modules/source-control/application/workspaceMaterialization'
 import { createVolumeRepositoryMirrorStore } from '@/modules/source-control/infrastructure/crewstation/volumeRepositoryMirrors'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { runGit } from '@/util/git'
 import { remoteUrlFor, startGitHttpRemote, stopGitHttpRemote } from './helpers/gitHttpRemote'
 

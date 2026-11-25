@@ -19,7 +19,7 @@ import {
   listWorkflows,
 } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
 import { validateWorkflowById } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
-import { ConflictError, NotFoundError } from '../src/util/errors'
+import { ConflictError, NotFoundError } from '../src/platform/errors/domainErrors'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'

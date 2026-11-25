@@ -3,7 +3,7 @@ import type { NormalizedEvent } from './agentObservations'
 import type { SystemAgentEventSinkV1 } from './agentSessionEvents'
 import type { RuntimeSessionCapturePersistence } from './runtimeSessionCapturePersistence'
 import type { AgentLiveCaptureRequest } from './agentLiveCapture'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { InventorySnapshot } from '@agent-workflow/shared'
 
 /** Post-run subagent session capture. All location and fixture fields belong to

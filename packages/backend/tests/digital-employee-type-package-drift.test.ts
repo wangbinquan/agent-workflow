@@ -35,7 +35,7 @@ import {
 } from '@/modules/digital-employee/domain/model'
 import { createDigitalEmployeeAuthoringPersistence } from '@/modules/digital-employee/infrastructure/authoringStore'
 import { withTypePackageDraftOverlay } from '@/modules/digital-employee/application/typePackageDraftOverlay'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 
 const STALE_DIGEST = 'a'.repeat(64)
 

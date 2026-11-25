@@ -27,7 +27,11 @@ import type { ProviderHttpApplication } from './helpers/providerHttpApplication'
 import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { JS_TIMER_MAX_MS } from '@agent-workflow/shared'
-import { createLogger, resetLoggerForTest, setLoggerStdoutWriterForTest } from '@/util/log'
+import {
+  createLogger,
+  resetLoggerForTest,
+  setLoggerStdoutWriterForTest,
+} from '@/platform/logging/logger'
 
 const TOKEN = 'd'.repeat(64)
 

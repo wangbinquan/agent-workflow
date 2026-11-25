@@ -1,7 +1,7 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { canAdvanceRepositoryPreparation } from '../domain/repositoryPreparationState'
 import type { RepositoryPreparationJournal } from '../application/ports/repositoryPreparationJournal'
 

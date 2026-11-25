@@ -21,7 +21,7 @@
 // and treat the JSON block as optional (parse failure → still keep the id).
 
 import type { OpencodeModel } from '@agent-workflow/shared'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { spawnVersionProbe } from '@/platform/execution/local/process'
 import type { ListModelsOpts, RuntimeModelList } from '../types'
 

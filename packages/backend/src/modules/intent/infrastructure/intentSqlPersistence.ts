@@ -20,8 +20,8 @@ import {
   type PostIntentWorkingSetChange,
 } from '@agent-workflow/shared'
 
-import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import { ConflictError, DomainError, NotFoundError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { generateEnvelopeNonce } from '@/platform/contracts/envelopeNonce'
 import {
   mergeHandleWatermarks,

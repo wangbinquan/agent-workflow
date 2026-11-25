@@ -107,7 +107,7 @@ import type {
   WorkflowValidationCandidateOverlays,
 } from '../public/types'
 import { PLUGIN_DISABLED_ERROR_CODE } from './disabledResourcePolicy'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 // RFC-103 T5 (04-WFM-06/07): the built-in prompt-var set is now the single
 // source `BUILTIN_VARS` from shared/prompt.ts (was a local copy that lagged the

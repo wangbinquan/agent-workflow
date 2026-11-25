@@ -17,7 +17,7 @@
 // task (a `cs-workspace:` volume) is analyzed in its volume. A terminal
 // generation is served from the store first: no worktree read, no volume wake.
 
-import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import { DomainError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import {
   canonicalRepoKeys,
   isSingleRootRepository,

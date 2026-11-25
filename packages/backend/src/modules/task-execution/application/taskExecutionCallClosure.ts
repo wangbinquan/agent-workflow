@@ -12,7 +12,7 @@ import type {
   TaskExecutionWorkflowSnapshot,
   TaskExecutionWorkgroupSnapshot,
 } from '@/modules/resource-catalog/public/types'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type { TaskExecutionCallClosureRoot } from './ports/taskExecutionResourceSnapshots'
 
 interface FrozenWorkflowRef {

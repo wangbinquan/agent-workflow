@@ -24,7 +24,7 @@ import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/m
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { ResourceOperationCoordinator } from '../src/modules/resource-catalog/infrastructure/resourceOperationCoordinator'
 
-import { ConflictError } from '../src/util/errors'
+import { ConflictError } from '../src/platform/errors/domainErrors'
 import {
   createMcpForTest as createMcp,
   deleteMcpForTest as deleteMcp,

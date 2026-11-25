@@ -7,7 +7,7 @@ import {
   DEFAULT_TIMEOUT_MS,
   runSystemAgentCore,
 } from '../application/systemAgentRun'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 /** Run the selected preparation through the shared System business core. */
 export async function runPreparedSystemAgent(

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { assertBranchPortsDeclared } from '@/modules/resource-catalog/infrastructure/agentBranchPorts'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 // RFC-359 W42: both resource-catalog callers retain the same synchronous port checks.
 function caughtFrom(run: () => void): unknown {

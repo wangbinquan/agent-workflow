@@ -9,7 +9,7 @@ import {
 
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import {
   DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATES_V2,
   DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2,

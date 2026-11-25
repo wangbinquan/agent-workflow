@@ -21,7 +21,7 @@ import {
   databaseMigrationStartIdempotencyKeyWith,
   databaseMigrationStartIdentityFromOverview,
 } from '@agent-workflow/shared'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 const roots: string[] = []
 const SCHEMA_DIGEST = `sha256:${'a'.repeat(64)}`

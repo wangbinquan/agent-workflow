@@ -10,7 +10,7 @@ import {
 } from '@agent-workflow/shared'
 import type { TaskStartupVerificationReadModel } from '../public/types'
 import { createTaskExecutionReadModels } from './taskExecutionReadModels'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 
 export async function getStartupVerification(
   source: TaskStartupVerificationReadModel | Parameters<typeof createTaskExecutionReadModels>[0],

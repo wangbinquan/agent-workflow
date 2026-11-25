@@ -16,7 +16,7 @@ import type { UserIdentity } from '@agent-workflow/shared'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import { storeUserAccessRecord } from './userAccessRecordIndex'
 import { syncOidcProfileTransaction } from '../application/commands/syncOidcProfile'
 import type {

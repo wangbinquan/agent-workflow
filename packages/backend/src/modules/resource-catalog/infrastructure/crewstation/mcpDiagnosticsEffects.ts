@@ -7,7 +7,7 @@ import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFe
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { DEFAULT_CONFIG_DIR_PROFILE, verifyStartup } from '@agent-workflow/shared'
 import { mcpOperationConfigHashOf } from '../../domain/mcpOperationRevision'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { MCP_RUNTIME_TESTS_CHANNEL, mcpRuntimeTestsBroadcaster } from '@/ws/broadcaster'
 import {
   AGENT_NAME,

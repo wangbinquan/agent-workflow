@@ -48,9 +48,9 @@ import {
 } from '@/modules/resource-catalog/composition/resourceAcl'
 import { canEditRow } from '@/modules/resource-catalog/domain/resourceAccess'
 import { listWritableGrantedResourceIds } from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { decodeZip } from '../../domain/zipArchive'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { preserveSkillMarkdownBytes, renderSkillMarkdown } from '../skillMarkdown'
 import type { SkillCreationContentStore } from '../../application/skills/creationContentStore'
 

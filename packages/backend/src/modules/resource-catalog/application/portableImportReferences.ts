@@ -7,7 +7,7 @@ import {
   type ImportRefType,
 } from '@agent-workflow/shared'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
-import { ConflictError, ValidationError } from '@/util/errors'
+import { ConflictError, ValidationError } from '@/platform/errors/domainErrors'
 import type {
   AgentImportResolutionSnapshot,
   TransactionBoundImportReferenceReadPort,

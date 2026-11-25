@@ -38,7 +38,7 @@ import {
   type TerminalWorkspacePrunePolicy,
 } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
 import { __hasTaskReviewMutationQueueForTesting } from '@/modules/task-execution/infrastructure/reviewMutationQueue'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { testTaskExecutionModule as taskExecutionModule } from './helpers/taskExecutionModule'
 import { prunePolicyOf } from './helpers/terminalWorkspacePrune'

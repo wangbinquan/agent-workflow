@@ -4,11 +4,11 @@
   "entries": [
     {
       "path": "modules/collaboration/infrastructure/clarifyAnswerWrite.ts",
-      "sha256": "af045cd0e66b5266d1816d7c17a791479d9b4fe4164098ff70b70129f9af6c83",
+      "sha256": "b75a256b9e52b408b940b2776d27a6e3a65f377bf602c2e353c5811a9b338705",
       "dependencies": [
         {
           "path": "modules/collaboration/infrastructure/clarify/seal.ts",
-          "sha256": "f16ae1b13d21668431437d995218d97c1058e4999194982b5a12884b632a0c3d"
+          "sha256": "1c609fd578094bede93d881c6b9112389025131ceb590d791750fa3fb121db2b"
         }
       ],
       "sites": [
@@ -37,7 +37,7 @@
         },
         {
           "path": "modules/task-execution/infrastructure/nodeRunWriteProtocol.ts",
-          "sha256": "533ad4290b6f9378f7d88e8a41f8ca77c619e1362a13232e1b398e85037ccf72"
+          "sha256": "8d5897eb4387c62cd32ac9cd4fc2d1205e0d5a8c2fdf1acf120ca14aae6821d4"
         }
       ],
       "sites": [

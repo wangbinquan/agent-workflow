@@ -12,7 +12,7 @@ import {
   databaseContentPolicy,
 } from '@/platform/content/infrastructure/contentStore'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { workflowFixture, taskFixture, nodeRunFixture } from './helpers/model'
 

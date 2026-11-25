@@ -46,7 +46,7 @@ import {
   DIGITAL_EMPLOYEE_PROMPT_KEY,
   DIGITAL_EMPLOYEE_RESULT_PORT,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { DrizzleTaskArtifactPathQueries } from '@/modules/task-execution/infrastructure/taskArtifactPathQueries'
 import { describeEachProvider } from './helpers/eachProvider'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'

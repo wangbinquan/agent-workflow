@@ -23,7 +23,7 @@ import {
   listRepoGroups,
   updateRepoGroup as updateRepoGroupImpl,
 } from '../src/modules/source-control/application/repositoryGroups'
-import { DomainError } from '../src/util/errors'
+import { DomainError } from '../src/platform/errors/domainErrors'
 import {
   repoGroupNodesFromAttachments,
   type RepoGroupAttachmentSpec,

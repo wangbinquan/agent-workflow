@@ -26,7 +26,7 @@ import {
   type StaleRunKillOutcome,
   type StaleRunKillOpts,
 } from '@/platform/execution/local/process'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('orphans')
 

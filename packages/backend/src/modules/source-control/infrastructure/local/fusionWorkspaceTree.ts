@@ -16,7 +16,7 @@ import {
 } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { PLATFORM_FUSION_MANIFEST, PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { gitDiffSnapshot, runGit } from '@/util/git'
 import type {
   FusionWorkspaceFile,

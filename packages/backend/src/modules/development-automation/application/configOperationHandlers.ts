@@ -6,7 +6,7 @@ import type { AclResourceType, ResourceAccess } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import {
   archiveActionTemplate,
   createActionTemplate,

@@ -9,7 +9,7 @@
 // 合成一个「把所有行都读进来再判」的函数会在重放路径上多读一次 draft，
 // 也会改变错误优先级。拆成三段可以让两个 provider 保持**逐字不变的读取顺序与抛出顺序**。
 
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 
 /** claim 只关心 session 行的这几列——刻意不吃 drizzle 的行类型。 */
 export interface IntentApplyClaimSession {

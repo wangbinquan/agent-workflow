@@ -17,7 +17,7 @@ import type {
   CrewStationRecoveryRequest,
   createCrewStationRecoveryApi,
 } from '@/platform/crewstation/recovery'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import {
   TERMINAL_HOSTED_RECOVERY_STATES,
   type HostedRecoveryJournal,

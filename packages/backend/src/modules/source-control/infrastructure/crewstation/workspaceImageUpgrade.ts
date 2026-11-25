@@ -31,8 +31,8 @@ import type {
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import { isCrewStationApiError } from '@/platform/crewstation/platformApi'
 import { WorkspaceCommandFailedError } from '@/platform/crewstation/workspaceProtocol'
-import { DomainError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import { DomainError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   hostedLifecycleRequestKey,
   isLifecycleRace,

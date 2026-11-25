@@ -41,7 +41,7 @@ import { createManualQuestionOpen } from '../application/commandEntries'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { insertInBatches, lastPerKey } from '@/platform/persistence/batchInsert'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { TASK_QUESTION_CONFLICT } from '../domain/taskQuestionConflicts'
 import {
   canReassign,

@@ -34,8 +34,8 @@ import type {
   BusinessStopAuthority,
   CrewStationBusinessExecution,
 } from '@/platform/crewstation/businessExecution'
-import { sha256Hex } from '@/util/hash'
-import type { Logger } from '@/util/log'
+import { sha256Hex } from '@/platform/contracts/hash'
+import type { Logger } from '@/platform/logging/logger'
 import type { HostedVolumeActivity } from '../../public/participants'
 import {
   hostedLifecycleRequestKey,

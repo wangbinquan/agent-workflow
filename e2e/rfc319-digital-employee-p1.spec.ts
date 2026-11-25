@@ -14,7 +14,7 @@ import { liveSqlitePath } from './storage'
 // 对话框的回填往返（`packages/frontend/src/routes/digital-employees.$typeRef.tsx:3927-3945`）。
 //
 // 夹具一律走产品自己的 HTTP API；唯一的例外是 DE-27 的 blocked 现场——平台没有任何
-// 用户面入口能把案例推进 blocked（`packages/backend/src/modules/digital-employee/application/runtimeService.ts:2199`
+// 用户面入口能把案例推进 blocked（`packages/backend/src/modules/digital-employee/application/runtimeService.ts:2204`
 // / `:2269` / `:2626` 三处都是失败路径的内部转移），`development` stub 也没有产出
 // blocked 的分支（`packages/system-mocks/src/runtime/mode-development.ts:172-272` 只有
 // 成功分支），所以那一条用 `runSqlite` 落库造现场，并在注释里写清它锁的是哪一段。

@@ -1,7 +1,7 @@
 // RFC-370: physical upload compatibility helpers, preserved from services/upload.
 import { existsSync, lstatSync, type Stats } from 'node:fs'
 import { dirname, isAbsolute, normalize, resolve, sep } from 'node:path'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { realpathInside } from '@/util/safePath'
 
 export function assertTargetDirInsideWorktree(worktreeRoot: string, targetAbs: string): void {

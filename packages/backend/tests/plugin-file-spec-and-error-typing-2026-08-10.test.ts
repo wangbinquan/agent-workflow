@@ -27,7 +27,7 @@ import {
   PluginInstallFailedError,
   PluginInstallTimeoutError,
 } from '@/modules/resource-catalog/infrastructure/local/filePluginInstallation'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 
 describe('file 源 spec 的三种形态都要归一成宿主路径', () => {
   test('file:// URL 走 fileURLToPath', () => {

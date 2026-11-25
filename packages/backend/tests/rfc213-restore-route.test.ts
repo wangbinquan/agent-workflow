@@ -5,7 +5,7 @@
 import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
-import { errorHandler } from '../src/util/errors'
+import { errorHandler } from '../src/platform/errors/domainErrors'
 import type { Database } from 'bun:sqlite'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { mkdtempSync, readdirSync, readFileSync } from 'node:fs'

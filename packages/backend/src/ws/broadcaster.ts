@@ -4,7 +4,7 @@
 // block other consumers. A single daemon process means no cross-process
 // bus is needed.
 
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('ws.broadcaster')
 

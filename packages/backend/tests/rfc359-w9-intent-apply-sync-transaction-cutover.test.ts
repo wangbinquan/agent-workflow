@@ -65,7 +65,7 @@ import type {
 } from '@/modules/intent/application/ports/intentApplyOperations'
 import type { IntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 // ─────────────────────────────────────────────────────────────────────────────

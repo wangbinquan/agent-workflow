@@ -43,7 +43,7 @@ import type {
   PostgresqlTransactionConnection,
 } from '@/platform/persistence/postgresqlRuntime'
 import { guardForeignStatements, registerLegacyDaemonTestFixture } from '@/db/client'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { rawRows, type RawRowCodecs } from '@/platform/persistence/queryHelpers'
 
 export const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

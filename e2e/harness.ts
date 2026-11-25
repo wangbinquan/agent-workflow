@@ -436,7 +436,7 @@ function mockNpmRegistryEnv(home: string): Record<string, string> {
  * A daemon log line the failing spec almost always needs, and that CI throws
  * away today.
  *
- * `packages/backend/src/util/errors.ts` maps every unmapped throw to a 500
+ * `packages/backend/src/platform/errors/domainErrors.ts` maps every unmapped throw to a 500
  * `{"code":"internal-error"}` and logs `unhandled error` with the stack — but
  * the harness only echoes daemon output under `E2E_VERBOSE`, which CI does not
  * set. A CI-only 500 therefore arrives as an opaque response body with no

@@ -9,7 +9,7 @@ import {
   createContentStore,
   databaseContentPolicy,
 } from '@/platform/content/infrastructure/contentStore'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
 import type { ReviewArtifactContentPort } from '../application/ports/reviewArtifactContent'
 import { HumanGateOperationError } from '../domain/humanGateOperation'

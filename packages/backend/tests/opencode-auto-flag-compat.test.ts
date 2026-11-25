@@ -35,7 +35,7 @@ import {
   recordOpencodeBinaryVersion,
   resetOpencodeBinaryVersionsForTests,
 } from '@/modules/runtime-management/infrastructure/drivers/opencode/versionRegistry'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   assembleOpencodeBusinessSpawn,
   assembleOpencodePersonaSpawn,

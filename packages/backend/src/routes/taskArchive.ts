@@ -19,7 +19,7 @@ import { actorOf } from '@/auth/actor'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { registerRoute } from '@/routes/registry'
 import type { TaskArchiveMaintenanceCommand } from '@/modules/task-execution/public/commands'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import { Paths } from '@/platform/configuration/installationPaths'
 

@@ -24,7 +24,7 @@ import {
   type RuntimeKind,
 } from '@/modules/runtime-management/infrastructure/drivers'
 import type { SpawnPlan } from '@/modules/runtime-management/infrastructure/drivers/types'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import { bindNativeAgentInvocation } from '@/modules/task-execution/infrastructure/local/agentInvocation'
 import { createNativeAgentMaterialReferences } from '@/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
 import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'

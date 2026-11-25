@@ -21,7 +21,7 @@ import {
 } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { triggerRevalidation } from '@/ws/revalidationHook'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export interface CreatePatInput {
   db: PersistenceDb

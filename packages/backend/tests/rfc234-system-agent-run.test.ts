@@ -25,7 +25,7 @@ import {
   releaseSystemAgentScratch,
 } from '@/modules/runtime-management/infrastructure/local/agentMaterialWorkspace'
 import type { SystemAgentEventSinkV1 } from '../src/modules/runtime-management/public/participants'
-import type { Logger } from '../src/util/log'
+import type { Logger } from '../src/platform/logging/logger'
 
 // RFC-491: the native system-agent run over bootstrap's providers (runtime-management's driver, material
 // workspace and material definition) — the original `runSystemAgent`.

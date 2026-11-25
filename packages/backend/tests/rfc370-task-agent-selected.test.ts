@@ -36,7 +36,7 @@ import type {
 import type { RuntimeKind } from '../src/modules/runtime-management/public/types'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
 import { getRuntimeDriver } from '../src/modules/runtime-management/infrastructure/drivers'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { broadcastNodeStatus } from '../src/modules/task-execution/infrastructure/nodeStatusEvents'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'

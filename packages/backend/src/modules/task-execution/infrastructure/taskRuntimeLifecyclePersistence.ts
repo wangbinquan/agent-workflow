@@ -16,7 +16,7 @@ import type { WorkspacePresenceQueries } from '@/modules/source-control/public/q
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { driveAsyncProgram } from '@/platform/persistence/transactionProgram'
-import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
+import { ConflictError, DomainError, NotFoundError } from '@/platform/errors/domainErrors'
 import type {
   TaskRuntimeLifecycleMutation,
   TaskRuntimeLifecyclePersistence,

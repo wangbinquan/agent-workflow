@@ -22,7 +22,7 @@ import {
   updateResourceAcl,
 } from '../src/modules/resource-catalog/composition/resourceAcl'
 import type { AclRow } from '../src/modules/resource-catalog/domain/resourceAccess'
-import { ConflictError, ValidationError } from '../src/util/errors'
+import { ConflictError, ValidationError } from '../src/platform/errors/domainErrors'
 
 function actorOfUser(id: string, role: 'admin' | 'user'): Actor {
   return buildActor({

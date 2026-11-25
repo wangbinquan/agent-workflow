@@ -66,7 +66,7 @@ import { createTaskExecutionPersistence as createChildPersistence } from '../../
 
 import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeDatabaseAgentResourceIntegrity } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
-import { createLogger } from '../../src/util/log'
+import { createLogger } from '../../src/platform/logging/logger'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeDynamicWorkflowPersistence } from '../../src/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { composeDynamicWorkflowLayerOneValidation } from '../../src/modules/resource-catalog/composition/workflowOperations'

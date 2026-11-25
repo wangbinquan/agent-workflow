@@ -2,7 +2,7 @@
 // Projectors are awaited serially because provider-backed PostgreSQL reads are
 // asynchronous and event-group order is part of the projection contract.
 
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type { CommittedEventCodecRegistry } from './dispatcherWorker'
 import type { CommittedEventDeliveryPersistencePort } from './persistence'
 import type {

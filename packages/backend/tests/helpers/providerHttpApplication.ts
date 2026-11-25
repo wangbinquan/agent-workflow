@@ -31,7 +31,7 @@ import {
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import type { DatabaseRuntimeTelemetry } from '@agent-workflow/shared'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import { standaloneSelections } from '@/bootstrap/standalone'
 import { composeLocalDevelopmentPurposes } from '@/bootstrap/developmentPurposeRoot'

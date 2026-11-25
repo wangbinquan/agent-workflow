@@ -20,7 +20,7 @@ import type {
 } from '@/modules/source-control/public/operations'
 import type { RepositoryMirrors } from '@/modules/source-control/public/types'
 import { mountRepoGroupRoutes } from '@/routes/repoGroups'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { importEdges, sourceUnit } from './architecture/census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
@@ -189,7 +189,7 @@ describe('RFC-447 —— 位置与引用', () => {
       expect([
         `${SC}/ports/repositoryWorkspaceStore`,
         `${SC}/application/ports/repositoryGroups`,
-        'util/errors',
+        'platform/errors/domainErrors',
       ]).toContain(target)
     // RFC-478: services/task.ts (which took the flatten function through `public/queries`) is gone; the deferred
     // repository preparation that inherited the call resolves group members through task's own preparation binding.

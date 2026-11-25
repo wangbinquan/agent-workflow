@@ -11,7 +11,7 @@ import type {
   ChangeCandidateParticipant,
 } from '@/modules/source-control/public/types'
 import type { RepositoryRevisionContentFactory } from '@/modules/source-control/public/participants'
-import { sha1Hex, sha256Hex } from '@/util/hash'
+import { sha1Hex, sha256Hex } from '@/platform/contracts/hash'
 import { graphDigest, validateGraphDocument } from '../../domain/graph-development/model'
 import { projectGraphEvidence } from '../../domain/graph-development/evidence'
 import { graphResultSchemas } from './toolContracts'

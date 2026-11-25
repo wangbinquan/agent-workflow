@@ -31,7 +31,7 @@ import type {
   HostedStoredObject,
 } from '@/platform/crewstation/objectStorage'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export const HOSTED_EVENT_ARCHIVE_OWNER = 'node-event-archive'
 

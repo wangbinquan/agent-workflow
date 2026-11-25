@@ -22,7 +22,7 @@ import {
   workflowDraftSnapshotOf,
 } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
 import { REDACTED, serializeWorkflowFor, workflowReadLensFor } from '@/auth/tokenRedaction'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import {
   createWorkflow,
   updateWorkflow,

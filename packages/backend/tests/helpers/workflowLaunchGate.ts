@@ -10,7 +10,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { canViewResource } from '@/modules/resource-catalog/composition/resourceAcl'
 import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
 import { getWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import { assertWorkflowSnapshotLaunchable } from '@/modules/resource-catalog/composition/agentLaunchResources'
 
 type LaunchableWorkflow = NonNullable<Awaited<ReturnType<typeof getWorkflow>>>

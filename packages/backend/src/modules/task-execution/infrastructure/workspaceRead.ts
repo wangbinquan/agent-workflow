@@ -1,7 +1,7 @@
 import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import type { WorkspaceContentParticipant } from '@/modules/source-control/public/participants'
 import type { AuthorizedWorkspaceSnapshotRef } from '@/modules/source-control/public/types'
-import { NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/platform/errors/domainErrors'
 import type { TaskWorkspaceReadScope } from '../application/workspaceRead'
 import type {
   TaskWorkspaceReadPort,

@@ -53,7 +53,7 @@ import {
   runManagedProcessLauncher,
 } from './platform/execution/local/managedProcessLauncher'
 import { Paths } from './platform/configuration/installationPaths'
-import { createLogger } from './util/log'
+import { createLogger } from './platform/logging/logger'
 
 declare const AW_E2E_BUILD: boolean | undefined
 

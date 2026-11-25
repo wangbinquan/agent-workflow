@@ -6,7 +6,7 @@ import type {
   MrLaunchGuardPersistencePort,
   MrLaunchSupervisorPort,
 } from './ports/mrTerminalControlPersistence'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import type { ProtectedMrLaunchGuard, ProtectedMrLaunchGuardInput } from './ports/mrTerminalControl'
 
 export class MrLaunchGuardCoordinator {

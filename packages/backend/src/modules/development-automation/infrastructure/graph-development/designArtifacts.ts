@@ -7,7 +7,7 @@ import type {
   GraphDesignArtifacts,
 } from '../../application/ports/graphDesignArtifacts'
 import { graphDigest } from '../../domain/graph-development/model'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export function createGraphDesignArtifacts(evidence: EvidenceArtifactPort): GraphDesignArtifacts {
   async function bundle(reference: GraphArtifactReference) {

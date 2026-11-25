@@ -5,7 +5,7 @@ import {
   planCanonicalWorkflowLayout,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 
 export { QUARANTINED_FUSION_SKILL_ID }
 

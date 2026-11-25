@@ -50,7 +50,7 @@ import {
   type ProviderTaskExecutionTestTopology,
 } from './helpers/providerTaskExecutionTestTopology'
 import { validateWorkflowDef } from '../src/modules/resource-catalog/domain/workflowValidator'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 // 同毫秒多行排序确定化（先例：scheduler-clarify-dispatch.test.ts:33-40）。

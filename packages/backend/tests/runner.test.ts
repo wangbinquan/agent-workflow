@@ -26,7 +26,7 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { runNode } from './helpers/runner'
-import type { Logger } from '../src/util/log'
+import type { Logger } from '../src/platform/logging/logger'
 import { composeRunObservationCalls } from '../src/modules/run-observability/composition/runObservation'
 import type { CallObservations } from '../src/modules/run-observability/public/participants'
 

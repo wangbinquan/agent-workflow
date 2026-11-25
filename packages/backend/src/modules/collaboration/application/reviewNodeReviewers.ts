@@ -4,7 +4,7 @@ import type {
   ReviewSummary,
 } from '@agent-workflow/shared'
 import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { deriveReviewAccess, type ReviewAccessDecision } from '../domain/reviewAccess'
 import type {
   ReviewNodeReviewerAssignmentInput,

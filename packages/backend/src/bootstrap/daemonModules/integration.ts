@@ -42,7 +42,7 @@ import {
   type WebhookDispatchDeps,
   type WebhookDispatcher,
 } from '@/modules/integration/composition/webhookDispatch'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type { DaemonScheduledTaskModules } from './scheduledTasks'
 
 const log = createLogger('daemon-integration')

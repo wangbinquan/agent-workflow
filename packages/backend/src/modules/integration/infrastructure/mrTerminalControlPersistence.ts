@@ -12,7 +12,7 @@ import type {
   MrLaunchGuardPersistencePort,
   MrTerminalEffectPersistencePort,
 } from '../application/ports/mrTerminalControlPersistence'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 
 const OPEN_GUARD_STATUSES = ['reserved', 'launching'] as const
 const BARRIER_GUARD_STATUSES = [

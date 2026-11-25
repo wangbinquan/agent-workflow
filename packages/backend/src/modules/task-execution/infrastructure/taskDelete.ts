@@ -51,7 +51,7 @@ import { projectStoredTaskRepositorySurface } from '@/platform/persistence/taskR
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { TaskDeletionCollaborationInTx } from '../application/ports/taskDeletionCollaboration'
 import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'

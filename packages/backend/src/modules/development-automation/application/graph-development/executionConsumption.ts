@@ -1,8 +1,8 @@
 import { canonicalJson, GraphProposalSchema, type GraphSource } from '@agent-workflow/shared'
 import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'
 import type { GraphHumanInputFacts, GraphExecutionFacts } from '../ports/graphHostFacts'
-import { sha256Hex } from '@/util/hash'
-import { ValidationError } from '@/util/errors'
+import { sha256Hex } from '@/platform/contracts/hash'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import {
   graphContentRefs,
   graphDigest,

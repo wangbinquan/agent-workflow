@@ -20,7 +20,7 @@ import {
   captureOpencodeSessionsToSink,
   resolveOpencodeDbPath,
 } from '../src/modules/runtime-management/infrastructure/drivers/opencode/sessionCapture'
-import type { Logger } from '../src/util/log'
+import type { Logger } from '../src/platform/logging/logger'
 import { createRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence'
 
 const capturePersistence = (db: DbClient) => createRuntimeSessionCapturePersistence(db)

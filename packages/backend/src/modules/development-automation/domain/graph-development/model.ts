@@ -6,7 +6,7 @@ import {
   type GraphDesignDocument,
   type GraphProposal,
 } from '@agent-workflow/shared'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export interface GraphIssue {
   readonly code: string

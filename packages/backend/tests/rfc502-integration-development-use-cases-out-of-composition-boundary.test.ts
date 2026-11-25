@@ -8,7 +8,7 @@
 //    文件取装配入口照旧（带负对照）。
 // ③ 全部生产文件、用例与 e2e 从四个组合文件只取允许的装配入口：命名 import、type-only、默认与副作用 import、re-export、命名空间成员与
 //    动态 import 都认，带负对照。
-// ④ 新文件的依赖面是闭集：只取 shared、`@/util/errors`、`@/util/hash`、`@/auth/actor`、resource-catalog 的 `public/queries` 与本模块
+// ④ 新文件的依赖面是闭集：只取 shared、`@/platform/errors/domainErrors`、`@/platform/contracts/hash`、`@/auth/actor`、resource-catalog 的 `public/queries` 与本模块
 //    domain / application；不取 infrastructure、composition、IO 包，不用进程全局（带负对照）。
 //
 // 覆盖范围（C12）：① ③ 读全部生产文件（语料下限 3,000）、全部用例（语料下限 2,500）与仓库根的 e2e，先按名字或路径文本筛、再逐个解析
@@ -344,8 +344,8 @@ const isShared = (specifier: string) =>
 const SURFACE = (file: string, specifier: string): boolean => {
   if (
     [
-      '@/util/errors',
-      '@/util/hash',
+      '@/platform/errors/domainErrors',
+      '@/platform/contracts/hash',
       '@/auth/actor',
       '@/modules/resource-catalog/public/queries',
     ].includes(specifier)
@@ -585,7 +585,7 @@ describe('RFC-502 ③ 从四个组合文件只取装配入口', () => {
 })
 
 describe('RFC-502 ④ 新文件的依赖面是闭集、不用进程全局', () => {
-  test('只取 shared、@/util/errors、@/util/hash、@/auth/actor、resource-catalog 的 public/queries 与本模块 domain / application', () => {
+  test('只取 shared、@/platform/errors/domainErrors、@/platform/contracts/hash、@/auth/actor、resource-catalog 的 public/queries 与本模块 domain / application', () => {
     for (const location of Object.keys(NEW_FILES)) {
       const path = sourceOf(location)
       expect([location, purityFindings(path, text(path), SURFACE)]).toEqual([location, []])
@@ -596,8 +596,8 @@ describe('RFC-502 ④ 新文件的依赖面是闭集、不用进程全局', () =
     const file = join(SRC, `${APP}/probe.ts`)
     const source = [
       `import type { ResourceAccess } from '@agent-workflow/shared'`,
-      `import { ValidationError } from '@/util/errors'`,
-      `import { sha256Hex } from '@/util/hash'`,
+      `import { ValidationError } from '@/platform/errors/domainErrors'`,
+      `import { sha256Hex } from '@/platform/contracts/hash'`,
       `import type { Actor } from '@/auth/actor'`,
       `import { isVisibleToAudienceSnapshot } from '@/modules/resource-catalog/public/queries'`,
       `import { ensureMergeRequest } from './mrEnsure'`,

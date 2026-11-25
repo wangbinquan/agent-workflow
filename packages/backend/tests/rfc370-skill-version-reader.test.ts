@@ -28,7 +28,7 @@ import {
   getSkillVersionContent,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { createFileSkillVersionContentReader } from '@/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 import { standaloneSkillCatalogContent } from './helpers/resourceCatalog'

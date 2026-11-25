@@ -37,7 +37,7 @@ import {
   resetSkillBootVerifyForTest,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { skillFilesRel } from '../src/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import type { Agent } from '@agent-workflow/shared'
 
 const SRC = resolve(import.meta.dir, '..', 'src')

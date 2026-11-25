@@ -52,7 +52,7 @@ import {
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import type { BusinessNodeSpawnContext } from '../src/modules/runtime-management/infrastructure/drivers/types'
 import { stageSkills } from '../src/modules/runtime-management/infrastructure/drivers/stageSkills'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { assembleOpencodeBusinessSpawn } from '../src/modules/runtime-management/infrastructure/drivers/opencode/driver'
 import { assembleClaudeBusinessSpawn } from '../src/modules/runtime-management/infrastructure/drivers/claudeCode/driver'
 

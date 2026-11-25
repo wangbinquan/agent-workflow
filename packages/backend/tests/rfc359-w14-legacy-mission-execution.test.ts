@@ -63,7 +63,7 @@ import {
   DIGITAL_EMPLOYEE_SCRIPT_NODE_ID,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
 import { runGit } from '@/util/git'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { legacyMissionScriptBody } from './fixtures/mock-opencode-legacy-mission'
 import {
   createAutomationPolicy,

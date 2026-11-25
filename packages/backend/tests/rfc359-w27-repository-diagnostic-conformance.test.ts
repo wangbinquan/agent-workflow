@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
-import * as errorUtilities from '@/util/errors'
+import * as errorUtilities from '@/platform/errors/domainErrors'
 
 type Diagnostic = (error: unknown) => string
 
@@ -40,7 +40,7 @@ function actual(relative: string, localName: string): Diagnostic {
     if (
       !ts.isImportDeclaration(node) ||
       !ts.isStringLiteral(node.moduleSpecifier) ||
-      node.moduleSpecifier.text !== '@/util/errors' ||
+      node.moduleSpecifier.text !== '@/platform/errors/domainErrors' ||
       node.importClause?.namedBindings === undefined ||
       !ts.isNamedImports(node.importClause.namedBindings)
     )

@@ -32,7 +32,7 @@ const TRANSPORT_ALLOWLIST = new Set([
   '@/auth/actor',
   '@/routes/registry',
   '@/routes/resourceAcl',
-  '@/util/errors',
+  '@/platform/errors/domainErrors',
   '@/platform/http/requestParsing',
 ])
 

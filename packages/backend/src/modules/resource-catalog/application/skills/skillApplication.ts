@@ -5,7 +5,7 @@ import {
   RestoreSkillVersionSchema,
   WriteSkillFileSchema,
 } from '@agent-workflow/shared'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type {
   CreateSkillCatalogInput,
   DeleteSkillCatalogInput,

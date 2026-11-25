@@ -47,7 +47,7 @@ import {
   startBatchImport,
 } from '../src/modules/source-control/infrastructure/local/repositoryBatchImport'
 import { createRepoGroup } from '../src/modules/source-control/application/repositoryGroups'
-import { DomainError, errorHandler } from '../src/util/errors'
+import { DomainError, errorHandler } from '../src/platform/errors/domainErrors'
 import { runGit } from '../src/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 

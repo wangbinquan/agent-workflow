@@ -2,8 +2,8 @@ import { ulid } from 'ulid'
 
 import type { Permission } from '@agent-workflow/shared'
 
-import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import { ForbiddenError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type {
   EmployeeAutomationWorkStartPort,
   EventAutomationDelegatedContextFactory,

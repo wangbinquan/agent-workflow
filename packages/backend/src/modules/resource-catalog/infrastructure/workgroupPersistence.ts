@@ -17,8 +17,8 @@ import {
   type WorkgroupRevision,
   type WorkgroupSnapshotHash,
 } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import { ValidationError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 type WorkgroupRow = PersistenceTables['workgroups']['$inferSelect']
 type MemberRow = PersistenceTables['workgroupMembers']['$inferSelect']

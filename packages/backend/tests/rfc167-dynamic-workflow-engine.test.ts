@@ -96,7 +96,7 @@ import type {
   WorkgroupTurnHostRequest,
 } from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
 
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,

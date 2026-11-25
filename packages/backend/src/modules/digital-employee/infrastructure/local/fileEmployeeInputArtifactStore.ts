@@ -9,7 +9,7 @@ import {
 import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
 
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 import type { EmployeeInputArtifactPort } from '../../composition/required-ports'
 
 async function digestFile(path: string): Promise<{ sha256: string; bytes: number }> {

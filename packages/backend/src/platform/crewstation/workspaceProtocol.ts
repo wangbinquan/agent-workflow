@@ -4,7 +4,7 @@
  * RFC-370 §9.2 V2: the request travels as base64 argv chunks and the outcome
  * is written to a file in the task volume, so a result survives a lost stream,
  * a service restart and any size limit of the platform's output summary. */
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
 
 export const WORKSPACE_CHUNK_BYTES = 24_000

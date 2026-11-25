@@ -8,7 +8,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ProgramArtifactPort } from '@/modules/digital-employee/composition/required-ports'
 import { createDigitalEmployeeAuthoringPersistence } from '@/modules/digital-employee/infrastructure/authoringStore'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { developmentEmployeeTypePackage } from '@/modules/development-automation/composition/employeeTypePackage'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 

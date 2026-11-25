@@ -84,7 +84,7 @@ prints the exact `method path (defined in <file>)` you need to copy into
 
 When a registry entry yields a 401 mismatch (e.g. the response body
 changed), update `packages/shared/src/schemas/apiError.ts` plus the
-`errorHandler` in `packages/backend/src/util/errors.ts` together — the
+`errorHandler` in `packages/backend/src/platform/errors/domainErrors.ts` together — the
 two files are the canonical wire shape.
 
 When a happy fixture's schema fails, the failure prints the actual body +

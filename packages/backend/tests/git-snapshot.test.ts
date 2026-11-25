@@ -6,7 +6,7 @@
 
 import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
 import { rollbackNodeRunWorktrees } from '@/modules/task-execution/infrastructure/nodeRollback'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

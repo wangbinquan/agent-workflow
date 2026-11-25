@@ -20,7 +20,7 @@
 // `required-implementation`。核心与日志都经本模块的应用层端口注入，不直接依赖 composition /
 // infrastructure（`rfc294-review-module-layer-rules`）。
 
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import type {
   DigitalEmployeeExecutionCore,
   TaskExecutionFailureClass,

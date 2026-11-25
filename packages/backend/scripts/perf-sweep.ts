@@ -37,7 +37,7 @@ import { workflowNameExpression } from '@/modules/resource-catalog/infrastructur
 import { nodeRunEventsProjection as getNodeRunEvents } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { launchTestTask as startTask } from '../tests/helpers/productionTaskLaunch'
 import { createTaskExecutionTestTopology } from '../tests/helpers/taskExecutionTestTopology'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('perf')
 

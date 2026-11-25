@@ -22,7 +22,7 @@ import {
 import { createWorkflowPersistenceSemantics } from '@/modules/resource-catalog/infrastructure/workflowPersistenceSemantics'
 import { createWorkflowRepository } from '@/modules/resource-catalog/infrastructure/workflowRepository'
 import { createWorkflowValidationPort } from '@/modules/resource-catalog/infrastructure/workflowValidation'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 

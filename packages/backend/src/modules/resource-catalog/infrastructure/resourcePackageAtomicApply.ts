@@ -49,8 +49,8 @@ import {
   verifyPreviewToken,
   type HumanMemberBaselineEntry,
 } from '../application/package/preview'
-import { ConflictError, ValidationError } from '@/util/errors'
-import { createLogger, type Logger } from '@/util/log'
+import { ConflictError, ValidationError } from '@/platform/errors/domainErrors'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import { opSlug, planBundleOps, resourceTypeOfOp } from '../domain/bundlePlan'
 import {
   type PreparedPackageMutation,

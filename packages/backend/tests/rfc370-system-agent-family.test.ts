@@ -16,7 +16,7 @@ import type {
   SystemAgentRetainedContents,
   SystemAgentWorkspaceScopes,
 } from '../src/modules/runtime-management/public/participants'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 
 function result(scratchDir: string): SystemAgentRunResult {
   return {

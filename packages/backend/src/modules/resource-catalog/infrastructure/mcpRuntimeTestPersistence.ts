@@ -22,7 +22,7 @@ import type {
   McpRuntimeTestSettlementInput,
   McpRuntimeTestSpawnReceiptInput,
 } from '../application/mcps/runtimeTestPersistence'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 
 type SessionRow = PersistenceTables['mcpRuntimeTestSessions']['$inferSelect']
 type TurnRow = PersistenceTables['mcpRuntimeTestTurns']['$inferSelect']

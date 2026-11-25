@@ -1,5 +1,5 @@
 import { reviewStagedPath } from '@/platform/content/locations/review'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { HumanGateArtifactStore } from './ports/humanGateArtifactStore'
 
 export const planReviewArtifact: HumanGateArtifactStore['planReviewArtifact'] = (input) => ({

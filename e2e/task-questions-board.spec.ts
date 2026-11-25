@@ -22,7 +22,7 @@
 //   routes/taskQuestions.ts:209-240       dispatch：entryIds 必填，随后释放门、任务继续跑
 //   routes/taskQuestions.ts:112-137       manual：人工提问
 //   routes/taskQuestions.ts:50-68         gateMemberEntry：条目不属于该任务 ⇒ 404
-//   routes/clarify.ts:266-292             defer=true 只封存不下发（B36 已锁），本条从它接力
+//   routes/clarify.ts:271-297             defer=true 只封存不下发（B36 已锁），本条从它接力
 
 import { expect, test } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'

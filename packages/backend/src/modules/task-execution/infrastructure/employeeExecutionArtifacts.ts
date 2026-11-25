@@ -1,7 +1,7 @@
 import { contentRefColumns, type ContentStore } from '@/platform/content/contentStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { and, eq } from 'drizzle-orm'
 import type { EmployeeExecutionArtifactQueries } from '../application/ports/employeeExecutionArtifactQueries'
 import { taskReadColumns } from './taskRepositorySql'

@@ -6,7 +6,7 @@ import type {
   RuntimeUsageMeter,
   RuntimeUsageSnapshot,
 } from '@/modules/runtime-management/public/participants'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 /** Minimum spacing of in-flight usage writes for one call. */
 export const USAGE_FLUSH_INTERVAL_MS = 3_000

@@ -16,9 +16,9 @@ import {
   serializeScriptDepsEnvKeyV1,
   type ScriptLanguage,
 } from '@agent-workflow/shared'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import { runManagedProcess } from '@/platform/execution/local/managedProcess'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export interface ScriptDepsEnv {
   /** Content hash identifying this environment; recorded on the node_run. */

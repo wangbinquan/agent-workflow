@@ -49,7 +49,7 @@ import type {
   LegacyIntentSkillArtifactCompat,
   PostgresqlSkillArtifactCompensation,
 } from '@/modules/intent/ports/skillArtifactCompensation'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 // ─────────────────────────────────────────────────────────────────────────────

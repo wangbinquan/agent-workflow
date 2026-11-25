@@ -20,7 +20,7 @@
 import type { TaskResourceLimitFacts } from './ports/taskResourceLimitFacts'
 import type { TaskResourceLimitAudit } from './ports/taskResourceLimitAudit'
 import { callRowHumanWait } from './taskResourceUsage'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 
 const log: Logger = createLogger('limits')
 

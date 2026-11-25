@@ -12,7 +12,7 @@ import { resolveSyntheticTaskAgentInjection } from '../infrastructure/taskExecut
 import type { TaskMechanicsState } from './taskMechanicsState'
 import { agentRefOfNode, fanoutInnerAgentRefKey } from '@agent-workflow/shared'
 import { detectRuntimeSessionNotFound } from '@/modules/runtime-management/public/queries'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { decideResumeSessionId } from '../domain/sessionModeFallback'
 import * as agentRunHistory from '../application/agentRunHistory'
 import { resolveUpstreamInputs } from '../application/nodeInputs'

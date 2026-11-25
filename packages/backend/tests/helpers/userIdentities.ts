@@ -4,7 +4,7 @@
 
 import { composeOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
 import { UserAccessError } from '@/modules/identity-access/public/types'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import { triggerRevalidation } from '@/ws/revalidationHook'
 import type { OidcIdentityProfileAccess } from '@/modules/identity-access/application/ports/oidcIdentityCrossContext'
 

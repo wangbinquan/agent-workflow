@@ -22,7 +22,7 @@ import type {
 import type { IntentContextResourceReference } from '@/modules/resource-catalog/public/participants'
 import { canAuditIntentSessions } from '@/modules/intent/domain/sessionAudit'
 import { generateEnvelopeNonce } from '@/platform/contracts/envelopeNonce'
-import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import {
   allocateHandle,
   createHandleAllocator,

@@ -1,5 +1,5 @@
 import { ulid } from 'ulid'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   validateExactContractOutput,
   type ExecutionContractGuide,

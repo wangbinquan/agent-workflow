@@ -60,7 +60,7 @@ import {
   ensureWorkgroupTaskStateRow,
   loadWorkgroupTaskState,
 } from './helpers/legacyWorkgroupState'
-import { ConflictError, ForbiddenError, NotFoundError } from '@/util/errors'
+import { ConflictError, ForbiddenError, NotFoundError } from '@/platform/errors/domainErrors'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { renameAgent } from './helpers/model/resourceWrites'
 

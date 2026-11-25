@@ -42,7 +42,7 @@ import {
 } from './helpers/workgroupTurns'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/domain/workgroupRuntimeConfig'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { createAgent } from './helpers/model/resourceWrites'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')

@@ -10,7 +10,7 @@
 // sha256、任何 added/removed/modified 即 boundary violation。一致性由
 // rfc310-pr4-workspace-validator 测试同树对拍两实现的 digest 锁定——probe
 // 文件本身锁 PR-0 判据不动，生产实现不得悄悄偏航。
-// hash 走 util/hash 单步 idiom（RFC-284 T7 文本锁：本 context 的 createHash
+// hash 走 platform/contracts/hash 单步 idiom（RFC-284 T7 文本锁：本 context 的 createHash
 // 合法集不因此再增文件）。
 
 import type {
@@ -18,7 +18,7 @@ import type {
   AutomationWorkspaceEffectsFactory,
 } from './ports/automationWorkspaceEffects'
 import { withSelectedAutomationWorkspaceEffects } from './automationWorkspaceEffectLifetime'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 
 export interface ProtectedRootSnapshot {
   /** root 标签（如 'git-meta'、'evidence'）→ 相对路径 → 内容摘要。 */

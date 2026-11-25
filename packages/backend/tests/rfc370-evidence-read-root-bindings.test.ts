@@ -9,7 +9,7 @@ import { evidenceArtifactsWith } from './helpers/evidenceSelections'
 import type { EvidenceDownloadHandle } from '@/modules/development-automation/application/evidenceDownloads'
 import { createRequirementBundleRefPersistence } from '@/modules/development-automation/infrastructure/requirementBundleRefPersistence'
 import type { RequirementBundleManifestV1 } from '@/modules/development-automation/domain/requirementManifest'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 

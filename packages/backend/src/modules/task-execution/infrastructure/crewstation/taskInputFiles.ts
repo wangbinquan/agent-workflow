@@ -20,7 +20,7 @@ import type {
   HostedObjectReceipt,
 } from '@/platform/content/hostedObjectPublications'
 import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/objectStorage'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { TaskInputFiles } from '../../application/ports/taskInputFiles'
 import { HOSTED_TASK_ARTIFACT_OWNER, retainHostedTaskArtifactInTx } from './taskArtifacts'
 

@@ -21,7 +21,12 @@ import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { EngineCapabilities } from '@/platform/persistence/capabilities'
-import { ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from '@/util/errors'
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+} from '@/platform/errors/domainErrors'
 import type {
   ActiveAuthPat,
   ActiveAuthSession,

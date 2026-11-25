@@ -24,7 +24,7 @@ import {
   ConcurrentNodeRunTransition,
   assertNodeRunSourceTerminationAdmission,
 } from '@/platform/persistence/nodeRunLifecycleCore'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import type { NodeRunLifecycleWrite as NodeRunStatusUpdateExtra } from '../application/ports/nodeRunWrites'
 import { compareAndWriteNodeRunInTx, nodeRunTableWrite } from './nodeRunWriteProtocol'
 

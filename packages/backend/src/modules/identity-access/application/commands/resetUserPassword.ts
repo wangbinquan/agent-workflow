@@ -3,7 +3,7 @@
 // writes, the password hash and the clock are passed in by the composition entry
 // (`composeIdentityUserOperations`), like the sibling commands' `systemUserId`. The path of that file
 // is deliberately not spelled out here: RFC-347's import lock scans raw source text for it.
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 export interface ResetUserPasswordDependencies {
   readonly systemUserId: string

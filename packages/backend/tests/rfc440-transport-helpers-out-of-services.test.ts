@@ -4,7 +4,7 @@
 // ① 位置：三个 services/ 文件与 `legacyTokenCallAudit` 兼容桥不存在；删除确认与删除快照在 platform/http，
 //    token 读视图在 identity-access 的 src/auth/。
 // ② 引用：源码里没有任何文件 import 三个旧路径（census 的 AST 提取，注释与字符串不算；别名与相对路径都认）。
-// ③ 方向：两个 platform 文件只依赖 hono、`@/auth/actor` 与 `@/util/errors`；token 读视图不 import services/、
+// ③ 方向：两个 platform 文件只依赖 hono、`@/auth/actor` 与 `@/platform/errors/domainErrors`；token 读视图不 import services/、
 //    routes/ 与模块；skills、memories、workgroups、workflows、plugins 五个路由不再 import services/。
 // ④ 同一实例：删除快照写入后只能取走一次，非 PAT 调用方不留快照。REST 与 bound operation 两条路的端到端审计
 //    由 rfc247-token-audit 与 rfc344-operation-catalog 覆盖。
@@ -87,8 +87,8 @@ describe('RFC-440 —— 引用与方向', () => {
     expect(resolvesToRetired(probe, '@/services/tokenAuditLog')).toBe(false)
   })
 
-  test('两个 platform 文件只依赖 hono、`@/auth/actor` 与 `@/util/errors`', () => {
-    const allowed = new Set(['hono', '@/auth/actor', '@/util/errors'])
+  test('两个 platform 文件只依赖 hono、`@/auth/actor` 与 `@/platform/errors/domainErrors`', () => {
+    const allowed = new Set(['hono', '@/auth/actor', '@/platform/errors/domainErrors'])
     for (const path of ['platform/http/deleteConfirm.ts', 'platform/http/deleteSnapshot.ts']) {
       const found = specifiersOf(join(SRC, path))
       // 非空对照：两个文件都按 Hono 的请求上下文工作，提取不到它就说明判据失效。

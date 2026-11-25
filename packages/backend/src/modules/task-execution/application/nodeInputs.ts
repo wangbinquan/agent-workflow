@@ -1,6 +1,6 @@
 import type { WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
 import { describeWrapperKind, resolveWorkflowSourceRef } from '@agent-workflow/shared'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { NodeExecutionPersistence } from './ports/nodeExecutionPersistence'
 import { collectDataflowInboundEdges } from '../domain/inboundEdges'
 import { loadFrameChain } from './frameChain'

@@ -30,7 +30,7 @@ import { CODE_CAPABILITIES, parseCodeCapabilityId } from '../../domain/stageCont
 import { lookupStageContract } from '../../domain/capabilityRegistry'
 import { projectStageGraph } from '../../domain/stageGraph'
 import { registerRoute } from '@/routes/registry'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type {
   CodeMatrixQuery,
   CodeMetricsQuery,

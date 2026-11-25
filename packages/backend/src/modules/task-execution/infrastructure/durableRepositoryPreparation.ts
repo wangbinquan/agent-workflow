@@ -2,8 +2,8 @@ import type { RequestAuthority } from '@/modules/identity-access/public/particip
 import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { ConflictError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
+import { ConflictError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { type GitCommitIdentity, isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 
 import { eq } from 'drizzle-orm'

@@ -50,7 +50,7 @@ import {
   registerBoundOperationHandler,
   registerBoundOperationMiddleware,
 } from '@/platform/operations/boundOperationInvoker'
-import { ForbiddenError, UnauthorizedError } from '@/util/errors'
+import { ForbiddenError, UnauthorizedError } from '@/platform/errors/domainErrors'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 

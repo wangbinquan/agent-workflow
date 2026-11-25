@@ -12,7 +12,12 @@ import type {
   IntegrationTriggerResourceRequest,
 } from '@/modules/resource-catalog/public/types'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
 import type {
   IntegrationTriggerAuthorityPair,
   ScheduledTaskPersistencePort,

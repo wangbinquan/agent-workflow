@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
 import type { AgentMaterialIntent } from '@/modules/runtime-management/public/participants'
-import { createLogger, type Logger } from '@/util/log'
+import { createLogger, type Logger } from '@/platform/logging/logger'
 import { outputTail } from '@/platform/execution/local/spawnDiagnostics'
 import { createSystemAgentUsageCapture } from './systemAgentUsageCapture'
 import type {

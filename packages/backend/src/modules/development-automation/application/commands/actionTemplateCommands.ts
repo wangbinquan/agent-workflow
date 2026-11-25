@@ -15,7 +15,7 @@ import {
 } from '../../domain/actionTemplate'
 import { canonicalStringify } from '../../domain/canonicalJson'
 import { agentCapabilityIdSchema } from '../../domain/capabilityDefinition'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type {
   ActionTemplatePersistence,
   ConfigResourceRecord,

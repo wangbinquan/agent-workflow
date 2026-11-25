@@ -1,5 +1,5 @@
 import type { Config } from '@agent-workflow/shared'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('config-applied-listeners')
 export type ConfigAppliedListener = (config: Config) => void | Promise<void>

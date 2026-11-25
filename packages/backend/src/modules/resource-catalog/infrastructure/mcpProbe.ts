@@ -44,8 +44,8 @@ import type {
   McpResourceTemplateInfo,
   McpToolInfo,
 } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
-import { createLogger } from '@/util/log'
+import { ValidationError } from '@/platform/errors/domainErrors'
+import { createLogger } from '@/platform/logging/logger'
 import { redactSensitiveString } from '@/util/redact'
 
 const log = createLogger('mcpProbe')

@@ -1,6 +1,6 @@
 // RFC-401 A2 —— MCP 配置按类型校验：唯一的 MCP 写入参与者调用（此前在普通编辑的 application 里）。
 import { McpLocalConfigSchema, McpRemoteConfigSchema, type Mcp } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 export function validateMcpConfigForType(type: Mcp['type'], config: unknown): Mcp['config'] {
   const parsed = (type === 'local' ? McpLocalConfigSchema : McpRemoteConfigSchema).safeParse(config)

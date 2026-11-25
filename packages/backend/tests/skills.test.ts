@@ -27,7 +27,7 @@ import {
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
+import { ConflictError, NotFoundError, ValidationError } from '../src/platform/errors/domainErrors'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import {

@@ -37,7 +37,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { canonicalJson } from '@agent-workflow/shared'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 

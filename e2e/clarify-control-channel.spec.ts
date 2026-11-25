@@ -16,8 +16,8 @@
 // 不下发**——被点名那题进 `staged`，没点名的那题不动，任务仍停在等人上。
 //
 // 判据取自源码单一事实源：
-//   routes/clarify.ts:245-258   两条非法组合的拒绝（各自独立的 code）
-//   routes/clarify.ts:266-292   defer ⇒ sealRoundQuestions(autoStage) 且**不** resumeTask
+//   routes/clarify.ts:250-263   两条非法组合的拒绝（各自独立的 code）
+//   routes/clarify.ts:271-297   defer ⇒ sealRoundQuestions(autoStage) 且**不** resumeTask
 //   shared/task-questions.ts:48 phase 词汇：pending 待指派 / staged 待下发
 
 import { expect, test } from '@playwright/test'

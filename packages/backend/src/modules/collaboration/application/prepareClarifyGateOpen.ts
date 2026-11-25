@@ -1,7 +1,7 @@
 // RFC-333 T7 — prepare one complete clarify round before TaskParkTx.
 
 import { ulid } from 'ulid'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import type { ClarifyQuestionSnapshotReader } from './ports/clarifyQuestionSnapshotReader'
 import type { HumanGateOperationStore } from './ports/humanGateOperationStore'
 import type { CanonicalHumanGateRequest } from '../domain/canonicalGateRequest'

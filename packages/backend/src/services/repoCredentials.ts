@@ -23,16 +23,16 @@ import {
   parseGitUrl,
   redactGitUrl,
 } from '@agent-workflow/shared'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import { TextDecoder } from 'node:util'
 import type { SecretBox } from '@/auth/secretBox'
 import type {
   RepositoryCredentialSealingMutation,
   RepositoryWorkspaceStore,
 } from '@/modules/source-control/public/operations'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { redactSensitiveString } from '@/util/redact'
-import { sha1Hex } from '@/util/hash'
+import { sha1Hex } from '@/platform/contracts/hash'
 
 const log = createLogger('repo-credentials')
 

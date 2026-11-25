@@ -250,7 +250,7 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
 }
 
 /**
- * The daemon's `errorHandler` (packages/backend/src/util/errors.ts) emits
+ * The daemon's `errorHandler` (packages/backend/src/platform/errors/domainErrors.ts) emits
  * `{ ok: false, code, message, details? }` for every DomainError. Older
  * (pre-RFC-024) versions of this client looked for a nested `{ error: {...} }`
  * shape which the backend never actually used — every 4xx was therefore

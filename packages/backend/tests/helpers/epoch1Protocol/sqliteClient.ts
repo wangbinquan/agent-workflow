@@ -6,7 +6,7 @@ import { Database, type Changes } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { chmodSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   frozenNativeTableSets as nativeTableSets,
   bindFrozenDatabaseHandle,

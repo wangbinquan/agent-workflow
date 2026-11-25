@@ -13,7 +13,7 @@ import { and, eq } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import type { DigitalEmployeeIntegrationTriggerParticipant } from '@/modules/digital-employee/public/participants'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import {
   canViewAccess,
   resolveAccessFrom,

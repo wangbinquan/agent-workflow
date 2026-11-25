@@ -20,7 +20,7 @@ import type {
   TaskAgentMaterialReferences,
   TaskAgentResourceMaterial,
 } from '@/modules/resource-catalog/public/participants'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import type {
   TaskExecutionResourceAuthority,
   TaskExecutionResourceAuthorityPair,

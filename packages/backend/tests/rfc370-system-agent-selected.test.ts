@@ -18,7 +18,7 @@ import type {
   SystemAgentEventSinkV1,
 } from '../src/modules/runtime-management/public/participants'
 import { emptyDeclaredManifest } from '@agent-workflow/shared'
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 
 function unused(): never {
   throw new Error('unselected System capability was read')

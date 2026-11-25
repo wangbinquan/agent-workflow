@@ -14,7 +14,7 @@ import { INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE } from '@/modules/intent/
 import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
 import { intentApplyArtifactCodecs } from '@/modules/intent/infrastructure/intentApplyArtifactCodec'
 import type { IntentApplyArtifact as IntentJournalArtifactV1 } from '@/modules/resource-catalog/public/types'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeStandaloneIntentArtifacts } from './helpers/intentApply'
 

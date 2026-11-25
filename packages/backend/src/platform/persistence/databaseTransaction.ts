@@ -50,7 +50,7 @@ import {
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 import { observeDbTransaction, type DbClient } from '@/db/client'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type { PersistenceDb, PersistenceTx } from './persistenceDb'
 import { retryPostgresqlSerialization } from '@/platform/persistence/postgresqlSerializationRetry'
 import { retrySqliteWrite } from '@/platform/persistence/sqliteWriteRetry'

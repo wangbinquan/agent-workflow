@@ -14,7 +14,7 @@ import { assertHostedPluginPublicationInTx } from '@/modules/resource-catalog/in
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { validatePluginMaterialTree } from '@/modules/resource-catalog/infrastructure/crewstation/pluginMaterialTree'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'
 

@@ -7,7 +7,7 @@ import {
   type Config,
   type ConfigPatch,
 } from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 /** Decode an already parsed stored value. JSON/transport failures belong to the adapter. */
 export function resolveConfigurationValue(raw: unknown): Config {

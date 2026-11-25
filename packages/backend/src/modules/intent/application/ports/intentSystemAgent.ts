@@ -1,5 +1,5 @@
 import type { WorkflowOutputEvidence } from '@agent-workflow/shared'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { IntentTurnEventRecord, IntentTurnRecord } from './intentPersistence'
 
 /** RFC-464: the terminal capture states a turn settles to (the persistence port's `captureState`). */

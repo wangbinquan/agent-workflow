@@ -6,7 +6,7 @@
 // `NativeRuntimeDriver`; the local task agent family reads plugin-load failures through `NativePluginLoadFailures`. No
 // runtime driver family module is imported here.
 import type { InventorySnapshot, Mcp, RuntimeConfigDirProfile } from '@agent-workflow/shared'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type { RuntimeKind, RuntimeProfile } from '@/modules/runtime-management/public/types'
 import type {
   AgentMaterialContentReference,

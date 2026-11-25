@@ -1,4 +1,4 @@
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { inlineContentColumns } from '@/platform/content/infrastructure/contentStore'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'

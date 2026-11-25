@@ -6,7 +6,7 @@ import type {
   RuntimeConfigDirProfile,
 } from '@agent-workflow/shared'
 import type { RuntimeKind, RuntimeProfile } from '../../public/types'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 /** The selected content owner interprets these references; callers do not. */
 export interface AgentMaterialContentReference {

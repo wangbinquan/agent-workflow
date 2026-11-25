@@ -17,7 +17,7 @@ import {
   runDaemonStartupWithLease,
   type DaemonStartupLease,
 } from '@/modules/system-operations/composition'
-import { configureLogger, createLogger, type LogLevel } from '@/util/log'
+import { configureLogger, createLogger, type LogLevel } from '@/platform/logging/logger'
 import { Paths } from '@/platform/configuration/installationPaths'
 import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'

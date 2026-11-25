@@ -10,7 +10,7 @@ import {
   transactionStep,
   type TransactionProgramStep,
 } from '@/platform/persistence/transactionProgram'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   aggregateSequenceLockKey,
   assertPositiveInteger,

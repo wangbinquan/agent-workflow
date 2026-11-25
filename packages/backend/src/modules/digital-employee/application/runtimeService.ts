@@ -13,7 +13,12 @@ import { retryAttemptCap } from '@/platform/contracts/retryAttemptCap'
 import type { EventCenterParticipant } from '@/modules/event-center/public/participants'
 import type { EventObservationInput } from '@/modules/event-center/public/types'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import {
+  ConflictError,
+  DomainError,
+  NotFoundError,
+  ValidationError,
+} from '@/platform/errors/domainErrors'
 import { stableIdentityComponent } from '@/util/gitRef'
 import type {
   EmployeeCaseDetailInputProjection,

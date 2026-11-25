@@ -4,7 +4,7 @@ import type {
   MergeBackResult,
   DiscardLock,
 } from '@/platform/contracts/isolationWorkspace'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import type {
   IsolationWorkspaceBinding,
   IsolationWorkspaceScope,

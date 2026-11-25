@@ -6,7 +6,7 @@ import {
   type Agent,
   type DeleteAgent,
 } from '@agent-workflow/shared'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import { assertInitialResourceOwner } from '../resourceDefaults'
 import type {
   CreateAgentCatalogInput,

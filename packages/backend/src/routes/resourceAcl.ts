@@ -16,7 +16,7 @@ import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import { assertNotBuiltin } from '@/modules/resource-catalog/public/types'
-import { NotFoundError, ValidationError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 
 /**
  * 挂载配置的键域 = 全部 `AclResourceType`，**没有排除项**。

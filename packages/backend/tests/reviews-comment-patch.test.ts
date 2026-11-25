@@ -40,7 +40,7 @@ import {
   deleteReviewComment,
   updateReviewCommentText,
 } from '@/modules/collaboration/infrastructure/review'
-import { ConflictError, NotFoundError } from '../src/util/errors'
+import { ConflictError, NotFoundError } from '../src/platform/errors/domainErrors'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'

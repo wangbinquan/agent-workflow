@@ -41,7 +41,7 @@ import {
   NotFoundError,
   ValidationError,
   staleConflictError,
-} from '@/util/errors'
+} from '@/platform/errors/domainErrors'
 
 export interface RepoGroupDeps {
   store: RepositoryWorkspaceStore

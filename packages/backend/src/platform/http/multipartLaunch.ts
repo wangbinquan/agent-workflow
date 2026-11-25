@@ -12,7 +12,7 @@
 //   • parseMultipartLaunch — form → { payloadJson, parts } (payload field +
 //     `files[<key>][]` grammar; defs-agnostic).
 
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 
 const UPLOAD_FIELD_PREFIX = 'files['
 const UPLOAD_FIELD_SUFFIX = '][]'

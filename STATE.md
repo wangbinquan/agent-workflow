@@ -1,4 +1,24 @@
-## 2026-11-25 RFC-574 `util/paths` 与 `util/http` 归 platform（In Progress；`design/RFC-574-util-paths-and-http-into-platform/`）
+## 2026-11-25 RFC-575 `util/errors`、`util/hash` 与 `util/log` 归 platform（In Progress；`design/RFC-575-util-errors-hash-log-into-platform/`）
+
+- **来由**：W9-D 的第五批。`util/` 余下 13 个文件里，除了安全相邻的一族（10 个），就是读者最多的三个基础原语。RFC-294 design 的目标表给它们的去向
+  是 `platform/errors` 与“platform 观测”（W9-C），plan 写明逐族搬迁可以先于 W9-C 的语义改造。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优
+  架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新的设计，
+  进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`util/errors.ts` → `platform/errors/domainErrors.ts`，`util/hash.ts` → `platform/contracts/hash.ts`，`util/log.ts` →
+  `platform/logging/logger.ts`（新目录；起初叫 `observability/`，撞上 `rfc371` 的规则后改名）；680 个生产读者与 370 个用例 / 测试助手改指，旧位置不留转出；钉着旧路径的
+  判据、账本与指针随改（56 个文件、110 处）；新增 RFC-575 用例（含“`util/` 只剩那一族的 10 个”的清单）。
+- **不做**：W9-C 的错误合同改造（domain / application 错误去 HTTP status、经 `publicError.ts` 映射）；`util/` 余下的安全相邻一族。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 三个基础原语进 platform；C11 不改 public 的形状；C12 RFC-575 用例覆盖 `src` / `tests` / `scripts`
+  的全部说明符、三个新文件与 `util/` 目录；C13 `legacy-horizontal-files` 101 → 98，其余计数不升。
+- **集中验证**（基于 `9083e8331`，详见 plan）：本地跑后端全量的 SQLite 一支，PostgreSQL 与 Windows 以 CI 为准。查出六处本人缺陷（都是被挪文件的钉法：目录名撞上 `rfc371` 的规则而改名 `platform/logging/`、
+  按解析路径的泛化放行、分段拼出的路径、源码摘要锁、转义的正则、本 RFC 用例的旧相对路径），均已修复并复验。tsc 0 错，eslint / promises / prettier
+  无告警；全部 3019 个用例文件逐文件跑完，除一条负载下的环境性超时外全部通过；读已提交源码的 207 个用例文件在候选导出里通过；十一种变异都被认出；
+  架构报告 60 个计数里只有 legacy 横向文件数变了。实现门 PASS（本会话按
+  路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：RFC-574 的实现提交 `fd3126d20` 两格红（`design/` 的一条链接、`rfc437` 的泛化放行）都由本会话引入并修复：`9083e8331`
+  修链接（它的 run 里 `rfc437` 那格仍红，同一原因），`62a3f20a4` 修放行表，主 CI run 45529694453 70 / 70 全绿，RFC-574 转 Done。
+
+## 2026-11-25 RFC-574 `util/paths` 与 `util/http` 归 platform（Done，`fd3126d20` + 两个修正；`design/RFC-574-util-paths-and-http-into-platform/`）
 
 - **来由**：W9-D 的第四批。`util/` 余下 15 个文件里，读者数百处的五个中 `paths` 与 `http` 读者最少。用户 2026-11-02「好，你继续推进RFC294，过程中
   你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新
@@ -21,7 +41,7 @@
 - **CI**：`fd3126d20` 主 CI 的 `Markdown link check (design/)` 红：RFC-370 的 evidence 里一条 Markdown 链接指向被挪走的 `util/paths.ts`，
   **本 RFC 引入**（检索没查 `design/` 的链接），修正提交改指新路径。分片 41/44 的 `rfc437-integration-webhook-family` 也红：它用
   `util\/[A-Za-z]+` 放行 webhook 绑定取整个 `util/`，`util/http` 迁走后就不放行了，**本 RFC 引入**，第二个修正提交补上新位置；其余 job 见修正
-  提交的记录。
+  提交的记录。第二个修正 `62a3f20a4` 主 CI run 45529694453 70 / 70 全绿，本 RFC 转 Done。
 - **CI 侧**：RFC-573 的提交 `3a9a99e64`：exact SHA 主 CI run 45518146982 的 70 个 job 全部成功——全部后端分片、真实 PostgreSQL、前端、三个平台的构建与检查、
   ubuntu / windows / macOS 的全部 e2e 分片。同一提交按路径触发的另三个工作流也全部通过：windows-platform（run 45518147036，`fsReclaim` 的
   新位置在它的路径清单里）、integration-opencode（run 45518146958）与 git-protocols-e2e（run 45518146932）。

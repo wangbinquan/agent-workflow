@@ -28,7 +28,7 @@ import {
   databaseSessionFor,
   engineOf,
 } from '@/platform/persistence/databaseTransaction'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import {
   HostedExecutionControlRegressionError,
   HostedExecutionControlStaleError,

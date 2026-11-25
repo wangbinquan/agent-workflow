@@ -45,7 +45,7 @@ import type {
   IntentArtifactContentPort,
   IntentSkillArtifactPublication,
 } from '@/modules/intent/application/ports/intentArtifactContent'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 const log: Logger = { debug() {}, info() {}, warn() {}, error() {}, child: () => log }
 const skillId = 'target-skill'

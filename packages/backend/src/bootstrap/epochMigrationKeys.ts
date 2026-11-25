@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeSync } from 'node:fs'
 import { join } from 'node:path'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { createSecretBoxFromKey, ensureSecretKey } from '@/auth/secretBox'
 import type { RepositoryUrlKeyProvider } from '@/modules/source-control/composition/conversion'
 import {

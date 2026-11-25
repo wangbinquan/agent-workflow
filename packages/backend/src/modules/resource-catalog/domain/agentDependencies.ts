@@ -1,4 +1,4 @@
-import { DomainError, ValidationError } from '@/util/errors'
+import { DomainError, ValidationError } from '@/platform/errors/domainErrors'
 import type { RefCallPolicy } from '@agent-workflow/shared'
 
 export interface AgentDependencyGraphInput {

@@ -35,7 +35,7 @@ import {
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { isVisibleRow } from '../../domain/resourceAccess'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { resourcePackageDocumentOf } from './packageDocument'
 import { type ResourcePackageReadPort } from './ports'
 

@@ -32,8 +32,8 @@ import { dirname } from 'node:path'
 import type { EventsArchiveStore } from '@/platform/background/eventsArchiveStorePort'
 import type { EventsArchiveContent } from '@/platform/background/eventsArchiveContent'
 export { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
-import { sha256Hex } from '@/util/hash'
-import { createLogger } from '@/util/log'
+import { sha256Hex } from '@/platform/contracts/hash'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('events-archive')
 

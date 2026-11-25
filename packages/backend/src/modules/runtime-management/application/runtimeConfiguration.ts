@@ -1,4 +1,4 @@
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import type { RuntimeProfileConfigurationCommands } from '../public/commands'
 
 interface RuntimeProfileInspectionQueries {

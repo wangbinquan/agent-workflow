@@ -26,7 +26,7 @@ import {
 } from '@/modules/resource-catalog/infrastructure/resourcePackageArtifactCodec'
 import { intentApplyErrors } from '@/modules/intent/infrastructure/intentApplyErrors'
 import { resourcePackageApplyErrors } from '@/modules/resource-catalog/infrastructure/resourcePackageApplyErrors'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const OWNER = 'rfc395-a6-owner'

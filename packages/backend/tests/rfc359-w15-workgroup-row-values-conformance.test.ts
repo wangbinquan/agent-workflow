@@ -42,7 +42,7 @@ import type { WorkgroupOperationContext } from '@/modules/resource-catalog/publi
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/modules/resource-catalog/composition/resourcePackageExecution'
 import { encodeZip } from '@/platform/content/zip'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'
 import { standaloneResourcePackageProviderSelections } from './helpers/resourceCatalog'

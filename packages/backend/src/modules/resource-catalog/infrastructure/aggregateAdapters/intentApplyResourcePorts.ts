@@ -37,7 +37,12 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { ForbiddenError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import {
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+  staleConflictError,
+} from '@/platform/errors/domainErrors'
 import { encodeSkillToken } from '../../application/skills/skillToken'
 import type { CatalogSelectorKind } from '../../domain/resourceKinds'
 import type { VersionedIntentResourceChangesetPlan } from '../../public/types'

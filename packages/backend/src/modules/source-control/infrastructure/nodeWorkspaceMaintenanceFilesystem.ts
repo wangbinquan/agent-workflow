@@ -5,7 +5,7 @@ import { join } from 'node:path'
 
 import { removeDirectoryWithRetry } from '@/platform/workspace/local/fsReclaim'
 import { deleteSnapshotRefs, removeWorktree, runGit, withWorktreeRegistryLock } from '@/util/git'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import type {
   WorkspaceMaintenanceFilesystem,
   WorkspaceTaskRecord,

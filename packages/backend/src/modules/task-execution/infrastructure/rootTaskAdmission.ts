@@ -20,7 +20,7 @@ import { createTaskCreationParticipantInTx } from './taskCreationParticipant'
 import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
 import { projectStoredTaskRepositorySurface } from './taskRepositorySurface'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { sha256Hex } from '../domain/digest'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
 import {

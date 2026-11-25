@@ -35,7 +35,7 @@ import type {
   RuntimeSessionCaptureEvent,
   RuntimeSessionCapturePersistence,
 } from '../../../application/ports/runtimeSessionCapturePersistence'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 import { parseEvent } from './events'
 
 export interface CaptureClaudeSessionsOpts {

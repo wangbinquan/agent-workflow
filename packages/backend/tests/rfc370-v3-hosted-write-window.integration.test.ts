@@ -30,7 +30,7 @@ import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresq
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 
 function deferred<T = void>() {

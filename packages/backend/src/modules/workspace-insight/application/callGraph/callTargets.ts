@@ -16,7 +16,7 @@ import {
   type RepositoryRevisionContent,
   type RepositoryRevisionContentFactory,
 } from '@/modules/source-control/public/participants'
-import { DomainError, NotFoundError } from '@/util/errors'
+import { DomainError, NotFoundError } from '@/platform/errors/domainErrors'
 import { resolveLang } from '../../domain/lang/languages'
 import { expandMethod, type ExpandCtx } from '../../engine/callGraph/expandMethod'
 

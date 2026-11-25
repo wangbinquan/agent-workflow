@@ -116,7 +116,7 @@ const DISK_IMPORTS = [
   'import node:path: join',
   'import db/client: DbClient',
   `import ${SO}/public/types: MaintenanceDiskReport, ReclaimableDiskItem`,
-  'import util/log: createLogger',
+  'import platform/logging/logger: createLogger',
   'import platform/configuration/installationPaths: Paths',
 ]
 /** The platform file takes only the PostgreSQL runtime type beside it. */

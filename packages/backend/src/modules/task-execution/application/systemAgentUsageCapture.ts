@@ -5,7 +5,7 @@
 import type { AgentInvocationBinding } from './ports/agentInvocation'
 import type { SystemAgentObservationRun } from './ports/systemAgentObservation'
 import { createCallUsageWriter, type ObservedCallStatus } from './callUsageWriter'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 export function createSystemAgentUsageCapture(input: {
   readonly run: SystemAgentObservationRun

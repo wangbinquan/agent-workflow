@@ -2,7 +2,7 @@ import { nodeRunReadColumns } from './nodeRunQueries'
 import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import {
   DEFAULT_CONFIG_DIR_PROFILE,
   RuntimeStatusEntrySchema,

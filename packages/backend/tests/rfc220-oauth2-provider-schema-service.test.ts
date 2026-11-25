@@ -28,7 +28,7 @@ import {
   type OidcProvidersService,
 } from '../src/auth/oidc/providers'
 import { createIdentity } from './helpers/userIdentities'
-import { DomainError } from '../src/util/errors'
+import { DomainError } from '../src/platform/errors/domainErrors'
 
 interface Harness {
   db: DbClient

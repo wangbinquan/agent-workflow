@@ -23,7 +23,7 @@ import {
   requireTaskMember,
   updateTaskMembers,
 } from '@/modules/collaboration/infrastructure/taskCollab'
-import { ForbiddenError } from '../src/util/errors'
+import { ForbiddenError } from '../src/platform/errors/domainErrors'
 import {
   TASKS_LIST_CHANNEL,
   tasksListBroadcaster,

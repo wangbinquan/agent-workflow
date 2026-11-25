@@ -18,7 +18,7 @@ import {
 import { join } from 'node:path'
 import { z } from 'zod'
 import { canonicalSchemaJson } from '@/platform/persistence/schemaContract'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 
 const MarkerSchema = z
   .object({

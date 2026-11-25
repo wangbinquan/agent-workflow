@@ -5,7 +5,7 @@ import {
   VALIDATE_CALL_POLICY,
   type Agent,
 } from '@agent-workflow/shared'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 import type {
   AgentDependencyClosureResult,
   ResolveAgentDependencyClosureInput,

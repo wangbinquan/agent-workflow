@@ -37,7 +37,7 @@ import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeCredential } from '@/modules/identity-access/composition/authentication'
 
-import { createLogger } from '../src/util/log'
+import { createLogger } from '../src/platform/logging/logger'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { PerformanceMonotonicClock } from '../src/modules/identity-access/infrastructure/inMemoryPresence'
 import {

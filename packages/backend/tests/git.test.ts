@@ -20,7 +20,7 @@ import {
   requireGitRepo,
   runGit,
 } from '../src/util/git'
-import { NotFoundError, ValidationError } from '../src/util/errors'
+import { NotFoundError, ValidationError } from '../src/platform/errors/domainErrors'
 
 let baseTmp: string
 let repoPath: string

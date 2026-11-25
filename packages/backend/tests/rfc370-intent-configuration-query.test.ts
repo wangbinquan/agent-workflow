@@ -15,7 +15,7 @@ import {
   type IntentSessionRouteDependencies,
 } from '@/modules/intent/inbound/intentSessionRoutes'
 import { createUser } from './helpers/userFixture'
-import { errorHandler } from '@/util/errors'
+import { errorHandler } from '@/platform/errors/domainErrors'
 import { appHome } from '@/platform/configuration/installationPaths'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

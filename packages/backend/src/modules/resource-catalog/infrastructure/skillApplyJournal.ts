@@ -11,7 +11,7 @@ import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { first } from '@/platform/persistence/queryHelpers'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 
 export const SKILL_APPLY_SCENE = 'skill' as const
 export const SKILL_APPLY_ARTIFACT_VERSION = 1 as const

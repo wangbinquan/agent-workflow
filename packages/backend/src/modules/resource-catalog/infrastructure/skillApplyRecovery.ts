@@ -11,7 +11,7 @@ import type { AtomicApplyRecoveryScene } from '@/platform/contracts/atomicApply'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { first } from '@/platform/persistence/queryHelpers'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 import type { SkillContentKind } from '../application/ports/skillMutation'
 import type { SkillVersionRecoveryContentStore } from '../application/skills/versionRecoveryContentStore'

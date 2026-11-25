@@ -20,7 +20,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { isAbsolute, join, sep } from 'node:path'
 import { extractTarGz, tarGz } from '@/platform/persistence/archive'
 import { runGit } from '@/util/git'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('worktreeBackup')
 

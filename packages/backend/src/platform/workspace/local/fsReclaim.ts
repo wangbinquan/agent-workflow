@@ -20,7 +20,7 @@
 
 import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
-import type { Logger } from '@/util/log'
+import type { Logger } from '@/platform/logging/logger'
 
 /**
  * 默认退避档：0 / 50 / 100 / 200 / 400 / 800 / 1600 ms。

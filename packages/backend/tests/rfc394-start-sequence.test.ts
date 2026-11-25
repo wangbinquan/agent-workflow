@@ -13,7 +13,7 @@ import * as bootstrap from '@/bootstrap/daemonProviderBootstrap'
 import * as operations from '@/modules/system-operations/composition'
 import * as database from '@/modules/system-operations/composition/daemonDatabase'
 import * as migrations from '@/platform/persistence/migration/migrationsFolder'
-import * as logging from '@/util/log'
+import * as logging from '@/platform/logging/logger'
 import * as tokens from '@/auth/token'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 

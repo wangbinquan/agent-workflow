@@ -7,7 +7,7 @@
 // 保持 application 可在无 HTTP 语境下测试（RFC-247 形态）。
 // RFC-359 W4-D6：store 是 Promise 端口（两个 provider 同一份实现），命令随之异步。
 
-import { ForbiddenError, ValidationError } from '@/util/errors'
+import { ForbiddenError, ValidationError } from '@/platform/errors/domainErrors'
 import {
   adapterContentDigest,
   developmentAdapterContentSchema,

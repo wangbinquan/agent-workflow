@@ -74,7 +74,7 @@ import { resolveCollaborationTaskAccess } from '@/modules/collaboration/public/q
 import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/composition/resourceCatalogOverview'
 import { composeSystemOverviewQuery } from '@/modules/system-operations/composition/overview'
 import { composeRuntimeProbeConfigFence } from '@/modules/runtime-management/composition/runtimeManagement'
-import { ForbiddenError, NotFoundError } from '@/util/errors'
+import { ForbiddenError, NotFoundError } from '@/platform/errors/domainErrors'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
 import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/composition'

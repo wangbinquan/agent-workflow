@@ -12,7 +12,7 @@ import { readPortRowAtFrame } from '@/modules/task-execution/application/nodeInp
 import { deriveFrontier } from './helpers/frontierSelection'
 import { resolveSchedulerRunRow } from '@/modules/task-execution/application/resolveSchedulerRunRow'
 import { selectResumeRollbackTargets } from './helpers/resumeRollbackTargets'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   nodeRunFixture,

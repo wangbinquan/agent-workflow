@@ -782,8 +782,8 @@
     },
     {
       "anchors": [
-        "packages/backend/src/util/errors.ts:133-155",
-        "packages/backend/src/util/errors.ts:157-161",
+        "packages/backend/src/platform/errors/domainErrors.ts:133-155",
+        "packages/backend/src/platform/errors/domainErrors.ts:157-161",
         "packages/backend/src/server.ts:410",
         "packages/backend/src/mcp/dispatch.ts:85",
         "packages/shared/src/lifecycle.ts:62",

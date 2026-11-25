@@ -11,7 +11,7 @@
 // `tests/rfc322-maintenance-cadence.test.ts` 拦下。
 
 import { MAINTENANCE_SLOW_TICK_MS } from '@/platform/background/daemonCadence'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('maintenance-ticker')
 

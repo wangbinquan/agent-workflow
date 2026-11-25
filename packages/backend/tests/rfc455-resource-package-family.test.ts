@@ -16,7 +16,7 @@ import * as pluginRevision from '@/modules/resource-catalog/domain/pluginOperati
 import * as rcQueries from '@/modules/resource-catalog/public/queries'
 import { decodeZip, ZIP_LIMITS } from '@/modules/resource-catalog/domain/zipArchive'
 import { encodeZip } from '@/platform/content/zip'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import { zipSync } from 'fflate'
 import { importEdges, sourceUnit } from './architecture/census'
 

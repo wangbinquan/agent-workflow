@@ -1,7 +1,7 @@
 import { createReadStream, lstatSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { EvidenceBudget } from '../../domain/evidence'
-import { createSha256DigestBuilder } from '@/util/hash'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 
 /** Shared native file mechanics: service-side use is limited to HTTP staging files. */
 export async function inspectEvidenceFile(path: string): Promise<{ sha256: string; size: number }> {

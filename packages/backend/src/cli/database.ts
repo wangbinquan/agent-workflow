@@ -3,7 +3,7 @@ import type { EpochSwitchApplication } from '@/modules/system-operations/public/
 // system-operations application as Settings; only human/JSON projection and
 // the offline daemon-lock boundary live here.
 
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import {
   databaseMigrationStartIdempotencyKeyWith,
   databaseMigrationStartIdentityFromOverview,

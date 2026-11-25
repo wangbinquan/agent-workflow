@@ -16,7 +16,7 @@ import {
   RESOURCE_PACKAGE_BODY_MAX_BYTES,
 } from '../src/routes/resourcePackages'
 import { decodeZip, ZIP_LIMITS } from '../src/modules/resource-catalog/domain/zipArchive'
-import { errorHandler, ValidationError } from '../src/util/errors'
+import { errorHandler, ValidationError } from '../src/platform/errors/domainErrors'
 
 const LOCAL_FILE_HEADER = 0x04034b50
 const CENTRAL_FILE_HEADER = 0x02014b50

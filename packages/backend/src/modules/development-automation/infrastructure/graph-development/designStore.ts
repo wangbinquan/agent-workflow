@@ -3,7 +3,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, sql } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError } from '@/util/errors'
+import { ConflictError } from '@/platform/errors/domainErrors'
 import type { GraphDesignStore, GraphStoredLink } from '../../application/ports/graphDesignStore'
 
 const conflict = (code: string) => new ConflictError(code, code)

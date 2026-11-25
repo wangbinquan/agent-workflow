@@ -10,7 +10,7 @@ import {
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { createCrewStationMcpDiagnostics } from '@/modules/resource-catalog/composition/crewstationMcpDiagnostics'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { composeCrewStationRecovery } from '@/modules/task-execution/composition/crewstationRecovery'
 import { createHostedScriptFixtureProcess } from '@/modules/task-execution/composition/programTools'
 import {

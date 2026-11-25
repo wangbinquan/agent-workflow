@@ -12,7 +12,7 @@ import {
   type ExecutionGroup,
   type ExecutionStatus,
 } from '@agent-workflow/shared'
-import { DomainError } from '@/util/errors'
+import { DomainError } from '@/platform/errors/domainErrors'
 
 // RFC-536: the reader rides on the app it serves (a non-enumerable, read-only own symbol property) — there is no
 // process-level table from apps to readers.

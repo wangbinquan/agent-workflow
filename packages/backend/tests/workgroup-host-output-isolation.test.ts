@@ -45,7 +45,7 @@ import {
   renderWgProtocolBlock,
   wgHostRolePorts,
 } from '../src/modules/task-execution/domain/workgroup/protocol'
-import type { Logger } from '../src/util/log'
+import type { Logger } from '../src/platform/logging/logger'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 

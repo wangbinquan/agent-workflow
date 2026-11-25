@@ -62,7 +62,7 @@ import {
   UnauthorizedError,
   ValidationError,
   staleConflictError,
-} from '@/util/errors'
+} from '@/platform/errors/domainErrors'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
 import type { MemoryResourceScopeAccessParticipant } from '../application/ports/resourceScopeAccess'
 import type { MemoryCatalogCommands } from '../../memory/public/commands'

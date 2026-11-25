@@ -89,9 +89,9 @@ import {
   fenceTaskWrite,
   withTaskExecutionWrite,
 } from '@/modules/task-execution/public/participants'
-import { ValidationError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
-import { createLogger } from '@/util/log'
+import { ValidationError } from '@/platform/errors/domainErrors'
+import { sha256Hex } from '@/platform/contracts/hash'
+import { createLogger } from '@/platform/logging/logger'
 
 const log = createLogger('clarify')
 

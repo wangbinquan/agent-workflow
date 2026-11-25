@@ -44,7 +44,7 @@ import { liveSqlitePath } from './storage'
 //   * 【TASK-35】变更页签的主链（真工作树 → 接口 → 面板）已由 REPO-X2 覆盖。
 //     真缺的两薄片：**作用域切换**（今天只有 `e2e/rfc250-*` 用 `page.route` 灌假
 //     数据点过那个下拉，从没走过真实的 `scope=node`）与 **1 MiB 截断提示**
-//     （`util/git.ts:2258-2268`）。后者坏掉时用户拿到的是一份**被悄悄砍掉尾巴**的
+//     （`util/git.ts:2263-2273`）。后者坏掉时用户拿到的是一份**被悄悄砍掉尾巴**的
 //     diff，看起来完整。
 //
 // 判据全部取自源码单一事实源（纯文本引用，禁 GitHub 外链——外链会被 CI 的
@@ -76,7 +76,7 @@ import { liveSqlitePath } from './storage'
 //   packages/backend/src/modules/workspace-insight/application/structuralDiff/taskStructuralDiff.ts:329-488
 //                                                                        node 作用域的 between / to-worktree 解析
 //   packages/backend/src/modules/workspace-insight/application/structuralDiff/nodeScope.ts:27-41 resolveNodeScope
-//   packages/backend/src/util/git.ts:2258-2268                           worktreeDiff 的 1 MiB 上限 + truncated
+//   packages/backend/src/util/git.ts:2263-2273                           worktreeDiff 的 1 MiB 上限 + truncated
 //   packages/frontend/src/components/changes/ChangeReviewPanel.tsx:615-620 截断提示条
 //
 // 与既有覆盖的分工（务必不要重复）：
@@ -1376,7 +1376,7 @@ test('RFC-319 TASK-35：工作树累积 diff 超过 1 MiB 时，接口在正好 
   ).toBe(true)
   expect(
     big.diff.length,
-    '标了截断，正文却不是正好停在 1 MiB ⇒ 上限没有真的生效（util/git.ts:2258-2268）',
+    '标了截断，正文却不是正好停在 1 MiB ⇒ 上限没有真的生效（util/git.ts:2263-2273）',
   ).toBe(1024 * 1024)
 
   await page.reload()

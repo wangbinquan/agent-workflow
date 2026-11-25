@@ -10,7 +10,7 @@
 //    工厂（远端树操作时原样、否则先选本机实现）交给 application 的同名函数。
 // ④ 全部生产文件、用例与 e2e 不从旧位置取迁出的名字：composition 文件只给三个组合名字，两个 infrastructure 文件只给包装与转出，
 //    `attemptSupport.ts` 不再给三组常量；命名 import、type-only、re-export、命名空间成员与动态 import 的解构都认，带负对照。
-// ⑤ 新文件的依赖面是闭集：三个 application 文件只取 zod、shared、`@/util/hash`、`@/util/gitRef`、digital-employee 的 `public/types` 与本
+// ⑤ 新文件的依赖面是闭集：三个 application 文件只取 zod、shared、`@/platform/contracts/hash`、`@/util/gitRef`、digital-employee 的 `public/types` 与本
 //    模块的 domain / application；domain 文件没有 import；都不用进程全局（带负对照）。
 //
 // 覆盖范围（C12）：① ④ 读全部生产文件（语料下限 3,000）、全部用例（语料下限 2,500）与仓库根的 e2e，先按名字或路径文本筛、再逐个解析
@@ -344,9 +344,12 @@ const mentionsOldLocation = (source: string) =>
 /** The closed dependency surface of the application files (design §4 ⑤). */
 function allowedDependency(file: string, specifier: string): boolean {
   if (
-    ['zod', '@/util/hash', '@/util/gitRef', '@/modules/digital-employee/public/types'].includes(
-      specifier,
-    )
+    [
+      'zod',
+      '@/platform/contracts/hash',
+      '@/util/gitRef',
+      '@/modules/digital-employee/public/types',
+    ].includes(specifier)
   )
     return true
   if (specifier === '@agent-workflow/shared' || specifier.startsWith('@agent-workflow/shared/'))
@@ -588,7 +591,7 @@ describe('RFC-496 ④ 没有文件从旧位置取迁出的名字', () => {
 })
 
 describe('RFC-496 ⑤ 新文件的依赖面是闭集、不用进程全局', () => {
-  test('三个 application 文件只取 zod、shared、@/util/hash、@/util/gitRef、digital-employee 的 public/types 与本模块 domain / application', () => {
+  test('三个 application 文件只取 zod、shared、@/platform/contracts/hash、@/util/gitRef、digital-employee 的 public/types 与本模块 domain / application', () => {
     for (const location of [WORKSPACE, SNAPSHOT, VALIDATOR]) {
       const path = sourceOf(location)
       expect([location, purityFindings(path, text(path))]).toEqual([location, []])
@@ -605,7 +608,7 @@ describe('RFC-496 ⑤ 新文件的依赖面是闭集、不用进程全局', () =
     const source = [
       `import { z } from 'zod'`,
       `import { utf16MinLength } from '@agent-workflow/shared'`,
-      `import { sha256Hex } from '@/util/hash'`,
+      `import { sha256Hex } from '@/platform/contracts/hash'`,
       `import type { EmployeeReactionRoundQueryPort } from '@/modules/digital-employee/public/types'`,
       `import { GIT_METADATA_SKIP_PREFIXES } from '../domain/gitMetadataOwnership'`,
       `import { withSelectedAutomationWorkspaceEffects } from './automationWorkspaceEffectLifetime'`,

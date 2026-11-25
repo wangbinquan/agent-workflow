@@ -17,7 +17,7 @@ import {
 import { headReferenceTraversals } from './helpers/rfc395A5HeadTraversals'
 import { directRefsOf } from '../src/modules/resource-catalog/application/package/closure'
 import { assertCanonicalWorkflowAgentIds } from '../src/modules/resource-catalog/infrastructure/workflowPersistence'
-import { ValidationError } from '../src/util/errors'
+import { ValidationError } from '../src/platform/errors/domainErrors'
 
 function oracle(
   group: keyof typeof headReferenceTraversals,

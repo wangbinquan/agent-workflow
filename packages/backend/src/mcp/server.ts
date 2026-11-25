@@ -31,7 +31,7 @@ import { McpCallError, toolsFor, type McpToolContext } from '@/mcp/tools'
 import type { OperationInvoker } from '@/platform/operations/contracts'
 import { isMcpSurfaceEnabled } from '@/platform/configuration/mcpSurface'
 import { redactErrorText } from '@/auth/tokenRedaction'
-import { ForbiddenError, UnauthorizedError } from '@/util/errors'
+import { ForbiddenError, UnauthorizedError } from '@/platform/errors/domainErrors'
 
 /** Advertised to clients on initialize. */
 const SERVER_INFO = { name: 'agent-workflow', version: '1' } as const

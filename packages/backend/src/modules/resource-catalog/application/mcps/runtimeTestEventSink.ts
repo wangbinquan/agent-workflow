@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
 import type {
   SessionCaptureIncompleteReason,
   SessionCaptureTerminalState,

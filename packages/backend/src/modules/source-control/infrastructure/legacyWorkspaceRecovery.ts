@@ -1,7 +1,7 @@
 // Historical Tasks have no preparation journal. Keep their existing reclaim
 // algorithm at the physical owner; journaled Tasks must never enter this path.
 import { resolveRepoGroupLayout } from '../application/repositoryGroups'
-import { ConflictError, diagnosticTextOf as diagnosticText } from '@/util/errors'
+import { ConflictError, diagnosticTextOf as diagnosticText } from '@/platform/errors/domainErrors'
 import { runGit, withWorktreeRegistryLock } from '@/util/git'
 import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'

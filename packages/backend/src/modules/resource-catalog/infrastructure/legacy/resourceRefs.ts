@@ -22,7 +22,7 @@ import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { ValidationError } from '@/util/errors'
+import { ValidationError } from '@/platform/errors/domainErrors'
 import {
   hasResourceAclBypass,
   isVisibleRow,

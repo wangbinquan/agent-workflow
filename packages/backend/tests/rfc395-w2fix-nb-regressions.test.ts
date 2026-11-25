@@ -48,7 +48,7 @@ import { pruneNodeRunSequenceAllocations } from '@/modules/task-execution/infras
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { createTaskObservationFacts } from '@/modules/task-execution/infrastructure/taskObservationFacts'
 import { contentRefColumns } from '@/platform/content/contentStore'
-import { createLogger } from '@/util/log'
+import { createLogger } from '@/platform/logging/logger'
 import { describeEachProvider } from './helpers/eachProvider'
 import { Paths } from '@/platform/configuration/installationPaths'
 import {

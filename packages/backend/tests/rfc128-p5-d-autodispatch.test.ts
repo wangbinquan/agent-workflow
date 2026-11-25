@@ -69,7 +69,7 @@ import {
   loadUndispatchedSelfQuestionerTargets,
 } from '../src/modules/collaboration/infrastructure/taskQuestions'
 import { getNodeClarifyDirectiveRow } from './helpers/clarifyDirectives'
-import { ConflictError } from '../src/util/errors'
+import { ConflictError } from '../src/platform/errors/domainErrors'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'

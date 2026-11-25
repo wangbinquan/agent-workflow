@@ -27,7 +27,7 @@
 // SSH note: this file has no SSH case, and that is deliberate — the SSH
 // path needs no gitea fixture at all. `git` reaches an ssh remote by handing
 // `git-upload-pack <path>` to GIT_SSH_COMMAND, which the daemon already
-// inherits from its environment (util/git.ts:38-44), so a stub ssh exercises
+// inherits from its environment (util/git.ts:43-49), so a stub ssh exercises
 // the whole transport locally. That is where the coverage now lives:
 // packages/backend/tests/rfc319-ssh-repo-access.test.ts (RFC-319 REPO-42) —
 // real ssh:// clone, scp-form canonicalization, and the `-i <deploy key>`

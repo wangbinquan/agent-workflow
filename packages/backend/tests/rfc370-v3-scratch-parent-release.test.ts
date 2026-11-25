@@ -42,7 +42,7 @@ import type {
   BusinessTask,
   CrewStationBusinessExecution,
 } from '@/platform/crewstation/businessExecution'
-import { sha256Hex } from '@/util/hash'
+import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const unused = async (): Promise<never> => {
