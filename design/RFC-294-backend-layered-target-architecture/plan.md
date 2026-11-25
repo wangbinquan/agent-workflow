@@ -819,6 +819,11 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   Done，`ce164ed44`：两个 HTTP 绑定归入兼容岛自己的 `inbound/http`；整体吸收仍开放）：把 26 成员可选袋拆为按用例、非可选的 required 端口与 exact provider adapter；
   `services/developmentDeliveryDeps.ts` 迁为 integration 的 provider adapter；mission / config / activity 路由只调 public；
   `code-capability` 的 capability template 写入与历史查询并入 development-automation 后删除该兼容岛。
+  2026-11-25 第一步 [RFC-597](../RFC-597-development-automation-required-providers/proposal.md)（In Progress）：可选袋的装配边界——
+  `composeDevelopmentAutomation` 的 11 个 provider 归在必填的 `DevelopmentAutomationProviders` 下，装配原样交给 `ReconcilerPorts`、不再按“给没给”
+  分支，F-H2-2 那类漏接在编译期就被挡下；用例不用的 provider 给调用即抛错的测试替身（查出 `rfc310-pr5-e2e-java` 一处静默落到
+  `collector-not-wired` 的用例）。`ReconcilerPorts` 按用例拆分、删去 `*-not-wired` 分支是下一步（直接构造端口的 19 个 RFC-310 用例与三个夹具 helper
+  随之改）；装配入参其余 6 个可选成员（三组工作区与基线效果、三个证据读取覆盖）按 S12 的做法另立。
 - **E9 digital-employee / event-center / execution-contract**（2026-11-03 路由部分由 [RFC-436](../RFC-436-module-inbound-http-bindings/proposal.md)
   Done，`3cb987341`：两个 HTTP 绑定归入各自模块 `inbound/http`，句柄合同留在 `application/ports`；XC 兼容 seam 仍开放）：在 RFC-361/365/368 已落切片之上，完成路由到 public command / query、
   Event observer 进入生命周期程序、XC 对 legacy agent / workflow / scriptRun 的兼容 seam 退役。

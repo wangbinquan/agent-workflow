@@ -45,13 +45,22 @@ import {
   bindChangeCandidateParticipant,
   createLocalRepositoryCandidateEffects,
 } from '../src/modules/source-control/composition'
-import { createDevelopmentMrEffects } from '../src/modules/integration/application/developmentCodeHostDelivery'
+import {
+  createDevelopmentMrEffects,
+  createDevelopmentMrFactsSource,
+  type RepoCodeHostBindingResolver,
+} from '../src/modules/integration/application/developmentCodeHostDelivery'
+import { composeDevelopmentMrFactsCollector } from '../src/modules/development-automation/composition/developmentDelivery'
+import { eq } from 'drizzle-orm'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { ulid } from 'ulid'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { codeHostRequests } from '@/modules/integration/composition'
-import { composeStandaloneDevelopmentAutomationSelections } from './helpers/developmentAutomation'
+import {
+  composeStandaloneDevelopmentAutomationSelections,
+  unusedDevelopmentProviders,
+} from './helpers/developmentAutomation'
 
 setDefaultTimeout(240_000)
 
@@ -195,8 +204,25 @@ async function seedLaneDatabase(db: PersistenceDb): Promise<void> {
   await publishAutomationPolicy(fx.db, { id: vPolicy.id, publishedBy: 'admin' })
   ;(fx as { e2ePolicyId?: string } as Record<string, unknown>).e2ePolicyId = vPolicy.id
 
+  const codeHostBinding: RepoCodeHostBindingResolver = () => ({
+    provider: 'gitlab',
+    project: encodeURIComponent(PROJECT_PATH),
+    requests: codeHostRequests,
+    call: {
+      connection: {
+        provider: 'gitlab',
+        baseUrl: suite.endpoints.gitlabApiBaseUrl,
+        repositoryUrlPrefixes: [],
+        token: SYSTEM_MOCK_CODE_HOST_TOKEN,
+        rejectUnauthorized: true,
+      },
+      ctx: { ports: {} },
+    },
+  })
+  const { developmentMrClaims } = tablesOf(fx.db)
   automation = composeDevelopmentAutomation({
     ...composeStandaloneDevelopmentAutomationSelections({ db: fx.db, appHome: HOME }),
+    ...unusedDevelopmentProviders(),
     verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db: fx.db,
     appHome: HOME,
@@ -211,22 +237,27 @@ async function seedLaneDatabase(db: PersistenceDb): Promise<void> {
       resolve: (repositoryId) =>
         repositoryId === 'repo-1' ? { remoteUrl: repoHttpUrl, defaultBranch: 'main' } : null,
     },
-    mrEffects: createDevelopmentMrEffects({
-      binding: () => ({
-        provider: 'gitlab',
-        project: encodeURIComponent(PROJECT_PATH),
-        requests: codeHostRequests,
-        call: {
-          connection: {
-            provider: 'gitlab',
-            baseUrl: suite.endpoints.gitlabApiBaseUrl,
-            repositoryUrlPrefixes: [],
-            token: SYSTEM_MOCK_CODE_HOST_TOKEN,
-            rejectUnauthorized: true,
-          },
-          ctx: { ports: {} },
+    mrEffects: createDevelopmentMrEffects({ binding: codeHostBinding }),
+    // RFC-597: round 9 hands the mission to the care chain, whose first step collects MR facts. This is the
+    // production collector over the same mock GitLab binding. Before RFC-597 the composition could leave it out, and
+    // that step was blocked `collector-not-wired:merge-request`.
+    ...composeDevelopmentMrFactsCollector({
+      provider: {
+        async readMrFactTarget({ missionId, mrClaimId }) {
+          const claim = (
+            await fx.db
+              .select({ mrIid: developmentMrClaims.mrIid })
+              .from(developmentMrClaims)
+              .where(eq(developmentMrClaims.id, mrClaimId))
+              .limit(1)
+          )[0]
+          const mission = await fx.store.getMission(missionId)
+          return claim === undefined || mission === null
+            ? null
+            : { repositoryId: mission.repositoryId, mrIid: claim.mrIid }
         },
-      }),
+      },
+      mrFacts: createDevelopmentMrFactsSource({ binding: codeHostBinding }),
     }),
   })
 }

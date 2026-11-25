@@ -76,7 +76,10 @@ import { createUser } from './helpers/userFixture'
 import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
 import { standaloneSelections } from '@/bootstrap/standalone'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
-import { composeStandaloneDevelopmentAutomationSelections } from './helpers/developmentAutomation'
+import {
+  composeStandaloneDevelopmentAutomationSelections,
+  unusedDevelopmentProviders,
+} from './helpers/developmentAutomation'
 
 setDefaultTimeout(120_000)
 
@@ -305,6 +308,7 @@ async function seedFixture(scope: ProviderHttpApplicationScope): Promise<void> {
       evidenceDocumentCommands: purposeRoot.requirement.documentCommands,
       requirementStaging: purposeRoot.requirement.staging,
     }),
+    ...unusedDevelopmentProviders(),
     verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db,
     appHome: opened.appHome,

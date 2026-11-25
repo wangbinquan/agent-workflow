@@ -59,7 +59,10 @@ import {
   WorkspaceReferenceCodec,
   type WorkspaceEffectGate,
 } from './helpers/rfc370ConflictWorkspaceEffects'
-import { composeStandaloneDevelopmentAutomationSelections } from './helpers/developmentAutomation'
+import {
+  composeStandaloneDevelopmentAutomationSelections,
+  unusedDevelopmentProviders,
+} from './helpers/developmentAutomation'
 
 setDefaultTimeout(120_000)
 
@@ -179,6 +182,7 @@ async function seedLaneDatabase(
 
   automation = composeDevelopmentAutomation({
     ...composeStandaloneDevelopmentAutomationSelections({ db: fx.db, appHome: HOME }),
+    ...unusedDevelopmentProviders(),
     verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db: fx.db,
     appHome: HOME,
@@ -483,6 +487,7 @@ describeEachProvider(
             evidenceArtifacts: evidence,
             evidenceDocumentCommands: evidence.documentCommands,
           }),
+          ...unusedDevelopmentProviders(),
           verificationCommands: createLocalVerificationCommandEffectsFactory(),
           db: fx.db,
           appHome: codec.reference(HOME),

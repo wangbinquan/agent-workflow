@@ -22,7 +22,10 @@ import {
   canonicalDigest,
   canonicalStringify,
 } from '@/modules/development-automation/domain/canonicalJson'
-import { composeStandaloneDevelopmentAutomationSelections } from './helpers/developmentAutomation'
+import {
+  composeStandaloneDevelopmentAutomationSelections,
+  unusedDevelopmentProviders,
+} from './helpers/developmentAutomation'
 
 const roots: string[] = []
 const identityRuntimes: ReturnType<typeof createIdentityAccessRuntime>[] = []
@@ -180,6 +183,7 @@ describeEachProvider('RFC-370 selected Mission evidence contents', (harness) => 
     roots.push(appHome)
     const automation = composeDevelopmentAutomation({
       ...composeStandaloneDevelopmentAutomationSelections({ db: harness.db, appHome }),
+      ...unusedDevelopmentProviders(),
       verificationCommands: createLocalVerificationCommandEffectsFactory(),
       db: harness.db,
       appHome,

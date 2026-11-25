@@ -242,7 +242,9 @@ async function restoreMissingLegacyMissionLaunchers(): Promise<void> {
       input: Parameters<typeof original.composeDevelopmentAutomation>[0],
     ) => {
       const { agentLauncher: _agent, scriptLauncher: _script, ...withoutLaunchers } = input
-      return composeOriginal(withoutLaunchers)
+      // RFC-597: both launchers are required now, so the compiler rejects this omission; the assertion reproduces it
+      // at runtime, where the reconciler still reads `undefined` and blocks `*-launcher-not-wired`.
+      return composeOriginal(withoutLaunchers as Parameters<typeof composeOriginal>[0])
     },
   }))
 }

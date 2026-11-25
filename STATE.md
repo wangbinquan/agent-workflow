@@ -1,3 +1,16 @@
+## 2026-11-25 RFC-597 development-automation 的装配不再接受缺省的 provider（In Progress；`design/RFC-597-development-automation-required-providers/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；RFC-294 W4-E8（`ReconcilerPorts` 可选袋）的第一步。
+- **范围**：`composeDevelopmentAutomation` 的 11 个 provider 归在必填的 `DevelopmentAutomationProviders` 下（装配入参继承它），装配把每个 provider 原样交给
+  `ReconcilerPorts`、需求源交给物化器，不再按“给没给”分支；daemon 装配不变（本来就都给）。9 个调用装配的用例文件先展开 `unusedDevelopmentProviders()`
+  （调用即抛错的测试替身）再给自己用的 provider；RFC-359 P0 变异 `p0-9-launchers` 的预载加一次类型断言，运行期照旧复现 `*-launcher-not-wired`。新增 RFC-597 用例。
+  `ReconcilerPorts` 本身与 reconciler 的 `*-not-wired` 分支留给按用例拆分的下一步；装配入参其余 6 个可选成员另立（design §5）。
+- **集中验证**（基于 `eead26c45`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 381 个
+  用例文件，首轮红的 `rfc310-pr5-e2e-java` 正是替身要查出的一类（第 9 轮的 MR 事实采集此前静默停在 `collector-not-wired:merge-request`，用例注释却说已装配），
+  改为给生产的 MR 事实采集后通过；`rfc321` 主树 10 / 10。P0 `p0-9-launchers` 单跑（SQLite）判定有效；五种运行期变异与三种类型检查变异都被认出；架构计数都不变。
+  实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-25 RFC-596 事件收件箱的通道在 integration 的业务层改用中立名字（In Progress；`design/RFC-596-event-channel-neutral-name/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；RFC-294 design §14 不变量“业务层部署模式分支 = 0”的最后

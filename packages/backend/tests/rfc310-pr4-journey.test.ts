@@ -57,7 +57,10 @@ import {
   completionBarrier,
   enteredBeforeOutcome as enteredBeforeCandidateOutcome,
 } from './helpers/repositoryCandidatePublication'
-import { composeStandaloneDevelopmentAutomationSelections } from './helpers/developmentAutomation'
+import {
+  composeStandaloneDevelopmentAutomationSelections,
+  unusedDevelopmentProviders,
+} from './helpers/developmentAutomation'
 
 setDefaultTimeout(120_000)
 
@@ -119,6 +122,7 @@ async function seedLaneDatabase(db: PersistenceDb, repoPath: string): Promise<vo
   })
   automation = composeDevelopmentAutomation({
     ...composeStandaloneDevelopmentAutomationSelections({ db: fx.db, appHome: HOME }),
+    ...unusedDevelopmentProviders(),
     verificationCommands: createLocalVerificationCommandEffectsFactory(),
     db: fx.db,
     appHome: HOME,
@@ -247,6 +251,7 @@ describeEachProvider(
       const candidateEffects = Object.freeze(new MappedCandidateFactory(store))
       automation = composeDevelopmentAutomation({
         ...composeStandaloneDevelopmentAutomationSelections({ db: fx.db, appHome: HOME }),
+        ...unusedDevelopmentProviders(),
         verificationCommands: createLocalVerificationCommandEffectsFactory(),
         db: fx.db,
         appHome: HOME,
@@ -324,6 +329,7 @@ describeEachProvider(
           appHome: HOME,
           evidenceArtifacts: evidence,
         }),
+        ...unusedDevelopmentProviders(),
         verificationCommands: createLocalVerificationCommandEffectsFactory(),
         db: fx.db,
         appHome: HOME,

@@ -1,6 +1,7 @@
 // RFC-524 — what the development-automation compositions used to build when the caller left a selection out. The
 // compositions now take these as required inputs (the daemon always gave them); tests that relied on the fallbacks give
 // them through these helpers. Each member is built only when the test did not give it, exactly as the fallback did.
+// RFC-597 adds the doubles for the providers a test does not exercise (the composition requires all of them).
 import { join } from 'node:path'
 import type { EvidenceDocumentCommands } from '@/modules/development-automation/application/evidenceDocumentCommands'
 import type { AdmissionLookup } from '@/modules/development-automation/application/ports/admissionLookup'
@@ -15,6 +16,7 @@ import {
   createLocalEvidenceStagingNamespace,
 } from '@/modules/development-automation/infrastructure/local/evidenceStaging'
 import { createFileEvidenceDocumentCommands } from '@/modules/development-automation/infrastructure/local/fileEvidenceDocumentCommands'
+import type { DevelopmentAutomationProviders } from '@/modules/development-automation/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 export interface StandaloneDevelopmentAutomationSelections {
@@ -59,6 +61,68 @@ export function composeStandaloneDevelopmentAutomationSelections(input: {
       createLocalEvidenceStagingNamespace(evidence),
       { kind: 'requirement', root: stagingRoot },
     ),
+  }
+}
+
+/** RFC-597: one method of a provider the test does not exercise. */
+function notUsed(member: string): () => never {
+  return () => {
+    throw new Error(`${member} is not used by this test`)
+  }
+}
+
+/**
+ * RFC-597 — `composeDevelopmentAutomation` requires every provider (the daemon gives all eleven). A test that exercises
+ * only some of them spreads these first and gives its own after. Every method throws a named error, so a test that
+ * reaches a provider it did not give fails loudly instead of being blocked as "not wired": the composition no longer
+ * has that state, and the reconciler's `*-not-wired` branches stay only for tests that build `ReconcilerPorts` directly.
+ * Each port lists its methods, so the compiler checks the doubles are complete.
+ */
+export function unusedDevelopmentProviders(): DevelopmentAutomationProviders {
+  return {
+    requirementSource: {
+      acquire: notUsed('requirementSource.acquire'),
+      publishQuestions: notUsed('requirementSource.publishQuestions'),
+      collectAnswers: notUsed('requirementSource.collectAnswers'),
+    },
+    agentLauncher: {
+      launch: notUsed('agentLauncher.launch'),
+      fetchOutcome: notUsed('agentLauncher.fetchOutcome'),
+      cancel: notUsed('agentLauncher.cancel'),
+    },
+    scriptLauncher: {
+      launch: notUsed('scriptLauncher.launch'),
+      fetchOutcome: notUsed('scriptLauncher.fetchOutcome'),
+      cancel: notUsed('scriptLauncher.cancel'),
+    },
+    approvalGateway: {
+      submit: notUsed('approvalGateway.submit'),
+      lookupByIdempotencyKey: notUsed('approvalGateway.lookupByIdempotencyKey'),
+      observe: notUsed('approvalGateway.observe'),
+    },
+    changeCandidate: { derive: notUsed('changeCandidate.derive') },
+    candidateDelivery: {
+      stage: notUsed('candidateDelivery.stage'),
+      commit: notUsed('candidateDelivery.commit'),
+      push: notUsed('candidateDelivery.push'),
+    },
+    repoRemote: { resolve: notUsed('repoRemote.resolve') },
+    mrEffects: {
+      ensure: notUsed('mrEffects.ensure'),
+      reply: notUsed('mrEffects.reply'),
+      observe: notUsed('mrEffects.observe'),
+    },
+    pipelineEvidence: {
+      collect: notUsed('pipelineEvidence.collect'),
+      trigger: notUsed('pipelineEvidence.trigger'),
+      rerun: notUsed('pipelineEvidence.rerun'),
+    },
+    mergeRequestFacts: { collect: notUsed('mergeRequestFacts.collect') },
+    conflictMerge: {
+      prepare: notUsed('conflictMerge.prepare'),
+      finish: notUsed('conflictMerge.finish'),
+      discard: notUsed('conflictMerge.discard'),
+    },
   }
 }
 

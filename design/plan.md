@@ -627,6 +627,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-594](./RFC-594-code-round-contract-into-task-execution/proposal.md) | code-round 的合同叶归 task-execution 的 domain（RFC-294 W9-D：`services/` 余项）：`CODE_ROUND_NODE_ID` 迁入 `modules/task-execution/domain/codeRoundHistory.ts`，只有用例用的快照合成函数迁到 `tests/helpers/`，两个没有读者的导出删除，`services/codeRoundContract.ts` 删除；`services/` 业务实现 2 → 1、legacy 横向文件 54 → 53。无用户可见变化。 | In Progress |
 | [RFC-595](./RFC-595-intent-resource-catalog-internals-out/proposal.md) | intent 不再取 resource-catalog 的内部（RFC-294 S9 余项）：intent 的三个装配函数改收 resource-catalog 的本机工件属主、技能工件补偿与技能内容定位查询（bootstrap 从 resource-catalog 的装配根取来交入，本机一族照托管一族的形状），apply 引擎驱动的资源会话改用 intent 自己的端口形状；跨 context 内部文件对 6 → 4。无用户可见变化。 | In Progress |
 | [RFC-596](./RFC-596-event-channel-neutral-name/proposal.md) | 事件收件箱的通道在 integration 的业务层改用中立名字（RFC-294 §14：业务层部署模式分支 1 → 0）：托管事件入站的接纳通道在 application 端口里叫 `admit`（`shadow` 不变），CrewStation 事件源配置与收件箱表照旧存 `crewstation`，互译只在托管适配器的一对函数里做，不改持久值与外部合同。无用户可见变化。 | In Progress |
+| [RFC-597](./RFC-597-development-automation-required-providers/proposal.md) | development-automation 的装配不再接受缺省的 provider（RFC-294 W4-E8 第一步：可选袋的装配边界）：`composeDevelopmentAutomation` 的 11 个 provider（需求源、两个动作启动器、审批网关、候选派生 / 发布链 / 冲突合并、仓库远端、MR 效果、流水线证据、MR 事实采集）归在必填的 `DevelopmentAutomationProviders` 下，漏给即编译错误（F-H2-2 那类遗漏在编译期就被挡下）；装配不再按“给没给”分支，用例不用的 provider 给调用即抛错的测试替身；`ReconcilerPorts` 的按用例拆分留给下一步。无用户可见变化。 | In Progress |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

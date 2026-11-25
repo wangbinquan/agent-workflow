@@ -183,7 +183,38 @@ export interface DevelopmentAutomationModule extends DevelopmentMissionAutomatio
   recover(): Promise<{ settledFences: number; invalidatedEffects: number; firedWakes: number }>
 }
 
-export interface DevelopmentAutomationCompositionOptions {
+/**
+ * RFC-597 (RFC-294 W4-E8 first step): the providers other modules implement, all required — the daemon gives every one,
+ * and a deployment that leaves one out no longer type-checks (dual-provider-parity-audit-2026-09-04 F-H2-2: the PostgreSQL
+ * daemon once composed this module without either launcher, and every action was blocked `*-launcher-not-wired`).
+ * `ReconcilerPorts` itself stays optional until it is split by use case.
+ */
+export interface DevelopmentAutomationProviders {
+  /** integration 模块组装的外部需求源 runner。 */
+  readonly requirementSource: RequirementSourceRunnerDep
+  /** task-execution 模块组装的 agent 执行 runner。 */
+  readonly agentLauncher: AgentActionLauncherPort
+  /** task-execution 模块组装的 program 执行 runner；与 Agent 共用 envelope 收口。 */
+  readonly scriptLauncher: ScriptActionLauncherPort
+  /** integration 模块组装的外部审批网关；提交/查询/观察均为幂等短调用。 */
+  readonly approvalGateway: ApprovalGatewayPort
+  /** source-control 模块组装的 candidate 派生。 */
+  readonly changeCandidate: ChangeCandidatePort
+  /** source-control 模块组装的发布链（stage/commit/push）。 */
+  readonly candidateDelivery: CandidateDeliveryPort
+  /** 装配点解析 repository remote（凭据 URL 解封在装配点）。 */
+  readonly repoRemote: RepoRemotePort
+  /** integration 模块组装的 code-host MR effects。 */
+  readonly mrEffects: MrEffectsPort
+  /** integration 模块组装的 pipeline provider 执行面。 */
+  readonly pipelineEvidence: PipelineEvidencePort
+  /** 装配点组装的 MR facts 采集面。 */
+  readonly mergeRequestFacts: MergeRequestFactsCollectorPort
+  /** source-control 组装的 conflict merge（prepare/finish/discard）；工作区根由本装配补齐。 */
+  readonly conflictMerge: ConflictMergePort
+}
+
+export interface DevelopmentAutomationCompositionOptions extends DevelopmentAutomationProviders {
   readonly verificationCommands: VerificationCommandEffectsFactory
   readonly actionWorkspaceEffects?: ActionWorkspaceEffects
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
@@ -199,28 +230,6 @@ export interface DevelopmentAutomationCompositionOptions {
   readonly attemptContext?: AttemptContextStorePort
   /** Bootstrap-selected admission configuration provider (RFC-524: required). */
   readonly admissionLookup: AdmissionLookup
-  /** integration 模块组装的外部需求源 runner；不注入 = 外部取件诚实 blocked。 */
-  readonly requirementSource?: RequirementSourceRunnerDep
-  /** task-execution 模块组装的 agent 执行 runner；不注入 = 动作发射诚实 blocked。 */
-  readonly agentLauncher?: AgentActionLauncherPort
-  /** task-execution 模块组装的 program 执行 runner；与 Agent 共用 envelope 收口。 */
-  readonly scriptLauncher?: ScriptActionLauncherPort
-  /** integration 模块组装的外部审批网关；提交/查询/观察均为幂等短调用。 */
-  readonly approvalGateway?: ApprovalGatewayPort
-  /** source-control 模块组装的 candidate 派生；不注入 = changed 结算诚实 blocked。 */
-  readonly changeCandidate?: ChangeCandidatePort
-  /** source-control 模块组装的发布链（stage/commit/push）；不注入 = 发布诚实 blocked。 */
-  readonly candidateDelivery?: CandidateDeliveryPort
-  /** 装配点解析 repository remote（凭据 URL 解封在装配点）；不注入 = push/MR 诚实 blocked。 */
-  readonly repoRemote?: RepoRemotePort
-  /** integration 模块组装的 code-host MR effects；不注入 = ensure-MR 诚实 blocked。 */
-  readonly mrEffects?: MrEffectsPort
-  /** integration 模块组装的 pipeline provider 执行面；不注入 = pipeline 诚实 blocked。 */
-  readonly pipelineEvidence?: PipelineEvidencePort
-  /** 装配点组装的 MR facts 采集面；不注入 = collect-mr-facts 诚实 blocked。 */
-  readonly mergeRequestFacts?: MergeRequestFactsCollectorPort
-  /** source-control 组装的 conflict merge（prepare/finish）；Agent 面接线前端口先备。 */
-  readonly conflictMerge?: ConflictMergePort
 }
 
 interface DevelopmentAutomationPersistenceBundle {
@@ -270,7 +279,7 @@ function composeDevelopmentAutomationFromPersistence(
     store,
     snapshots,
     evidence,
-    ...(deps.requirementSource === undefined ? {} : { source: deps.requirementSource }),
+    source: deps.requirementSource,
     now,
   })
   const seedsRoot = factory.resolve(
@@ -300,12 +309,12 @@ function composeDevelopmentAutomationFromPersistence(
       now,
       workspace: factory,
     }),
-    ...(deps.agentLauncher === undefined ? {} : { agentLauncher: deps.agentLauncher }),
-    ...(deps.scriptLauncher === undefined ? {} : { scriptLauncher: deps.scriptLauncher }),
-    ...(deps.approvalGateway === undefined ? {} : { approvalGateway: deps.approvalGateway }),
+    agentLauncher: deps.agentLauncher,
+    scriptLauncher: deps.scriptLauncher,
+    approvalGateway: deps.approvalGateway,
     playbookSaga,
     childMissions,
-    ...(deps.changeCandidate === undefined ? {} : { changeCandidate: deps.changeCandidate }),
+    changeCandidate: deps.changeCandidate,
     actionBaseline: {
       resolve: createActionBaselineResolver(
         persistence.repositoryLocations,
@@ -340,9 +349,9 @@ function composeDevelopmentAutomationFromPersistence(
     },
     workspaceValidation: createWorkspaceValidationAdapter(factory),
     repositoryFacts: persistence.repositoryFacts,
-    ...(deps.candidateDelivery === undefined ? {} : { candidateDelivery: deps.candidateDelivery }),
-    ...(deps.repoRemote === undefined ? {} : { repoRemote: deps.repoRemote }),
-    ...(deps.mrEffects === undefined ? {} : { mrEffects: deps.mrEffects }),
+    candidateDelivery: deps.candidateDelivery,
+    repoRemote: deps.repoRemote,
+    mrEffects: deps.mrEffects,
     verificationProfiles: {
       content: async (id, revision) => {
         const row = await verificationProfiles.getRevision(id, revision)
@@ -357,29 +366,25 @@ function composeDevelopmentAutomationFromPersistence(
         }),
     },
     uploadPublication: persistence.uploadPublication,
-    ...(deps.pipelineEvidence === undefined ? {} : { pipelineEvidence: deps.pipelineEvidence }),
-    ...(deps.mergeRequestFacts === undefined ? {} : { mergeRequestFacts: deps.mergeRequestFacts }),
+    pipelineEvidence: deps.pipelineEvidence,
+    mergeRequestFacts: deps.mergeRequestFacts,
     // conflict workspace 的宿主根同样必须落 appHome 之下（RFC-308 owner 门；
     // 见 actionWorkspace）——application 层不知道 appHome，装配点补齐。
-    ...(deps.conflictMerge === undefined
-      ? {}
-      : {
-          conflictMerge: {
-            prepare: (input: Parameters<ConflictMergePort['prepare']>[0]) =>
-              deps.conflictMerge!.prepare({
-                ...input,
-                workspacesRoot: factory.resolve(
-                  factory.applicationRootReference ?? deps.appHome,
-                  'workspaces',
-                  'conflicts',
-                ),
-              }),
-            finish: (input: Parameters<ConflictMergePort['finish']>[0]) =>
-              deps.conflictMerge!.finish(input),
-            discard: (input: Parameters<ConflictMergePort['discard']>[0]) =>
-              deps.conflictMerge!.discard(input),
-          },
+    conflictMerge: {
+      prepare: (input: Parameters<ConflictMergePort['prepare']>[0]) =>
+        deps.conflictMerge.prepare({
+          ...input,
+          workspacesRoot: factory.resolve(
+            factory.applicationRootReference ?? deps.appHome,
+            'workspaces',
+            'conflicts',
+          ),
         }),
+      finish: (input: Parameters<ConflictMergePort['finish']>[0]) =>
+        deps.conflictMerge.finish(input),
+      discard: (input: Parameters<ConflictMergePort['discard']>[0]) =>
+        deps.conflictMerge.discard(input),
+    },
     pipelineImport: createSelectedPipelineImportAdapter(PIPELINE_IMPORT_BUDGET),
   }
   const reconcileDeps = { store, lookup, snapshots, ports, now }
