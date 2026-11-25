@@ -6,9 +6,9 @@ import type { RepositoryFactsScan } from '../infrastructure/repositoryFactsScan'
 /** The repository facts scan of a volume selection runs next to the files;
  * the native selection (no tree operations) scans in-process. */
 export function repositoryFactsScannerOf(
-  workspace: AutomationWorkspaceEffectsFactory | undefined,
+  workspace: AutomationWorkspaceEffectsFactory,
 ): RepositoryFactsScanner | undefined {
-  const tree = workspace?.treeOperations
+  const tree = workspace.treeOperations
   if (tree === undefined) return undefined
   return async (localPath) =>
     (await tree.run('repository-facts-scan', { root: localPath })) as RepositoryFactsScan

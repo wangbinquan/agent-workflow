@@ -31,6 +31,7 @@
 
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 import { composeDevelopmentMissionOperations } from '@/modules/development-automation/composition/missionOperations'
+import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
@@ -321,6 +322,7 @@ async function seedFixture(scope: ProviderHttpApplicationScope): Promise<void> {
   if (admitted === null) throw new Error('historical mission fixture authority unavailable')
   historicalActor = admitted.actor
   historicalMissionOperations = composeDevelopmentMissionOperations({
+    repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
     db,
     automation,
     admissionLookup: fx.lookup,

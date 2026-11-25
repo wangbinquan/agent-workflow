@@ -3668,7 +3668,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc496-development-employee-workspace-out-of-composition-boundary.test.ts",
       "id": "rfc496-development-employee-workspace-out-of-composition-boundary",
-      "lines": 643,
+      "lines": 646,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
       "negativeFixture": true,
@@ -4883,6 +4883,18 @@
       "lines": 167,
       "mechanism": "ast",
       "minCorpusFiles": null,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc600-development-automation-infrastructure-stated-effects-boundary.test.ts",
+      "id": "rfc600-development-automation-infrastructure-stated-effects-boundary",
+      "lines": 208,
+      "mechanism": "ast",
+      "minCorpusFiles": 3000,
       "negativeFixture": true,
       "runner": "bun"
     }

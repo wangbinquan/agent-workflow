@@ -13,6 +13,7 @@ import { createIdentityAccessRuntime } from '@/modules/identity-access/compositi
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 import { composeDevelopmentAutomation } from '@/modules/development-automation/composition'
 import { composeDevelopmentMissionOperations } from '@/modules/development-automation/composition/missionOperations'
+import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 import {
   EVIDENCE_READ_MAX_BYTES,
   readEvidenceRange,
@@ -202,6 +203,7 @@ describeEachProvider('RFC-370 selected Mission evidence contents', (harness) => 
     })
     expect(automation.evidenceContents).toBe(contents)
     const operations = composeDevelopmentMissionOperations({
+      repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
       db: harness.db,
       automation,
       admissionLookup: fx.lookup,

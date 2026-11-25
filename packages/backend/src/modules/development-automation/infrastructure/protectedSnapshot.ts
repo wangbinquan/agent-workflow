@@ -14,12 +14,12 @@ export { serializeProtectedRootSnapshot } from '../application/protectedSnapshot
 
 export async function snapshotProtectedRoots(
   roots: Record<string, string>,
-  opts: Parameters<typeof readProtectedRootSnapshot>[1] = {},
-  factory?: AutomationWorkspaceEffectsFactory,
+  opts: Parameters<typeof readProtectedRootSnapshot>[1],
+  factory: AutomationWorkspaceEffectsFactory,
 ): Promise<ProtectedRootSnapshot> {
   return snapshotSelectedProtectedRoots(
     roots,
     opts,
-    factory?.treeOperations === undefined ? selectedAutomationWorkspaceEffects(factory) : factory,
+    factory.treeOperations === undefined ? selectedAutomationWorkspaceEffects(factory) : factory,
   )
 }

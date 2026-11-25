@@ -18,20 +18,20 @@ export {
 
 export async function businessTreeSnapshot(
   root: string,
-  factory?: AutomationWorkspaceEffectsFactory,
+  factory: AutomationWorkspaceEffectsFactory,
 ): Promise<Map<string, string>> {
   return selectedBusinessTreeSnapshot(
     root,
-    factory?.treeOperations === undefined ? selectedAutomationWorkspaceEffects(factory) : factory,
+    factory.treeOperations === undefined ? selectedAutomationWorkspaceEffects(factory) : factory,
   )
 }
 
 export async function validateWorkspaceOutcome(
   input: WorkspaceValidationInput,
-  factory?: AutomationWorkspaceEffectsFactory,
+  factory: AutomationWorkspaceEffectsFactory,
 ): Promise<WorkspaceValidationOutcome> {
   return validateSelectedWorkspaceOutcome(
     input,
-    factory?.treeOperations === undefined ? selectedAutomationWorkspaceEffects(factory) : factory,
+    factory.treeOperations === undefined ? selectedAutomationWorkspaceEffects(factory) : factory,
   )
 }

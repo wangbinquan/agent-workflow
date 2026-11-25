@@ -19,6 +19,7 @@ import {
   createRepositoryBaselineResolverFromLocations,
 } from '@/modules/development-automation/infrastructure/gitBaselineReader'
 import { runGit } from '@/platform/execution/local/gitProcess'
+import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 
 const REFERENCE = 'cs:repository/opaque#baseline-input'
 const SHA = 'c'.repeat(40)
@@ -466,9 +467,10 @@ test('the native selected default retains exact binary Git bytes, index modes an
     'binary baseline',
   ])
   const head = await git(['rev-parse', 'HEAD'])
-  const context = await createRepositoryBaselineResolverFromLocations(locations(root))(
-    'repository-id',
-  )
+  const context = await createRepositoryBaselineResolverFromLocations(
+    locations(root),
+    createFileRepositoryBaselineEffectsFactory(),
+  )('repository-id')
   if (context === null) throw new Error('native-baseline-context-missing')
   expect(context).toMatchObject({ baselineSha: head, baselineSnapshotRef: `git:${head}` })
   expect(await context.reader.stat('binary.bin')).toEqual({
@@ -484,7 +486,12 @@ test('the native selected default retains exact binary Git bytes, index modes an
   expect(await context.reader.stat('folder')).toBe('directory')
   expect(await context.reader.stat('link')).toBe('unsupported')
   expect(await context.reader.stat('absent')).toBe('missing')
-  expect(await createActionBaselineResolver(locations(root))('repository-id')).toEqual({
+  expect(
+    await createActionBaselineResolver(
+      locations(root),
+      createFileRepositoryBaselineEffectsFactory(),
+    )('repository-id'),
+  ).toEqual({
     repoPath: root,
     headSha: head,
   })

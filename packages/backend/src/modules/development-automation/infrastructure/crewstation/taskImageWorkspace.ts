@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { requireWorkPath } from '@/platform/crewstation/workVolumePath'
 import { createFileActionWorkspaceEffects } from '../local/fileActionWorkspaceEffects'
+import { createFileAutomationWorkspaceEffectsFactory } from '../local/fileAutomationWorkspaceEffects'
 import { createFileRepositoryBaselineEffectsFactory } from '../local/fileRepositoryBaselineEffects'
 import { actionTreeDigest, prepareActionScene } from '../../application/actionWorkspace'
 import { serializeProtectedRootSnapshot, snapshotProtectedRoots } from '../protectedSnapshot'
@@ -153,14 +154,24 @@ async function runTreeOperation(
     )
   switch (operation) {
     case 'business-tree-snapshot':
-      return [...(await businessTreeSnapshot(workPath((payload as { root: unknown }).root)))]
+      // RFC-600: the in-image executor runs the tree operations on its own files — the local implementation, stated.
+      return [
+        ...(await businessTreeSnapshot(
+          workPath((payload as { root: unknown }).root),
+          createFileAutomationWorkspaceEffectsFactory(),
+        )),
+      ]
     case 'protected-root-snapshot': {
       const request = payload as {
         roots: unknown
         opts?: Parameters<typeof snapshotProtectedRoots>[1]
       }
       return serializeProtectedRootSnapshot(
-        await snapshotProtectedRoots(roots(request.roots), request.opts ?? {}),
+        await snapshotProtectedRoots(
+          roots(request.roots),
+          request.opts ?? {},
+          createFileAutomationWorkspaceEffectsFactory(),
+        ),
       )
     }
     case 'validate-workspace-outcome': {
@@ -171,6 +182,7 @@ async function runTreeOperation(
           workspacePath: workPath(request.workspacePath),
           protectedRoots: roots(request.protectedRoots),
         }),
+        createFileAutomationWorkspaceEffectsFactory(),
       )
     }
     case 'action-scene-prepare': {

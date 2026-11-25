@@ -26,7 +26,7 @@ export interface DevelopmentMissionOperationCompositionOptions extends Omit<
   DevelopmentMissionOperationsInput,
   'automation' | 'resolveBaseline' | 'now'
 > {
-  readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
+  readonly repositoryBaselines: RepositoryBaselineEffectsFactory
   /** Bootstrap-owned daemon participant shared by REST, MCP and recovery. */
   readonly automation: DevelopmentAutomationModule
 }

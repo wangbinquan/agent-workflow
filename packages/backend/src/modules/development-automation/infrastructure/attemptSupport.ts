@@ -69,7 +69,7 @@ function reviveProtected(value: SerializedPreState['protected']): ProtectedRootS
 }
 
 export function createWorkspaceValidationAdapter(
-  chosen?: AutomationWorkspaceEffectsFactory,
+  chosen: AutomationWorkspaceEffectsFactory,
 ): WorkspaceValidationPort {
   const factory = selectedAutomationWorkspaceEffects(chosen)
   const tree = factory.treeOperations

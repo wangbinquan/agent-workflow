@@ -16,6 +16,7 @@ import {
   PLATFORM_OWNED_GIT_METADATA_PREFIXES,
 } from '@/modules/development-automation/domain/gitMetadataOwnership'
 import { runGit } from '@/platform/execution/local/gitProcess'
+import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
 
 const roots: string[] = []
 afterEach(() => {
@@ -55,7 +56,7 @@ function request(workspacePath: string, preStateJson: string) {
 
 test('the runtime project-id cache in .git is not an Agent write, written or rewritten', async () => {
   const workspace = await actionWorkspace()
-  const adapter = createWorkspaceValidationAdapter()
+  const adapter = createWorkspaceValidationAdapter(createFileAutomationWorkspaceEffectsFactory())
   const pre = await adapter.capturePreState(workspace)
   const rootCommit = await git(workspace, ['rev-list', '--max-parents=0', 'HEAD'])
   writeFileSync(join(workspace, '.git', 'opencode'), rootCommit)
@@ -72,7 +73,7 @@ test('every other write into .git still fails the boundary', async () => {
   ]
   for (const write of writes) {
     const workspace = await actionWorkspace()
-    const adapter = createWorkspaceValidationAdapter()
+    const adapter = createWorkspaceValidationAdapter(createFileAutomationWorkspaceEffectsFactory())
     const pre = await adapter.capturePreState(workspace)
     write(workspace)
     expect(await adapter.validate(request(workspace, pre))).toMatchObject({

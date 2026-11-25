@@ -49,6 +49,7 @@ import {
   type WorkspaceHelper,
 } from '@/platform/crewstation/workspaceProtocol'
 import { runGit } from '@/platform/execution/local/gitProcess'
+import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
 
 const translate = (value: unknown, from: string, to: string): unknown => {
   if (typeof value === 'string' && (value === from || value.startsWith(from + '/')))
@@ -215,16 +216,22 @@ test('snapshots and validation are one command each and equal the standalone wal
     }
     const opts = { skipPrefixesByRoot: { 'git-meta': ['objects', 'logs', 'index'] } }
     expect(await businessTreeSnapshot(scene, factory)).toEqual(
-      await businessTreeSnapshot(v.baseline),
+      await businessTreeSnapshot(v.baseline, createFileAutomationWorkspaceEffectsFactory()),
     )
     const protectedSnapshot = await snapshotProtectedRoots(roots, opts, factory)
-    expect(protectedSnapshot).toEqual(await snapshotProtectedRoots(nativeRoots, opts))
+    expect(protectedSnapshot).toEqual(
+      await snapshotProtectedRoots(
+        nativeRoots,
+        opts,
+        createFileAutomationWorkspaceEffectsFactory(),
+      ),
+    )
     expect(v.operations).toEqual([
       'development-tree:business-tree-snapshot',
       'development-tree:protected-root-snapshot',
     ])
     const adapter = createWorkspaceValidationAdapter(factory)
-    const native = createWorkspaceValidationAdapter()
+    const native = createWorkspaceValidationAdapter(createFileAutomationWorkspaceEffectsFactory())
     const preStateJson = await adapter.capturePreState(scene)
     expect(v.operations).toHaveLength(4)
     const nativePreStateJson = await native.capturePreState(v.baseline)
@@ -292,7 +299,9 @@ test('payloads beyond the command budget travel as released volume files', async
     const scene = 'cs-workspace:task/baseline'
     const snapshot = await businessTreeSnapshot(scene, factory)
     expect(snapshot.size).toBe(3_000)
-    expect(snapshot).toEqual(await businessTreeSnapshot(v.baseline))
+    expect(snapshot).toEqual(
+      await businessTreeSnapshot(v.baseline, createFileAutomationWorkspaceEffectsFactory()),
+    )
     // The result came back through a file read with the platform file API.
     expect(v.reads).toHaveLength(1)
     expect(v.reads[0]).toMatch(/^cs-workspace:task\/tmp\/development-tree\/[^/]+\.json$/)

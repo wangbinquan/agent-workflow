@@ -31,6 +31,7 @@ import {
   validateWorkspaceOutcome,
 } from '../src/modules/development-automation/infrastructure/workspaceValidator'
 import type { WorkspaceValidationInput } from '../src/modules/development-automation/application/workspaceValidator'
+import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
 
 let baselineRepo = ''
 let baselineSha = ''
@@ -85,27 +86,30 @@ async function freshScene(): Promise<Scene> {
   )
   const ws = materialized.workspacePath
   const roots = { 'git-meta': join(ws, '.git'), evidence: join(ws, '.agent-workflow') }
-  const pre = await snapshotProtectedRoots(roots)
-  const preTree = await businessTreeSnapshot(ws)
+  const pre = await snapshotProtectedRoots(roots, {}, createFileAutomationWorkspaceEffectsFactory())
+  const preTree = await businessTreeSnapshot(ws, createFileAutomationWorkspaceEffectsFactory())
   return {
     ws,
     pre,
     preTree,
     roots,
     validate(overrides) {
-      return validateWorkspaceOutcome({
-        workspacePath: ws,
-        preProtected: pre,
-        protectedRoots: roots,
-        preBusinessTree: preTree,
-        outcome: 'changed',
-        workspaceMode: 'edit-business-files',
-        writablePrefixes: [],
-        preservePaths: [],
-        editablePaths: [],
-        budget: { maxChangedFiles: 100, maxTotalBytes: 10 * 1024 * 1024 },
-        ...overrides,
-      })
+      return validateWorkspaceOutcome(
+        {
+          workspacePath: ws,
+          preProtected: pre,
+          protectedRoots: roots,
+          preBusinessTree: preTree,
+          outcome: 'changed',
+          workspaceMode: 'edit-business-files',
+          writablePrefixes: [],
+          preservePaths: [],
+          editablePaths: [],
+          budget: { maxChangedFiles: 100, maxTotalBytes: 10 * 1024 * 1024 },
+          ...overrides,
+        },
+        createFileAutomationWorkspaceEffectsFactory(),
+      )
     },
   }
 }
@@ -226,7 +230,11 @@ describe('rfc310 pr4 — workspace validator', () => {
 
   test('production snapshot keeps the exact PR-0 probe semantics (same tree, same digest)', async () => {
     const scene = await freshScene()
-    const production = await snapshotProtectedRoots(scene.roots)
+    const production = await snapshotProtectedRoots(
+      scene.roots,
+      {},
+      createFileAutomationWorkspaceEffectsFactory(),
+    )
     const probe = probeSnapshot(scene.roots)
     expect(production.digest).toBe(probe.digest)
     rmSync(join(scene.ws, '..'), { recursive: true, force: true })

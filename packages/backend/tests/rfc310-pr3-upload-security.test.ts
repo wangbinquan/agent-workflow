@@ -48,6 +48,7 @@ import { createMissionInputUploadPersistence } from '../src/modules/development-
 import { createUploadSessionPersistence } from '../src/modules/development-automation/infrastructure/uploadSessionStore'
 import type { UploadSessionPersistence } from '../src/modules/development-automation/application/ports/uploadSessionStore'
 import { defaultAutomationPolicyContent } from '../src/modules/development-automation/domain/automationPolicy'
+import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 
@@ -356,7 +357,10 @@ function previewDeps(db: PersistenceDb): {
       now: () => Date.now(),
       uploadAdmission: {
         uploads: createMissionInputUploadPersistence(db),
-        resolveBaseline: createRepositoryBaselineResolver(db),
+        resolveBaseline: createRepositoryBaselineResolver(
+          db,
+          createFileRepositoryBaselineEffectsFactory(),
+        ),
       },
     },
   }

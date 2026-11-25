@@ -1,3 +1,16 @@
+## 2026-11-25 RFC-600 development-automation 的 infrastructure 不再替调用方造本机效果（In Progress；`design/RFC-600-development-automation-infrastructure-stated-effects/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；接 RFC-598 design §5 / RFC-599 留下的一项（RFC-294 S12：
+  单机默认值只留在 standalone profile）。
+- **范围**：`selectedAutomationWorkspaceEffects`、`selectActionWorkspaceEffects` 只核对完整性，基线的 `selectedRepositoryBaselineEffects` 删去；工作区校验适配器、
+  业务树快照、工作区结果校验、受保护根快照（选项随之必填）、带效果执行与四个基线解析 / 读取的工厂参数，事实扫描器的入参与任务操作装配的 `repositoryBaselines`
+  都改为必填。托管任务镜像里的执行器（`taskImageWorkspace.ts`）三处树操作显式给本机实现；平台工作项证据助手自己给此前的回落；14 处直接调包装的用例与两处调
+  任务操作装配的用例显式给本机实现，`rfc496` 钉选择表达式的锁随改。新增 RFC-600 用例（含“生产代码里只有 standalone profile、本机一族与镜像里的执行器调用本机
+  效果构造”的账）。
+- **集中验证**（基于 `84be64f92`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 515 个
+  用例文件只有 `rfc321` 照例红（主树 10 / 10）；四种变异都被认出；架构计数都不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-25 RFC-599 员工工作区与平台工作项装配的效果选择必填（In Progress；`design/RFC-599-employee-compositions-stated-effects/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；与 RFC-598 同一做法（RFC-294 S12 第 1 项），落在

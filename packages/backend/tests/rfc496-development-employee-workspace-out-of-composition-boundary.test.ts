@@ -163,9 +163,12 @@ const ADAPTERS: readonly (readonly [string, Adapter])[] = [
   [INFRA_SNAPSHOT, SNAPSHOT_ADAPTER],
   [INFRA_VALIDATOR, VALIDATOR_ADAPTER],
 ]
-/** The one argument each wrapper adds: the factory as given for a remote volume, otherwise the selected one. */
+/**
+ * The one argument each wrapper adds: the factory as given for a remote volume, otherwise the checked one. RFC-600: the
+ * factory is a stated (required) parameter, so the wrapper reads it without `?.`.
+ */
 const SELECTION =
-  'factory?.treeOperations===undefined?selectedAutomationWorkspaceEffects(factory):factory'
+  'factory.treeOperations===undefined?selectedAutomationWorkspaceEffects(factory):factory'
 /** design §2 ④: what an old location may still give; anything else taken from it is a finding. */
 const OLD_LOCATIONS: Readonly<Record<string, (name: string) => boolean>> = {
   [COMPOSITION]: (name) => COMPOSITION_OFFERED.includes(name),
@@ -530,7 +533,7 @@ describe('RFC-496 ③ infrastructure 的快照 / 校验文件只留包装与转�
     const file = join(SRC, `${DA}/infrastructure/probe.ts`)
     const source = [
       `import { snapshotProtectedRoots as selected, diffProtectedRoots } from '../application/protectedSnapshot'`,
-      `export async function snapshotProtectedRoots(r, o, factory) { return selected(r, o, factory?.treeOperations === undefined ? selectedAutomationWorkspaceEffects(factory) : factory) }`,
+      `export async function snapshotProtectedRoots(r, o, factory) { return selected(r, o, factory.treeOperations === undefined ? selectedAutomationWorkspaceEffects(factory) : factory) }`,
       `export async function businessTreeSnapshot(root, factory) { return selected(root, factory) }`,
       `export async function validateWorkspaceOutcome(input, factory) { const f = factory; return selected(input, f) }`,
       `export function diff(a, b) { return diffProtectedRoots(a, b) }`,

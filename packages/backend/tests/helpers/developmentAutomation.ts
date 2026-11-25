@@ -19,6 +19,7 @@ import {
   createLocalEvidenceStagingNamespace,
 } from '@/modules/development-automation/infrastructure/local/evidenceStaging'
 import { createFileActionWorkspaceEffects } from '@/modules/development-automation/infrastructure/local/fileActionWorkspaceEffects'
+import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
 import { createFileEvidenceDocumentCommands } from '@/modules/development-automation/infrastructure/local/fileEvidenceDocumentCommands'
 import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 import type { DevelopmentAutomationProviders } from '@/modules/development-automation/composition'
@@ -159,7 +160,10 @@ export function composeStandalonePlatformWorkItemEvidence(input: {
   let store: EvidenceStore | undefined
   const current = (): EvidenceStore => {
     if (store === undefined) {
-      const factory = selectedAutomationWorkspaceEffects(input.automationWorkspaceEffects)
+      // RFC-600: the former local fallback is the helper's, stated (the infrastructure check no longer builds one).
+      const factory = selectedAutomationWorkspaceEffects(
+        input.automationWorkspaceEffects ?? createFileAutomationWorkspaceEffectsFactory(),
+      )
       store = new EvidenceStore(
         factory.resolve(factory.applicationRootReference ?? input.appHome, 'evidence'),
       )

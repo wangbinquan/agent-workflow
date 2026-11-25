@@ -674,7 +674,9 @@ describe('RFC-396 shared platform MR effects retain graph verification', () => {
     const root = mkdtempSync(join(tmpdir(), 'rfc396-mr-conflict-'))
     roots.push(root)
     writeFileSync(join(root, 'book.ts'), 'export const duplicateBooking = false\n')
-    const conflictDigest = businessTreeSnapshotDigest(await businessTreeSnapshot(root))
+    const conflictDigest = businessTreeSnapshotDigest(
+      await businessTreeSnapshot(root, createFileAutomationWorkspaceEffectsFactory()),
+    )
     const fixture = platformFixture({ gate: 'block', conflictPath: root, conflictDigest })
     expect(await fixture.execute('publish-conflict')).toMatchObject({ status: 'blocked' })
     expect(fixture.calls).toEqual(['conflict.finish', `graph.verify:publish-conflict:${treeOid}`])

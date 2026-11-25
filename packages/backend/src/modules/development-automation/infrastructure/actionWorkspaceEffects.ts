@@ -1,12 +1,11 @@
 import type { ActionWorkspaceEffects } from '../application/ports/actionWorkspaceEffects'
-import { createFileActionWorkspaceEffects } from './local/fileActionWorkspaceEffects'
 import type { AutomationWorkspaceEffectsFactory } from '../application/ports/automationWorkspaceEffects'
 import { selectedAutomationWorkspaceEffects } from './automationWorkspaceEffects'
 
+/** RFC-600: checks a stated selection; there is no local fallback here. */
 export function selectActionWorkspaceEffects(
-  selected: ActionWorkspaceEffects | undefined,
+  selected: ActionWorkspaceEffects,
 ): ActionWorkspaceEffects {
-  if (selected === undefined) return createFileActionWorkspaceEffects()
   if (
     selected === null ||
     ['allocate', 'cloneBaseline', 'run', 'installPlatformExclude', 'requireEntry', 'discard'].some(

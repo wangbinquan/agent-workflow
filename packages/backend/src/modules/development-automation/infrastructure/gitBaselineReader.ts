@@ -3,7 +3,6 @@ import type {
   RepositoryBaselineEffects,
   RepositoryBaselineEffectsFactory,
 } from '../application/ports/repositoryBaselineEffects'
-import { createFileRepositoryBaselineEffectsFactory } from './local/fileRepositoryBaselineEffects'
 // RFC-310 / RFC-370: baseline selection and reader lifetime stay with this owner.
 // The complete binary Git reader and stream hash live in the DA local adapter.
 
@@ -13,12 +12,6 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { BaselineFileReader, BaselineStat } from '../application/uploadPlan'
 import type { UploadBaselineContext } from '../application/commands/launchMission'
 import type { RepositoryLocationRead } from '../application/ports/repositoryLocationRead'
-
-function selectedRepositoryBaselineEffects(
-  effects?: RepositoryBaselineEffectsFactory,
-): RepositoryBaselineEffectsFactory {
-  return effects === undefined ? createFileRepositoryBaselineEffectsFactory() : effects
-}
 
 async function withRepositoryBaselineEffects<T>(
   effects: RepositoryBaselineEffectsFactory,
@@ -74,9 +67,9 @@ async function withRepositoryBaselineEffects<T>(
 /** PR-4 —— attempt 编排的 baseline 定位（repoPath + exact head；无 reader）。 */
 export function createActionBaselineResolver(
   repositories: RepositoryLocationRead,
-  factory?: RepositoryBaselineEffectsFactory,
+  factory: RepositoryBaselineEffectsFactory,
 ): (repositoryId: string) => Promise<{ repoPath: string; headSha: string } | null> {
-  const effects = selectedRepositoryBaselineEffects(factory)
+  const effects = factory
   return async (repositoryId) => {
     const localPath = await repositories.localPath(repositoryId)
     if (localPath === null) return null
@@ -92,9 +85,9 @@ export function createActionBaselineResolver(
 
 export function createRepositoryBaselineResolverFromLocations(
   repositories: RepositoryLocationRead,
-  factory?: RepositoryBaselineEffectsFactory,
+  factory: RepositoryBaselineEffectsFactory,
 ): (repositoryId: string) => Promise<UploadBaselineContext | null> {
-  const effects = selectedRepositoryBaselineEffects(factory)
+  const effects = factory
   return async (repositoryId) => {
     const localPath = await repositories.localPath(repositoryId)
     if (localPath === null) return null
@@ -133,14 +126,14 @@ export function createRepositoryLocationRead(db: PersistenceDb): RepositoryLocat
 /** 直接吃数据库句柄的便捷工厂（focused 调用方 / 测试用）。 */
 export function resolveActionBaseline(
   db: PersistenceDb,
-  factory?: RepositoryBaselineEffectsFactory,
+  factory: RepositoryBaselineEffectsFactory,
 ) {
   return createActionBaselineResolver(createRepositoryLocationRead(db), factory)
 }
 
 export function createRepositoryBaselineResolver(
   db: PersistenceDb,
-  factory?: RepositoryBaselineEffectsFactory,
+  factory: RepositoryBaselineEffectsFactory,
 ) {
   return createRepositoryBaselineResolverFromLocations(createRepositoryLocationRead(db), factory)
 }
@@ -148,9 +141,9 @@ export function createRepositoryBaselineResolver(
 export function createGitBaselineReader(
   repoPath: string,
   headSha: string,
-  factory?: RepositoryBaselineEffectsFactory,
+  factory: RepositoryBaselineEffectsFactory,
 ): BaselineFileReader {
-  const effects = selectedRepositoryBaselineEffects(factory)
+  const effects = factory
   return {
     async stat(path: string): Promise<BaselineStat> {
       return withRepositoryBaselineEffects(effects, async (scope) => {
