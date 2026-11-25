@@ -6,6 +6,9 @@ export { neverPruneTerminalWorkspaces } from './infrastructure/terminalWorkspace
 // RFC-553: the inbound projection of an authenticated actor's source onto the launch initiator (RFC-301: only inbound sees
 // the source). Bootstrap binds it into other contexts' launch routes (knowledge-evolution's fusions) as their own port.
 export { directTaskInitiatorFromActorSource } from './inbound/directTaskInitiator'
+// RFC-582: the port-artifact and worktree-file HTTP bindings live in this module's inbound layer; server.ts mounts them here.
+export { mountPortArtifactRoutes } from './inbound/http/portArtifactRoutes'
+export { mountWorktreeFilesRoutes } from './inbound/http/worktreeFilesRoutes'
 import {
   bindTaskWorkspaceReadScope,
   type TaskWorkspaceReadDependencies,

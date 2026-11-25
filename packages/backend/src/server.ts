@@ -118,8 +118,10 @@ import {
   registerResourcePackageRoutes,
 } from '@/modules/resource-catalog/composition'
 import { mountWorkgroupRoutes } from '@/routes/workgroups'
-import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
-import { mountPortArtifactRoutes } from '@/routes/port-artifacts'
+import {
+  mountPortArtifactRoutes,
+  mountWorktreeFilesRoutes,
+} from '@/modules/task-execution/composition'
 import { errorHandler } from '@/platform/errors/domainErrors'
 import { createLogger } from '@/platform/logging/logger'
 

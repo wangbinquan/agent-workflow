@@ -95,7 +95,8 @@ describe('RFC-349 repository workspace provider boundary', () => {
       'modules/source-control/inbound/http/cachedRepoRoutes.ts',
       'modules/source-control/inbound/http/repoGroupRoutes.ts',
       'modules/source-control/inbound/http/repoRoutes.ts',
-      'routes/worktree-files.ts',
+      // RFC-582: the worktree-file binding moved into task-execution's inbound layer.
+      'modules/task-execution/inbound/http/worktreeFilesRoutes.ts',
     ]
     for (const path of production) {
       const source = readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8')

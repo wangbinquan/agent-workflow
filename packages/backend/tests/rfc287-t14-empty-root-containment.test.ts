@@ -59,7 +59,16 @@ describe('RFC-287 G7 — worktree-files 路由挡住「还没有工作树」', (
   // 它有自己的一道 404，语义比「路径逃逸」准确：任务不是被拒绝，是还没准备好。
   test('路由在取根之前先判空 worktreePath', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'routes', 'worktree-files.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'inbound',
+        'http',
+        'worktreeFilesRoutes.ts',
+      ),
       'utf8',
     )
     const guard = src.indexOf('isTaskWorkspaceUnbound(task.worktreePath)')

@@ -333,7 +333,16 @@ describeProviderPortArtifacts((getHarness) => {
 describe('RFC-193 route source lock', () => {
   test('route delegates visibility and artifact rows to the provider read model', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'routes', 'port-artifacts.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'inbound',
+        'http',
+        'portArtifactRoutes.ts',
+      ),
       'utf8',
     )
     expect(src).toContain('taskExecutionReadModels.portArtifacts.find')

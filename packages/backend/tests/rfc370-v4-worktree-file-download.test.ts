@@ -11,7 +11,7 @@
 import { expect, test } from 'bun:test'
 import { Hono, type Context } from 'hono'
 import { buildActor } from '@/auth/actor'
-import { mountWorktreeFilesRoutes } from '@/routes/worktree-files'
+import { mountWorktreeFilesRoutes } from '@/modules/task-execution/inbound/http/worktreeFilesRoutes'
 import { createHostedWorkspaceEffects } from '@/modules/source-control/infrastructure/crewstation/workspaceEffects'
 import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
 import { CrewStationApiError } from '@/platform/crewstation/platformApi'

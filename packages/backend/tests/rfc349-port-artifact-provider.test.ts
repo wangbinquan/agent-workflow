@@ -222,7 +222,8 @@ describeEachProvider('RFC-349 port-artifact provider cutover', (h) => {
 
   test('transport and filesystem presenter do not import database mechanisms', () => {
     for (const relativePath of [
-      'routes/port-artifacts.ts',
+      // RFC-582: the port-artifact binding moved into task-execution's inbound layer.
+      'modules/task-execution/inbound/http/portArtifactRoutes.ts',
       'platform/content/local/rootFileQueries.ts',
       'modules/task-execution/infrastructure/sessionTreeRead.ts',
     ]) {
@@ -230,7 +231,16 @@ describeEachProvider('RFC-349 port-artifact provider cutover', (h) => {
       expect(source).not.toMatch(/@\/db|bun:sqlite|drizzle-orm/)
     }
     const route = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'routes', 'port-artifacts.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'inbound',
+        'http',
+        'portArtifactRoutes.ts',
+      ),
       'utf8',
     )
     expect(route).toContain('taskExecutionReadModels.portArtifacts.find')

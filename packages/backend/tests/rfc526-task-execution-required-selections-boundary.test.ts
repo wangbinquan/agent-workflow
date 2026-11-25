@@ -80,7 +80,7 @@ const MECHANICS = at(
 )
 const CLARIFY = at('modules', 'collaboration', 'infrastructure', 'clarify', 'service.ts')
 const REVIEW = at('modules', 'collaboration', 'infrastructure', 'review.ts')
-const PORT_ROUTE = at('routes', 'port-artifacts.ts')
+const PORT_ROUTE = at('modules', 'task-execution', 'inbound', 'http', 'portArtifactRoutes.ts')
 const DAEMON_TE = at('bootstrap', 'daemonModules', 'taskExecution.ts')
 const DAEMON_DE = at('bootstrap', 'daemonModules', 'digitalEmployee.ts')
 const STANDALONE = at('bootstrap', 'standalone.ts')

@@ -1,3 +1,26 @@
+## 2026-11-25 RFC-582 task-execution 的端口产物与工作树文件路由归入模块 inbound（In Progress；`design/RFC-582-task-execution-port-artifact-worktree-file-routes-into-inbound/`）
+
+- **来由**：RFC-581 之后 `routes/` 还剩 23 个文件。task-execution 的五个里逐个推算（边的角色一起核对）：`port-artifacts`、`worktree-files` 撤回 0 个、
+  只取 source-control 的 `public/types`（DAG 有），作为第七批；`taskArchive`、`taskFeedback`、`tasks` 取 system-operations / collaboration / memory /
+  workspace-insight 的 public，DAG 里这几对只有 required-implementation 或没有边，与 resource-catalog 的 `agents` / `workgroups` 一起等用户定。用户
+  2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前
+  RFC294的设计已经刷新，你按照最新刷新的设计，进行推进」、2026-11-19「你加速推进RFC294」、2026-11-25「继续」：本会话调研、设计、实施与集中验证，按授权
+  记为已批准，不派 Codex。
+- **范围**：两个路由原样（逐字节）迁入 `modules/task-execution/inbound/http/`（`portArtifactRoutes.ts`、`worktreeFilesRoutes.ts`），挂载函数经
+  `composition.ts` 转出，`server.ts` 改从那里取；挂载调用与顺序不变。随改：归属表两行、`counts.json` 与五个读源码或列清单的用例；新增 RFC-582 用例。
+- **待用户定（汇总）**：resource-catalog 的 `agents`、`workgroups` 与 task-execution 的 `taskArchive`、`taskFeedback`、`tasks` 五个路由迁进模块都会产生
+  DAG 之外的边（取别的模块的 offered public，而 DAG 里那一对没有 offered-consumption）。可选：在 RFC-294 design §3.1 补边；或由消费方自持端口、装配根
+  接上提供方的实现；或换落位。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 入站绑定进 owner 模块的 `inbound/http`，装配根经 composition 取；C11 public 面不变；C12 RFC-582 用例
+  覆盖 `src` / `tests` / `scripts` 的全部说明符、两个绑定与 `server.ts`；C13 `legacy-horizontal-files` 71 → 69，其余计数不升。
+- **集中验证**（基于 `2f5dcbe3f`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；选出 649 个
+  用例文件、5718 条全部通过；读已提交源码的 287 个用例文件、2829 条在候选导出里通过（含只能在提交上跑的 `route-error-code-coverage`）；五种变异都被
+  认出（其中一种证明 `rfc294-review-offered-edge-dag` 也看着 task-execution 的 inbound）；架构报告 60 个计数里只有 legacy 横向文件数变了，DAG 之外的
+  context 值对仍为 0。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施
+  被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：`ad64ba6e5` 的主 CI 除 macOS e2e 分片 3/4 的作业时限取消（见 RFC-581 条目）外 68 格通过；RFC-580（`8a0d8516e`）与 RFC-581
+  （`2f5dcbe3f`）的 windows-platform 通过、主 CI 在跑。RFC-579 / RFC-580 / RFC-581 的转 Done 记在后继提交里。
+
 ## 2026-11-25 RFC-581 resource-catalog 的 MCP、技能与插件路由归入模块 inbound（In Progress；`design/RFC-581-resource-catalog-mcp-skill-plugin-routes-into-inbound/`）
 
 - **来由**：RFC-580 之后 resource-catalog 在 `routes/` 里还剩五个路由；`agents` 与 `workgroups` 等用户定（取 task-execution 的启动合同，见 RFC-580 条目），
