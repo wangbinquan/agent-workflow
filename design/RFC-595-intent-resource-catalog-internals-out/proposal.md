@@ -1,6 +1,6 @@
 # RFC-595 intent 不再取 resource-catalog 的内部（RFC-294 S9 余项：跨 context 内部文件对 6 → 4）
 
-- **状态**：In Progress（2026-11-25）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话自行裁定落位（见
+- **状态**：Done（2026-11-25，落地 `6f05a750b`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话自行裁定落位（见
   design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) design §14 终局判据“跨 context 内部文件对 → 0”、“bootstrap 唯一装配”；
   S9 的同类先例见 [RFC-559](../RFC-559-memory-consumer-owned-ports/proposal.md)、[RFC-563](../RFC-563-content-reference-own-shapes/proposal.md)。

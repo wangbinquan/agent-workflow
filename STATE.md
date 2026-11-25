@@ -1,4 +1,4 @@
-## 2026-11-25 RFC-597 development-automation 的装配不再接受缺省的 provider（In Progress；`design/RFC-597-development-automation-required-providers/`）
+## 2026-11-25 RFC-597 development-automation 的装配不再接受缺省的 provider（Done；`design/RFC-597-development-automation-required-providers/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；RFC-294 W4-E8（`ReconcilerPorts` 可选袋）的第一步。
 - **范围**：`composeDevelopmentAutomation` 的 11 个 provider 归在必填的 `DevelopmentAutomationProviders` 下（装配入参继承它），装配把每个 provider 原样交给
@@ -9,9 +9,10 @@
   用例文件，首轮红的 `rfc310-pr5-e2e-java` 正是替身要查出的一类（第 9 轮的 MR 事实采集此前静默停在 `collector-not-wired:merge-request`，用例注释却说已装配），
   改为给生产的 MR 事实采集后通过；`rfc321` 主树 10 / 10。P0 `p0-9-launchers` 单跑（SQLite）判定有效；五种运行期变异与三种类型检查变异都被认出；架构计数都不变。
   实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-597 的提交 `8cc1e0ff3`：exact SHA 主 CI run 45710331883 70 / 70 全绿（含真实 PostgreSQL job 里 RFC-359 P0 变异的两库验证），windows-platform run
+  45710331650 通过；2026-11-25 转 Done。
 
-## 2026-11-25 RFC-596 事件收件箱的通道在 integration 的业务层改用中立名字（In Progress；`design/RFC-596-event-channel-neutral-name/`）
+## 2026-11-25 RFC-596 事件收件箱的通道在 integration 的业务层改用中立名字（Done；`design/RFC-596-event-channel-neutral-name/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；RFC-294 design §14 不变量“业务层部署模式分支 = 0”的最后
   一处（RFC-426 收口时留下的例外）。
@@ -21,9 +22,11 @@
 - **收口对账**（RFC-294 C10～C13）：C10 部署词汇留在托管适配器；C12 RFC-596 用例覆盖 integration 业务层的全部源码；C13 该计数 1 → 0，§14 的这条不变量成立。
 - **集中验证**（基于 `4daf7840b`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 177 个用例
   文件、1708 条全部通过，`rfc321` 10 / 10；三种变异都被认出。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：在跑（实现提交）。
+- **CI 侧**：RFC-596 的提交 `eead26c45`：主 CI run 45689898269 70 个 job 里 68 个成功；Windows 前端第 3/3 片 `mcps-split-page` 的一条用例 `findByRole` 等待超时
+  （CI required 随之红），归因环境性——本提交只改后端与文档，祖先 `4e03ecce4` 起前端与 shared 一字未变、同一片在那里通过；后继证据为 `8cc1e0ff3` 的
+  run 45710331883 70 / 70 全绿（含该片）。2026-11-25 转 Done。
 
-## 2026-11-25 RFC-595 intent 不再取 resource-catalog 的内部（In Progress；`design/RFC-595-intent-resource-catalog-internals-out/`）
+## 2026-11-25 RFC-595 intent 不再取 resource-catalog 的内部（Done；`design/RFC-595-intent-resource-catalog-internals-out/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；RFC-294 design §14“跨 context 内部文件对 → 0”与
   “bootstrap 唯一装配”，S9 的 consumer 自有端口先例（RFC-559 / RFC-563）。
@@ -40,9 +43,11 @@
 - **集中验证**（基于 `7dfc0423e`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 315 个
   用例文件红 2 条，都是本人遗漏的两行陈旧账，删去后复跑 24 个文件全部通过，`rfc321` 10 / 10，文档用例 46 / 46；四种用例变异与一种端口漂移的
   typecheck 变异都被认出（后者 `tsc` 报 21 处，含 bootstrap 绑定处与编译期断言）。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：在跑（实现提交）。
+- **CI 侧**：RFC-595 的提交 `6f05a750b`：主 CI run 45684699951 70 个 job 里 67 个成功；后端第 16/44 片是 RFC-593 引入的 force-push 扫描误报（已由 `4e03ecce4`
+  修），macOS Playwright e2e 第 3/4 片到 job 的 20 分钟上限被取消（141 条里已跑完的 139 条全过、没有失败），归因环境性；后继证据为 `4e03ecce4` 的
+  run 45685757907 70 / 70 全绿。2026-11-25 转 Done。
 
-## 2026-11-25 RFC-594 code-round 的合同叶归 task-execution 的 domain（In Progress；`design/RFC-594-code-round-contract-into-task-execution/`）
+## 2026-11-25 RFC-594 code-round 的合同叶归 task-execution 的 domain（Done；`design/RFC-594-code-round-contract-into-task-execution/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；RFC-294 design §2“`services/` 按 owner 迁入模块后删除”、
   §14 终局判据“`services/` 下的业务实现 → 0”。
@@ -56,9 +61,11 @@
   legacy 计数各降 1、其余不变。此后 `services/` 只剩暂缓的 `repoCredentials.ts`。
 - **集中验证**（基于 `f48df41c2`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 206 个
   用例文件、2003 条全部通过，`rfc321` 在主树里 10 / 10，文档用例 46 / 46；五种变异都被认出。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：在跑（实现提交）。
+- **CI 侧**：RFC-594 的提交 `7dfc0423e`：主 CI run 45680663963 70 个 job 里 67 个成功；第 16/44 片同上（RFC-593 引入、已修），第 43/44 片
+  `scheduler-clarify-dispatch` 的一条 PostgreSQL 用例在 20 秒时超时，归因环境性时序；后继证据为 `6f05a750b` 的 run 45684699951 第 43/44 片 923 条全过（该用例
+  1.6 秒）与 `4e03ecce4` 的 run 45685757907 70 / 70 全绿。2026-11-25 转 Done。
 
-## 2026-11-25 RFC-593 `util/git` 的仓库语义整体归 source-control（In Progress；`design/RFC-593-util-git-into-source-control/`）
+## 2026-11-25 RFC-593 `util/git` 的仓库语义整体归 source-control（Done；`design/RFC-593-util-git-into-source-control/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；沿 RFC-591 裁定的方案（b）收口，正是 RFC-294 design
   §8 / §15 的“`util/git` 归 source-control”。
@@ -75,7 +82,9 @@
   infrastructure；延后准备直接取 source-control），按上面的落位改正；另有两个锁没把本模块 domain 当作合法的下层，已补。tsc 0 错，eslint / promises /
   prettier 无告警；候选导出两轮（403、409 个用例文件）与复跑 25 个文件全部通过，`rfc321` 在主树里 10 / 10；六种变异都被认出。实现门 PASS（本会话按路径
   限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
-- **CI 侧**：在跑（实现提交）。
+- **CI 侧**：RFC-593 的提交 `f48df41c2`：主 CI run 45678070550 第 16/44 片红 1 条——迁入 source-control 的 `removeWorktree` 的 `--force` 被
+  `rfc310-pr7-no-merge-capability-scan` 认作强推，**本人缺陷**，补正 `4e03ecce4`（排除迁入的 git 原语文件并锁住它不出现 push 子命令）；同 SHA 的
+  windows-platform 与 git-protocols-e2e 通过。补正的 run 45685757907 70 / 70 全绿。2026-11-25 转 Done。
 
 ## 2026-11-25 RFC-592 两个只读 git 查询归 platform，协作的回滚经装配绑定交进来（Done；`design/RFC-592-git-queries-and-collaboration-rollback-port/`）
 

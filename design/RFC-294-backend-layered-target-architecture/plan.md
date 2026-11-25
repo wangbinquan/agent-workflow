@@ -819,7 +819,7 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   Done，`ce164ed44`：两个 HTTP 绑定归入兼容岛自己的 `inbound/http`；整体吸收仍开放）：把 26 成员可选袋拆为按用例、非可选的 required 端口与 exact provider adapter；
   `services/developmentDeliveryDeps.ts` 迁为 integration 的 provider adapter；mission / config / activity 路由只调 public；
   `code-capability` 的 capability template 写入与历史查询并入 development-automation 后删除该兼容岛。
-  2026-11-25 第一步 [RFC-597](../RFC-597-development-automation-required-providers/proposal.md)（In Progress）：可选袋的装配边界——
+  2026-11-25 第一步 [RFC-597](../RFC-597-development-automation-required-providers/proposal.md)（Done，`8cc1e0ff3`）：可选袋的装配边界——
   `composeDevelopmentAutomation` 的 11 个 provider 归在必填的 `DevelopmentAutomationProviders` 下，装配原样交给 `ReconcilerPorts`、不再按“给没给”
   分支，F-H2-2 那类漏接在编译期就被挡下；用例不用的 provider 给调用即抛错的测试替身（查出 `rfc310-pr5-e2e-java` 一处静默落到
   `collector-not-wired` 的用例）。`ReconcilerPorts` 按用例拆分、删去 `*-not-wired` 分支是下一步（直接构造端口的 19 个 RFC-310 用例与三个夹具 helper

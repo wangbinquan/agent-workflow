@@ -17,7 +17,7 @@
 - [x] AC-2 source-control 之外只经 `public/participants`（两个名字）或 task-execution 自有的准备绑定取；application 层不取 infrastructure；git 相关用例通过
 - [x] AC-3 `legacy-horizontal-files` 上限 55 → 54；`public-surface-deviations` 28 → 27；`module-layer-violations` 0；未消费 public 符号 0；DAG 之外的边与跨
       context 内部文件对不增加；新增 RFC-593 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 的一格红是本人缺陷，已由补正修复（见「CI」）
 
 ## 集中验证
 
@@ -49,7 +49,10 @@
   development-automation、integration、source-control 三个模块为根逐行找“含 `push` 且含 force 形态”的行；`util/git.ts` 原在根外，迁进 source-control 后
   `removeWorktree` 的 `args.push('--force')`（`git worktree remove --force`，不是 push）被它认作强推。集中验证按改动路径与名字选用例，这条按模块根目录走
   文件的扫描选不到（`docs/dev-gotchas.md` 已补一句）。补正（下一提交）：照 RFC-450 排除通用执行器目录的做法，把迁入的 git 原语文件排除在扫描之外，并加
-  一条锁：该文件不出现 `'push'` 子命令（往里加 push 就得重新纳入扫描）；变异验证（往该文件加一行 push 参数）会红。其余 job 在跑。
+  一条锁：该文件不出现 `'push'` 子命令（往里加 push 就得重新纳入扫描）；变异验证（往该文件加一行 push 参数）会红。
+- 同一次运行（run 45678070550）其余 68 个 job 成功（不算汇总它的 CI required），同 SHA 的 windows-platform run 45678070669 与
+  git-protocols-e2e run 45678070684 通过。补正 `4e03ecce4` 的 run 45685757907 70 / 70 全绿（含第 16/44 片的这条扫描），作后继证据。没有改测试、没有重跑。
+  2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

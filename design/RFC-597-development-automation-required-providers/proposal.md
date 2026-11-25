@@ -1,6 +1,6 @@
 # RFC-597 development-automation 的装配不再接受缺省的 provider（RFC-294 W4-E8 第一步：可选袋的装配边界）
 
-- **状态**：In Progress（2026-11-25）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话自行裁定落位（见
+- **状态**：Done（2026-11-25，落地 `8cc1e0ff3`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话自行裁定落位（见
   design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) design §3 的 development-automation 一行（“按用例拆分的 non-optional
   required SPI（由可选袋 `ReconcilerPorts` 拆出），provider adapter 各实现一小面”）与债务表里 “`ReconcilerPorts` 可选袋 → W4-E8” 一行。

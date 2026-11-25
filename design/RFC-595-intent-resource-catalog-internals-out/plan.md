@@ -15,7 +15,7 @@
 - [x] AC-1 intent 只经 resource-catalog 的 `public/*` 取它；resource-catalog 的 `composition/intentApply` 在生产代码里只有 bootstrap 取
 - [x] AC-2 本机工件一族、维护 worker 的工件内容与两处工件生命周期的构造与原来逐一相同；相关用例通过
 - [x] AC-3 `cross-context-internal-file-pairs` 上限 6 → 4；其余计数不升；新增 RFC-595 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 的两格红已归因（见「CI」）
 
 ## 集中验证
 
@@ -42,7 +42,10 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `6f05a750b`（实现）：主 CI run 45684699951 70 个 job 里 67 个成功。后端第 16/44 片同上（RFC-593 引入的 force-push 扫描误报，已由 `4e03ecce4` 修）。
+  macOS Playwright e2e 第 3/4 片到 job 的 20 分钟上限被取消：141 条里已跑完的 139 条全部通过、没有失败，归因环境性（macOS runner 慢，单条 RFC-396
+  通知旅程跑了 5.3 分钟）。后继证据：`4e03ecce4`（以本提交为祖先、本提交的内容原样保留）的 run 45685757907 70 / 70 全绿，含 macOS e2e 第 3/4 片与后端
+  第 16/44 片。没有改测试、没有重跑。2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

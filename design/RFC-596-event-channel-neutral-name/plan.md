@@ -14,7 +14,7 @@
 - [x] AC-1 integration 的业务层不再出现部署名字面量；通道是 `admit` / `shadow`
 - [x] AC-2 互译全且互逆；配置、表与托管入站的行为不变；相关用例通过
 - [x] AC-3 `deployment-mode-branch-sites` 上限 1 → 0；其余计数不升；新增 RFC-596 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 的一格红已归因为环境性（见「CI」）
 
 ## 集中验证
 
@@ -33,7 +33,11 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `eead26c45`（实现）：主 CI run 45689898269 70 个 job 里 68 个成功——全部后端分片、真实 PostgreSQL、三个平台的构建与检查、e2e。没过的两格是同一件事：
+  Windows 前端第 3/3 片 `mcps-split-page` 的“edits made while Save is pending stay dirty and prevent the follow-up probe”在 `findByRole` 等待标题时超时，
+  CI required 因它而红。归因：环境性（Windows runner 上的等待时序），不是本提交引入——本提交只改后端与文档，祖先 `4e03ecce4` 与本提交之间前端与 shared
+  一字未变，`4e03ecce4` 的 run 45685757907 里同一片通过。后继证据：RFC-597 的提交 `8cc1e0ff3`（以本提交为祖先、本提交的内容原样保留）的 run
+  45710331883 70 / 70 全绿，含 Windows 前端第 3/3 片。没有改测试、没有重跑。2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

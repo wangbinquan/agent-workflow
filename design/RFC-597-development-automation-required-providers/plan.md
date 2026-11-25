@@ -15,7 +15,7 @@
 - [x] AC-1 11 个 provider 必填、入参继承具名接口；装配没有按 provider 分支与非空断言
 - [x] AC-2 daemon 装配不变；替身给全、调用即抛；P0 变异照旧得到 `*-launcher-not-wired`
 - [x] AC-3 计数都不升；新增 RFC-597 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -40,7 +40,8 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `8cc1e0ff3`（实现）：exact SHA 主 CI run 45710331883 70 / 70 全绿（含真实 PostgreSQL job 里 RFC-359 P0 变异的两库验证），同 SHA 的 windows-platform
+  run 45710331650 通过。2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

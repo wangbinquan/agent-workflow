@@ -1,6 +1,6 @@
 # RFC-594 code-round 的合同叶归 task-execution 的 domain（RFC-294 W9-D：`services/` 余项）
 
-- **状态**：In Progress（2026-11-25）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话自行裁定落位（见
+- **状态**：Done（2026-11-25，落地 `7dfc0423e`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话自行裁定落位（见
   design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) design §2（“`services/` 按 owner 迁入模块后删除”）与 §14 的
   终局判据“`services/` 下的业务实现 → 0”。

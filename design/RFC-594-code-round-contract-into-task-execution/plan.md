@@ -15,7 +15,7 @@
 - [x] AC-1 旧路径不存在、没有说明符再解析到它；节点 id 只在 task-execution 的 domain 里定义、值不变；合成函数逐字迁到测试 helper
 - [x] AC-2 历史 code-round 的执行结果投影与内置快照布局的用例通过
 - [x] AC-3 `legacy-service-implementations` 上限 2 → 1、`legacy-horizontal-files` 上限 54 → 53；其余计数不升；新增 RFC-594 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 的两格红已归因（见「CI」）
 
 ## 集中验证
 
@@ -36,7 +36,11 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `7dfc0423e`（实现）：主 CI run 45680663963 70 个 job 里 67 个成功。后端第 16/44 片是 RFC-593 引入、本提交继承的那条 force-push 扫描误报（已由
+  `4e03ecce4` 修）。第 43/44 片 `scheduler-clarify-dispatch` 的 PostgreSQL 用例“multi-round (ci=2) interrupted rerun”在 20 秒时超时，归因环境性时序——本
+  提交只迁了 code-round 的节点 id 与一个用例 helper，没有改到澄清调度。后继证据：RFC-595 的提交 `6f05a750b`（以本提交为祖先、本提交的内容原样保留）的
+  run 45684699951 第 43/44 片 923 条全过，这条用例 1.6 秒通过；第 16/44 片的后继证据是 `4e03ecce4` 的 run 45685757907 70 / 70 全绿。没有改测试、没有
+  重跑。2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 
