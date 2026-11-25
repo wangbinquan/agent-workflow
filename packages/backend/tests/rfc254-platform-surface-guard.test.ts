@@ -122,7 +122,8 @@ const ALLOWANCES: readonly Allowance[] = [
   // --- permanent: posix-by-contract ------------------------------------------
   {
     rule: 'posix-path-prefix',
-    file: 'util/git.ts',
+    // RFC-593: util/git.ts moved into source-control's local infrastructure.
+    file: 'modules/source-control/infrastructure/local/gitRepository.ts',
     match: '`${m}/`',
     count: 2,
     why: 'git pathspec construction and ls-files output matching; git speaks `/` on every platform (RFC-248)',

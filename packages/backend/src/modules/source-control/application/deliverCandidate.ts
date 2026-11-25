@@ -13,7 +13,7 @@
 // 幂等：同 candidate 重放不重复 commit——commit 前先看目标位（expected/内部
 // ref/远端）上是否已有 tree==treeOid 且 parent==baseline 的 commit，有则复用。
 
-import { AW_INTERNAL_GIT_IDENTITY } from '@/util/git'
+import { AW_INTERNAL_GIT_IDENTITY } from '@/modules/source-control/domain/gitRepositoryModel'
 import {
   repositoryBusinessParent,
   repositoryMaterializationCommit,

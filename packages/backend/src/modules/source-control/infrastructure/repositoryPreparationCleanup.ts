@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { cleanupRecordedWorktree } from '@/util/git'
+import { cleanupRecordedWorktree } from '@/modules/source-control/infrastructure/local/gitRepository'
 import {
   WorktreePreparationEvidenceSchema,
   verifyExistingWorktree,

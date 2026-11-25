@@ -6,9 +6,9 @@ import {
   applySparseSubdir,
   repoSlug,
   withWorktreeRegistryLock,
-  type WorktreeCleanupProvenance,
   type WorktreeLifecycleHookEvent,
-} from '@/util/git'
+} from '@/modules/source-control/infrastructure/local/gitRepository'
+import { type WorktreeCleanupProvenance } from '@/modules/source-control/domain/gitRepositoryModel'
 import { runGit } from '@/platform/execution/local/gitProcess'
 import { syncSubmodules } from '@/modules/source-control/infrastructure/local/gitSubmodule'
 import { resolveSubmoduleParams } from '@/modules/source-control/infrastructure/local/submoduleParams'

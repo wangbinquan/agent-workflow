@@ -17,7 +17,10 @@ import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { commitTree, snapshotFullState } from '../src/util/git'
+import {
+  commitTree,
+  snapshotFullState,
+} from '../src/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 
 async function initRepo(): Promise<string> {

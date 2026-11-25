@@ -43,7 +43,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { createWorktree } from '../src/util/git'
+import { createWorktree } from '../src/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 
 const ulid = monotonicFactory()

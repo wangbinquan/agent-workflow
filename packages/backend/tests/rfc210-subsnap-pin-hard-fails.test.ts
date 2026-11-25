@@ -23,7 +23,7 @@ import {
 } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { subSlug } from '@/modules/source-control/infrastructure/local/gitSubmodule'
-import { snapshotFullState } from '@/util/git'
+import { snapshotFullState } from '@/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '@/platform/execution/local/gitProcess'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-sp-home-'))

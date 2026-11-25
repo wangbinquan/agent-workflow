@@ -18,7 +18,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { createWorktree } from '@/util/git'
+import { createWorktree } from '@/modules/source-control/infrastructure/local/gitRepository'
 
 const roots: string[] = []
 

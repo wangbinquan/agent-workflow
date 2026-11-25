@@ -29,7 +29,7 @@ import * as sourceControlComposition from '@/modules/source-control/composition'
 import { bindRepositoryCommitParticipant } from '@/modules/source-control/composition/repositoryCommit'
 import { bindWorkspaceChangePublication } from '@/modules/source-control/composition/workspaceChangePublication'
 import * as sourceControlParticipants from '@/modules/source-control/public/participants'
-import { bottomUp, usableSubmodules } from '@/util/git'
+import { bottomUp, usableSubmodules } from '@/modules/source-control/domain/gitRepositoryModel'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const SRC = resolve(import.meta.dir, '..', 'src')

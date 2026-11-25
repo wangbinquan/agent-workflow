@@ -51,7 +51,7 @@ import {
 import { markMergeFailed, mergeBackAndSettle } from '@/modules/task-execution/engine/kernel/merge'
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { type CanonRepo, type IsoHandle } from '@/platform/contracts/isolationWorkspace'
-import { snapshotFullState } from '../src/util/git'
+import { snapshotFullState } from '../src/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { IsolatedAgentRunBinding } from '@/modules/task-execution/application/ports/executionKernel'

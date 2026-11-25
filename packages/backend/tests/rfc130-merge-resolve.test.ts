@@ -13,7 +13,11 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { commitTree, mergeTreeInMemory, snapshotFullState } from '../src/util/git'
+import {
+  commitTree,
+  mergeTreeInMemory,
+  snapshotFullState,
+} from '../src/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 import {
   completeHumanResolvedConflict,

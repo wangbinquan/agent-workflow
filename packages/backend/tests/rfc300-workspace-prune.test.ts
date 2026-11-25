@@ -31,7 +31,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { WORKSPACE_PRUNING_LEASE_MS } from '@/modules/source-control/application/workspaceMaintenance'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { getTask } from './helpers/taskDetailRead'
-import { snapshotRefName, snapshotRefPrefix } from '../src/util/git'
+import {
+  snapshotRefName,
+  snapshotRefPrefix,
+} from '../src/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 
 const ulid = monotonicFactory()

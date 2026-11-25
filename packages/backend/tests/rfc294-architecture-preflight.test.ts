@@ -410,7 +410,8 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // left the public — bootstrap takes them from source-control's composition and hands over reads bound to the root handle
   // (and the fragment to Task Execution's knowledge read); five entries settled.
   'modules/source-control/infrastructure/repositoryScopeAuthorization.ts#repositoryScopeExistenceReads: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
-  'modules/source-control/public/types.ts#WorkspaceMaintenanceEffects: forbidden type import @/util/git#WorktreeCleanupProvenance',
+  // RFC-593: util/git.ts became source-control's own infrastructure, so the WorktreeCleanupProvenance import is no longer a
+  // legacy type import; one entry settled.
   'modules/source-control/public/types.ts#WorkspaceMaintenanceEffects: unsafe/open type FunctionType',
   // RFC-552: visible once the operations exemption narrowed — the repository workspace store and its credential sealing
   // mutation re-exported for the legacy `services/repoCredentials.ts`; successor: that service moves into source-control.

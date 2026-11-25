@@ -57,15 +57,15 @@
       "packages/backend/src/modules/source-control/application/workspaceChangePublication.ts",
       "packages/backend/src/modules/source-control/infrastructure/crewstation/repositoryRemoteVolume.ts",
       "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryCandidateEffects.ts",
+      "packages/backend/src/modules/source-control/infrastructure/local/gitRepository.ts",
       "packages/backend/src/modules/source-control/infrastructure/local/gitSubmodule.ts",
-      "packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts",
-      "packages/backend/src/util/git.ts"
+      "packages/backend/src/modules/source-control/infrastructure/local/repositoryMirrorCache.ts"
     ],
     "ls-remote": [
       "packages/backend/src/modules/source-control/application/deliverCandidate.ts",
       "packages/backend/src/modules/source-control/application/workspaceChangePublication.ts",
       "packages/backend/src/modules/source-control/infrastructure/crewstation/repositoryRemoteVolume.ts",
-      "packages/backend/src/util/git.ts"
+      "packages/backend/src/modules/source-control/infrastructure/local/gitRepository.ts"
     ]
   },
   "excludedReadPaths": [
@@ -81,7 +81,7 @@
     },
     {
       "id": "working-branch-preparation",
-      "file": "packages/backend/src/util/git.ts",
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/gitRepository.ts",
       "reason": "task preparation reads are outside a platform-owned publication attempt"
     }
   ]

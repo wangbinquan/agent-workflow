@@ -1,6 +1,6 @@
 // RFC-414 — the canonical delta behind the zero-delta-done warning (RFC-187 §4), moved verbatim from the node execution
 // hooks in composition/nodeExecution.ts.
-import { worktreeFilesChanged } from '@/util/git'
+import { worktreeFilesChanged } from '@/modules/source-control/public/participants'
 
 /**
  * RFC-187 §4 — canonical delta for the zero-delta-done warn. Throws (engine swallows) when there's no base commit to

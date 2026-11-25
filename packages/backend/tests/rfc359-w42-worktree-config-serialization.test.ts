@@ -23,7 +23,7 @@ function loadProtocol(runGit: (path: string, args: string[]) => Promise<GitResul
     return ts.createSourceFile(relative, text, ts.ScriptTarget.Latest, true)
   }
   const owner = parse('../src/modules/source-control/infrastructure/workspaceExcludeManager.ts')
-  const git = parse('../src/util/git.ts')
+  const git = parse('../src/modules/source-control/infrastructure/local/gitRepository.ts')
   const errors = parse('../src/platform/errors/domainErrors.ts')
   const named = (source: ts.SourceFile, name: string) => {
     const nodes = source.statements.filter(

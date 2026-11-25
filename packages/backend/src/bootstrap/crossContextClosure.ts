@@ -37,7 +37,7 @@ import {
 } from '@/modules/resource-catalog/composition'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 // RFC-592: collaboration's review gate rollback takes the workspace snapshot rollback through its bindings.
-import { rollbackToSnapshot } from '@/util/git'
+import { rollbackToSnapshot } from '@/modules/source-control/public/participants'
 
 /** RFC-395 II-b O2: the selected session's owner adapters travel through explicit dependencies. */
 export function composeCrossContextClosure(

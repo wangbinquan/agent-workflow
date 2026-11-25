@@ -7,12 +7,12 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
-  AW_INTERNAL_GIT_IDENTITY,
   resolveSubmodulePool,
   submoduleGitDir,
   subSlug,
   type SubSnapshot,
-} from '@/util/git'
+} from '@/modules/source-control/infrastructure/local/gitRepository'
+import { AW_INTERNAL_GIT_IDENTITY } from '@/modules/source-control/domain/gitRepositoryModel'
 import { runGit } from '@/platform/execution/local/gitProcess'
 
 export {
@@ -21,8 +21,8 @@ export {
   subSlug,
   submoduleGitDir,
   syncSubmodules,
-} from '@/util/git'
-export type { SubmoduleMode } from '@/util/git'
+} from '@/modules/source-control/infrastructure/local/gitRepository'
+export type { SubmoduleMode } from '@/modules/source-control/infrastructure/local/gitRepository'
 import type { SubmoduleEntry } from '@/modules/source-control/public/types'
 
 // ─────────────────────────────────────────────────────────────────────────────

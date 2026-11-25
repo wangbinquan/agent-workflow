@@ -1858,7 +1858,19 @@ describe('RFC-287 AC-14 —— 终止条件必须穿透子模块同步', () => {
   })
 
   test('建树调用点确实把 signal 传给了子模块同步', () => {
-    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'util', 'git.ts'), 'utf8')
+    const src = readSrc(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'gitRepository.ts',
+      ),
+      'utf8',
+    )
     const i = src.indexOf('return await syncSubmodules(worktreePath, {')
     expect(i).toBeGreaterThan(-1)
     // 边界取**同缩进的收尾行**，不能用第一个 `})`——内层 `{ remote: true }` 的
@@ -2118,7 +2130,19 @@ describe('RFC-287 五轮门 —— 对抗输入', () => {
     // remove --force 128 ⇒ AC-11 重试永久撞 "missing but locked worktree"，而本 RFC 新加
     // 的 reclaimStalePrepArtifacts 三步全 exit 0、对锁定注册项完全免疫。
     // 本 RFC 还把 ref 持久化进 base_branch 并在每次重试/boot 重放 ⇒ 一次性输入变永久毒化。
-    const src = readSrc(resolve(import.meta.dir, '..', 'src', 'util', 'git.ts'), 'utf8')
+    const src = readSrc(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'gitRepository.ts',
+      ),
+      'utf8',
+    )
     const i = src.indexOf('const baseRev = await runGit(')
     expect(i).toBeGreaterThan(-1)
     const call = src.slice(i, src.indexOf('\n  )', i) + 4)
@@ -2216,8 +2240,25 @@ describe('RFC-287 五轮门 —— 第四轮修复的收尾', () => {
   test('F6：worktree prune 必须持 registry 锁（与 add/remove 同一把）', () => {
     // prune 会改 common-dir registry：不持锁时会观察并删掉另一个任务正在 add 的
     // 半初始化注册项。util/git.ts 的锁注释里记着这类真实事故。
+    // RFC-593: the reclaim calls the prune through task's own preparation binding; source-control's bridge holds the lock.
     const body = reclaim()
-    expect(body).toMatch(/withWorktreeRegistryLock\([\s\S]{0,160}'worktree', 'prune'/)
+    expect(body).toContain('await binding.pruneWorktreeRegistry(localPath)')
+    const bridge = readSrc(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'repositoryPreparationBridge.ts',
+      ),
+      'utf8',
+    )
+    const prune = bridge.slice(bridge.indexOf('async pruneWorktreeRegistry('))
+    expect(prune.slice(0, prune.indexOf('\n    },\n'))).toMatch(
+      /withWorktreeRegistryLock\([\s\S]{0,160}'worktree', 'prune'/,
+    )
   })
 
   test('F1：引用计数必须用领养后的真实行 id（不是可能为幽灵的那个）', () => {

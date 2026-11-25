@@ -29,7 +29,11 @@ import {
   rollbackSubmodule,
   rollbackSubmodulesRecursive,
 } from '@/modules/source-control/infrastructure/local/gitSubmodule'
-import { hasDirtySubmoduleContent, snapshotSubmodule, type SubSnapshot } from '@/util/git'
+import {
+  hasDirtySubmoduleContent,
+  snapshotSubmodule,
+  type SubSnapshot,
+} from '@/modules/source-control/infrastructure/local/gitRepository'
 
 function git(cwd: string, args: string[]): Promise<{ code: number; out: string }> {
   return new Promise((resolve) => {
@@ -198,7 +202,19 @@ describe('RFC-210 detectSubmodules performance gate', () => {
     // Behavioural assertions cannot observe "zero processes spawned" here, so the
     // ordering is pinned in source. If someone moves the probe below the git call,
     // AC-11 ("never ⟹ zero submodule argv") silently regresses.
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'util', 'git.ts'), 'utf8')
+    const src = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'gitRepository.ts',
+      ),
+      'utf8',
+    )
     const fn = src.slice(src.indexOf('export async function hasDirtySubmoduleContent'))
     const body = fn.slice(0, fn.indexOf('\n}\n'))
     const gateAt = body.indexOf(".gitmodules'")

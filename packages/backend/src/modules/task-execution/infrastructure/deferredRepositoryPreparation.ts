@@ -21,7 +21,6 @@ import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persis
 import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
 import { ConflictError, diagnosticTextOf } from '@/platform/errors/domainErrors'
 import { removeDirectoryWithRetry } from '@/platform/workspace/local/fsReclaim'
-import { reclaimStaleRefLocks, withWorktreeRegistryLock } from '@/util/git'
 import { runGit } from '@/platform/execution/local/gitProcess'
 import { createLogger } from '@/platform/logging/logger'
 import type {
@@ -307,7 +306,10 @@ function taskRepoRowsFor(
  * 选了这条)。全部失败都只记 warn:清理是尽力而为,真正的判据是紧随其后的建树本身。
  */
 async function reclaimStalePrepArtifacts(
-  binding: Pick<TaskRepositoryPreparationBinding, 'groupCachedRepoIds'>,
+  binding: Pick<
+    TaskRepositoryPreparationBinding,
+    'groupCachedRepoIds' | 'pruneWorktreeRegistry' | 'reclaimStaleRefLocks'
+  >,
   lookup: RepositoryPreparationLookup,
   appHome: string,
   task: Task,
@@ -379,8 +381,9 @@ async function reclaimStalePrepArtifacts(
       // `prune` 与 `add` / `remove` 一样会改 common-dir registry，必须走同一把
       // registry 锁（五轮门 Codex F6）：不持锁时，另一个任务正在同一镜像上
       // `worktree add` 的半初始化注册项会被本次 prune 观察到并删掉，让对方的 add
-      // 失败或留下不完整 registry——`util/git.ts` 的锁注释里记着这类真实事故。
-      await withWorktreeRegistryLock(localPath, () => runGit(localPath, ['worktree', 'prune']))
+      // 失败或留下不完整 registry——source-control 的 `gitRepository.ts` 锁注释里记着这类真实事故（RFC-593：持锁 prune 经
+      // task 自有的准备绑定，由 source-control 实现）。
+      await binding.pruneWorktreeRegistry(localPath)
       // 分支名不止 `agent-workflow/{taskId}`：同一镜像在仓库组里可被挂载多次，
       // 第 2 份起是 `agent-workflow/{taskId}-2`、`-3`…（repoGroupLayout 的去重后缀）。
       // 只删不带后缀那条，会让第二仓的建树永远撞 "branch already exists"、每次重试
@@ -390,7 +393,7 @@ async function reclaimStalePrepArtifacts(
       // ——下一次在同一分支名上建树就永远撞 `cannot lock ref … File exists`，与 issue #13
       // 同形（残留物挡住重建、且无自愈路径）。锁挡住的 ref 未必存在，所以 for-each-ref
       // 看不到它，必须按前缀直接扫锁文件。只删 60s 之前落的锁，不抢活着的 git。
-      const locksCleared = await reclaimStaleRefLocks({
+      const locksCleared = await binding.reclaimStaleRefLocks({
         repoPath: localPath,
         branchRef: `agent-workflow/${task.id}*`,
         log,

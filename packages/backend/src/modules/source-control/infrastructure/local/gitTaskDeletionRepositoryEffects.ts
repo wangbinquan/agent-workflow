@@ -1,4 +1,7 @@
-import { deleteSnapshotRefs, removeWorktree } from '@/util/git'
+import {
+  deleteSnapshotRefs,
+  removeWorktree,
+} from '@/modules/source-control/infrastructure/local/gitRepository'
 import type { TaskDeletionRepositoryParticipant } from '../../public/participants'
 
 export function createGitTaskDeletionRepositoryEffects(): TaskDeletionRepositoryParticipant {

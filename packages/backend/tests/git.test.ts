@@ -18,7 +18,7 @@ import {
   removeWorktree,
   repoSlug,
   requireGitRepo,
-} from '../src/util/git'
+} from '../src/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 import { NotFoundError, ValidationError } from '../src/platform/errors/domainErrors'
 

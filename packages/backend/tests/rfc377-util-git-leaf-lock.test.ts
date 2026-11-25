@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { evaluateCruises, isBlocking, KNOWN_VIOLATIONS } from '../../../scripts/depcheck'
 import * as facade from '@/modules/source-control/infrastructure/local/gitSubmodule'
-import * as git from '@/util/git'
+import * as git from '@/modules/source-control/infrastructure/local/gitRepository'
 import { importEdges, sourceUnit } from './architecture/census'
 
 /**
@@ -35,6 +35,8 @@ const WORKSPACE_LEAVES = new Set([
  * `util/` into platform. They import nothing above them (the error family takes only the logger), so the git primitives
  * may name exactly these three.
  */
+/** RFC-593: the git primitives now live in source-control and take their four pure parts from the module's own domain. */
+const DOMAIN_LEAVES = new Set(['../../domain/gitRepositoryModel'])
 const BASE_PRIMITIVES = new Set([
   '@/platform/errors/domainErrors',
   '@/platform/logging/logger',
@@ -42,7 +44,12 @@ const BASE_PRIMITIVES = new Set([
 ])
 
 function forbiddenEdges(text: string): string[] {
-  return importEdges(sourceUnit('packages/backend/src/util/git.ts', text))
+  return importEdges(
+    sourceUnit(
+      'packages/backend/src/modules/source-control/infrastructure/local/gitRepository.ts',
+      text,
+    ),
+  )
     .map((edge) => edge.specifier)
     .filter((specifier) => {
       const firstParty =
@@ -56,6 +63,7 @@ function forbiddenEdges(text: string): string[] {
         !specifier.startsWith('./') &&
         !PROCESS_LEAVES.has(specifier) &&
         !WORKSPACE_LEAVES.has(specifier) &&
+        !DOMAIN_LEAVES.has(specifier) &&
         !BASE_PRIMITIVES.has(specifier)
       )
     })
@@ -63,7 +71,13 @@ function forbiddenEdges(text: string): string[] {
 
 describe('RFC-377 util/git leaf', () => {
   test('git primitives have no imports or re-exports from upper layers', () => {
-    const text = readFileSync(resolve(import.meta.dir, '../src/util/git.ts'), 'utf8')
+    const text = readFileSync(
+      resolve(
+        import.meta.dir,
+        '../src/modules/source-control/infrastructure/local/gitRepository.ts',
+      ),
+      'utf8',
+    )
     expect(forbiddenEdges(text)).toEqual([])
   })
 

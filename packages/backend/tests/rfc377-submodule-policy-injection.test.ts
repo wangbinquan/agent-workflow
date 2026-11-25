@@ -13,7 +13,7 @@ import {
   snapshotFullState,
   type CreateWorktreeOptions,
   type SubmoduleMode,
-} from '@/util/git'
+} from '@/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '@/platform/execution/local/gitProcess'
 
 const roots: string[] = []

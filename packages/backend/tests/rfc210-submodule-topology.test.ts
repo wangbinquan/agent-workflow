@@ -28,7 +28,7 @@ import {
   type SubmoduleEntry,
 } from '@/modules/source-control/infrastructure/local/gitSubmodule'
 // RFC-475: the two pure list helpers live with the other submodule primitives in util/git.
-import { bottomUp, usableSubmodules } from '@/util/git'
+import { bottomUp, usableSubmodules } from '@/modules/source-control/domain/gitRepositoryModel'
 
 /** Minimal runGit stub: canned stdout for the status probe, argv recorder for the rest. */
 function stubGit(stdout: string, exitCode = 0) {

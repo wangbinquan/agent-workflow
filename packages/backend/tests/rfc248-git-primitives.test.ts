@@ -9,7 +9,11 @@ import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { applySparseSubdir, createWorktree, findTrackedPathUnderMounts } from '../src/util/git'
+import {
+  applySparseSubdir,
+  createWorktree,
+  findTrackedPathUnderMounts,
+} from '../src/modules/source-control/infrastructure/local/gitRepository'
 import { nonInteractiveGitEnv } from '../src/platform/execution/local/gitProcess'
 
 let tmp = ''

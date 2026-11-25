@@ -1,4 +1,4 @@
-import type { WorktreeCleanupProvenance } from '@/util/git'
+import type { WorktreeCleanupProvenance } from '@/modules/source-control/domain/gitRepositoryModel'
 
 export interface ResolvedRepoSource {
   repoPath: string

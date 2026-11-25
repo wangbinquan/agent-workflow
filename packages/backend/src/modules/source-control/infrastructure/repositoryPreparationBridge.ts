@@ -41,6 +41,9 @@ import type {
   RepositoryLaunchSource,
   SealedPublicRepositorySourceRef,
 } from '../public/types'
+import { reclaimStaleRefLocks, withWorktreeRegistryLock } from './local/gitRepository'
+import { runGit } from '@/platform/execution/local/gitProcess'
+import type { Logger } from '@/platform/logging/logger'
 
 /** Root-only bridge. No Task rows, Task lease or autonomous worker are owned here. */
 export function createRepositoryPreparationBridge(
@@ -70,6 +73,21 @@ export function createRepositoryPreparationBridge(
           groupId,
         )
       ).repos.map((repository) => repository.cachedRepoId)
+    },
+    // RFC-593：延后准备的重试回收在每个候选镜像里做的两步（原先 task-execution 直接取 util/git）。
+    async pruneWorktreeRegistry(repoPath: string): Promise<void> {
+      await withWorktreeRegistryLock(repoPath, () => runGit(repoPath, ['worktree', 'prune']))
+    },
+    reclaimStaleRefLocks(lock: {
+      readonly repoPath: string
+      readonly branchRef: string
+      readonly log?: Logger | undefined
+    }): Promise<number> {
+      return reclaimStaleRefLocks({
+        repoPath: lock.repoPath,
+        branchRef: lock.branchRef,
+        log: lock.log,
+      })
     },
     legacy: {
       reclaim(

@@ -40,7 +40,7 @@ import {
   createWorktree,
   type CreatedWorktree,
   type CreateWorktreeOptions,
-} from '@/util/git'
+} from '@/modules/source-control/infrastructure/local/gitRepository'
 
 type RepositoryRow = PersistenceTables['cachedRepos']['$inferSelect']
 export function repositoryRevision(row: RepositoryRow): string {

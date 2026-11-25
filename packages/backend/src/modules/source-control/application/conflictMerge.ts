@@ -9,7 +9,7 @@
 // Git；push 不在本文件——finish 只产本地 merge commit，发布仍走
 // deliverCandidate 的 exact-head CAS 面。
 
-import { AW_INTERNAL_GIT_IDENTITY } from '@/util/git'
+import { AW_INTERNAL_GIT_IDENTITY } from '@/modules/source-control/domain/gitRepositoryModel'
 import type { ConflictMergeWorkspaceEffects } from './ports/conflictMergeWorkspaceEffects'
 
 export type PrepareConflictMergeResult =

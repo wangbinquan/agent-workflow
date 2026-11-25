@@ -17,7 +17,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { gitChangedFiles } from '../src/util/git'
+import { gitChangedFiles } from '../src/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 
 async function makeRepo(): Promise<{ dir: string; cleanup: () => void }> {

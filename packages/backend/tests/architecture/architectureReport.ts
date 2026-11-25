@@ -345,7 +345,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/terminalSweep.ts': 'task-execution',
   'packages/backend/src/services/workgroup/state.ts': 'resource-catalog',
   'packages/backend/src/util/fileTrust.ts': 'platform',
-  'packages/backend/src/util/git.ts': 'source-control',
   'packages/backend/src/util/gitCredentialHelper.ts': 'source-control',
   'packages/backend/src/util/gitCredentialLease.ts': 'source-control',
   'packages/backend/src/util/gitHardening.ts': 'source-control',

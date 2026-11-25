@@ -28,7 +28,7 @@ on:
     branches: [main]
     paths:
       - 'packages/backend/src/util/fileTrust.ts'
-      - 'packages/backend/src/util/git.ts'
+      - 'packages/backend/src/modules/source-control/infrastructure/local/gitRepository.ts'
       - 'packages/backend/src/platform/workspace/local/fsReclaim.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/assembly.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/isolation.ts'
@@ -492,7 +492,7 @@ on:
     # checks push ⊇ pull_request, so it structurally cannot see the reverse.
     paths:
       - 'packages/backend/src/util/fileTrust.ts'
-      - 'packages/backend/src/util/git.ts'
+      - 'packages/backend/src/modules/source-control/infrastructure/local/gitRepository.ts'
       - 'packages/backend/src/platform/workspace/local/fsReclaim.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/assembly.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/isolation.ts'

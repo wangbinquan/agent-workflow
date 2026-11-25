@@ -52,6 +52,11 @@ export interface WorkspaceExcludeProfileFactory {
 export { createRepositoryScopeAuthorizationInTx } from '../application/repositoryScopeAuthorization'
 export type { RepositoryScopeExistenceReads } from '../application/repositoryScopeAuthorization'
 export { repositoryScopeExistenceReads } from '../infrastructure/repositoryScopeAuthorization'
+// RFC-593: the two local git repository operations other modules call directly — the node-run snapshot rollback
+// (task-execution's node rollback; the assembly root binds it for collaboration's review gate) and the worktree change
+// check (task-execution's canonical delta). Task-execution's deferred preparation reaches the rest through its own
+// preparation binding, which source-control implements (`infrastructure/repositoryPreparationBridge.ts`).
+export { rollbackToSnapshot, worktreeFilesChanged } from '../infrastructure/local/gitRepository'
 
 /** 一个仓库 scope 或仓库组 scope 的目标。 */
 export interface RepositoryScopeTarget {

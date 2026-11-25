@@ -27,8 +27,6 @@ export { isoKeyOf, isoWorktreePathFor } from './isolationReferences'
 import { removeDirectoryWithRetry } from '@/platform/workspace/local/fsReclaim'
 import {
   alignWorktreeGitlinks,
-  AW_INTERNAL_GIT_IDENTITY,
-  bottomUp,
   buildSalvageTree,
   commitTree,
   createIsolatedWorktree,
@@ -39,8 +37,12 @@ import {
   mergeTreeInMemory,
   reclaimWorktreePath,
   snapshotFullState,
+} from '@/modules/source-control/infrastructure/local/gitRepository'
+import {
+  AW_INTERNAL_GIT_IDENTITY,
+  bottomUp,
   usableSubmodules,
-} from '@/util/git'
+} from '@/modules/source-control/domain/gitRepositoryModel'
 import { gitCommitExists } from '@/platform/workspace/local/gitQueries'
 import { runGit } from '@/platform/execution/local/gitProcess'
 import {

@@ -36,7 +36,18 @@ describe('RFC-254 T18 — git on Windows', () => {
     // `new URL(...).pathname` yields `/C:/...` on Windows, which `Bun.file`
     // cannot open. `import.meta.dir` + `resolve` is separator-correct
     // everywhere (docs/dev-gotchas.md: cwd-sensitive source locks).
-    const source = Bun.file(resolve(import.meta.dir, '..', 'src', 'util', 'git.ts')).text()
+    const source = Bun.file(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'gitRepository.ts',
+      ),
+    ).text()
     return source.then((text) => {
       expect(text).not.toContain("'/dev/null'")
       expect(text).toContain('NULL_DEVICE_FOR_HOST')

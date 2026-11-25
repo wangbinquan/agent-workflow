@@ -23,7 +23,7 @@ import {
   materializeTree,
   mergeTreeInMemory,
   snapshotFullState,
-} from '../src/util/git'
+} from '../src/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 // RFC-586: the marker oracle moved from util/git into the merge-conflict domain file.
 import {

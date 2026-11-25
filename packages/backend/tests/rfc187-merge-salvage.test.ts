@@ -16,7 +16,12 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { buildSalvageTree, commitTree, mergeTreeInMemory, snapshotFullState } from '../src/util/git'
+import {
+  buildSalvageTree,
+  commitTree,
+  mergeTreeInMemory,
+  snapshotFullState,
+} from '../src/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 import {
   completeHumanResolvedConflict,

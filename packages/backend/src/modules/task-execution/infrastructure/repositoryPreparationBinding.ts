@@ -25,12 +25,24 @@ import type {
   WorkspaceCleanupHookEvent,
   PlannedSpaceLayout,
 } from '../application/ports/preparedWorkspace'
+import type { Logger } from '@/platform/logging/logger'
 
 /** Provider-private binding assembled by the root. Task retains its transaction and owner. */
 export interface TaskRepositoryPreparationBinding {
   groupName(groupId: string): Promise<string>
   /** RFC-478：仓库组成员的缓存仓 id（与 `groupName` 同源），延后准备的重试回收按它找要清理的镜像。 */
   groupCachedRepoIds(groupId: string): Promise<readonly string[]>
+  /**
+   * RFC-593：在一个缓存镜像里持 worktree registry 锁做 `git worktree prune`（prune 与 add / remove 一样改 common-dir
+   * registry），重试回收的第一步；结果不检查，与原调用处相同。
+   */
+  pruneWorktreeRegistry(repoPath: string): Promise<void>
+  /** RFC-593：清掉被中断的 `worktree add` 留下的陈旧 `<branchRef>.lock`，返回清掉的个数。 */
+  reclaimStaleRefLocks(input: {
+    readonly repoPath: string
+    readonly branchRef: string
+    readonly log?: Logger | undefined
+  }): Promise<number>
   /** Explicit compatibility for persisted Tasks created before RFC-363. */
   legacy: {
     reclaim(

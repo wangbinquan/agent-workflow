@@ -39,7 +39,10 @@ import {
   subSlug,
   worktreeRefName,
 } from '@/modules/source-control/infrastructure/local/gitSubmodule'
-import { attachSubmoduleFromPool, snapshotFullState } from '@/util/git'
+import {
+  attachSubmoduleFromPool,
+  snapshotFullState,
+} from '@/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '@/platform/execution/local/gitProcess'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-ns-home-'))

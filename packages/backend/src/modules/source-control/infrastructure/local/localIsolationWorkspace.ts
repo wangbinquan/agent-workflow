@@ -22,7 +22,10 @@ import {
   type SubmoduleMergeResolutions,
 } from '@/modules/source-control/infrastructure/local/nodeIsolation'
 import { type IsoHandle, type MergeBackConflict } from '@/platform/contracts/isolationWorkspace'
-import { gitBlobHashes, gitChangedFiles } from '@/util/git'
+import {
+  gitBlobHashes,
+  gitChangedFiles,
+} from '@/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '@/platform/execution/local/gitProcess'
 
 /** Task-image preparation uses precisely the same conflict interpretation. */

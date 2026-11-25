@@ -19,9 +19,9 @@ import {
   createWorktree,
   findTrackedPathUnderMounts,
   initScratchRepo,
-  type WorktreeCleanupProvenance,
   type WorktreeLifecycleHookEvent,
-} from '@/util/git'
+} from '@/modules/source-control/infrastructure/local/gitRepository'
+import { type WorktreeCleanupProvenance } from '@/modules/source-control/domain/gitRepositoryModel'
 import { createLogger } from '@/platform/logging/logger'
 import type {
   GitCommitIdentity,

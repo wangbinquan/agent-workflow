@@ -16,7 +16,7 @@ import {
   createIsolatedWorktree,
   snapshotFullState,
   withWorktreeRegistryLock,
-} from '../src/util/git'
+} from '../src/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 
 async function initRepo(dir: string): Promise<void> {
@@ -96,7 +96,19 @@ describe('RFC-243 §7.2 — worktree registry mutex', () => {
   }, 30000)
 
   test('源码锁：三个注册表写操作都经互斥', () => {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'util', 'git.ts'), 'utf8')
+    const src = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'gitRepository.ts',
+      ),
+      'utf8',
+    )
     const wrapped = src.match(/withWorktreeRegistryLock\(opts\.repoPath/g) ?? []
     expect(wrapped.length).toBeGreaterThanOrEqual(3)
   })

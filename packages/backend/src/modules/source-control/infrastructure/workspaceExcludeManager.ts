@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { withWorktreeRegistryLock } from '@/util/git'
+import { withWorktreeRegistryLock } from '@/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '@/platform/execution/local/gitProcess'
 import { DomainError } from '@/platform/errors/domainErrors'
 import { planWorkspaceExcludeProfile } from '../domain/workspaceExcludeProfile'

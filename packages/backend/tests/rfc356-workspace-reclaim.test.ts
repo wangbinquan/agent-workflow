@@ -28,7 +28,7 @@ import {
   reclaimWorktreePath,
   STALE_REF_LOCK_MIN_AGE_MS,
   withWorktreeRegistryLock,
-} from '../src/util/git'
+} from '../src/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 import { removeTempDirSync } from './fixtures/tempDir'
 

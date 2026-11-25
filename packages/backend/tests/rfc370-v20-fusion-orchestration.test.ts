@@ -437,6 +437,6 @@ test('the orchestration has no filesystem, Git or Source Control dependency of i
     'utf8',
   )
   expect(source).not.toMatch(/from 'node:(?:fs|path)'/)
-  expect(source).not.toContain("from '@/util/git'")
+  expect(source).not.toContain("from '@/modules/source-control/infrastructure/local/gitRepository'")
   expect(source).not.toContain('@/modules/source-control')
 })

@@ -32,7 +32,7 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import { deleteTask } from '@/modules/task-execution/infrastructure/taskDelete'
 import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/infrastructure/taskDeletionParticipant'
 import { Paths } from '@/platform/configuration/installationPaths'
-import { snapshotRefPrefix } from '@/util/git'
+import { snapshotRefPrefix } from '@/modules/source-control/infrastructure/local/gitRepository'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'

@@ -10,7 +10,7 @@ import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createWorktree } from '../src/util/git'
+import { createWorktree } from '../src/modules/source-control/infrastructure/local/gitRepository'
 
 // RUN_GIT_NETWORK gate (P0 test-tier fortification): builds a real submodule
 // fixture via `git submodule add file://` + bare clone, then drives

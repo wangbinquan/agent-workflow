@@ -42,7 +42,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { initScratchRepo } from '../src/util/git'
+import { initScratchRepo } from '../src/modules/source-control/infrastructure/local/gitRepository'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {
   createProviderTaskExecutionTestTopology,

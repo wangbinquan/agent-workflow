@@ -13,7 +13,7 @@ import {
   gitGrepFiles,
   isGitWorkTree,
   readBlobAtRef,
-} from '@/util/git'
+} from '@/modules/source-control/infrastructure/local/gitRepository'
 import { toPortableRelativePath } from '@/platform/execution/local/platformExec'
 import type {
   RepositoryClassIndex,

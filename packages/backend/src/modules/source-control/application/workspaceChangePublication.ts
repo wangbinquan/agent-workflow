@@ -17,7 +17,11 @@ import type {
   RepositoryPublicationReceipt,
   SubrepoPushResult,
 } from '@agent-workflow/shared'
-import { AW_INTERNAL_GIT_IDENTITY, bottomUp, usableSubmodules } from '@/util/git'
+import {
+  AW_INTERNAL_GIT_IDENTITY,
+  bottomUp,
+  usableSubmodules,
+} from '@/modules/source-control/domain/gitRepositoryModel'
 import {
   classifyPushFailure,
   classifyRepositoryPushFailure,

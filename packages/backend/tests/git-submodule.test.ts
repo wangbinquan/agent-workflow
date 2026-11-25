@@ -11,7 +11,7 @@ import {
   detectSubmodules,
   readDeclaredSubmodulePaths,
   submoduleNameForPath,
-} from '@/util/git'
+} from '@/modules/source-control/infrastructure/local/gitRepository'
 
 let tmp: string
 

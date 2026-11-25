@@ -124,7 +124,8 @@ describe('RFC-592 —— 两个查询在 platform', () => {
   test('两个查询只在新文件定义，util/git.ts 不再导出它们；新文件只取 platform', () => {
     expect(existsSync(join(SRC, QUERIES))).toBe(true)
     const queries = offeredNames(QUERIES, read(QUERIES))
-    const utilGit = offeredNames(UTIL_GIT, read(UTIL_GIT))
+    // RFC-593: util/git.ts itself moved into source-control (its old location no longer exists).
+    const utilGit = existsSync(join(SRC, UTIL_GIT)) ? offeredNames(UTIL_GIT, read(UTIL_GIT)) : []
     for (const name of MOVED) {
       expect([name, queries.includes(name)]).toEqual([name, true])
       expect([name, utilGit.includes(name)]).toEqual([name, false])

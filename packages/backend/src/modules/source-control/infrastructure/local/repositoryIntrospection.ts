@@ -19,7 +19,7 @@ import {
   listTags,
   recentCommits,
   requireGitRepo,
-} from '@/util/git'
+} from '@/modules/source-control/infrastructure/local/gitRepository'
 import { ValidationError } from '@/platform/errors/domainErrors'
 import type { RepositoryMirrors } from '../../application/ports/repositoryMirrors'
 

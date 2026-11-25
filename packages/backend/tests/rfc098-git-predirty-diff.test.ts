@@ -41,7 +41,10 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
-import { DELETED_BLOB_SENTINEL, gitBlobHashes } from '../src/util/git'
+import {
+  DELETED_BLOB_SENTINEL,
+  gitBlobHashes,
+} from '../src/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 
 // Runtime-generated shim opencode（s04 同款骨架；SHIM_WRITES 提供显式

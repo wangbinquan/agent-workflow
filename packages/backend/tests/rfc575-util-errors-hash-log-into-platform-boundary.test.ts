@@ -66,7 +66,7 @@ const OLD = new Set(MOVED.map(([old]) => old))
 /** What `util/` still holds after RFC-575: the git, credential, file-trust, Windows ACL, OIDC, redaction and safe-path family. */
 const UTIL_REMAINDER = [
   'fileTrust.ts',
-  'git.ts',
+  // RFC-593: git.ts moved into source-control's local infrastructure.
   'gitCredentialHelper.ts',
   'gitCredentialLease.ts',
   'gitHardening.ts',

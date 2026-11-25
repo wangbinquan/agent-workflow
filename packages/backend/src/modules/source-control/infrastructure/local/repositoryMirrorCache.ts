@@ -43,7 +43,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '@/platform/errors/domainErrors'
-import { classifyBaseRef } from '@/util/git'
+import { classifyBaseRef } from '@/modules/source-control/infrastructure/local/gitRepository'
 import {
   GIT_ABORTED_EXIT_CODE,
   GIT_TIMEOUT_EXIT_CODE,

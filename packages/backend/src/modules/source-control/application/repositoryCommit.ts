@@ -4,7 +4,7 @@
 // their own orchestration and push modes. They both delegate the Git mechanism
 // here so stage/preview/freeze/history can no longer drift.
 
-import { AW_INTERNAL_GIT_IDENTITY } from '@/util/git'
+import { AW_INTERNAL_GIT_IDENTITY } from '@/modules/source-control/domain/gitRepositoryModel'
 import { runGit as defaultRunGit } from '@/platform/execution/local/gitProcess'
 import type { RepositoryPreviewIndexPort } from './ports/repositoryPreviewIndex'
 import { createTaskCommitPolicy, type TaskCommitPolicy } from '../domain/taskCommitPolicy'

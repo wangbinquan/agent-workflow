@@ -1,3 +1,22 @@
+## 2026-11-25 RFC-593 `util/git` 的仓库语义整体归 source-control（In Progress；`design/RFC-593-util-git-into-source-control/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；沿 RFC-591 裁定的方案（b）收口，正是 RFC-294 design
+  §8 / §15 的“`util/git` 归 source-control”。
+- **范围**：`util/git.ts`（3723 行）整份迁入 `modules/source-control/infrastructure/local/gitRepository.ts`；其中四段纯逻辑 / 数据（内部提交身份
+  `AW_INTERNAL_GIT_IDENTITY`、`WorktreeCleanupProvenance`、子模块的 `usableSubmodules` / `bottomUp`）逐字进 `domain/gitRepositoryModel.ts`——source-control 的
+  application 层只用到这四段，留在 infrastructure 就成了 application → infrastructure。其他模块按已有规则取：`rollbackToSnapshot`、`worktreeFilesChanged`
+  经 source-control 的 `public/participants`（task-execution 的节点回滚与规范差异；装配根交给 collaboration 的评审门回滚）；task-execution 的延后准备照
+  RFC-447 / RFC-478 只经自有的 `TaskRepositoryPreparationBinding`，绑定多两个方法（持锁 `worktree prune`、陈旧 ref 锁清理），由 source-control 的绑定实现给出。
+  随改：归属表、`counts.json`（legacy 55 → 54，public 类型偏差 28 → 27）、`windows-platform.yml` 的路径过滤、`repository-publication-call-sites.json`、
+  preflight 的偏差账本、读源码的用例、RFC-575 的 `util/` 余量清单、RFC-591 / RFC-592 用例对旧位置的检查；新增 RFC-593 用例。
+- **收口对账**（RFC-294 C10～C13）：C10 仓库语义进 owner 模块、纯部分进 domain；C11 public 面只多两个闭合形状的转出；C12 RFC-593 用例覆盖全部说明符与
+  source-control 之外的生产文件；C13 两项计数下降、其余不变。**W5 的 `util/git` 收口**；`util/` 余下的都是暂缓的安全相邻一族。
+- **集中验证**（基于 `12d8cfb6c`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。集中验证里查出设计上的本人缺陷两处（application 层取
+  infrastructure；延后准备直接取 source-control），按上面的落位改正；另有两个锁没把本模块 domain 当作合法的下层，已补。tsc 0 错，eslint / promises /
+  prettier 无告警；候选导出两轮（403、409 个用例文件）与复跑 25 个文件全部通过，`rfc321` 在主树里 10 / 10；六种变异都被认出。实现门 PASS（本会话按路径
+  限定自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：在跑（实现提交）。
+
 ## 2026-11-25 RFC-592 两个只读 git 查询归 platform，协作的回滚经装配绑定交进来（In Progress；`design/RFC-592-git-queries-and-collaboration-rollback-port/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；沿 RFC-591 裁定的方案（b）。`util/git.ts` 的仓库

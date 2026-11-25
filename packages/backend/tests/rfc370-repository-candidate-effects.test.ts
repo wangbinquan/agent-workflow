@@ -15,7 +15,7 @@ import type {
   RepositoryCandidateWorkspace,
 } from '../src/modules/source-control/application/ports/repositoryCandidateEffects'
 import { missionCandidateRef } from '../src/modules/source-control/application/deliverCandidate'
-import { AW_INTERNAL_GIT_IDENTITY } from '../src/util/git'
+import { AW_INTERNAL_GIT_IDENTITY } from '../src/modules/source-control/domain/gitRepositoryModel'
 
 const BASE = {
   baselineRepoPath: 'artifact:baseline',

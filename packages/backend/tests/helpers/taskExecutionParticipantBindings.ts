@@ -29,7 +29,7 @@ import {
   workflowNameExpression,
 } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 // RFC-592: the review gate's workspace rollback (the bootstrap binds the same function).
-import { rollbackToSnapshot } from '@/util/git'
+import { rollbackToSnapshot } from '@/modules/source-control/infrastructure/local/gitRepository'
 
 export const taskExecutionParticipants: TaskExecutionParticipantBindings = Object.freeze({
   executionPermits: testExecutionPermits,

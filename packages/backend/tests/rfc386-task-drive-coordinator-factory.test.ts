@@ -25,7 +25,7 @@ import { buildActor } from '@/auth/actor'
 import { composeDaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
 import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
 import { createLogger } from '@/platform/logging/logger'
-import { gitDiffSnapshot } from '@/util/git'
+import { gitDiffSnapshot } from '@/modules/source-control/infrastructure/local/gitRepository'
 import { bindWorkspaceExcludeParticipant } from '@/modules/source-control/composition'
 import type { MemoryDistillPolicySource } from '@/modules/memory/application/distill/schedule'
 import {
