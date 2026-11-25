@@ -733,6 +733,10 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
 - **`e2e/` 与其余包**（RFC-574 查出）：只在 `packages/backend` 里搜，会漏掉 `e2e/*.spec.ts` 注释里“实现在 `util/process.ts:39-52`”一类的指针；
   它们不红，只是从此指向不存在的文件。检索范围至少包括 `e2e/`、`scripts/`、`.github/` 与 `docs/`。
 
+- **`design/` 里的 Markdown 链接**（RFC-574 推红，2026-11-25）：`design/**` 的正文是历史记录、不随改，但其中写成 `[…](../../packages/…/x.ts#L12)`
+  的**链接**会被 CI 的 `Markdown link check (design/)`（lychee）逐条解析，目标文件挪走就红。挪文件前用
+  `grep -rnoE "\]\([^)]*<旧路径>[^)]*\)" design docs` 查链接，有就只改链接目标（行号对一下新文件），不动正文。
+
 另一半教训是**检索本身没跑**：zsh 里一条命令只要有一个通配没有匹配（`grep -rn pat architecture/ tests/architecture/*.json`，后一个目录下没有
 JSON），整条命令在执行前就中止，只打印一行 `no matches found`，看上去和“没搜到”一样。查空结果时先确认输出里没有这一行；需要通配时用
 `for f in dir/*.json; do grep … "$f"; done`，或者直接给目录。

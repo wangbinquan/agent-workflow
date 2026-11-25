@@ -54,7 +54,11 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `fd3126d20`（实现，父提交是 `3a9a99e64`）：exact SHA 主 CI run 45522587218 的 `Markdown link check (design/)`（job 138897880712）红——lychee
+  报 `design/RFC-370-crewstation-hosted-deployment/evidence.md:16` 的链接指向的 `packages/backend/src/util/paths.ts#L12` 不存在。**本 RFC 引入**：
+  检索时把 `design/` 当成历史记录不改，没有查它的 Markdown 链接，而 CI 会逐条解析这些链接。修正提交把这条链接改指
+  `platform/configuration/installationPaths.ts#L12`（第 12 行在新旧文件里都是 `export const Paths = {`）；`design/` 与 `docs/` 里再没有指向
+  `src/util/` 的 Markdown 链接。其余 job 的结果见修正提交的记录。
 
 ## 实现门（本会话自审，只审功能）
 
