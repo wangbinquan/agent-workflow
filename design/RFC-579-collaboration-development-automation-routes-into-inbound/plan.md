@@ -17,7 +17,7 @@
 - [x] AC-2 行为不变：挂载调用与顺序不变，路由用例通过
 - [x] AC-3 `legacy-horizontal-files` 上限 84 → 77、`public-surface-deviations` 上限 32 → 29；未消费 public 符号保持 0；归属表删去七行；新增
       RFC-579 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（实现 `58ab43d1f` 的三格红由 `ad64ba6e5` 补正；以后继 `8a0d8516e` 的主 CI 70 / 70 为证据）
 
 ## 集中验证
 
@@ -66,7 +66,13 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `58ab43d1f`（实现）：exact SHA 主 CI run 45570161148 三格红（后端分片 11/44、前端分片 1/3 的 ubuntu 与 windows），windows-platform
+  run 45570161411 红，都归因于本 RFC 漏改的两个按路径读路由源码的用例（`rfc143` 读 `routes/clarify.ts`、前端的 `code-config-api-base` 读
+  `routes/developmentConfig.ts`），由 `ad64ba6e5` 补正（同一组红也出现在其后的发布注册表补正 `d6a26069b` 上，不由它引起）。
+- `ad64ba6e5`（补正）：主 CI run 45574363157 收尾为 cancelled——macOS e2e 分片 3/4 的 141 条用例全部通过、作业在收尾时撞上 20 分钟时限，其余
+  68 格通过；windows-platform（run 45574363127）与 visual-regression-nightly（run 45574363167）通过。
+- 后继证据（CLAUDE.md：被取消的 run 以包含它的后继提交的 CI 为证据）：`8a0d8516e`（RFC-580）以 `ad64ba6e5` 为祖先、补正的三个文件原样保留，它的
+  exact SHA 主 CI run 45578856280 70 / 70 全绿（含 macOS e2e 分片 3/4），windows-platform run 45578856368 通过。2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

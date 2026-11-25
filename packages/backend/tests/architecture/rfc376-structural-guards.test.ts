@@ -121,7 +121,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
   'platform-to-modules-file-pairs': [],
   'application-direct-effect-files': [
     // RFC-554: the repository endpoint discovery HTTP adapter moved into integration's infrastructure/codeHost/.
-    'packages/backend/src/modules/intent/application/maintenance.ts',
+    // RFC-584: the pre-RFC-503 intent maintenance copy (direct file-system effects in application) is deleted — the last one.
   ],
   'module-layer-violations': [
     // RFC-553: the last one (the fusion routes took task-execution's inbound projection) is settled.
@@ -157,26 +157,21 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/platform/background/providerBackupScheduler.ts#startBackupScheduler.handle#setInterval#1',
   ],
   'unreachable-production-files': [
-    'packages/backend/src/modules/development-automation/infrastructure/actionWorkspace.ts',
-    'packages/backend/src/modules/development-automation/infrastructure/pipelineEvidenceImport.ts',
-    'packages/backend/src/modules/development-automation/infrastructure/verificationRunner.ts',
-    'packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts',
-    'packages/backend/src/modules/intent/application/maintenance.ts',
     'packages/backend/src/modules/intent/domain/teaching/reconciliation.ts',
     'packages/backend/src/modules/resource-catalog/application/portableImportReferences.ts',
     'packages/backend/src/modules/resource-catalog/composition/portableImportReferences.ts',
     'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.yaml.ts',
-    'packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts',
     'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/plugin/aw-inventory-dump.mjs',
     'packages/backend/src/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority.ts',
     'packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts',
-    'packages/backend/src/modules/task-execution/composition/systemAgentRun.ts',
     // RFC-466：`legacyCallClosure.ts`（RFC-349 冻结行走预言）迁入 `tests/helpers/`，`services/workgroups.ts` 删除（销账）。
     // RFC-467：RFC-349 注入预言与只有它在用的 `agentDeps` / `mcpClosure` / `pluginClosure` 迁入 `tests/helpers/`，两个技能转出
     // 删除（销账，6 个）。
     // RFC-491：只供 RFC-370 契约用例的本机兼容运行（`nativeTaskAgentRun`、`nativeTaskAgentRunOptions`）迁入 `tests/helpers/`
     // （销账，2 个）。
     // RFC-492：RFC-108 的驱动租约兼容夹具（`services/driverLease.ts`）迁入 `tests/helpers/`（销账，1 个）；库存插件随一族换位置。
+    // RFC-584：RFC-370 收口后，只供契约用例的五个兼容入口迁入 `tests/helpers/`，MCP 诊断的一跳旧地址与 RFC-503 之前的 Intent
+    // 维护副本删除（销账，7 个）。
     'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
   ],
 }
@@ -248,26 +243,13 @@ const RETAINED_REACHABILITY_GROUPS = [
     reason: 'Retained test-driven domain reference; removal requires an explicit successor.',
     files: ['modules/intent/domain/teaching/reconciliation.ts'],
   },
+  // RFC-584: RFC-370 closed — its contract-test-only compatibility entries moved to `tests/helpers/`, the one-hop MCP
+  // diagnostics address and the pre-RFC-503 intent maintenance copy were deleted (retired, 7 files).
   {
-    successor: 'RFC-370 closure',
+    successor: 'RFC-294 execution-authority family (deferred)',
     reason:
-      'Retained hosted compatibility address or implementation used by RFC-370 contract tests.',
-    files: [
-      'modules/event-center/infrastructure/customEventObserverProgram.ts',
-      'modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts',
-      'modules/task-execution/composition/systemAgentRun.ts',
-      'modules/development-automation/infrastructure/actionWorkspace.ts',
-      'modules/development-automation/infrastructure/pipelineEvidenceImport.ts',
-      'modules/development-automation/infrastructure/verificationRunner.ts',
-    ],
-  },
-  {
-    successor: 'RFC-370 closure',
-    reason: 'RFC-375 section 4 retains these files because RFC-370 modified them after 2026-10-14.',
-    files: [
-      'modules/intent/application/maintenance.ts',
-      'modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority.ts',
-    ],
+      'RFC-370 closed; the hosted standby execution authority its contract tests use stays with the deferred execution-authority family.',
+    files: ['modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority.ts'],
   },
   {
     successor: 'RFC-294 W9-D: retire with the resource-catalog legacy workflow family',

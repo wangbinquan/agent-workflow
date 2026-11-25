@@ -751,6 +751,10 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
   （`'routes',` 换行 `'developmentConfig.ts'`）用跨行匹配（Python 的 `re.S`）搜。
 - **前端与 shared 的用例也读后端文件**（RFC-579 推红）：`packages/frontend/tests/code-config-api-base.test.ts` 按段拼路径读后端的路由文件，
   核对前端调用的端点确实挂着。检索范围要包括 `packages/frontend/tests`、`packages/shared/tests`，不能只在 `packages/frontend/src` 里排除前端。
+- **名字列表里要挪的名字不一定在表头**（RFC-583 查出，2026-11-25）：`['auth', 'docs', 'plantuml'].map((name) => join(SRC, 'routes', `${name}.ts`))`
+  里要挪的是后两个，只认表头位置的正则会漏。按“表里任意位置有这个名字、前后几百字以内出现目录名”搜。
+- **workflow 的路径过滤也逐条列文件**（RFC-584 查出）：`windows-platform.yml` 的 `push` / `pull_request` 两份 `paths:` 都列具体文件，`rfc473`、
+  `rfc474` 与 `test-suite-policy` 校验它们都在；挪或删文件时检索范围要含 `.github/`。
 
 另一半教训是**检索本身没跑**：zsh 里一条命令只要有一个通配没有匹配（`grep -rn pat architecture/ tests/architecture/*.json`，后一个目录下没有
 JSON），整条命令在执行前就中止，只打印一行 `no matches found`，看上去和“没搜到”一样。查空结果时先确认输出里没有这一行；需要通配时用

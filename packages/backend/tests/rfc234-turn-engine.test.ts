@@ -38,11 +38,11 @@ import {
   type IntentTurnConfig,
   requestedArtifactTypeOf,
 } from '@/modules/intent/application/turnEngine'
+// RFC-584: the maintenance cases drive the production commands; the pre-RFC-503 direct-FS copy they used is deleted.
 import {
-  listIntentTurnIdsForBootRecovery,
-  recoverIntentTurnsOnBoot,
-  sweepIntentScratch,
-} from '@/modules/intent/application/maintenance'
+  composeIntentMaintenanceCommands,
+  composeLocalIntentScratch,
+} from '@/modules/intent/composition/maintenance'
 import { sha256Hex } from '../src/platform/contracts/hash'
 import { normalizeIntentWorkflowCreateLayouts } from '../src/modules/intent/domain/workflowCreateLayout'
 import { insertUserTurn } from '@/modules/intent/application/session'
@@ -1046,6 +1046,19 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
   })
 
   describe('maintenance', () => {
+    // RFC-584: the production maintenance commands over this test's persistence and app home.
+    const maintenance = () =>
+      composeIntentMaintenanceCommands({
+        persistence,
+        scratch: composeLocalIntentScratch({ appHome }),
+      })
+    /** Boot recovery as the daemon runs it: snapshot the in-flight turns, then settle that snapshot. */
+    const recoverOnBoot = async (recoverTurnIds?: readonly string[]): Promise<number> => {
+      const commands = maintenance()
+      const turnIds = recoverTurnIds ?? (await commands.recovery.bootTurnIds())
+      return (await commands.recovery.recover({ recoverTurnIds: turnIds })).orphanedTurns
+    }
+
     test('boot recovery settles orphaned in-flight turns', async () => {
       const { session } = await createIntentSession(db, actor, { message: 'x' })
       const turnId = ulid()
@@ -1066,7 +1079,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
         .set({ inFlightTurnId: turnId, turnSeq: 2 })
         .where(eq(intentSessions.id, session.id))
 
-      expect(await recoverIntentTurnsOnBoot(persistence)).toBe(1)
+      expect(await recoverOnBoot()).toBe(1)
       const turn = (await db.select().from(intentTurns).where(eq(intentTurns.id, turnId)))[0]
       expect(turn?.kind).toBe('error')
       expect(JSON.parse(turn?.contentJson ?? '{}').code).toBe('intent-run-daemon-restart')
@@ -1104,10 +1117,10 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       }
 
       const orphaned = await reserveRunningTurn('previous generation')
-      const bootSnapshot = await listIntentTurnIdsForBootRecovery(persistence)
+      const bootSnapshot = await maintenance().recovery.bootTurnIds()
       const current = await reserveRunningTurn('current generation')
 
-      expect(await recoverIntentTurnsOnBoot(persistence, undefined, bootSnapshot)).toBe(1)
+      expect(await recoverOnBoot(bootSnapshot)).toBe(1)
       const { intentTurns, intentSessions } = tablesOf(db)
       expect(
         (await db.select().from(intentTurns).where(eq(intentTurns.id, orphaned.turnId)))[0]?.kind,
@@ -1141,7 +1154,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
         .set({ inFlightTurnId: turnId, turnSeq: 2 })
         .where(eq(intentSessions.id, session.id))
 
-      expect(await recoverIntentTurnsOnBoot(persistence)).toBe(1)
+      expect(await recoverOnBoot()).toBe(1)
       const turn = (await db.select().from(intentTurns).where(eq(intentTurns.id, turnId)))[0]
       expect(turn?.kind).toBe('error')
       expect(turn?.captureState).toBe('truncated')
@@ -1191,7 +1204,7 @@ describeEachProvider('RFC-234 意图回合引擎（双引擎）', (harness) => {
       mk('orphan-unknown', true)
       mk('fresh-terminal', false)
 
-      const removed = await sweepIntentScratch(persistence, appHome, 24)
+      const { removed } = await maintenance().scratch.sweep({ retentionHours: 24 })
       expect(removed).toBe(2) // terminal-old + unknown-old
       const left = new Set((await import('node:fs')).readdirSync(scratchRoot))
       expect(left.has(runningTurn)).toBe(true)

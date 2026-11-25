@@ -24,7 +24,7 @@ import {
   adoptActionWorkspace,
   materializeActionWorkspace,
 } from '../src/modules/development-automation/application/actionWorkspace'
-import { businessTreeDigestOf } from '../src/modules/development-automation/infrastructure/actionWorkspace'
+import { businessTreeDigestOf } from './helpers/developmentActionWorkspace'
 import {
   selectActionWorkspaceEffects,
   selectDevelopmentWorkspaceEffectBinding,

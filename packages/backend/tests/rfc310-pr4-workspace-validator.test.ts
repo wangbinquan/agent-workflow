@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { EvidenceStore } from '../src/modules/development-automation/infrastructure/evidenceStore'
-import { materializeActionWorkspace } from '../src/modules/development-automation/infrastructure/actionWorkspace'
+import { materializeActionWorkspace } from './helpers/developmentActionWorkspace'
 import { snapshotProtectedRoots } from '../src/modules/development-automation/infrastructure/protectedSnapshot'
 // RFC-496: the pure helpers and types moved to development-automation's application layer; the default-selecting wrappers stay.
 import type { ProtectedRootSnapshot } from '../src/modules/development-automation/application/protectedSnapshot'

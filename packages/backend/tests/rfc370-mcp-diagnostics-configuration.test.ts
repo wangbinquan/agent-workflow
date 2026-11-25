@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { createMcpDiagnosticsEffects } from '@/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects'
-import type { McpDiagnosticsEffectDependencies } from '@/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects'
+// RFC-584: the one-hop native address (infrastructure/mcpDiagnosticsEffects.ts) is deleted; take the local implementation.
+import {
+  createLocalMcpDiagnosticsEffects as createMcpDiagnosticsEffects,
+  type McpDiagnosticsEffectDependencies,
+} from '@/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects'
 import type { McpDiagnosticRuntime } from '@/modules/resource-catalog/application/mcps/runtimeDiagnosticsEffects'
 import { composeLocalMcpDiagnosticRunnerSelection } from '@/bootstrap/runFamilyProviders'
 

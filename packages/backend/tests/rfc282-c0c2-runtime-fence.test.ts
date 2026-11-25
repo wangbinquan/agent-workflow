@@ -62,7 +62,8 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
       'modules/task-execution/application/taskAgentRun.ts',
       // RFC-491: the native compatibility run (contract tests only) moved to tests/helpers.
       '../tests/helpers/nativeTaskAgentRun.ts',
-      'modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts',
+      // RFC-584: the one-hop native address is deleted; the check reads the local implementation it pointed at.
+      'modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts',
       // RFC-488: the MCP test bench's startup observation now lives in Task Execution's local runner.
       'modules/task-execution/infrastructure/local/mcpDiagnosticRunner.ts',
     ]) {
@@ -90,7 +91,8 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
       'modules/task-execution/application/taskAgentRun.ts',
       // RFC-491: the native compatibility run (contract tests only) moved to tests/helpers.
       '../tests/helpers/nativeTaskAgentRun.ts',
-      'modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts',
+      // RFC-584: the one-hop native address is deleted; the check reads the local implementation it pointed at.
+      'modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts',
       // RFC-488: the MCP test bench's startup observation now lives in Task Execution's local runner.
       'modules/task-execution/infrastructure/local/mcpDiagnosticRunner.ts',
     ]) {

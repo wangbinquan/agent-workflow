@@ -74,7 +74,7 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
     ['createTaskWorkspaceSession', 'memo'],
   ],
   'task-execution/composition/systemAgentObservations.ts': [['ulid', 'id']],
-  'task-execution/composition/systemAgentRun.ts': [['createLogger', 'logger']],
+  // RFC-584: composition/systemAgentRun.ts (a contract-test-only entry) moved to tests/helpers.
   'task-execution/composition/taskEngineApplication.ts': [['createLogger', 'logger']],
 }
 

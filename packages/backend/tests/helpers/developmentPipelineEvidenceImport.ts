@@ -1,16 +1,17 @@
 // Explicit physical-input bridge for existing callers and original fixtures.
-import type { EvidenceArtifactPort } from '../application/ports/evidenceArtifacts'
-import type { EvidenceBudget } from '../domain/evidence'
-import { canonicalStringify } from '../domain/canonicalJson'
+// RFC-584: moved verbatim from development-automation infrastructure/pipelineEvidenceImport.ts — only contract tests use it; no production entry reaches it.
+import type { EvidenceArtifactPort } from '@/modules/development-automation/application/ports/evidenceArtifacts'
+import type { EvidenceBudget } from '@/modules/development-automation/domain/evidence'
+import { canonicalStringify } from '@/modules/development-automation/domain/canonicalJson'
 import {
   importPipelineEvidenceWithStaging,
   type PipelineCollectEnvelopeLike,
-} from '../application/pipelineEvidenceImport'
-import { createLocalEvidenceStagingNamespace } from './local/evidenceStaging'
+} from '@/modules/development-automation/application/pipelineEvidenceImport'
+import { createLocalEvidenceStagingNamespace } from '@/modules/development-automation/infrastructure/local/evidenceStaging'
 export type {
   ImportPipelineEvidenceResult,
   PipelineCollectEnvelopeLike,
-} from '../application/pipelineEvidenceImport'
+} from '@/modules/development-automation/application/pipelineEvidenceImport'
 
 export function importPipelineEvidence(
   deps: { readonly evidence: EvidenceArtifactPort },

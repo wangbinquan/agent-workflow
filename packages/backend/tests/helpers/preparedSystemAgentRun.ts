@@ -1,12 +1,14 @@
+// RFC-584: moved verbatim from task-execution composition/systemAgentRun.ts — only the RFC-370 selected-run contract test uses
+// it; no production entry reaches it.
 import type {
   PreparedSystemAgentRunOptions,
   PreparedSystemAgentRunResult,
-} from '../application/ports/systemAgentRun'
+} from '@/modules/task-execution/application/ports/systemAgentRun'
 import {
   DEFAULT_MAX_EVENT_TEXT_BYTES,
   DEFAULT_TIMEOUT_MS,
   runSystemAgentCore,
-} from '../application/systemAgentRun'
+} from '@/modules/task-execution/application/systemAgentRun'
 import { createLogger } from '@/platform/logging/logger'
 
 /** Run the selected preparation through the shared System business core. */

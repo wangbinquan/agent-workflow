@@ -12,7 +12,7 @@ import type {
 } from '@/modules/event-center/application/ports/customObserverProgram'
 import type { CustomEventSourceStorePort } from '@/modules/event-center/application/ports/customEventSourceStore'
 import { createLocalCustomObserverProgramFactory } from '@/modules/event-center/infrastructure/local/customObserverProgram'
-import { createCustomEventObserverProgram as createCompatibleCustomEventObserverProgram } from '@/modules/event-center/infrastructure/customEventObserverProgram'
+import { createCustomEventObserverProgram as createCompatibleCustomEventObserverProgram } from './helpers/customEventObserverProgram'
 import {
   CUSTOM_EVENT_OBSERVER_PROTOCOL,
   customEventSourceDraftSchema,

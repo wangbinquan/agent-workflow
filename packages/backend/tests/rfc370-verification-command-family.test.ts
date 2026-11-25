@@ -23,7 +23,7 @@ import {
   createLocalVerificationCommandEffects,
   createRepoScriptResolver as nativeResolver,
 } from '@/modules/development-automation/infrastructure/local/verificationCommandEffects'
-import { createRepoScriptResolver as compatibilityResolver } from '@/modules/development-automation/infrastructure/verificationRunner'
+import { createRepoScriptResolver as compatibilityResolver } from './helpers/developmentVerificationRunner'
 import { defaultAutomationPolicyContent } from '@/modules/development-automation/domain/automationPolicy'
 import {
   canonicalDigest,

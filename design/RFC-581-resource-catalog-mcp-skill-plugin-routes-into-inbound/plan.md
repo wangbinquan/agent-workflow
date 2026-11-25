@@ -17,7 +17,7 @@
 - [x] AC-2 行为不变：挂载调用与顺序不变，路由用例通过；36 个声明逐字移动
 - [x] AC-3 `legacy-horizontal-files` 上限 74 → 71；未消费 public 符号保持 0；public 类型偏差不变；DAG 之外的边不增加；归属表删去三行；新增 RFC-581
       用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（`2f5dcbe3f`，主 CI 70 / 70）
 
 ## 集中验证
 
@@ -58,7 +58,8 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `2f5dcbe3f`（实现）：exact SHA 主 CI run 45582686752 的 70 个 job 全部成功；按路径触发的 windows-platform（run 45582686681）通过。2026-11-25
+  转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

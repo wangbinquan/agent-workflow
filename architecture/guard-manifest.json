@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1024
+      "lines": 1006
     },
     {
       "assertsAbsence": true,
@@ -4688,6 +4688,18 @@
       "file": "packages/backend/tests/rfc583-system-operations-config-docs-plantuml-routes-and-http-helpers-boundary.test.ts",
       "id": "rfc583-system-operations-config-docs-plantuml-routes-and-http-helpers-boundary",
       "lines": 406,
+      "mechanism": "ast",
+      "minCorpusFiles": 6000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc584-rfc370-closure-unreachable-production-files-boundary.test.ts",
+      "id": "rfc584-rfc370-closure-unreachable-production-files-boundary",
+      "lines": 197,
       "mechanism": "ast",
       "minCorpusFiles": 6000,
       "negativeFixture": true,

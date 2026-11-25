@@ -15,7 +15,7 @@ import { EvidenceStore } from '../src/modules/development-automation/infrastruct
 import {
   createRepoScriptResolver,
   runVerificationProfile,
-} from '../src/modules/development-automation/infrastructure/verificationRunner'
+} from './helpers/developmentVerificationRunner'
 import type { VerificationProfileContent } from '../src/modules/development-automation/domain/verificationProfile'
 
 setDefaultTimeout(120_000)

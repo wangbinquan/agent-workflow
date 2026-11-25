@@ -18,7 +18,7 @@ import {
   businessTreeDigestOf,
   discardWorkspace,
   materializeActionWorkspace,
-} from '../src/modules/development-automation/infrastructure/actionWorkspace'
+} from './helpers/developmentActionWorkspace'
 
 async function git(cwd: string, args: string[]): Promise<string> {
   const r = await runGit(cwd, args)

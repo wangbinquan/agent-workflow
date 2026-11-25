@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { EvidenceStore } from '@/modules/development-automation/infrastructure/evidenceStore'
-import { adoptActionWorkspace } from '@/modules/development-automation/infrastructure/actionWorkspace'
+import { adoptActionWorkspace } from './helpers/developmentActionWorkspace'
 import { placeUploadSeed } from '@/modules/development-automation/infrastructure/uploadPlacement'
 import type { UploadPlacementPersistence } from '@/modules/development-automation/application/ports/uploadPlacementStore'
 import { sha256Hex } from '@/platform/contracts/hash'

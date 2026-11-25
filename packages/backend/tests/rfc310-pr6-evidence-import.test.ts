@@ -16,7 +16,7 @@ import { EvidenceStore } from '../src/modules/development-automation/infrastruct
 import {
   importPipelineEvidence,
   type PipelineCollectEnvelopeLike,
-} from '../src/modules/development-automation/infrastructure/pipelineEvidenceImport'
+} from './helpers/developmentPipelineEvidenceImport'
 
 setDefaultTimeout(120_000)
 
