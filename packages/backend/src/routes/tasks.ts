@@ -29,7 +29,7 @@ import {
   workflowReadLensFor,
   shouldRedactFor,
 } from '@/auth/tokenRedaction'
-import { parseBoolQuery } from '@/util/http'
+import { parseBoolQuery } from '@/platform/http/requestParsing'
 import { SyncWorkflowBodySchema, UpdateTaskMembersBodySchema } from '@agent-workflow/shared'
 import type {
   CodeIntelQuery,
@@ -42,7 +42,7 @@ import { structuralScopeSchema } from '@agent-workflow/shared'
 import type { TaskWorkspaceQueries } from '@/modules/task-execution/public/queries'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import type {
   TaskDiagnostics,
   TaskLifecycleAlertNotices,

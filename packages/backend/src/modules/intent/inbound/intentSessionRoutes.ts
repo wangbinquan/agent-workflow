@@ -71,7 +71,7 @@ import {
   setIntentSessionStatus,
   type ReservedIntentTurn,
 } from '@/modules/intent/application/session'
-import { safeJsonOrThrowInvalid } from '@/util/http'
+import { safeJsonOrThrowInvalid } from '@/platform/http/requestParsing'
 import {
   reserveExactIntentRetry,
   reserveIntentCurrentAction,

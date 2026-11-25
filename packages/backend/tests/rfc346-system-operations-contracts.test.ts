@@ -29,6 +29,19 @@ setDefaultTimeout(20_000)
 
 const SOURCE_ROOT = join(import.meta.dirname, '../src')
 const REPO_ROOT = join(import.meta.dirname, '../../..')
+/**
+ * What system-operations' domain / public / application may not import. RFC-574: the installation paths left
+ * `util/paths`; the matcher names their current location.
+ */
+const FORBIDDEN_INNER_LAYER_IMPORTS =
+  /from ['"](?:node:(?:fs|path)|hono|@\/(?:db|services|routes|server|platform\/configuration\/installationPaths))/
+/**
+ * What the backup / restore routes may not import. The migrations folder (RFC-573) and the installation paths
+ * (RFC-574) left `util/`; RFC-574 points the matcher at their current locations, which the `util/` spelling had stopped
+ * matching after the first move.
+ */
+const FORBIDDEN_ROUTE_IMPORTS =
+  /from ['"](?:node:(?:fs|path)|@\/(?:db|services|server|platform\/configuration\/installationPaths|platform\/persistence\/migration\/migrationsFolder))/
 const localContext = Object.freeze({}) as LocalSystemOperationContext
 const artifactRef = Object.freeze({}) as RestoreArtifactRef
 
@@ -281,11 +294,7 @@ describe('RFC-346 System Operations contracts', () => {
     const files = ['domain', 'public', 'application'].flatMap((layer) => walk(join(root, layer)))
     const offenders = files
       .map((path) => ({ path, source: readFileSync(path, 'utf8') }))
-      .filter(({ source }) =>
-        /from ['"](?:node:(?:fs|path)|hono|@\/(?:db|services|routes|server|util\/paths))/.test(
-          source,
-        ),
-      )
+      .filter(({ source }) => FORBIDDEN_INNER_LAYER_IMPORTS.test(source))
       .map(({ path }) => path.slice(root.length + 1))
       .sort()
     expect(offenders).toEqual([])
@@ -298,15 +307,41 @@ describe('RFC-346 System Operations contracts', () => {
     ])
   })
 
+  test('matcher self-check: the two forbidden-import matchers recognise every listed target and pass the public contracts', () => {
+    for (const fabricated of [
+      "import { readFileSync } from 'node:fs'",
+      "import { join } from 'node:path'",
+      "import { Hono } from 'hono'",
+      "import { openDb } from '@/db/client'",
+      "import { runBackup } from '@/services/backup'",
+      "import { mountRoutes } from '@/routes/registry'",
+      "import { createServer } from '@/server'",
+      "import { Paths } from '@/platform/configuration/installationPaths'",
+    ])
+      expect(FORBIDDEN_INNER_LAYER_IMPORTS.test(fabricated), fabricated).toBe(true)
+    for (const fabricated of [
+      "import { Paths } from '@/platform/configuration/installationPaths'",
+      'import { resolveMigrationsFolder } from "@/platform/persistence/migration/migrationsFolder"',
+      "import { openDb } from '@/db/client'",
+      "import { readFileSync } from 'node:fs'",
+    ])
+      expect(FORBIDDEN_ROUTE_IMPORTS.test(fabricated), fabricated).toBe(true)
+    for (const legitimate of [
+      "import type { RequestBackupCommand } from '@/modules/system-operations/public/commands'",
+      "import { safeJsonOrThrowInvalid } from '@/platform/http/requestParsing'",
+    ]) {
+      expect(FORBIDDEN_INNER_LAYER_IMPORTS.test(legitimate), legitimate).toBe(false)
+      expect(FORBIDDEN_ROUTE_IMPORTS.test(legitimate), legitimate).toBe(false)
+    }
+  })
+
   test('HTTP routes are thin descriptor adapters and bootstrap composes one module root', () => {
     const backup = readFileSync(join(SOURCE_ROOT, 'routes/backup.ts'), 'utf8')
     const restore = readFileSync(join(SOURCE_ROOT, 'routes/restore.ts'), 'utf8')
     const server = readFileSync(join(SOURCE_ROOT, 'server.ts'), 'utf8')
     for (const source of [backup, restore]) {
       expect(source).toContain('registerOperationRoute')
-      expect(source).not.toMatch(
-        /from ['"](?:node:(?:fs|path)|@\/(?:db|services|server|util\/(?:paths|migrationsFolder)))/,
-      )
+      expect(source).not.toMatch(FORBIDDEN_ROUTE_IMPORTS)
       expect(source).not.toMatch(
         /from ['"]@\/modules\/[^/'"]+\/(?:application|composition|domain|infrastructure)(?:\/|['"])/,
       )

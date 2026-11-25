@@ -39,7 +39,7 @@ import {
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { RuntimeSchemaBinding } from '@/platform/persistence/schema/tables'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
 import { doctorEpochUpgrade } from './doctorEpochUpgrade'
 import { readAutoUpgradeSessions } from './autoUpgradeState'

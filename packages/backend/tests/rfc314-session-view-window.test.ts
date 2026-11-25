@@ -27,7 +27,7 @@ import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/ea
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { getSessionTree } from '../src/modules/task-execution/infrastructure/sessionTreeRead'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,

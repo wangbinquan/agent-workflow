@@ -42,7 +42,7 @@ import {
   workflowReadLensFor,
 } from '@/auth/tokenRedaction'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 export interface WorkflowRouteDependencies {
   readonly queries: WorkflowQueries

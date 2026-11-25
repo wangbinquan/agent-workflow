@@ -31,7 +31,7 @@ import { ulid } from 'ulid'
 import { ValidationError } from '@/util/errors'
 import { redactSensitiveString } from '@/util/redact'
 import { createLogger } from '@/util/log'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { isLexicallyInsideForHost } from '@/platform/execution/local/platformExec'
 import { runManagedProcess } from '@/platform/execution/local/managedProcess'
 

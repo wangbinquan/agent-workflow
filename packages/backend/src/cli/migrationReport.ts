@@ -14,7 +14,7 @@ import type { LogicalSchemaContract } from '@/platform/persistence/schemaContrac
 import type { RuntimeSchemaBinding } from '@/platform/persistence/schema/tables'
 import { loadConfig } from '@/config'
 import { existsSync } from 'node:fs'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 /** What the command needs; bootstrap's `composeMigrationReportCommandDependencies()` supplies development-automation's analysis. */
 export interface MigrationReportCommandDependencies<R> {

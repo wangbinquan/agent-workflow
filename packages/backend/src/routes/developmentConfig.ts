@@ -21,7 +21,7 @@ import {
 import { decodeOrInvalid, registerOperationRoute } from '@/routes/operationRoute'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { NotFoundError } from '@/util/errors'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 interface ResourceHttpBinding {
   readonly kind: DevelopmentConfigResourceKind

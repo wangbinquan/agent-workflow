@@ -16,7 +16,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { resolve } from 'node:path'
 // RFC-282 C4 — import paths follow the per-runtime split; every assertion
 // below is byte-unchanged (golden table: 断言内容一字不改).

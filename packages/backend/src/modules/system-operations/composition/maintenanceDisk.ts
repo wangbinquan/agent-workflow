@@ -7,7 +7,7 @@ import {
   reportDiskReclaimable,
   reportMeasuredDiskReclaimable,
 } from '@/modules/system-operations/infrastructure/local/systemMaintenanceDisk'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 export function composeSqliteMaintenanceDiskOperations(
   db: DbClient,

@@ -8,7 +8,7 @@ import { actorOf } from '@/auth/actor'
 import type { EventCenterModule } from '../../application/ports/eventCenterModule'
 import { registerRoute } from '@/routes/registry'
 import { ConflictError, ForbiddenError } from '@/util/errors'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import { jsonDocumentResponse } from '@/platform/http/jsonDocument'
 
 const exactRefSchema = z

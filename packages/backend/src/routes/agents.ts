@@ -49,7 +49,7 @@ import { SKILL_MERGER_AGENT_ID } from '@/modules/resource-catalog/public/types'
 import { parseMultipartLaunch } from '@/platform/http/multipartLaunch'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { Agent } from '@agent-workflow/shared'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import type {
   AgentRouteTaskLaunchOperations,
   TaskRouteMultipartFilePart,

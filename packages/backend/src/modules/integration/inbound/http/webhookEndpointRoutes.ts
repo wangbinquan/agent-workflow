@@ -17,7 +17,7 @@ import {
   updateWebhookEndpoint,
   type WebhookEndpointServiceDeps,
 } from '../../application/webhookEndpoints'
-import { safeJsonOrThrowInvalid } from '@/util/http'
+import { safeJsonOrThrowInvalid } from '@/platform/http/requestParsing'
 
 export function mountWebhookEndpointRoutes(
   app: Hono,

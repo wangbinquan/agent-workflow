@@ -11,7 +11,7 @@
 // neither re-implements the parse.
 
 import { existsSync, readFileSync } from 'node:fs'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import type { DaemonRuntimeInfo } from '../../domain/daemonRuntime'
 import type { DaemonRuntimeQueries } from '../../public/queries'
 

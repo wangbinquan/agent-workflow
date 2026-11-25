@@ -117,7 +117,7 @@ const DISK_IMPORTS = [
   'import db/client: DbClient',
   `import ${SO}/public/types: MaintenanceDiskReport, ReclaimableDiskItem`,
   'import util/log: createLogger',
-  'import util/paths: Paths',
+  'import platform/configuration/installationPaths: Paths',
 ]
 /** The platform file takes only the PostgreSQL runtime type beside it. */
 const FOOTPRINT_IMPORTS = [
@@ -443,7 +443,7 @@ describe('RFC-505 ② composition 只装配', () => {
     const source = [
       `import { readPostgresqlStorageFootprint } from '@/platform/persistence/postgresqlStorageFootprint'`,
       `import { createBuiltinEmployeeJobs } from '@/${JOBS}'`,
-      `import { Paths } from '@/util/paths'`,
+      `import { Paths } from '@/platform/configuration/installationPaths'`,
       `export async function report(runtime: Runtime, kinds: readonly string[]) {`,
       `  if (kinds.length === 0) return`,
       `  for (const kind of kinds) void kind`,
@@ -458,7 +458,7 @@ describe('RFC-505 ② composition 只装配', () => {
     expect(moduleEdges(probe, source)).toEqual([
       `import ${FOOTPRINT}: readPostgresqlStorageFootprint`,
       `import ${JOBS}: createBuiltinEmployeeJobs`,
-      'import util/paths: Paths',
+      'import platform/configuration/installationPaths: Paths',
     ])
     // The location filter keeps edges into the RFC-505 locations and ignores the file's other edges.
     expect(edgesToLocations(moduleEdges(probe, source))).toEqual([

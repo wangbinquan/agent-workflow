@@ -37,7 +37,7 @@ import { registerRoute } from '@/routes/registry'
 import { mountAclEndpoints } from '@/routes/resourceAcl'
 import type { TemplateUpstreamOperations } from '../../application/templateUpstreamStatus'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 export interface CapabilityTemplateRouteDeps {
   readonly codeHistoryQueries: {

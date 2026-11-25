@@ -38,7 +38,7 @@ import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
 import { actorOf } from '@/auth/actor'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-import { parseBoolQuery } from '@/util/http'
+import { parseBoolQuery } from '@/platform/http/requestParsing'
 import type {
   DirectAuthorityBinding,
   DirectCommandContextFactory,

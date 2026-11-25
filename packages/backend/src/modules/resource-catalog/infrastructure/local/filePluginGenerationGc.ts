@@ -2,7 +2,7 @@
 import type { Dirent } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { garbageCollectPluginGenerations } from './filePluginInstallation'
 
 const DEFAULT_GRACE_MS = 24 * 60 * 60_000

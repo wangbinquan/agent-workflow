@@ -9,7 +9,7 @@ import {
   composePortArtifactOperations,
   createFilePortArtifactContent,
 } from '@/modules/task-execution/composition/portArtifacts'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 
 export const o2Ports = (db: PersistenceDb) =>

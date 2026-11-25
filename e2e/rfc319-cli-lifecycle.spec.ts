@@ -14,8 +14,8 @@ import { liveSqlitePath } from './storage'
 //     退出码由 `packages/backend/src/main.ts:71-80` 决定（只有 timeout / forced 非零）。
 //   * `status` 的三态与 running 那一档的排版 → `packages/backend/src/cli/status.ts:22-84`。
 //   * 单实例锁的拒绝文案 → `packages/backend/src/cli/start.ts:322-329`；
-//     锁文件本身（`.daemon.lock`，内容就是 PID）→ `packages/backend/src/util/lock.ts:47-95`
-//     与 `packages/backend/src/util/paths.ts`（`Paths.lock` / `daemonInfo` / `controlFile`）。
+//     锁文件本身（`.daemon.lock`，内容就是 PID）→ `packages/backend/src/platform/execution/local/daemonLock.ts:47-95`
+//     与 `packages/backend/src/platform/configuration/installationPaths.ts`（`Paths.lock` / `daemonInfo` / `controlFile`）。
 //   * `/health` 的载荷字段 → `packages/backend/src/routes/health.ts:36-68`。
 //
 // **本文件没有覆盖 OPS-007（stop 超时 / 强杀时诚实上报非优雅停机）**，原因写在
@@ -41,7 +41,7 @@ test.setTimeout(180_000)
  *
  * macOS 的 pid 上限是 99998，Linux 的 `pid_max` 默认 4194304，都远小于这个数；
  * `isProcessAlive` 只把 EPERM 当作「存在但没权限」，其余异常一律判死
- * （`packages/backend/src/util/process.ts:39-52`）。所以造陈旧锁用它，
+ * （`packages/backend/src/platform/execution/local/process.ts:39-52`）。所以造陈旧锁用它，
  * 而不是去 kill 一个真实进程——后者会在并发跑的机器上误伤别人。
  */
 const DEAD_PID = 2_147_483_600

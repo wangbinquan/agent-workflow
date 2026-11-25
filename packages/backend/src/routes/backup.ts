@@ -11,7 +11,7 @@ import type {
 import type { SystemOperationDescriptors } from '@/modules/system-operations/public/operations'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { directRequestAuthority } from '@/routes/operationAuthority'
-import { safeJsonOrThrowInvalid } from '@/util/http'
+import { safeJsonOrThrowInvalid } from '@/platform/http/requestParsing'
 import { ValidationError } from '@/util/errors'
 import { z } from 'zod'
 

@@ -37,7 +37,7 @@ import {
 } from '../../application/scheduledTasks'
 import { canEditAccess, canGovernAccess } from '@/modules/resource-catalog/public/types'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-import { safeJsonOrThrowInvalid } from '@/util/http'
+import { safeJsonOrThrowInvalid } from '@/platform/http/requestParsing'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 import type { BuildScheduleLaunch } from '../../application/ports/scheduledLaunch'

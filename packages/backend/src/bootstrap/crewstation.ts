@@ -1,5 +1,5 @@
 import { createCrewStationMcpDiagnosticRunner } from '@/modules/task-execution/composition/crewstationMcpDiagnosticRunner'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { createContentHumanGateArtifactStore } from '@/modules/collaboration/composition/contentArtifacts'
 import { createActiveHistoryRestrictionProvider } from '@/modules/system-operations/composition/epochInstallation'
 import {

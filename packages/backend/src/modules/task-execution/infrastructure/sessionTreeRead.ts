@@ -22,7 +22,7 @@ import { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
 import type { NodeRunPromptOperations } from '../public/types'
 import { requireNodeRunPromptOperations } from '../application/nodeRunPrompt'
 import { DomainError, NotFoundError } from '@/util/errors'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 /** 会话树是「读全历史」的视图,但仍要有界:单个 node_run 的归档回读封顶,
  *  避免一次请求把整份 JSONL 拉进内存(实现门 P1-2 的同源约束)。 */

@@ -5,7 +5,7 @@ import { startMaintenanceTicker } from '@/platform/background/maintenanceTicker'
 import { join } from 'node:path'
 import { writeSync } from 'node:fs'
 import { loadConfig } from '@/config'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { appVersion } from '@/platform/execution/version'
 import { createMigrationProgressReporter } from '@/platform/persistence/migration/run/progress'
 import {

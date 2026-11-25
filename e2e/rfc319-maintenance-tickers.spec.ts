@@ -29,7 +29,7 @@ import { liveSqlitePath } from './storage'
 //   * 心跳停滞自动杀：packages/backend/src/modules/task-execution/application/recovery/heartbeatKill.ts:96-110
 //     （`running` + pid 非空 + 最后事件早于 `now - heartbeatStallMs`）、:126-158
 //     （quarantine → breaker → driver lease → killChild → recovery 审计）、
-//     packages/backend/src/util/process.ts:258-301（`killStaleRunProcessTree`：
+//     packages/backend/src/platform/execution/local/process.ts:395-465（`killStaleRunProcessTree`：
 //     pid 活着 + 48h 窗口 + `spawn_binary_path` 命令行匹配三关才发信号）。
 //     **注意 autoKill.ts:149-156 无论 outcome 是什么都会落一条 `heartbeat-kill`
 //     recovery 事件**，所以本文件的判据是「子进程真的没了 + node_run 真的终态」，
@@ -594,7 +594,7 @@ async function waitForLiveChild(daemon: DaemonHandle, taskId: string): Promise<L
   if (row === undefined) throw new Error('unreachable')
   expect(
     row.spawnBinaryPath,
-    'node_runs.spawn_binary_path 是空的 ⇒ killStaleRunProcessTree 的命令行身份闸（util/process.ts:281-285）' +
+    'node_runs.spawn_binary_path 是空的 ⇒ killStaleRunProcessTree 的命令行身份闸（platform/execution/local/process.ts:416-432）' +
       '会以 command-mismatch 拒杀，本用例测的那条链路根本走不到',
   ).toBeTruthy()
   return { runId: row.id, pid: row.pid, taskId }

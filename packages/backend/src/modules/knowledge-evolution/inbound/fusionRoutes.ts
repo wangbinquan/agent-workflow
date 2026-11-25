@@ -38,7 +38,7 @@ import {
 } from '../application/fusionViews'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import type { MemoryScopeAuthority } from '@/modules/memory/public/queries'
 

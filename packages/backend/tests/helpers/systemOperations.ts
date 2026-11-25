@@ -12,7 +12,7 @@ import {
 } from '@/platform/persistence/databaseProviderRuntime'
 import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
 import type { DatabaseProvider, LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 
 /**

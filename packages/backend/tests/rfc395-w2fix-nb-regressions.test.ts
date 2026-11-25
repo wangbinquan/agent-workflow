@@ -50,7 +50,7 @@ import { createTaskObservationFacts } from '@/modules/task-execution/infrastruct
 import { contentRefColumns } from '@/platform/content/contentStore'
 import { createLogger } from '@/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,

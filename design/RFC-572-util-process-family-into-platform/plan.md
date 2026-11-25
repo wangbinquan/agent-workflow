@@ -68,6 +68,9 @@
 - **本地为什么没查出来**：选集把 59 个“只改了 import 说明符”的生产文件按“谁直接 import 它”选用例，没有按“谁把它当源码读”选（按文件名做文本
   匹配会把选集撑到两千多个，收窄时把这一类一起收掉了）。这条用例不 import `cli/stop.ts`，只按路径读它的源码。主 CI 的全量运行里整个后端只有这一条
   红，所以没有第二处同类遗漏；教训写进 `docs/dev-gotchas.md`。
+- **后续发现（RFC-574 动手前的检索，2026-11-25）**：`rfc346-system-operations-cli` 的“禁止取”正则写的是
+  `util\/(?:lock|paths|migrationsFolder)`，本 RFC 把 `util/lock` 迁走后它就认不出 daemon 锁的新位置了——判据没红，只是不再拦这个文件。本 RFC 的
+  检索按路径文本搜，漏了用正则写的路径。RFC-574 改认新位置并补自证。
 - `9507dea6e`（修正，父提交是 `cbbcf4692`）：exact SHA 主 CI run 45508080489 的 70 个 job 全部成功，含上一次红的后端分片 41/44、真实
   PostgreSQL、前端、三个平台的构建与检查、ubuntu / windows / macOS 的全部 e2e 分片。这个提交只改了一个用例文件与文档，没有触发按路径的其他
   工作流。本 RFC 转 Done。

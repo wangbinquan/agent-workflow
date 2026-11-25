@@ -28,7 +28,7 @@ import { createLogger, type Logger } from '@/util/log'
 import { bindNativeAgentInvocation } from '@/modules/task-execution/infrastructure/local/agentInvocation'
 import { createNativeAgentMaterialReferences } from '@/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
 import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import {
   DEFAULT_TIMEOUT_MS,
   runRuntimeSmokeCore,

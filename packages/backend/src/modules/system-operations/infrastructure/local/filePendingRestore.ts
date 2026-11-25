@@ -24,7 +24,7 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import { DomainError } from '@/util/errors'
 import { createLogger } from '@/util/log'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import {
   restoreBackup,
   RestorePostSwapError,

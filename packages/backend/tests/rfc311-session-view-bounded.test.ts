@@ -25,7 +25,7 @@ import { seedNodeRunDisplayEvidence } from './helpers/rfc395Q1Evidence'
 
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { getSessionTree } from '../src/modules/task-execution/infrastructure/sessionTreeRead'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,

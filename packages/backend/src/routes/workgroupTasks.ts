@@ -21,7 +21,7 @@ import type { WorkgroupTaskRoomModule } from '@/modules/resource-catalog/public/
 import type { WorkgroupOperationContext } from '@/modules/resource-catalog/public/participants'
 import type { WorkgroupTaskRoomQueries } from '@/modules/resource-catalog/public/queries'
 import { registerRoute } from '@/routes/registry'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import { jsonDocumentResponse } from '@/platform/http/jsonDocument'
 
 /** A room write may re-drive only a parked or interrupted task. */

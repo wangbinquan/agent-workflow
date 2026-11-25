@@ -3,7 +3,7 @@
 import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
 import type { DaemonRuntimeInfo } from '@/modules/system-operations/public/types'
 import { isProcessAlive, readPidFromLock } from '@/platform/execution/local/daemonLock'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 export interface HealthReport {
   ok: boolean

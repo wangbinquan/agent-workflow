@@ -5,7 +5,7 @@
 import { bindWorkspaceExcludeParticipant } from '@/modules/source-control/composition'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import type { TaskDriveRequest } from '@/modules/task-execution/application/ports/taskExecutionTopology'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 export function composeTaskWorkspaceExcludeProfilesFor(
   selected?: WorkspaceExcludeProfileFactory,

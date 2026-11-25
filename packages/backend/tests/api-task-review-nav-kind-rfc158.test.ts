@@ -26,7 +26,7 @@ import { SYSTEM_DECIDER } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,

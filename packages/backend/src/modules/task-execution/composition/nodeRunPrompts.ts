@@ -1,4 +1,4 @@
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import type {
   NodeRunPromptContentEffects,
   NodeRunPromptOperations,

@@ -71,7 +71,7 @@ import {
   createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { composeStandaloneTaskDeletionEffects } from './helpers/standaloneTaskDeletionEffects'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import {
   createFileRepositoryWorkspaceReadQueries,
   createFileWorkspaceUploadContentFactory,

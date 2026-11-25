@@ -100,7 +100,7 @@ import {
   buildPostgresqlSchemaPlan,
   type PostgresqlSchemaPlan,
 } from '@/platform/persistence/postgresqlSchema'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import {
   createSystemOperationsApplication,
   type SystemOperationsApplication,

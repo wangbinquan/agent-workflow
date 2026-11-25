@@ -27,7 +27,7 @@ import type {
   ReclaimableDiskItem,
 } from '@/modules/system-operations/public/types'
 import { createLogger } from '@/util/log'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 const log = createLogger('maintenance-disk')
 

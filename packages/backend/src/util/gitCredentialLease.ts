@@ -11,7 +11,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { IS_EMBEDDED } from '@/embed'
 import { GIT_CREDENTIAL_HELPER_SOURCE } from '@/embed.generated'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 export const GIT_CREDENTIAL_SUBCOMMAND = '__git-credential'
 const LEASE_NAME_RE = /^\.gitcred-[0-9A-HJKMNP-TV-Z]{26}$/

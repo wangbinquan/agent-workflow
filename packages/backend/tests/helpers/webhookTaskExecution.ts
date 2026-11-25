@@ -42,7 +42,7 @@ import { createTestTaskDriveCoordinator } from './legacyTaskDrive'
 
 import { cancelViaEngine } from './cancelEngine'
 import type { IntegrationTriggerIdentityAccess } from '../../src/server'
-import { Paths } from '../../src/util/paths'
+import { Paths } from '../../src/platform/configuration/installationPaths'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 import type { TerminalWorkspacePrunePolicy } from '@/modules/task-execution/public/types'

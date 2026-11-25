@@ -16,7 +16,7 @@ import { applyEmailTrust, decideProvisioning, type IdTokenClaims } from '@/auth/
 import { registerRoute } from '@/routes/registry'
 import { DomainError } from '@/util/errors'
 import { BadRequestErrorOrFriendlyHtml, friendly } from '@/util/oidcResponse'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 export interface OidcIdentitySeed {
   readonly providerId: string

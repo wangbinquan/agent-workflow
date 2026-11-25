@@ -5,7 +5,7 @@
 
 import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { loadConfig } from '@/config'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import {
   readEpochBootFactsForConfig,
   classifyEpochInstallation,

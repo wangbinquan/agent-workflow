@@ -56,7 +56,7 @@ import type { TaskLaunchProvenance } from '@/modules/task-execution/domain/taskL
 import type { TaskDriveCoordinator } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import { createTestHostTaskLaunchKernel } from './hostTaskLaunchKernel'
 import { composeTestTaskDriveFactory, createTestTaskDriveCoordinator } from './legacyTaskDrive'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { NotFoundError } from '@/util/errors'
 import type { WorktreeCleanupProvenance } from '@/util/git'
 import { createRootTaskLaunchPorts } from '@/modules/task-execution/composition/taskRouteLaunch'

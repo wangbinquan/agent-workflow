@@ -18,7 +18,7 @@ import {
   type DaemonStartupLease,
 } from '@/modules/system-operations/composition'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'

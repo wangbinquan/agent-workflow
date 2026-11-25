@@ -100,7 +100,7 @@
 //
 // 一处**刻意的环境设置**：daemon 跑在一个预先写好 `.demo-seeded` 标记的 home 上，
 // 于是 RFC-307 的样例内容（`[demo] reviewer` 等）不会被种下
-// （services/demoSeed.ts:100-101 的 marker 门；标记路径见 util/paths.ts:56-58）。
+// （services/demoSeed.ts:100-101 的 marker 门；标记路径见 platform/configuration/installationPaths.ts:56-58）。
 // 理由不是「样例碍事」，而是它把本行要验的状态**变得不可达**：`[demo] reviewer`
 // 是 `__system__` 名下的 **public** 行（demoSeed.ts:38-42、:156-158），对每个账号都可见，
 // 于是任何账号的代理列表都永远不为空——AGENT-08 的「删完回到空态列表」与 AGENT-40 的

@@ -28,7 +28,7 @@ async function createUserCommandFixture() {
     import('../src/modules/identity-access/composition'),
     import('../src/modules/identity-access/composition/userOperations'),
     import('../src/platform/persistence/migration/migrationsFolder'),
-    import('../src/util/paths'),
+    import('../src/platform/configuration/installationPaths'),
   ])
   const migrationsFolder = await resolveMigrationsFolder()
   const db = openDb({ path: Paths.db, migrationsFolder })

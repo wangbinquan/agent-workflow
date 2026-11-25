@@ -22,7 +22,8 @@ function tsFiles(root: string): string[] {
 
 // RFC-317 T14 —— 判据提到模块顶层：扫描与「matcher 自证」共用同一份实现。
 const FORBIDDEN_TASK_INTERNALS =
-  /from ['"]@\/(?:services\/(?:task|gc|scheduler|execution)|util\/paths)/
+  // RFC-574: the installation paths moved from util/paths into platform's configuration directory.
+  /from ['"]@\/(?:services\/(?:task|gc|scheduler|execution)|platform\/configuration\/installationPaths)/
 
 describe('RFC-303 architecture locks', () => {
   test('integration domain/application/infrastructure import only the task public contract', () => {
@@ -93,7 +94,7 @@ describe('RFC-317 T14 —— matcher 自证：伪造的越界 import 必须被�
       'import { collect } from "@/services/taskDelete"',
       "import { dispatch } from '@/services/scheduler'",
       "import { run } from '@/services/execution/kernel'",
-      "import { worktreePath } from '@/util/paths'",
+      "import { worktreePath } from '@/platform/configuration/installationPaths'",
     ]) {
       expect(FORBIDDEN_TASK_INTERNALS.test(fabricated), `没抓到：${fabricated}`).toBe(true)
     }

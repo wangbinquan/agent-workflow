@@ -1,7 +1,7 @@
 // 迁移目录的**唯一**解析入口。
 //
 // 为什么必须收敛成一处：drizzle 的 migrator 只认文件系统路径，而
-// `Paths.migrationsDir`（util/paths.ts:94）指的是**源码树里**的
+// `Paths.migrationsDir`（platform/configuration/installationPaths.ts:108）指的是**源码树里**的
 // `packages/backend/db/migrations`——`bun --compile` 出来的单二进制里没有这个
 // 目录，.sql 与 meta/_journal.json 都嵌在可执行文件内部。于是每个要开库的入口
 // 都得先「IS_EMBEDDED 时解包到 ~/.agent-workflow/runtime/migrations」。
@@ -21,7 +21,7 @@ import {
   extractPostgresqlMigrationsTo,
   IS_EMBEDDED,
 } from '@/embed'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 export interface ResolveMigrationsOptions {
   /**

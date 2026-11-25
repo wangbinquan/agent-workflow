@@ -101,13 +101,16 @@ export const Paths = {
    * Path to bundled drizzle migrations folder. In dev: backend/db/migrations.
    * In production single-binary build (M5), this resolves to the embedded path
    * via Bun.embeddedFiles (P-5-05).
+   *
+   * RFC-574: three levels up from this file (configuration → platform → src) is the backend package root; the
+   * file used to sit one level higher, in `src/util/`.
    */
   get migrationsDir() {
-    return resolve(import.meta.dirname, '..', '..', 'db', 'migrations')
+    return resolve(import.meta.dirname, '..', '..', '..', 'db', 'migrations')
   },
   /** RFC-349: PostgreSQL owns an independent immutable migration history; the
-   * SQLite SQL chain is never replayed into PostgreSQL. */
+   * SQLite SQL chain is never replayed into PostgreSQL. Same package root as `migrationsDir`. */
   get postgresqlMigrationsDir() {
-    return resolve(import.meta.dirname, '..', '..', 'db', 'postgresql-migrations')
+    return resolve(import.meta.dirname, '..', '..', '..', 'db', 'postgresql-migrations')
   },
 }

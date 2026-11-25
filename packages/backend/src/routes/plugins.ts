@@ -29,7 +29,7 @@ import { captureDeleteSnapshot } from '@/platform/http/deleteSnapshot'
 import { serializePluginFor } from '@/auth/tokenRedaction'
 import { assertDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 export interface PluginRouteDependencies {
   readonly queries: PluginQueries

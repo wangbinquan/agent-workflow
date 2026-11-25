@@ -49,7 +49,7 @@ import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopo
 import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
 import { createUser } from './helpers/userFixture'
 import { createWebhookDispatcher } from '../src/modules/integration/application/webhookDispatch'
-import { Paths } from '../src/util/paths'
+import { Paths } from '../src/platform/configuration/installationPaths'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import { createWorkflow } from './helpers/model/resourceWrites'
 import { applyIntentChangeset } from './helpers/intentApply'

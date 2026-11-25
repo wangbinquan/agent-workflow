@@ -10,7 +10,7 @@
 
 | 变量                                      | 读取点                                                                             | 语义                                                                                 |
 | ----------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `AGENT_WORKFLOW_HOME`                     | `backend/src/util/paths.ts`                                                        | app home 根目录覆盖（worktrees / skills / runs 等全在其下）                          |
+| `AGENT_WORKFLOW_HOME`                     | `backend/src/platform/configuration/installationPaths.ts`                          | app home 根目录覆盖（worktrees / skills / runs 等全在其下）                          |
 | `AGENT_WORKFLOW_VERSION`                  | `backend/src/platform/execution/version.ts`                                                      | 版本号覆盖（dev/测试）；优先于构建期注入值，双缺省 `0.0.0-dev`                       |
 | `AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK`     | `backend/src/bootstrap/daemonStart.ts`                                             | `=1` 跳过单二进制完整性自检——最后手段、不安全，错误提示里明示                        |
 | `AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS`      | `backend/src/bootstrap/daemonStart.ts`                                             | dev 模式下单实例 flock 交接的等待毫秒数                                              |

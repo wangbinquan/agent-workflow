@@ -18,7 +18,7 @@ import {
   updateWebhookTrigger,
   type WebhookTriggerServiceDeps,
 } from '../../application/webhookTriggers'
-import { safeJsonOrThrowInvalid } from '@/util/http'
+import { safeJsonOrThrowInvalid } from '@/platform/http/requestParsing'
 import type { DirectAuthorityBinding } from '@/modules/identity-access/public/participants'
 import type { TaskExecutionResourceBinding } from '@/modules/task-execution/public/commands'
 import type { IntegrationTriggerResourceQueries } from '../../application/ports/scheduledTaskPersistence'

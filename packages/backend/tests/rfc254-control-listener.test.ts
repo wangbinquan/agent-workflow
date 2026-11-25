@@ -312,7 +312,10 @@ describe('RFC-254 T7 — the daemon publishes and retracts the endpoint', () => 
   })
 
   test('the control path is registered as an at-rest secret location', () => {
-    const paths = readFileSync(join(import.meta.dir, '..', 'src', 'util', 'paths.ts'), 'utf8')
+    const paths = readFileSync(
+      join(import.meta.dir, '..', 'src', 'platform', 'configuration', 'installationPaths.ts'),
+      'utf8',
+    )
     expect(paths).toContain('controlFile')
     expect(paths).toContain('AT-REST SECRET')
   })

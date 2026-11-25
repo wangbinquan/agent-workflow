@@ -9,7 +9,7 @@ import { mkdtempSync, rmSync, readFileSync, existsSync, statSync } from 'node:fs
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadConfig } from '@/config'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { extractTarGz } from '@/platform/persistence/archive'
 import { readManifest } from '@/platform/persistence/sqlite/systemBackupManifest'
 import { composeLocalEpochSwitch } from './epochMigration'

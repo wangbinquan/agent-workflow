@@ -77,7 +77,7 @@ function freshHome(tag: string): string {
 
 /**
  * 系统 `tar`，路径规则与产品自己用的那份保持一致
- * （`packages/backend/src/util/archive.ts:28-36`）：Windows 上必须用绝对的
+ * （`packages/backend/src/platform/persistence/archive.ts:28-36`）：Windows 上必须用绝对的
  * `System32\tar.exe`（bsdtar），裸名字会先命中 Git for Windows 的 GNU tar，而后者
  * 把 `C:\…` 读成 rsh 的 `host:path`。夹具用的 tar 与产品用的 tar 不是同一个，
  * 就等于夹具在验证另一件事。

@@ -1,4 +1,28 @@
-## 2026-11-24 RFC-573 `util/` 的四个余下小文件归位（In Progress；`design/RFC-573-util-small-files-placement/`）
+## 2026-11-25 RFC-574 `util/paths` 与 `util/http` 归 platform（In Progress；`design/RFC-574-util-paths-and-http-into-platform/`）
+
+- **来由**：W9-D 的第四批。`util/` 余下 15 个文件里，读者数百处的五个中 `paths` 与 `http` 读者最少。用户 2026-11-02「好，你继续推进RFC294，过程中
+  你以最优架构进行自行判断不用提交给我审批」（2026-11-09、2026-11-17、2026-11-24 再次下达）、2026-11-10「当前RFC294的设计已经刷新，你按照最新刷新
+  的设计，进行推进」、2026-11-19「你加速推进RFC294」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：`util/paths.ts` 改名 `installationPaths.ts` 进 `platform/configuration/`（文件深了一层，`migrationsDir` 与 `postgresqlMigrationsDir` 回到
+  backend 包根的层数从两级改成三级），`util/http.ts` 改名 `requestParsing.ts` 进 `platform/http/`（逐字节不变）；78 个生产读者与
+  43 个用例与测试助手（30 + 13）改指，旧位置不留转出。随改：归属表、公共内核清单、几处钉着旧路径的用例、`docs/env-flags.md`、e2e 里指向
+  被挪文件的现状指针；新增 RFC-574 用例。
+- **本人缺陷（RFC-572 / RFC-573 引入，本 RFC 修）**：`rfc346-system-operations-cli` 与 `rfc346-system-operations-contracts` 用正则写的“禁止取”判据里
+  是 `util\/(?:lock|paths|migrationsFolder)` 这样的写法，`lock`、`migrationsFolder` 迁走后它们就认不出新位置了——判据没红，只是不再拦那两个文件；
+  按路径文本的检索看不到这种写法。改认现位置并补自证（`rfc303` 的一条同样改）。e2e 注释里 RFC-572 留下的五处旧路径指针一并改。检索清单补进
+  `docs/dev-gotchas.md`（正则写的路径、`import.meta` 相对路径、`e2e/` 与其余包）。
+- **不做**：`util/` 余下的 13 个——`errors` / `hash` / `log` 另立；git、凭据、文件信任、Windows ACL、OIDC、脱敏与安全路径一族不动。
+- **收口对账**（RFC-294 C10～C13，design §7）：C10 两个平台机制进 platform；C11 不涉及 public；C12 RFC-574 用例覆盖 `src` / `tests` / `scripts` 的
+  全部说明符、两个新文件与真实的 `Paths`，三个正则判据各自覆盖原来的文件集合并带自证；C13 `legacy-horizontal-files` 103 → 101，其余计数不升。
+- **集中验证**（基于 `3a9a99e64`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。没有查出产品缺陷；`requestParsing.ts` 逐字节不变，`installationPaths.ts` 只差两处
+  层数。tsc 0 错，eslint / promises / prettier 无告警；选出 829 个用例文件，一次全部通过；读已提交源码的 206 个用例文件在候选导出里通过；十二种变异
+  都被认出（层数那一种起初配错了证人，换成读第一代迁移历史的用例后同红，design §6 随之改正）；架构报告 60 个计数里只有 legacy 横向文件数变了。实现门 PASS（本会话按路径限定
+  自审，只审功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：RFC-573 的提交 `3a9a99e64`：exact SHA 主 CI run 45518146982 的 70 个 job 全部成功——全部后端分片、真实 PostgreSQL、前端、三个平台的构建与检查、
+  ubuntu / windows / macOS 的全部 e2e 分片。同一提交按路径触发的另三个工作流也全部通过：windows-platform（run 45518147036，`fsReclaim` 的
+  新位置在它的路径清单里）、integration-opencode（run 45518146958）与 git-protocols-e2e（run 45518146932）。
+
+## 2026-11-24 RFC-573 `util/` 的四个余下小文件归位（Done，`3a9a99e64`；`design/RFC-573-util-small-files-placement/`）
 
 - **来由**：W9-D 的第三批。`util/` 余下的 19 个文件里，扣掉读者数百处的五个与 git、凭据、文件信任一族，还有四个小文件：三个是平台机制，第四个
   （读 daemon 运行信息文件）其实是 system-operations 里 `DaemonRuntimeQueries` 端口的文件实现的内容，只是住在 `util/`，`status` 命令绕过端口直接
@@ -21,6 +45,9 @@
   功能）。独立对账（RFC-294 plan §0 第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
 - **CI 侧**：RFC-571 补迁的提交 `1db8cc54f`：exact SHA 主 CI run 45512993334 70 / 70 全绿；同一提交按路径触发的 windows-platform（run 45512993314）与
   maintenance-soak-nightly（run 45512993436）通过。
+- **CI**：`3a9a99e64` exact SHA 主 CI run 45518146982 的 70 个 job 全部成功——全部后端分片、真实 PostgreSQL、前端、三个平台的构建与检查、
+  ubuntu / windows / macOS 的全部 e2e 分片。同一提交按路径触发的另三个工作流也全部通过：windows-platform（run 45518147036，`fsReclaim` 的
+  新位置在它的路径清单里）、integration-opencode（run 45518146958）与 git-protocols-e2e（run 45518146932）。
 
 ## 2026-11-24 RFC-571 补迁：`util/inFlight` 与 `util/sqlChunk` 归 platform（Done，`1db8cc54f`；`design/RFC-571-util-primitives-into-platform-1/` design §7、plan「补迁」一节）
 

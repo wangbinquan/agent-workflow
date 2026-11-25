@@ -17,7 +17,7 @@ import {
   type MemoryDistillPolicySource,
 } from '@/modules/memory/application/distill/schedule'
 import { DEFAULT_DISTILL_POLICY } from '@agent-workflow/shared'
-import { appHome } from '@/util/paths'
+import { appHome } from '@/platform/configuration/installationPaths'
 import {
   runDistill as runSelectedDistill,
   type RunDistillOptions as SelectedRunDistillOptions,

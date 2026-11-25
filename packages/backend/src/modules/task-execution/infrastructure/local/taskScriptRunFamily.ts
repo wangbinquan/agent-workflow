@@ -9,7 +9,7 @@ import type {
   TaskScriptStartReceipt,
 } from '../../application/ports/taskScriptRunFamily'
 import { join } from 'node:path'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import type { ManagedProcessResult } from '@/platform/execution/local/managedProcess'
 import {
   describeInterpreterResolution,

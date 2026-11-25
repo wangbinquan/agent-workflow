@@ -11,7 +11,7 @@ import {
 import { decodeOrInvalid, registerOperationRoute } from '@/routes/operationRoute'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { DomainError } from '@/util/errors'
-import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '@/util/http'
+import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '@/platform/http/requestParsing'
 
 export function mountDevelopmentMissionRoutes(
   app: Hono,

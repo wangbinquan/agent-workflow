@@ -1,6 +1,6 @@
 import type { Task } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { appHome } from '@/util/paths'
+import { appHome } from '@/platform/configuration/installationPaths'
 import {
   triggerChangeNarrative as triggerSelectedNarrative,
   type ChangeNarrativeDeps as SelectedChangeNarrativeDeps,

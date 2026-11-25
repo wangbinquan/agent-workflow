@@ -23,7 +23,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { stopCommand } from '../src/cli/stop'
 import { isProcessAlive, writePidFileForTest } from '../src/platform/execution/local/daemonLock'
-import { Paths } from '../src/util/paths'
+import { Paths } from '../src/platform/configuration/installationPaths'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const mainPath = resolve(import.meta.dir, '..', 'src', 'main.ts')

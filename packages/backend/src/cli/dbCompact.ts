@@ -22,7 +22,7 @@ import {
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { isProcessAlive } from '@/platform/execution/local/process'
 import { readPidFromLock } from '@/platform/execution/local/daemonLock'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 export interface DbCompactResult {
   status: 'ok' | 'daemon-running' | 'no-db'

@@ -18,7 +18,9 @@ const ENTRY_IMPORTS: Readonly<Record<string, string>> = {
   // RFC-571: the binary version identity moved from util/ into platform.
   './platform/execution/version': 'the `version` command',
   './util/log': 'the startup failure log',
-  './util/paths': 'the application home handed to the legacy epoch command',
+  // RFC-574: the installation paths moved from util/ into platform's configuration directory.
+  './platform/configuration/installationPaths':
+    'the application home handed to the legacy epoch command',
   './util/gitCredentialLease': 'the git credential-helper protocol (RFC-254 T20)',
 }
 const MAIN_FUNCTIONS = ['isE2eBuild', 'main', 'readFlag', 'readPortFlag']

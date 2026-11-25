@@ -16,7 +16,7 @@ import {
 } from '@/modules/intent/inbound/intentSessionRoutes'
 import { createUser } from './helpers/userFixture'
 import { errorHandler } from '@/util/errors'
-import { appHome } from '@/util/paths'
+import { appHome } from '@/platform/configuration/installationPaths'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createIntentSessionForTest,

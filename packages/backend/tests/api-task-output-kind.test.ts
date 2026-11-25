@@ -28,7 +28,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,

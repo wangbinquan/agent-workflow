@@ -23,7 +23,7 @@ import {
   runSqliteWalCheckpointTick,
 } from '@/platform/persistence/sqlite/systemMaintenanceOperations'
 import { createLogger } from '@/util/log'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { HOUR_MS, MAINTENANCE_PHASE } from '@/platform/background/daemonCadence'
 import { startMaintenanceTicker } from '@/platform/background/maintenanceTicker'
 import { rawCopyDb } from '@/platform/persistence/sqlite/rawDbSnapshot'

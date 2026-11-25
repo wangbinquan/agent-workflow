@@ -51,7 +51,7 @@ import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSou
 import { readLogicalDatabaseBackupEnvelope } from '@/platform/persistence/logicalDatabaseExport'
 import { verifyLogicalDatabaseSourceMatchesArtifact } from '@/platform/persistence/logicalDatabaseRestore'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { type BackupManifest, currentAppVersion, readManifest } from './systemBackupManifest'
 import { rawCopyDb } from '@/platform/persistence/sqlite/rawDbSnapshot'
 import { reconstructWorktrees } from '@/platform/persistence/portableApplicationAssets'

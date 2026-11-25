@@ -16,7 +16,7 @@
 - [x] AC-1 四个旧路径不存在、没有说明符再解析到它们；迁入 platform 的三个文件与原文件相同
 - [x] AC-2 行为不变；`status` 命令经端口读运行信息，`cli/status.ts` 不取任何模块的 infrastructure
 - [x] AC-3 `legacy-horizontal-files` 上限 107 → 103；归属表删去四行；Windows 工作流两份路径清单同步；新增 RFC-573 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（`3a9a99e64`，主 CI 70 / 70）
 
 ## 集中验证
 
@@ -26,6 +26,9 @@
 与候选相同。
 
 - **集中验证没有查出缺陷**：选集、候选导出里的用例与架构报告都是一次通过。
+- **后续发现（RFC-574 动手前的检索，2026-11-25）**：`rfc346-system-operations-cli` 与 `rfc346-system-operations-contracts` 的“禁止取”正则里写的是
+  `util\/(?:…|migrationsFolder)`，本 RFC 把 `migrationsFolder` 迁走后它们就认不出它的新位置了——判据没红，只是不再拦这个文件。本 RFC 的检索按
+  路径文本搜，漏了用正则写的路径。RFC-574 改认新位置并补自证。
 - **原样迁移**：迁入 platform 的三个文件迁移前后的 SHA-256 逐个相同。生产代码的其余改动：15 个读者的 import 说明符（`epoch1/bundle.ts` 的那一行
   变长后被 prettier 折成四行），五处注释里的路径，以及 design §2 的五个文件（运行信息的读取并入文件实现、装配根多一条导出、bootstrap 多一个
   函数、`status` 命令与 `main.ts` 的接线）。
@@ -58,7 +61,9 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `3a9a99e64`（实现，父提交是 `1db8cc54f`；同一提交记 RFC-571 补迁转 Done）：exact SHA 主 CI run 45518146982 的 70 个 job 全部成功——全部后端分片、真实 PostgreSQL、前端、三个平台的构建与检查、
+  ubuntu / windows / macOS 的全部 e2e 分片。同一提交按路径触发的另三个工作流也全部通过：windows-platform（run 45518147036，`fsReclaim` 的
+  新位置在它的路径清单里）、integration-opencode（run 45518146958）与 git-protocols-e2e（run 45518146932）。
 
 ## 实现门（本会话自审，只审功能）
 

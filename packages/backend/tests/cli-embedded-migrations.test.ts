@@ -4,7 +4,7 @@
 // dist/agent-workflow-macos-arm64 上实测，四条命令退出码都是 1）。
 //
 // 根因：这四处直接把 `Paths.migrationsDir` 交给 `openDb`，而
-// `packages/backend/src/util/paths.ts:94` 解析出来的是**源码树里**的
+// `packages/backend/src/platform/configuration/installationPaths.ts:108` 解析出来的是**源码树里**的
 // `packages/backend/db/migrations`——单二进制里没有这个目录。同仓的
 // `cli/user.ts` / `cli/auth.ts` / `cli/restore.ts` / `cli/start.ts` 都各自手写了
 // 一段「IS_EMBEDDED 时先解包到 ~/.agent-workflow/runtime/migrations」的前置，

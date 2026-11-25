@@ -1,5 +1,5 @@
 import { eventArchivePath } from '@/platform/content/locations/eventArchive'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { existsSync } from 'node:fs'
 import type { ArchivedEventsReader } from './eventsArchiveContent'
 

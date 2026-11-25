@@ -5,7 +5,7 @@ import {
   type DaemonHostLifecyclePort,
   type DaemonHostShutdownCallbacks,
 } from '@/modules/system-operations/composition/daemonHostLifecycle'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 export interface DevelopmentOverlay {
   readonly daemonHost: DaemonHostLifecyclePort

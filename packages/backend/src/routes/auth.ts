@@ -26,7 +26,7 @@ import {
   UnauthorizedError,
   ValidationError,
 } from '@/util/errors'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import type { UpdateOwnProfile } from '@/modules/identity-access/public/commands'
 import type {
   DirectAuthorityBinding,

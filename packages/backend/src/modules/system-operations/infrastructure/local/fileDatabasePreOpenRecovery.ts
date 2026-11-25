@@ -7,7 +7,7 @@ import type { SqlitePostRestoreRecovery } from '@/platform/persistence/sqlite/sy
 import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/schema/history/logicalHistory'
 import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { readDatabaseSchemaUpgradeGeneration } from '../databaseMigrationCoordinator'
 import { applyPendingRestoreIfAny, hasPendingRestore } from './filePendingRestore'
 import { existsSync, readFileSync } from 'node:fs'

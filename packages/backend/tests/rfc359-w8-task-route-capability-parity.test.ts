@@ -119,7 +119,7 @@ import {
   createFileNodeRunPromptContent,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { composeStandaloneTaskDeletionEffects } from './helpers/standaloneTaskDeletionEffects'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { neverPruneTerminalWorkspaces } from '@/modules/task-execution/composition'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'

@@ -10,7 +10,7 @@ import {
   type ChangeNarrative,
   type StructuralDiff,
 } from '@agent-workflow/shared'
-import { appHome } from '@/util/paths'
+import { appHome } from '@/platform/configuration/installationPaths'
 import type {
   CodeReviewArtifactStore,
   StructuralDiffArtifactKey,

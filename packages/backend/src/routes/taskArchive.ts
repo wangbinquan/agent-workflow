@@ -20,8 +20,8 @@ import type { ApplicationConfigurationQueries } from '@/modules/system-operation
 import { registerRoute } from '@/routes/registry'
 import type { TaskArchiveMaintenanceCommand } from '@/modules/task-execution/public/commands'
 import { ValidationError } from '@/util/errors'
-import { safeJsonOrEmpty } from '@/util/http'
-import { Paths } from '@/util/paths'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 const RETENTION_BOUND = SETTINGS_NUMERIC_BOUNDS['taskArchive.retentionDays']
 // 单次调用的硬上限。归档跑在守护进程那条**同步**的 SQLite 连接上,一次吞下上万棵

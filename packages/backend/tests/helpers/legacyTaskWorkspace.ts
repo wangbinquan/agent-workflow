@@ -3,7 +3,7 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 // Test-only binding to the real SC mechanisms; no production service facade.
 import type { StartTask } from '@agent-workflow/shared'
 import type { TestTaskLaunchOptions } from './productionTaskLaunch'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { loadFrozenSpaceLayout } from '@/modules/task-execution/infrastructure/frozenWorkspaceLayout'
 import {

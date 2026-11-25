@@ -30,7 +30,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '@/util/errors'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 const OPERATION_LIMIT_PER_MINUTE = 20
 const OPERATION_LIMIT_WINDOW_MS = 60_000

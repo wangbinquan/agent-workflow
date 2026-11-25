@@ -10,7 +10,7 @@ import type {
 import type { DatabaseMigrationOperationDescriptors } from '@/modules/system-operations/public/operations'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { directRequestAuthority } from '@/routes/operationAuthority'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import type { DatabaseMigrationArtifactView } from '@/modules/system-operations/public/types'
 
 interface DatabaseMigrationRouteIdentityAccess {

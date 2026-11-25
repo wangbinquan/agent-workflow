@@ -548,14 +548,14 @@
       "claimAudit": "Holds, and it is ratcheted properly: rfc284-safejson-convergence.test.ts:21,32-48 keeps the local-definition allowlist EMPTY and fails on any new `async function safeJson(`. This is the template the other commons in this family lack.",
       "core": false,
       "files": [
-        "packages/backend/src/util/http.ts"
+        "packages/backend/src/platform/http/requestParsing.ts"
       ],
       "guards": [],
       "id": "util-http-safejsonorempty-safejsonorthrowinvalid",
       "layer": "inbound",
       "owner": "platform",
       "singleSourceOf": "Single HTTP body JSON parser for every route (replaced 20 local copies, audit N20).",
-      "title": "util/http safeJsonOrEmpty / safeJsonOrThrowInvalid"
+      "title": "platform/http/requestParsing safeJsonOrEmpty / safeJsonOrThrowInvalid"
     },
     {
       "auditedBy": "execution-kernel",

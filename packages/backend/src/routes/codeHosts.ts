@@ -18,7 +18,7 @@ import { actorOf } from '@/auth/actor'
 import type { CodeHostConnectionAdministration } from '@/modules/integration/public/types'
 import { registerRoute } from '@/routes/registry'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '@/util/http'
+import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '@/platform/http/requestParsing'
 
 function providerOf(raw: string): CodeHostProvider {
   // safeParse 而不是 `as`：RFC-054 W1-7 要求路由层的窄化走 Zod，而不是断言。

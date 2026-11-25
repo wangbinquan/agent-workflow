@@ -13,7 +13,7 @@ import {
 } from '@/modules/system-operations/infrastructure/local/doctorDiagnostics'
 import { loadConfig } from '@/config'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 function barrier() {
   let resolve!: () => void

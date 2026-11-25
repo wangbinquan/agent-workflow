@@ -1,7 +1,7 @@
 import { taskContentDirectory } from '@/platform/content/locations/directories'
 import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import type { TaskDeletionContentEffects } from '../../application/ports/taskDeletionContentEffects'
 
 export function createFileTaskDeletionContentEffects(): TaskDeletionContentEffects {

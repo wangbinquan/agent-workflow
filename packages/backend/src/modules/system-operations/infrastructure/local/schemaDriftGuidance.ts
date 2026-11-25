@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path'
 import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
 import { readGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
 import { SchemaHistoryError } from '@/platform/persistence/schema/history/types'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 function databaseLocation(): string {
   if (!existsSync(Paths.databaseGenerationPointer)) return Paths.db

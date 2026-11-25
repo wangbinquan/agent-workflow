@@ -22,7 +22,7 @@ import {
   requestShutdown,
 } from '@/platform/execution/local/controlListener'
 import { isProcessAlive, readPidFromLock } from '@/platform/execution/local/daemonLock'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 export interface StopOptions {
   /** Max time to wait for the daemon to exit after the request. Default 30s. */

@@ -11,8 +11,8 @@ import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { redactedProvider, type OidcProvidersService } from '@/auth/oidc/providers'
 import { registerRoute } from '@/routes/registry'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { parseBoolQuery } from '@/util/http'
-import { safeJsonOrEmpty } from '@/util/http'
+import { parseBoolQuery } from '@/platform/http/requestParsing'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 export interface OidcRouteBindings {
   readonly auth: AuthRuntime

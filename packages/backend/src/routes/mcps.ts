@@ -46,7 +46,7 @@ import { NotFoundError, ValidationError } from '@/util/errors'
 import type { CommandContext, QueryContext } from '@/modules/identity-access/public/participants'
 import type { McpDiagnosticsCommands } from '@/modules/resource-catalog/public/commands'
 import type { McpDiagnosticsQueries } from '@/modules/resource-catalog/public/queries'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 export interface McpRouteDependencies {
   readonly queries: McpQueries

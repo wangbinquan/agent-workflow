@@ -45,7 +45,7 @@ import {
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
-import { appHome } from '../src/util/paths'
+import { appHome } from '../src/platform/configuration/installationPaths'
 import { createInMemoryDb } from '../src/db/client'
 
 import { describeEachProvider } from './helpers/eachProvider'

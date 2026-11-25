@@ -21,7 +21,7 @@ import { ulid } from 'ulid'
 import { mintNodeRun } from '../src/modules/task-execution/infrastructure/legacyNodeRunMint'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,

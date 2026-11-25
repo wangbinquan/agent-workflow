@@ -33,7 +33,7 @@ const TRANSPORT_ALLOWLIST = new Set([
   '@/routes/registry',
   '@/routes/resourceAcl',
   '@/util/errors',
-  '@/util/http',
+  '@/platform/http/requestParsing',
 ])
 
 function walk(dir: string): string[] {

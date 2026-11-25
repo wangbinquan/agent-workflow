@@ -35,7 +35,7 @@ import {
 } from '../src/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries'
 import type { DaemonRuntimeInfo } from '../src/modules/system-operations/public/types'
 import { writePidFileForTest } from '../src/platform/execution/local/daemonLock'
-import { Paths } from '../src/util/paths'
+import { Paths } from '../src/platform/configuration/installationPaths'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const REPO = resolve(BACKEND, '..', '..')
@@ -60,7 +60,7 @@ const MOVED: ReadonlyArray<readonly [string, string, readonly string[], readonly
     'util/migrationsFolder',
     'platform/persistence/migration/migrationsFolder',
     ['ResolveMigrationsOptions', 'resolveMigrationsFolder', 'resolvePostgresqlMigrationsFolder'],
-    ['@/embed', '@/util/paths', 'node:fs', 'node:path'],
+    ['@/embed', '@/platform/configuration/installationPaths', 'node:fs', 'node:path'],
   ],
 ]
 /** The fourth file did not move as a file: its one function joined the file implementation of the query port. */
@@ -328,8 +328,8 @@ describe('RFC-573 —— status 命令经端口读运行信息', () => {
     ).toEqual([
       '@/modules/system-operations/public/queries',
       '@/modules/system-operations/public/types',
+      '@/platform/configuration/installationPaths',
       '@/platform/execution/local/daemonLock',
-      '@/util/paths',
     ])
   })
 

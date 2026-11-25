@@ -1,7 +1,7 @@
 // RFC-360: model discovery belongs to Runtime Management.
 import type { Hono } from 'hono'
 import { registerRoute } from '@/routes/registry'
-import { parseBoolQuery } from '@/util/http'
+import { parseBoolQuery } from '@/platform/http/requestParsing'
 import type { RuntimeModelQueries } from '@/modules/runtime-management/public/queries'
 
 export type RuntimeRouteDependencies = RuntimeModelQueries

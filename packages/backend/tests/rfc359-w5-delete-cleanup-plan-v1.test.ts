@@ -36,7 +36,7 @@ import { join } from 'node:path'
 
 import { parseDeleteCleanupPlan } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
 import type { MaintenanceMemberSnapshot } from '@/modules/task-execution/domain/terminalMaintenance'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { composeStandaloneTaskDeletionEffects } from './helpers/standaloneTaskDeletionEffects'
 
 function member(taskId: string): MaintenanceMemberSnapshot {

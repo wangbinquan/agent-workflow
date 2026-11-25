@@ -6,7 +6,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
-import { parseBoolQuery } from '../src/util/http'
+import { parseBoolQuery } from '../src/platform/http/requestParsing'
 import { ValidationError } from '../src/util/errors'
 
 async function probe(query: string, def: boolean): Promise<boolean> {

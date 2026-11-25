@@ -12,7 +12,7 @@ import { composeDefaultRuntimeBinaryProbe } from '@/modules/runtime-management/c
 import { createResourcePackagePluginInstaller } from '@/modules/resource-catalog/composition/resourcePackagePluginInstaller'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { createFileArchivedEventsReader } from '@/platform/background/eventsArchiveReader'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import {
   composeLocalRepositoryMirrorRefresh,

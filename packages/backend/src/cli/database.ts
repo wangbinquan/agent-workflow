@@ -10,7 +10,7 @@ import {
 } from '@agent-workflow/shared'
 import type { Lock } from '@/platform/execution/local/daemonLock'
 import { acquireLock, DaemonLockHeldError } from '@/platform/execution/local/daemonLock'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import { DATABASE_PROVIDERS } from '@/platform/persistence/databaseProviders'
 import { supportsProviderMove } from '@/platform/persistence/migrationSupport'

@@ -1,7 +1,7 @@
 // RFC-284 T5（2026-08-12 审计 N20 / 设计门路 2 P1）——safeJson 语义族收口锁。
 //
 // 20 份本地拷贝分三个语义族（{}×13 / throw×4 / 异文案×1），已按族收敛为
-// util/http.ts 的两个 util。本测试三层锁：
+// platform/http/requestParsing.ts 的两个 util。本测试三层锁：
 //   1. 计数锁：routes/services 里本地 `async function safeJson` 定义只剩
 //      T28 豁免清单（webhook 两路由——RFC-283 在途，removeWhen=RFC-284 T28）；
 //   2. wire 行为锁（{} 族）：坏 JSON → {} → 下游 zod 报字段级 validation-error；
@@ -11,13 +11,13 @@
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '../src/util/http'
+import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '../src/platform/http/requestParsing'
 import { ValidationError } from '../src/util/errors'
 
 const SRC_ROOT = join(import.meta.dir, '../src')
 
 // T28 已落地（webhook CRUD 抽 service，2026-08-12）：清单按约清空——safeJson
-// 全仓唯一定义在 util/http.ts，任何新的本地定义直接红。
+// 全仓唯一定义在 platform/http/requestParsing.ts，任何新的本地定义直接红。
 const LOCAL_DEF_ALLOWLIST = new Set<string>()
 
 function walk(dir: string, acc: string[] = []): string[] {
@@ -34,7 +34,7 @@ describe('RFC-284 T5 — safeJson convergence', () => {
     const offenders: string[] = []
     for (const file of walk(SRC_ROOT)) {
       const rel = relative(SRC_ROOT, file)
-      if (rel === 'util/http.ts') continue
+      if (rel === 'platform/http/requestParsing.ts') continue
       const src = readFileSync(file, 'utf8')
       if (/async function safeJson\(/.test(src) && !LOCAL_DEF_ALLOWLIST.has(rel)) {
         offenders.push(rel)

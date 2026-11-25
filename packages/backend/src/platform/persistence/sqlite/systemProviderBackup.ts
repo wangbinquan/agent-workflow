@@ -34,7 +34,7 @@ import type { LogicalSchemaContract } from '@/platform/persistence/schemaContrac
 import { createPortableBackupApplicationAssets } from '@/platform/persistence/portableApplicationAssets'
 import { quickCheckSqlite } from './systemBackupVacuum'
 import { createLogger } from '@/util/log'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 import { type BackupKind, readDbMigrationIdentity } from './systemBackupManifest'
 

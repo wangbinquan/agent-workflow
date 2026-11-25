@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs'
 import { loadConfig } from '@/config'
 import { getCachedGitCapabilities } from '@/platform/workspace/local/gitVersion'
 import type { SubmoduleMode } from '@/services/gitSubmodule'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 /**
  * Resolve effective submodule mode + jobs from caller config + local git caps.

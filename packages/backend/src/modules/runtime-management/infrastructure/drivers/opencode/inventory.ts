@@ -18,7 +18,7 @@ import {
   type InventorySnapshot,
   normalizeInventoryRaw,
 } from '@agent-workflow/shared'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 /**
  * Map a workflow `NodeKind` (`'agent-single'` / `'agent-multi'` / ...) onto

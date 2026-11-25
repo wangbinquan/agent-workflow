@@ -13,7 +13,7 @@ import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { registerRoute } from '@/routes/registry'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-import { safeJsonOrEmpty } from '@/util/http'
+import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import type {
   DirectAuthorityBinding,
   DirectCommandContextFactory,

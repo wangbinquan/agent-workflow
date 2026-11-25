@@ -6,7 +6,7 @@ import {
 } from '@/platform/persistence/fileSnapshots'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { SchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import type { DatabaseConfigurationPort } from '../application/ports/databaseConfiguration'
 import { createFileDatabaseConfiguration } from '../infrastructure/local/fileDatabaseConfiguration'
 

@@ -3,7 +3,7 @@
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { RuntimeSchemaBinding } from '@/platform/persistence/schema/tables'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import { loadConfig } from '@/config'
 import type { DatabaseConfigurationPort } from '../application/ports/databaseConfiguration'
 import type { DatabaseInstallationPort } from '../application/ports/databaseInstallation'

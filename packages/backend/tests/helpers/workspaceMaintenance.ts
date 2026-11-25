@@ -5,7 +5,7 @@ import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/com
 import { createNodeWorkspaceMaintenanceFilesystem } from '@/modules/source-control/infrastructure/nodeWorkspaceMaintenanceFilesystem'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 
 const instances = new WeakMap<
   PersistenceDb,

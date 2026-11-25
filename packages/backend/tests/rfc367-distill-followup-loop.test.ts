@@ -37,7 +37,7 @@ import type {
   SystemAgentRunOptions,
   SystemAgentRunResult,
 } from '@/modules/task-execution/infrastructure/local/nativeSystemAgentRun'
-import { appHome } from '../src/util/paths'
+import { appHome } from '../src/platform/configuration/installationPaths'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'

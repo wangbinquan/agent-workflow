@@ -25,7 +25,7 @@ import type { RepositoryGroups } from '@/modules/source-control/public/types'
 import { registerRoute } from '@/routes/registry'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/platform/http/deleteConfirm'
 import { ValidationError } from '@/util/errors'
-import { parseBoolQuery } from '@/util/http'
+import { parseBoolQuery } from '@/platform/http/requestParsing'
 
 function assertNoRetiredMembers(raw: unknown): void {
   if (

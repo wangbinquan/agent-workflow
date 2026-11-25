@@ -24,7 +24,7 @@ import { TASK_EXECUTION_GENERATION_CAUSES } from '@/modules/task-execution/appli
 import { createNodeRunQueries } from '@/modules/task-execution/infrastructure/nodeRunQueries'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskFixture, workflowFixture } from './helpers/model'
-import { Paths } from '@/util/paths'
+import { Paths } from '@/platform/configuration/installationPaths'
 import {
   composeNodeRunPromptOperations,
   createFileNodeRunPromptContent,
