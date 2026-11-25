@@ -8,6 +8,8 @@ export { neverPruneTerminalWorkspaces } from './infrastructure/terminalWorkspace
 export { directTaskInitiatorFromActorSource } from './inbound/directTaskInitiator'
 // RFC-582: the port-artifact and worktree-file HTTP bindings live in this module's inbound layer; server.ts mounts them here.
 export { mountPortArtifactRoutes } from './inbound/http/portArtifactRoutes'
+// RFC-587: the manual task archive binding.
+export { mountTaskArchiveRoutes } from './inbound/http/taskArchiveRoutes'
 export { mountWorktreeFilesRoutes } from './inbound/http/worktreeFilesRoutes'
 import {
   bindTaskWorkspaceReadScope,

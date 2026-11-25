@@ -33,7 +33,7 @@ import {
   readCrewStationEnvironment,
 } from '@/modules/system-operations/composition/crewstationDeployment'
 import { createStandbyExecutionAuthority } from '@/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority'
-import { mountHealthRoutes } from '@/routes/health'
+import { mountHealthRoutes } from '@/modules/system-operations/inbound/http/healthRoutes'
 import {
   parseDeploymentProfile,
   renderCrewStationManifest,

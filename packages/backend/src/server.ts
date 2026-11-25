@@ -34,6 +34,7 @@ import {
   mountDaemonRoutes,
   mountDatabaseMigrationRoutes,
   mountDocsRoutes,
+  mountHealthRoutes,
   mountMaintenanceDiskRoutes,
   mountMaintenanceRoutes,
   mountOverviewRoutes,
@@ -41,7 +42,6 @@ import {
   mountRestoreRoutes,
   mountWellKnownRoutes,
 } from '@/modules/system-operations/composition/routes'
-import { mountHealthRoutes } from '@/routes/health'
 import { type IdentityAccessRuntime } from '@/modules/identity-access/composition'
 import type { TaskExecutionResourceBinding } from '@/modules/task-execution/public/commands'
 import { executionStatusOf } from '@/modules/system-operations/composition'
@@ -53,7 +53,6 @@ import {
   mountRepoRoutes,
   type RepositoryMirrors,
 } from '@/modules/source-control/composition'
-import { mountTaskFeedbackRoutes } from '@/routes/taskFeedback'
 import { mountOidcRoutes } from '@/routes/oidc'
 import { mountOidcAuthRoutes } from '@/routes/oidc-auth'
 import { mountUserRoutes } from '@/routes/users'
@@ -74,6 +73,7 @@ import {
   mountClarifyRoutes,
   mountReviewRoutes,
   mountTaskClarifyDirectiveRoutes,
+  mountTaskFeedbackRoutes,
   mountTaskQuestionRoutes,
 } from '@/modules/collaboration/composition'
 import {
@@ -84,7 +84,6 @@ import {
   mountIntentSessionRoutes,
   type IntentSessionRouteDependencies,
 } from '@/modules/intent/composition/routes'
-import { mountTaskArchiveRoutes } from '@/routes/taskArchive'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { mountTaskCatalogRoutes } from '@/routes/taskCatalog'
 import { mountAccountRepositoryTransportCredentialRoutes } from '@/routes/accountRepositoryTransportCredentials'
@@ -121,6 +120,7 @@ import {
 import { mountWorkgroupRoutes } from '@/routes/workgroups'
 import {
   mountPortArtifactRoutes,
+  mountTaskArchiveRoutes,
   mountWorktreeFilesRoutes,
 } from '@/modules/task-execution/composition'
 import { errorHandler } from '@/platform/errors/domainErrors'

@@ -42,10 +42,11 @@ const MOVED: ReadonlyArray<readonly [string, string, string]> = [
   ],
 ]
 const OLD = new Set(MOVED.map(([old]) => old))
-/** RFC-583 added the configuration, API documentation and PlantUML bindings to the same route composition. */
+/** RFC-583 added the configuration, API documentation and PlantUML bindings to the same route composition; RFC-587 the health probes. */
 const LATER_MOUNTS = [
   'mountConfigRoutes',
   'mountDocsRoutes',
+  'mountHealthRoutes',
   'mountPlantumlRoutes',
   'mountWellKnownRoutes',
 ] as const

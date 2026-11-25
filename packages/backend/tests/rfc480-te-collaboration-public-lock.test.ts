@@ -266,7 +266,8 @@ describe('RFC-480 —— 未消费符号撤出两个模块的 public', () => {
       ['task-execution', 'participants', 'currentTaskExecutionContext', true],
       ['task-execution', 'types', 'TerminalWorkspacePrunePolicy', false],
       ['task-execution', 'events', 'taskLifecycleEventCatalogJson', true],
-      ['collaboration', 'commands', 'createTaskFeedback', true],
+      // RFC-587: createTaskFeedback moved into collaboration's application; the commands file keeps a type.
+      ['collaboration', 'commands', 'HumanGateArtifactRecovery', false],
       ['collaboration', 'queries', 'resolveCollaborationTaskAccess', true],
       ['collaboration', 'participants', 'createWorkgroupClarifyAskGate', true],
       ['collaboration', 'types', 'CollaborationCommandContext', false],

@@ -42,11 +42,12 @@ import {
   type MemoryCatalogTestHooks,
   type MemoryTransaction,
 } from './infrastructure/memoryCatalogOperations'
-import type { MemoryOperations } from './public/operations'
-import type { MemoryInjectionQueries } from './public/queries'
+import type { MemoryOperations } from './application/memoryOperationContracts'
+import type { MemoryInjectionQueries } from './application/memoryOperationContracts'
 import type { MemoryCatalogOperations } from './public/operations'
 import type { DirectCommandContextFactory } from '@/modules/identity-access/public/participants'
-import type { EnqueueMemoryDistillJobInput, MemoryDistillWorkerOptions } from './public/commands'
+import type { EnqueueMemoryDistillJobInput } from './public/commands'
+import type { MemoryDistillWorkerOptions } from './application/memoryOperationContracts'
 import {
   injectMemoryForRun,
   loadInjectedSnapshotFromFirstAttempt,

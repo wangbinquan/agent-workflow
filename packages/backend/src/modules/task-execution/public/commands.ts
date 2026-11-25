@@ -271,8 +271,7 @@ export interface WorkgroupRouteTaskLaunchOperations {
 
 /** Bootstrap must supply one daemon-scoped driver to every command caller. */
 
-// RFC-434: the archive maintenance command `/api/tasks/archive` calls (defined in application/ports).
-export type { TaskArchiveMaintenanceCommand } from '../application/ports/taskArchiveMaintenanceCommand'
+// RFC-587: the archive maintenance command port is taken by its binding from application/ports (no outside consumer).
 
 // RFC-434: the `/api/tasks` route face, folded in from the former non-exact `public/taskRoutes`.
 /** Closed TaskExecution command/query face consumed by `/api/tasks`. */

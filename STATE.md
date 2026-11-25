@@ -1,3 +1,25 @@
+## 2026-11-25 RFC-587 健康探测、任务归档与任务反馈三个路由按 owner 归入模块 inbound（In Progress；`design/RFC-587-health-archive-feedback-routes-into-owner-modules/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」——对本会话列出的待定事项（六个路由的落位、W5 的
+  `util/git`）的回复：落位由本会话按 RFC-294 总纲裁定，不新增 DAG 边。`health`、`taskArchive`、`taskFeedback` 三个都只取别的模块的一个窄读取或一个
+  端口：健康探测读 task-execution 的运行任务计数，归档读配置里的 `taskArchive` 一段，反馈把 memory 的蒸馏命令交给 collaboration 的命令。
+- **范围**：`health` → system-operations、`taskArchive` → task-execution、`taskFeedback` → collaboration 的 `inbound/http/`；三处改为本绑定声明的窄形状
+  （`HealthRunningTaskQueries`、`TaskArchiveConfiguration`）或本模块已有的端口类型（`CollaborationMemoryDistillPort`），`server.ts` 传的对象不变。撤回
+  10 个 public 符号：collaboration 的三个反馈函数（移进 `application/taskFeedbackOperations.ts`）、task-execution 对 `TaskArchiveMaintenanceCommand` 的
+  转出、memory 的 `MemoryOperations` 与只经它可达的五个类型（移进 `application/memoryOperationContracts.ts`）。随改：归属表三行、`counts.json`、
+  `rfc442` / `rfc445` / RFC-576 / `rfc480` / `rfc552` 的清单；新增 RFC-587 用例。
+- **余下两批的落位（已裁定）**：`tasks.ts` 按端点拆——结构化 diff、变更叙述、文件内容 / 符号与代码智能几个端点归 workspace-insight，其余归
+  task-execution（`/api/tasks/:id/*` 的可见性中间件随 task-execution 的绑定先挂）；`agents.ts` / `workgroups.ts` 的启动端点（`POST …/:id/tasks`，鉴权点
+  就是 `tasks:execute`）归 task-execution，其余归 resource-catalog——补 resource-catalog → task-execution 的边会与 task-execution → resource-catalog 成环。
+- **收口对账**（RFC-294 C10～C13，design §6）：C10 入站绑定进 owner 模块；C11 三个模块的 public 面共收窄 10 个符号；C12 RFC-587 用例覆盖全部说明符、
+  三个绑定、两个模块的 public 与 `server.ts`；C13 `legacy-horizontal-files` 62 → 59，其余计数不升。
+- **集中验证**（基于 `3c4a3cefb`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。查出一处本人缺陷（反馈绑定不再取 `MemoryOperations`
+  之后 memory 的未消费计数 0 → 1，推算时漏了；连带五个类型一并撤回），已修复并复验。tsc 0 错，eslint / promises / prettier 无告警；选出 616 个用例
+  文件、5316 条全部通过，撤回之后另选 219 个、1767 条全部通过；读已提交源码的 370 个用例文件、3666 条在候选导出里通过；六种变异都被认出；架构报告
+  60 个计数里只有 legacy 横向文件数变了，DAG 之外的 context 值对仍为 0。实现门 PASS（本会话按路径限定自审，只审功能）。独立对账（RFC-294 plan §0
+  第 10 条）已到期、已在本会话向用户说明；须由没有实施被抽查后继的会话执行，不阻塞本 RFC。
+- **CI 侧**：在跑（实现提交）。
+
 ## 2026-11-25 RFC-586 合并冲突解决的纯逻辑归 source-control 的 domain（Done，`035f97026`；`design/RFC-586-merge-conflict-resolution-into-source-control/`）
 
 - **来由**：RFC-585 之后 `services/mergeAgent.ts` 由 source-control 的隔离实现（冲突解析、判定与提示词）与 task-execution 的合并冲突端口（代理定义、

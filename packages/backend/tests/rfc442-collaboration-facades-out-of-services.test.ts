@@ -113,12 +113,11 @@ describe('RFC-442 —— 引用与方向', () => {
   })
 
   // RFC-579: taskClarifyDirective and taskQuestions moved into collaboration's inbound layer and take the module's own
-  // application / domain from there; taskFeedback (task-execution's route, still in routes/) reaches collaboration only
-  // through the exact public entries.
-  test('三个路由不 import services/；仍在 routes/ 的 taskFeedback 对 collaboration 只经 exact public 入口', () => {
+  // application / domain from there; RFC-587 moved taskFeedback there too (its commands and queries are collaboration's).
+  test('三个路由不 import services/；都在 collaboration 的 inbound，取本模块 application / domain', () => {
     const offenders: string[] = []
     const routes: ReadonlyArray<readonly [string, string, boolean]> = [
-      ['taskFeedback', join(SRC, 'routes', 'taskFeedback.ts'), false],
+      ['taskFeedback', join(COLLABORATION, 'inbound', 'http', 'taskFeedbackRoutes.ts'), true],
       [
         'taskClarifyDirective',
         join(COLLABORATION, 'inbound', 'http', 'taskClarifyDirectiveRoutes.ts'),

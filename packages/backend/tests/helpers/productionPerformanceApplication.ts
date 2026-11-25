@@ -69,7 +69,7 @@ import {
 } from '@/modules/source-control/composition'
 import { mountClarifyRoutes } from '@/modules/collaboration/inbound/http/clarifyRoutes'
 import { mountWellKnownRoutes } from '@/modules/system-operations/inbound/http/docsRoutes'
-import { mountHealthRoutes } from '@/routes/health'
+import { mountHealthRoutes } from '@/modules/system-operations/inbound/http/healthRoutes'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { mountOverviewRoutes } from '@/modules/system-operations/inbound/http/overviewRoutes'
 import { mountReviewRoutes } from '@/modules/collaboration/inbound/http/reviewRoutes'

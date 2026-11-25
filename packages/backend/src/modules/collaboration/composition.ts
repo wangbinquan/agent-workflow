@@ -173,4 +173,6 @@ export function composeHumanGateOpenParticipantFactory() {
 export { mountClarifyRoutes } from './inbound/http/clarifyRoutes'
 export { mountReviewRoutes } from './inbound/http/reviewRoutes'
 export { mountTaskClarifyDirectiveRoutes } from './inbound/http/taskClarifyDirectiveRoutes'
+// RFC-587: the task feedback binding (its commands and queries are Collaboration's).
+export { mountTaskFeedbackRoutes } from './inbound/http/taskFeedbackRoutes'
 export { mountTaskQuestionRoutes } from './inbound/http/taskQuestionRoutes'

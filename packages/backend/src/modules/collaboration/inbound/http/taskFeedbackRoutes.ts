@@ -12,17 +12,21 @@ import { TaskFeedbackCreateSchema } from '@agent-workflow/shared'
 import type { Context, Hono } from 'hono'
 import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
-import type { MemoryOperations } from '@/modules/memory/public/operations'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
-import { createTaskFeedback } from '@/modules/collaboration/public/commands'
-import { canViewTaskFeedback, listTaskFeedback } from '@/modules/collaboration/public/queries'
+import {
+  canViewTaskFeedback,
+  createTaskFeedback,
+  listTaskFeedback,
+} from '../../application/taskFeedbackOperations'
+import type { CollaborationMemoryDistillPort } from '../../application/ports/taskFeedbackMemoryDistill'
 import { NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 
 export function mountTaskFeedbackRoutes(
   app: Hono,
   deps: {
     readonly collaborationContext: CollaborationCommandContext
-    readonly memoryOperations: MemoryOperations
+    // RFC-587: only the distill commands, typed by Collaboration's own port (the assembly root passes Memory's operations).
+    readonly memoryOperations: { readonly distillCommands: CollaborationMemoryDistillPort }
   },
 ): void {
   registerRoute(

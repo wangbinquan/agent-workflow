@@ -2,7 +2,7 @@
 import { expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { mountHealthRoutes } from '@/routes/health'
+import { mountHealthRoutes } from '@/modules/system-operations/inbound/http/healthRoutes'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 describeEachProviderHttpApplication(

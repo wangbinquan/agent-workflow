@@ -14,7 +14,7 @@ import ts from 'typescript'
 
 import type { CollaborationMemoryDistillPort } from '../src/modules/collaboration/application/ports/taskFeedbackMemoryDistill'
 import type { MemoryDistillEnqueuer } from '../src/modules/memory/public/participants'
-import type { MemoryInjectionQueries } from '../src/modules/memory/public/queries'
+import type { MemoryInjectionQueries } from '@/modules/memory/application/memoryOperationContracts'
 import type { TaskMemoryDistillPort } from '../src/modules/task-execution/application/ports/taskMemoryDistill'
 import type { TaskMemoryInjectionPort } from '../src/modules/task-execution/application/ports/taskMemoryInjection'
 

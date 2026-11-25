@@ -22,7 +22,7 @@ import type {
   MemoryDistillJobRecord,
   MemoryDistillReadStore,
 } from './ports/distillReadStore'
-import type { MemoryDistillQueries } from '../public/queries'
+import type { MemoryDistillQueries } from './memoryOperationContracts'
 
 const log = createLogger('memory-distill-queries')
 

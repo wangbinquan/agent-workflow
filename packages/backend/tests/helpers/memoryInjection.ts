@@ -2,7 +2,7 @@ import { createRepositoryIdentityQueries } from '@/modules/source-control/infras
 import { createNodeRunQueries } from '@/modules/task-execution/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleMemoryInjectionReadStore } from '../../src/modules/memory/infrastructure/memoryInjectionReadStore'
-import type { MemoryInjectionQueries } from '../../src/modules/memory/public/queries'
+import type { MemoryInjectionQueries } from '@/modules/memory/application/memoryOperationContracts'
 import {
   injectMemoryForRun,
   loadInjectedSnapshotFromFirstAttempt,

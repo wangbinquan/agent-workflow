@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG, type Config, type MaintenanceStatus } from '@agent-work
 import { buildActor } from '@/auth/actor'
 import { mountMaintenanceRoutes } from '@/modules/system-operations/inbound/http/maintenanceRoutes'
 import { mountPlantumlRoutes } from '@/modules/system-operations/inbound/http/plantumlRoutes'
-import { mountTaskArchiveRoutes } from '@/routes/taskArchive'
+import { mountTaskArchiveRoutes } from '@/modules/task-execution/inbound/http/taskArchiveRoutes'
 import { mountWellKnownRoutes } from '@/modules/system-operations/inbound/http/docsRoutes'
 import { publicOriginOf } from '@/platform/http/publicOrigin'
 

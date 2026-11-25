@@ -4,10 +4,8 @@ import type {
   Memory,
   MemoryCandidatePromote,
   MemoryCreateRequest,
-  MemoryDistillJob,
   MemoryMoveRequest,
   MemoryPatchRequest,
-  SourceContextBudget,
 } from '@agent-workflow/shared'
 import type { CommandContext } from '@/modules/identity-access/public/participants'
 import type { MoveMemoryResult, PatchMemoryResult } from './types'
@@ -37,28 +35,6 @@ export interface MemoryDistillCommands {
   enqueue(input: EnqueueMemoryDistillJobInput): Promise<EnqueueMemoryDistillJobResult | null>
   retryFailed(jobId: string): Promise<boolean>
   cancelPending(jobId: string): Promise<boolean>
-}
-
-export interface MemoryDistillWorkerOptions {
-  readonly enabled?: boolean
-  readonly intervalMs?: number
-  readonly runtimeName?: string | null
-  readonly defaultRuntime?: string | null
-  readonly model?: string | null
-  readonly sourceContextBudget?: SourceContextBudget
-  /** config.memoryDistillTimeoutMs — per-run distiller timeout (ms). */
-  readonly timeoutMs?: number
-}
-
-export interface MemoryDistillWorker {
-  tick(options?: Omit<MemoryDistillWorkerOptions, 'enabled' | 'intervalMs'>): Promise<{
-    picked: number
-    succeeded: number
-    failed: number
-    candidatesCreated: number
-  }>
-  recoverRunning(): Promise<{ recovered: number }>
-  listJobs(filter?: { readonly status?: string }): Promise<MemoryDistillJob[]>
 }
 
 // RFC-434: the memory catalog contract, folded in from the former non-exact `public/catalog`.

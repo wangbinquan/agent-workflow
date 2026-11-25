@@ -1,53 +1,9 @@
-import type {
-  Agent,
-  InjectedMemorySnapshot,
-  Memory,
-  MemoryDistillJob,
-  MemoryDistillJobDetail,
-  MemoryDistillSessionView,
-  MemoryListFilter,
-  MemorySummary,
-} from '@agent-workflow/shared'
+import type { Memory, MemoryListFilter, MemorySummary } from '@agent-workflow/shared'
 import type {
   AuthenticatedAuthoritySnapshot,
   RequestAuthority,
 } from '@/modules/identity-access/public/participants'
 import type { FusedIntoSkillMemory, MemoryScopeRef, MemoryWithChain } from './types'
-
-export interface MemoryDistillQueries {
-  listJobs(filter?: { readonly status?: string }): Promise<MemoryDistillJob[]>
-  getJobDetail(jobId: string): Promise<MemoryDistillJobDetail>
-  getJobSessionView(jobId: string): Promise<MemoryDistillSessionView>
-}
-
-export interface MemoryInjectionBudget {
-  readonly agent: number
-  readonly workflow: number
-  readonly repo: number
-  readonly repoGroup: number
-  readonly global: number
-}
-
-export interface MemoryInjectionQueries {
-  injectForRun(input: {
-    readonly taskId: string
-    readonly primaryAgent: Agent
-    readonly dependents: readonly Agent[]
-    readonly budget?: MemoryInjectionBudget
-    readonly envelopeNonce?: string
-  }): Promise<{
-    readonly block: string | null
-    readonly snapshot: InjectedMemorySnapshot[] | null
-  }>
-  loadFirstAttemptSnapshot(input: {
-    readonly taskId: string
-    readonly nodeId: string
-    readonly iteration: number
-    readonly shardKey: string | null
-    readonly reviewIteration: number
-    readonly runId: string
-  }): Promise<InjectedMemorySnapshot[] | null>
-}
 
 // RFC-434: the memory catalog contract, folded in from the former non-exact `public/catalog`.
 /**

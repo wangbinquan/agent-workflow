@@ -4,8 +4,15 @@
 import type { Hono } from 'hono'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { registerRoute } from '@/routes/registry'
-import type { TaskStatusCountQueries } from '@/modules/task-execution/public/types'
 import { recoveryCountersSnapshot } from '@/platform/health/recoveryCounters'
+
+/**
+ * RFC-587: the one task fact the probes read, as this binding's own port (Task Execution's status-count queries
+ * satisfy it; the assembly root passes that object unchanged).
+ */
+export interface HealthRunningTaskQueries {
+  countRunningTasks(): Promise<number>
+}
 
 export interface HealthRouteDependencies {
   readonly opencodeVersion: string | null
@@ -34,7 +41,7 @@ export function mountHealthRoutes(
   app: Hono,
   deps: HealthRouteDependencies,
   identityAccess: IdentityAccessHealthDiagnostics,
-  database: TaskStatusCountQueries,
+  database: HealthRunningTaskQueries,
 ): void {
   // RFC-398 §2.7: the database identity is reported on the existing `/health` probe only.
   // `/api/health` is not a separate route: legacy operation ids strip `/api/`, so mounting

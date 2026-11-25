@@ -13,12 +13,11 @@
 
 import type { Hono } from 'hono'
 import { z } from 'zod'
-import { SETTINGS_NUMERIC_BOUNDS } from '@agent-workflow/shared'
+import { SETTINGS_NUMERIC_BOUNDS, type Config } from '@agent-workflow/shared'
 
 import { actorOf } from '@/auth/actor'
-import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { registerRoute } from '@/routes/registry'
-import type { TaskArchiveMaintenanceCommand } from '@/modules/task-execution/public/commands'
+import type { TaskArchiveMaintenanceCommand } from '../../application/ports/taskArchiveMaintenanceCommand'
 import { ValidationError } from '@/platform/errors/domainErrors'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 import { Paths } from '@/platform/configuration/installationPaths'
@@ -36,8 +35,16 @@ const ArchiveRequestSchema = z.object({
   dryRun: z.boolean().optional(),
 })
 
+/**
+ * RFC-587: the archive settings this binding reads from the daemon configuration (the configuration query satisfies it;
+ * the assembly root passes that object unchanged).
+ */
+export interface TaskArchiveConfiguration {
+  read(): Pick<Config, 'taskArchive'> | Promise<Pick<Config, 'taskArchive'>>
+}
+
 export interface TaskArchiveRouteDependencies {
-  readonly configuration: ApplicationConfigurationQueries
+  readonly configuration: TaskArchiveConfiguration
   readonly taskArchiveMaintenance: TaskArchiveMaintenanceCommand
 }
 

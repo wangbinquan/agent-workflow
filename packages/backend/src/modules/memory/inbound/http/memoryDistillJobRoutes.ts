@@ -12,7 +12,7 @@ import type { Hono } from 'hono'
 import { registerRoute } from '@/routes/registry'
 import type { MemoryDistillCommands } from '@/modules/memory/public/commands'
 import { ConflictError, ValidationError } from '@/platform/errors/domainErrors'
-import type { MemoryDistillQueries } from '@/modules/memory/public/queries'
+import type { MemoryDistillQueries } from '../../application/memoryOperationContracts'
 
 export function mountMemoryDistillJobRoutes(
   app: Hono,

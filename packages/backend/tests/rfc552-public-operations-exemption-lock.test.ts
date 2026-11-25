@@ -84,7 +84,8 @@ const LEDGER: Readonly<Record<string, ModuleLedger>> = {
       'the legacy auth/oidc/providers.ts reads the OIDC provider repository; it moves into identity-access (W9-D)',
   },
   memory: {
-    entries: { 'handle contract': ['MemoryCatalogOperations', 'MemoryOperations'] },
+    // RFC-587: MemoryOperations moved into memory's application with the cascade it carried (no outside consumer).
+    entries: { 'handle contract': ['MemoryCatalogOperations'] },
   },
   'resource-catalog': {
     entries: {

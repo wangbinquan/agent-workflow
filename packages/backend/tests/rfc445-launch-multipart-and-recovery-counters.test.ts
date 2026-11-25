@@ -4,7 +4,7 @@
 // ① 位置：`services/launchMultipart`、`services/upload` 不存在；信封在 `platform/http/multipartLaunch.ts`，其余上传助手按层在
 //    task-execution（`domain/uploads`、`application/launchUploads`、`infrastructure/local/fileTaskLaunchConfiguration`）。
 // ② 引用：源码里没有任何文件 import 两个旧路径（census 的 AST 提取；别名与相对路径都认，带负对照）；`routes/agents.ts`、
-//    `routes/health.ts` 不 import `services/`。
+//    `modules/system-operations/inbound/http/healthRoutes.ts`（RFC-587 起）不 import `services/`。
 // ③ 计数只有一份：恢复计数只在 `platform/health/recoveryCounters.ts` 声明；四处累加点与 `/health` 只经它取；
 //    `services/recovery.ts`（RFC-452 起为 task-execution `application/recovery/recoveryEvents.ts`）只剩审计写入与查询，写入仍累加同一份计数。
 // ④ 行为：信封解析与四个错误码；先核对声明再复制字节；回收失败时的错误合成。
@@ -121,7 +121,8 @@ describe('RFC-445 —— 引用', () => {
     // 非空对照：每个路由都解析出了本地目标（含本 RFC 改到的新位置），判据不是空集上的恒真。
     const expectedNewTarget = {
       'routes/agents.ts': 'platform/http/multipartLaunch',
-      'routes/health.ts': COUNTERS,
+      // RFC-587: the health probes moved into system-operations' inbound layer.
+      'modules/system-operations/inbound/http/healthRoutes.ts': COUNTERS,
     } as const
     for (const [route, newTarget] of Object.entries(expectedNewTarget)) {
       const targets = targetsOf(route)
@@ -140,7 +141,7 @@ describe('RFC-445 —— 恢复计数只有一份', () => {
 
   test('四处累加点、/health 与恢复审计都只经 platform/health/recoveryCounters', () => {
     for (const site of [
-      'routes/health.ts',
+      'modules/system-operations/inbound/http/healthRoutes.ts',
       'platform/persistence/sqlite/systemProviderRestore.ts',
       'modules/system-operations/infrastructure/resourceLimitAudit.ts',
       'modules/task-execution/infrastructure/taskIdleTimeoutPersistence.ts',

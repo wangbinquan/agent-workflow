@@ -1,23 +1,4 @@
 export type { HumanGateArtifactRecovery } from '../application/recoverHumanGateOperations'
 // RFC-333 public collaboration commands. Command context is opaque; public
 // inputs contain business data only and results are narrow receipts.
-
-import { requireReviewTaskAccess, requireTaskFeedbackStore } from '../application/commandContext'
-import type { CollaborationCommandContext, ReviewActor } from './types'
-import { TaskFeedbackService } from '../application/taskFeedback'
-import type { CollaborationMemoryDistillPort } from '../application/ports/taskFeedbackMemoryDistill'
-
-export function createTaskFeedback(
-  context: CollaborationCommandContext,
-  input: {
-    readonly actor: ReviewActor
-    readonly taskId: string
-    readonly bodyMd: string
-  },
-  memoryDistillEnqueuer: CollaborationMemoryDistillPort,
-) {
-  return new TaskFeedbackService(
-    requireTaskFeedbackStore(context),
-    requireReviewTaskAccess(context),
-  ).create(input, memoryDistillEnqueuer)
-}
+// RFC-587: `createTaskFeedback` moved to application/taskFeedbackOperations.ts with its only caller, the task feedback binding.

@@ -89,7 +89,7 @@ import { type RuntimePlugin } from '@/modules/runtime-management/infrastructure/
 
 // RFC-559: the run options carry Task Execution's own memory injection budget.
 import type { TaskMemoryInjectionBudget } from '@/modules/task-execution/application/ports/taskMemoryInjection'
-import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
+import type { MemoryInjectionQueries } from '@/modules/memory/application/memoryOperationContracts'
 
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
 
