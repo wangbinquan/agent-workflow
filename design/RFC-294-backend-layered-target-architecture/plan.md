@@ -639,7 +639,7 @@ PostgreSQL 事务的 owner-native 合同迁入 resource-catalog 的 application 
 
 > 后继：[RFC-479](../RFC-479-governance-gap-fill/proposal.md)（Done，2026-11-10，`0d591604b`）：减速带 42 项每项 `max` = 实测（4 项收紧；当时另把低于上限也判红，与 design §13.4 相悖，2026-11-11 由 [RFC-484](../RFC-484-count-gate-not-above-max/proposal.md) 撤回，Done，`067169518`）；未消费 public 符号 322、public 类型偏差 88 与 19 个模块的 composition 控制流（F13 口径、按语法树计数，合计 1,197 行，临时至 S10）入带；§1.2 增「结构锁 / 覆盖范围」列。
 >
-> 后继：[RFC-618](../RFC-618-unreachable-production-files-out-of-production-tree/proposal.md)（In Progress，2026-11-26）：`unreachable-production-files` 8 → 4——Intent 的字段对账表（测试数据）迁入 `tests/helpers/`，写成起就没有消费方的 portable-import 引用一对与 RFC-271 后只剩用例在用的 YAML 预览 / 选择子投影删除；余下四个各有登记理由（执行权一族按既有约定暂缓、`rfc333` 锁住的续跑测试调用方、RFC-359 §5hn 的方言参照、内嵌插件资产）。
+> 后继：[RFC-618](../RFC-618-unreachable-production-files-out-of-production-tree/proposal.md)（Done，2026-11-26，`4a39ec7be`）：`unreachable-production-files` 8 → 4——Intent 的字段对账表（测试数据）迁入 `tests/helpers/`，写成起就没有消费方的 portable-import 引用一对与 RFC-271 后只剩用例在用的 YAML 预览 / 选择子投影删除；余下四个各有登记理由（执行权一族按既有约定暂缓、`rfc333` 锁住的续跑测试调用方、RFC-359 §5hn 的方言参照、内嵌插件资产）。
 
 - **范围**：`architecture/counts.json` 六项高于实测的 `max` 收紧到实测值；未消费 public 符号与 public 类型污染条数进入减速带；
   S10 的门落地前临时纳入各模块 `composition/` 的控制流计数（review F13 的口径：行首 `if / for / while / switch / try` 与 `throw`
@@ -1116,7 +1116,7 @@ provenance 按 RFC-395 design §5.1 不建列；先后判据只用 `seq`（RFC-3
 | git 一族：`gitSubmodule.ts`、`mergeAgent.ts`、`repoCredentials.ts`                                   | 3      | source-control（W5）              | 与 `util/git.ts` 迁入 source-control infrastructure 一并设计。RFC-585（`gitSubmodule.ts`，Done）、RFC-586（`mergeAgent.ts`，Done）与 RFC-593（`util/git.ts` 整份进 source-control 的 infrastructure，纯部分进 domain）已迁；`repoCredentials.ts` 属凭据一族，暂缓 |
 | 其余                                                                                                 | 5      | 各自 owner                        | `taskDelete.ts` 与 `reviewMutationCoordinator.ts`（RFC-476 Done，`9184e1e5a`，已迁入 task-execution）、`codeRoundContract.ts`（W4-E8；RFC-594：唯一读者是 task-execution 的执行结果投影，节点 id 归 task-execution 的 domain、只有用例用的合成函数移到 `tests/helpers/`——偏离 W4-E8 标注，理由见其 design §0）、`digitalEmployeeAgentTemplates.ts` 与 `demoSeed.ts`（RFC-544 Done，`bbcc840e2`：模板按内容迁入 development-automation 的 domain / application——偏离原 W4-E9 标注，理由见其 design D2；演示种子迁入 bootstrap） |
 
-2026-11-26 [RFC-617](../RFC-617-util-primitives-into-platform/proposal.md)（In Progress）：`util/` 的六个通用原语（`redact`、`safePath`、`fileTrust`、`win32Acl`、`gitHardening`、`gitRef`）原样归 platform，`legacy-horizontal-files` 53 → 47；`util/` 只剩 git 凭据助手（独立二进制入口）与它的租约、OIDC 响应助手。`auth/actor` 的去向是 identity-access 的 `AuthenticatedAuthoritySnapshot`（design §270），属权限传递语义，不按搬文件处理。
+2026-11-26 [RFC-617](../RFC-617-util-primitives-into-platform/proposal.md)（Done，`9f1b2535f` + `a18f85368`）：`util/` 的六个通用原语（`redact`、`safePath`、`fileTrust`、`win32Acl`、`gitHardening`、`gitRef`）原样归 platform，`legacy-horizontal-files` 53 → 47；`util/` 只剩 git 凭据助手（独立二进制入口）与它的租约、OIDC 响应助手。`auth/actor` 的去向是 identity-access 的 `AuthenticatedAuthoritySnapshot`（design §270），属权限传递语义，不按搬文件处理。
 
 2026-11-26 [RFC-619](../RFC-619-util-emptied/proposal.md)（In Progress）：`util/` 清空——git 凭据租约与单二进制凭据助手入口归 `platform/execution/local`，OIDC 回调失败页移到唯一读者 `routes/oidc-auth.ts` 旁边、随 OIDC 路由一族再迁；`legacy-horizontal-files` 47 → 45。legacy 横向目录余 `auth/`、`routes/`、`mcp/`、`ws/` 与 `services/repoCredentials.ts`，都与认证主体或凭据流相连，按 plan 只审功能地分族另立。
 

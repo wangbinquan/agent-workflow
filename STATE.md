@@ -49,7 +49,7 @@
   RFC-616 在验证后改了共享工作树里的 `bootstrap/daemonApplication.ts`，本提交按 `origin/main` 上的该文件 + 本 RFC 的一行 import 提交，不带入其在制品。
 - **CI 侧**：待推送。
 
-## 2026-11-26 RFC-618 四个不可达生产文件出生产树（In Progress；`design/RFC-618-unreachable-production-files-out-of-production-tree/`）
+## 2026-11-26 RFC-618 四个不可达生产文件出生产树（Done；`design/RFC-618-unreachable-production-files-out-of-production-tree/`）
 
 - **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S11，
   `unreachable-production-files` 余 8 个，逐个读源码与历史后，后继指向 RFC-294 W4 / W9-D 与 RFC-348 的四个由本 RFC 清掉。
@@ -60,9 +60,9 @@
   `rfc454`）随之改；计数 8 → 4。余下四个各有登记理由，不动。新增 RFC-618 用例。
 - **集中验证**：候选导出（HEAD `9f1b2535f` + 本 RFC 路径）上 `tsc` / eslint / prettier 全过；用例第一轮 281 个文件里四份按路径读被删文件的锁红
   （`rfc317` 表归属债清单、`rfc271`、`rfc345`、`rfc454`），按 design §1 改后第二轮全过；架构报告只有 `unreachable-production-files` 8 → 4；变异 4 / 4 被抓。
-- **CI 侧**：待推送。
+- **CI 侧**：实现提交 `4a39ec7be` 的 CI run 45868996879 全绿（70 / 70）。RFC-618 Done。
 
-## 2026-11-26 RFC-617 util/ 的六个通用原语原样归 platform（In Progress；`design/RFC-617-util-primitives-into-platform/`）
+## 2026-11-26 RFC-617 util/ 的六个通用原语原样归 platform（Done；`design/RFC-617-util-primitives-into-platform/`）
 
 - **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W9-D，
   design §2.2“`util/` 中的通用原语归 `platform/`”。
@@ -74,7 +74,9 @@
   `windows-platform.yml` 路径过滤钉着两条旧路径（Windows 任务会因此不再触发）、改指脚本误改了 `rfc593` 写在字符串里的近似对照、仓库根 `tests/perf/run.ts`
   未改指；第二轮 473 个文件除 `rfc321`（导出没有发布历史，环境性）外全过；架构报告只有 `legacy-horizontal-files` 53 → 47；变异 4 / 4 被抓。
   RFC-616 在验证之后改了共享工作树里的 `employeeTypePackage.ts`，本提交按验证过的版本提交该文件，不带入其在制品。
-- **CI 侧**：待推送。
+- **CI 侧**：实现提交 `9f1b2535f` 的 CI run 45866414822 里 68 个测试 / 构建 job 全绿，只有格式检查（与汇总格 `CI required`）红——`rfc254-platform-surface-guard`
+  改指后一行过长，本 RFC 自己的缺陷，由 `a18f85368` 按 prettier 折行修正；`a18f85368` 的 CI run 45868339529 全绿（70 / 70），windows-platform 两次都绿。
+  RFC-617 Done。
 
 ## 2026-11-26 RFC-616 过程度量：工作流、工作组、数字员工的统一过程观测（In Progress；`design/RFC-616-process-metrics/`）
 

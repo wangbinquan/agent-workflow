@@ -1,6 +1,6 @@
 # RFC-617 util/ 的六个通用原语原样归 platform（RFC-294 W9-D 余项）
 
-- **状态**：In Progress（2026-11-26）。用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
+- **状态**：Done（2026-11-26，`9f1b2535f` + 格式修正 `a18f85368`）。用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
   落位由本会话裁定（见 design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) W9-D（legacy 横向目录归位）；design §2.2“`util/` 中的通用原语归
   `platform/`”。接 [RFC-575](../RFC-575-util-errors-hash-log-into-platform/proposal.md)（errors / hash / log 归 platform）与 RFC-593（util/git 归 source-control）。

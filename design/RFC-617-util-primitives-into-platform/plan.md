@@ -15,7 +15,7 @@
 - [x] AC-1 六个文件在新位置，没有读者取旧位置
 - [x] AC-2 新文件只取 node / shared / platform，行为不变
 - [x] AC-3 计数 53 → 47；新增 RFC-617 用例并登记
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证
 
@@ -38,7 +38,9 @@
 
 ## CI（AC-4）
 
-待推送。
+- 实现提交 `9f1b2535f`：CI run 45866414822 的 68 个测试 / 构建 job 全绿；格式检查红——`rfc254-platform-surface-guard` 改指后一行超出 printWidth
+  （本 RFC 的缺陷：发布前的格式检查只跑了改写脚本碰过的文件），`a18f85368` 只按 prettier 折行。
+- `a18f85368`：CI run 45868339529 全绿（70 / 70）；windows-platform 在两个提交上都绿。
 
 ## 实现门（本会话自审，只审功能）
 
