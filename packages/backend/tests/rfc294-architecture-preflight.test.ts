@@ -352,6 +352,9 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   // RFC-491: the native compatibility run (contract tests only) moved to tests/helpers — its source-control pair settled.
 ]
 const PUBLIC_SURFACE_DEBT: readonly string[] = [
+  // RFC-606: runtime-management's open types are JSON (the platform JsonValue / JsonObject, designated contract types) or
+  // closed — the usage event, the probe receipt view and the sweep failure reason — and a mapped type over a closed key
+  // set (the inventory declaration) is a finite object type (detector rule three): four entries settled.
   // RFC-605: the opaque identity references are branded platform tokens (OpaqueIdentity, a designated contract type) and the
   // task room participant's results no longer carry the committed event reference nobody nudged — three entries settled.
   // RFC-604: the platform logger is a designated contract interface and a callback parameter is part of its method's
@@ -393,15 +396,11 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // intent owner's own public root.
   // RFC-465: newly visible once the session capture / sweep contracts moved into the module (it replaces the three
   // `services/runtime/types` forbidden imports) — the sweep outcome's caught `failureReason?: unknown`.
-  'modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentMaterialEvidence: unsafe/open type UnknownKeyword',
   // RFC-462: newly visible once the driver capability declaration moved into the module — the closed
   // `Readonly<Record<DeclarationFace, FaceSupport>>` that makes a new manifest face a compile error in every driver.
-  'modules/runtime-management/application/ports/agentProtocol.ts#AgentInvocationProtocol: unsafe/open type MappedType',
-  'modules/runtime-management/application/ports/agentProtocol.ts#AgentInvocationProtocol: unsafe/open type UnknownKeyword',
   // RFC-550: the usage meter's open JsonObject left the list with runtime-management's JsonObject re-export (its only
   // public root).
   // RFC-492: `modelKey` is no longer offered by runtime-management's public (only the driver family read it).
-  'modules/runtime-management/public/commands.ts#RuntimeProfileCommands: unsafe/open type UnknownKeyword',
   // RFC-570: the workgroup run selection projection is declared by its owner (task-execution's domain) instead of a
   // platform file, and source-control's two receiver completeness checks take the port types; three entries settled.
   // RFC-565: `readHostedWorkspaceOwnerForBusinessTask`, `existingRepositoryIds` and the fragment `repositoryExistsExpression`

@@ -294,7 +294,8 @@ describe('RFC-370 selected material evidence', () => {
 
   test('system sink keeps original two lookups, request, callbacks and failed evidence', async () => {
     let lookups = 0
-    const reason = new Error('child sweep failed')
+    // RFC-606: the sweep reports a human-readable reason string.
+    const reason = 'child sweep failed'
     const failed = { failed: true, failureReason: reason },
       pending = Promise.resolve(failed)
     const sink: SystemAgentSessionSweepContext['sink'] = {

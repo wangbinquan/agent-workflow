@@ -4,13 +4,9 @@ import type { TableDefinition } from '../../schema/contribution'
 import type { ColumnData } from '../../schema/neutral'
 import { valueDigest } from './digest'
 
-export type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | readonly JsonValue[]
-  | { readonly [key: string]: JsonValue }
+// RFC-606: the JSON value type is the platform contract's (one definition); conversion keeps exporting it.
+import type { JsonValue } from '../../../contracts/json'
+export type { JsonValue }
 export type SourceTable = string
 export type TargetTable = string
 export type MigrationKey = readonly CanonicalLogicalValue[]

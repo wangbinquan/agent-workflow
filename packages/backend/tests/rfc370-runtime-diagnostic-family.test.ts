@@ -254,11 +254,11 @@ describeEachProvider('RFC-370 complete selected Runtime diagnostic family', (har
       JSON.parse((await h.registry.getRuntime('remote-profile'))!.lastProbeJson!).smoke,
     ).toEqual(conforming)
     // Display labels differ from receipt identities; valid cached results must remain visible.
-    expect(
-      (await h.management.runtimes.queries.list()).runtimes.find(
-        (row) => row.name === 'remote-profile',
-      )?.lastProbe,
-    ).toEqual(conforming)
+    // RFC-606: the view carries the stored receipt's smoke section as JSON.
+    const shown: unknown = (await h.management.runtimes.queries.list()).runtimes.find(
+      (row) => row.name === 'remote-profile',
+    )?.lastProbe
+    expect(shown).toEqual(conforming)
   })
 
   test('the explicit native root preserves the original before-probe fixture application receiver', async () => {

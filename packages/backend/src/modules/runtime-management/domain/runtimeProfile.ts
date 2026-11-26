@@ -14,6 +14,7 @@ import type {
   RuntimeProfileInput,
   RuntimeObservationIdentity,
 } from '../public/types'
+import type { JsonValue } from '@/platform/contracts/json'
 
 /** RFC-112 Codex P3: runtime names are lowercase, URL-safe (used in /:name routes). */
 export const RUNTIME_NAME_RE = /^[a-z0-9][a-z0-9-]{0,30}$/
@@ -124,7 +125,10 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-export function receiptMatchesTarget(receipt: unknown, target: RuntimeProbeTarget): unknown | null {
+export function receiptMatchesTarget(
+  receipt: JsonValue,
+  target: RuntimeProbeTarget,
+): JsonValue | null {
   if (!isRecord(receipt) || receipt.codec !== 1 || !isRecord(receipt.target)) return null
   const stored = receipt.target
   if (!isRecord(stored.fingerprint) || !Object.hasOwn(receipt, 'smoke')) return null
@@ -148,7 +152,7 @@ export function receiptMatchesTarget(receipt: unknown, target: RuntimeProbeTarge
   ) {
     return null
   }
-  return receipt.smoke
+  return receipt.smoke ?? null
 }
 
 /**
@@ -162,10 +166,11 @@ export function runtimeRowToView(
   defaultRuntimeName: string | null | undefined,
   resolvedBinaryPath: string,
 ): RuntimeView {
-  let lastProbe: unknown = null
+  let lastProbe: JsonValue | null = null
   if (row.lastProbeJson !== null) {
     try {
-      const receipt: unknown = JSON.parse(row.lastProbeJson)
+      // The column holds a JSON receipt (written with JSON.stringify).
+      const receipt = JSON.parse(row.lastProbeJson) as JsonValue
       lastProbe = receiptMatchesTarget(receipt, runtimeProbeTargetOf(row, resolvedBinaryPath))
     } catch {
       lastProbe = null

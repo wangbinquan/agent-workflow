@@ -13,6 +13,7 @@ import type {
   RuntimeUsageSnapshot,
 } from '@/modules/runtime-management/public/participants'
 import { objectOf } from '@/modules/runtime-management/public/participants'
+import type { JsonObject } from '@/platform/contracts/json'
 
 export const HOSTED_EVENT_FORMAT = 'aw-normalized-execution-v1'
 
@@ -72,9 +73,7 @@ export function hostedEventRecord(
 /** RFC-370 §9.2 V1 — token deltas for the node's running totals (`tok_*`,
  * enforced by `max_total_tokens`). Platform usage is a replacement snapshot;
  * each delta is the growth since the previous snapshot, never negative. */
-export function createHostedTokenDeltas(): (
-  raw: Readonly<Record<string, unknown>>,
-) => NormalizedTokenDelta | undefined {
+export function createHostedTokenDeltas(): (raw: JsonObject) => NormalizedTokenDelta | undefined {
   const meter = createHostedUsageMeter()
   let emitted: NormalizedTokenDelta = { input: 0, output: 0, cacheCreate: 0, cacheRead: 0 }
   return (raw) => {

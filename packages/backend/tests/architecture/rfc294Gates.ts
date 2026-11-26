@@ -1066,7 +1066,34 @@ const PLATFORM_CONTRACT_INTERFACES: ReadonlySet<string> = new Set([
   '@/platform/logging/logger#Logger',
   // RFC-605: the branded opaque identity token implementations mint and key their own state by (design §3.3).
   '@/platform/contracts/opaqueIdentity#OpaqueIdentity',
+  // RFC-606: the JSON-safe value types (design §3.3) for documents that are JSON by construction.
+  '@/platform/contracts/json#JsonValue',
+  '@/platform/contracts/json#JsonObject',
 ])
+
+/**
+ * RFC-606 rule three: a mapped type is a finite object type when its key set is closed — a literal union, a reference to
+ * one (an enum's inferred union), or `keyof` a closed shape. Only a primitive key (`string`, `number`, `symbol`) or a
+ * template literal makes it an open record; the key constraint and the value type are still checked.
+ */
+function isOpenMappedType(node: ts.MappedTypeNode): boolean {
+  const constraint = node.typeParameter.constraint
+  return constraint === undefined || isOpenKeyType(constraint)
+}
+
+function isOpenKeyType(type: ts.TypeNode): boolean {
+  if (
+    type.kind === ts.SyntaxKind.StringKeyword ||
+    type.kind === ts.SyntaxKind.NumberKeyword ||
+    type.kind === ts.SyntaxKind.SymbolKeyword ||
+    ts.isTemplateLiteralTypeNode(type)
+  )
+    return true
+  if (ts.isParenthesizedTypeNode(type)) return isOpenKeyType(type.type)
+  if (ts.isUnionTypeNode(type)) return type.types.some(isOpenKeyType)
+  // The lib's `PropertyKey` is `string | number | symbol`.
+  return ts.isTypeReferenceNode(type) && type.typeName.getText() === 'PropertyKey'
+}
 
 /**
  * RFC-604 rule two: a callback parameter is part of a method's signature (a lending parameter or a progress / predicate
@@ -1477,7 +1504,7 @@ export function publicSurfaceViolations(units: readonly SourceUnit[]): string[] 
         (ts.isFunctionTypeNode(node) && !isCallbackParameterType(node)) ||
         ts.isConstructorTypeNode(node) ||
         ts.isTypeQueryNode(node) ||
-        ts.isMappedTypeNode(node) ||
+        (ts.isMappedTypeNode(node) && isOpenMappedType(node)) ||
         ts.isIndexSignatureDeclaration(node)
       ) {
         violations.add(`${chain}: unsafe/open type ${ts.SyntaxKind[node.kind]}`)

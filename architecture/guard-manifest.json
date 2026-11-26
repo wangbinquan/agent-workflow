@@ -1987,7 +1987,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "id": "rfc294-architecture-preflight",
-      "lines": 529,
+      "lines": 528,
       "mechanism": "ast",
       "minCorpusFiles": 120,
       "negativeFixture": true,
@@ -4943,6 +4943,18 @@
       "lines": 177,
       "mechanism": "ast",
       "minCorpusFiles": 300,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": false,
+      "file": "packages/backend/tests/rfc606-runtime-contract-json-and-closed-mapped-types-boundary.test.ts",
+      "id": "rfc606-runtime-contract-json-and-closed-mapped-types-boundary",
+      "lines": 128,
+      "mechanism": "ast",
+      "minCorpusFiles": null,
       "negativeFixture": true,
       "runner": "bun"
     }

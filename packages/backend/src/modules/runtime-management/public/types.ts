@@ -1,3 +1,4 @@
+import type { JsonValue } from '@/platform/contracts/json'
 /** Runtime protocol identity shared by provider-neutral module contracts. */
 export type RuntimeKind = 'opencode' | 'claude-code'
 
@@ -98,7 +99,8 @@ export interface RuntimeView extends RuntimeProfile {
   /** RFC-154: raw config-dir overrides (NULL = protocol default) — edit-form prefill. */
   configDirEnv: string | null
   configDirName: string | null
-  lastProbe: unknown
+  /** RFC-606: the stored probe receipt's `smoke` section (JSON) when the receipt matches this runtime, else null. */
+  lastProbe: JsonValue | null
   createdAt: number
   updatedAt: number
 }

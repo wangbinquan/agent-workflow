@@ -2,6 +2,8 @@
 // own stdout protocol into one replaceable per-invocation snapshot split by the
 // model the runtime actually reported; callers never branch on protocol names.
 
+import type { JsonObject as JsonEvent } from '@/platform/contracts/json'
+
 export interface RuntimeUsageModel {
   /** Actual reported model; '' when the runtime did not attribute it. */
   readonly model: string
@@ -21,8 +23,8 @@ export interface RuntimeUsageSnapshot {
 }
 
 export interface RuntimeUsageMeter {
-  /** Feed one parsed stdout event; true when the snapshot changed. */
-  observe(event: Readonly<Record<string, unknown>>): boolean
+  /** Feed one parsed stdout event (RFC-606: JSON by construction); true when the snapshot changed. */
+  observe(event: JsonEvent): boolean
   snapshot(): RuntimeUsageSnapshot
   /**
    * After the process drained: a bounded authoritative summary (e.g. a native

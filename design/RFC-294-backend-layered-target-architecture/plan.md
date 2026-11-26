@@ -543,6 +543,9 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 2026-11-25 [RFC-605](../RFC-605-opaque-identity-handles/proposal.md)（In Progress）：不透明身份引用 2 条改为平台的带品牌令牌 `OpaqueIdentity`（指定的平台
 合同类型）；任务房间结果里的 `CommittedEventRef` 1 条去掉（唯一的事务属主从未读它，事件由持久投递送达）。`PUBLIC_SURFACE_DEBT` 19 → 16。余下：有限键映射
 类型 1 条、`unknown` DTO 4 条，以及能力 / 凭据 / 身份一族 11 条。
+2026-11-25 [RFC-606](../RFC-606-runtime-contract-json-and-closed-mapped-types/proposal.md)（In Progress）：runtime-management 的 4 条收口——平台 `JsonValue` /
+`JsonObject`（指定的平台合同类型）用于用量事件与探测回执视图，清扫失败原因为 `string`，键集合封闭的映射类型算闭合（检测器规则三）。`PUBLIC_SURFACE_DEBT`
+16 → 12。余下：system-operations 的自动升级回执 1 条（记录层载荷按 RFC-398 §2.7 不透明，另立），以及能力 / 凭据 / 身份一族 11 条（等 RFC-546）。
 
 ### S10 `composition/` 只装配：全模块收口
 

@@ -31,7 +31,8 @@ export interface SystemAgentSessionSweepRequest {
 
 export interface SystemAgentSessionSweepOutcome {
   failed: boolean
-  failureReason?: unknown
+  /** RFC-606: a human-readable reason, set when `failed` (the native sweep reports strings). */
+  failureReason?: string
 }
 
 /** Live evidence owns writes; post-run capture consumes its same read view. */

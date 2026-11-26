@@ -27,6 +27,7 @@ import {
 } from '@/modules/source-control/infrastructure/crewstation/workspaceReference'
 import { createCrewStationObjectStorage } from '@/platform/crewstation/objectStorage'
 import { createHash } from 'node:crypto'
+import type { JsonObject } from '@/platform/contracts/json'
 
 test('SSE accepts split UTF-8 and multiple large frames in one network chunk', async () => {
   const text = '中' + 'a'.repeat(200_000)
@@ -303,7 +304,7 @@ test('normalized usage replaces per-model snapshots and never counts a replay tw
           },
         },
       }).raw,
-    ) as Record<string, unknown>
+    ) as JsonObject
   expect(meter.observe(event('one', 10))).toBe(true)
   expect(meter.observe(event('one', 10))).toBe(false)
   expect(meter.observe(event('two', 12))).toBe(true)
@@ -346,7 +347,7 @@ test('platform usage snapshots become non-negative token deltas, a replay counts
           },
         },
       }).raw,
-    ) as Record<string, unknown>
+    ) as JsonObject
   expect(deltas(usage('u1', [{ model: 'a', input: 10, output: 3 }]))).toEqual({
     input: 10,
     output: 3,

@@ -7,6 +7,7 @@ import type {
   RuntimeUsageSnapshot,
 } from '@/modules/runtime-management/public/participants'
 import type { Logger } from '@/platform/logging/logger'
+import type { JsonObject } from '@/platform/contracts/json'
 
 /** Minimum spacing of in-flight usage writes for one call. */
 export const USAGE_FLUSH_INTERVAL_MS = 3_000
@@ -35,7 +36,8 @@ export function createCallUsageWriter(input: {
         return
       }
       if (event === null || typeof event !== 'object' || Array.isArray(event)) return
-      if (input.meter.observe(event as Record<string, unknown>)) dirty = true
+      // RFC-606: a parsed stdout line is JSON by construction.
+      if (input.meter.observe(event as JsonObject)) dirty = true
     },
     /** Write the current snapshot when it changed and the interval allows (or `force`). */
     async flush(force = false): Promise<void> {

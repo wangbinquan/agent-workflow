@@ -1,3 +1,15 @@
+## 2026-11-25 RFC-606 runtime-management 合同里的开放类型：JSON 值、有限键映射与失败原因（In Progress；`design/RFC-606-runtime-contract-json-and-closed-mapped-types/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-605 之后
+  runtime-management 的 4 条 public 类型偏差（检测规则与收法由本会话裁定，见 design §0；存量探测回执的兼容口径即现有的展示规则）。
+- **范围**：平台新增 `S/platform/contracts/json.ts`（`JsonValue` / `JsonObject`），迁移转换的同名类型改为转出它；二者认作指定的平台合同类型。用量计的
+  `observe` 收 `JsonObject`，`RuntimeView.lastProbe` 为 `JsonValue | null`，`SystemAgentSessionSweepOutcome.failureReason` 为 `string`；两处调用方断言为
+  `JsonObject`。检测器规则三：键集合封闭的映射类型算闭合（原始键、模板字面量、`PropertyKey` 照旧记债）。`PUBLIC_SURFACE_DEBT` 去掉 4 条（16 → 12），
+  `public-surface-deviations` 降到 12。新增 RFC-606 用例。
+- **集中验证**（基于 `170f3e2cc`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 658 个用例文件只有 `rfc321` 照例红；6 种变异都被认出；
+  架构报告除偏差 16 → 12 与只记不门的 import 清单外不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-25 RFC-605 不透明身份引用改为带品牌的句柄，任务房间结果不再带事件引用（In Progress；`design/RFC-605-opaque-identity-handles/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-604 留下的
