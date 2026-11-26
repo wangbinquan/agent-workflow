@@ -46,22 +46,22 @@ describe('RFC-395 A-3 activated schema artifacts', () => {
   // catalog was embedded while the RFC-349 preflight admits 15–18, so a stock Ubuntu 24.04
   // PostgreSQL 16 target took the whole copy and then failed final admission. A history append
   // that skips one admitted major's catalog turns this red instead of narrowing support silently.
-  test('every PostgreSQL major the preflight admits has an embedded catalog on every history version', () => {
+  test('embedded PostgreSQL majors exactly match the majors admitted by preflight', () => {
     expect(persistencePostgresqlMajors()).toEqual([...SUPPORTED_POSTGRESQL_MAJORS])
-    for (const major of SUPPORTED_POSTGRESQL_MAJORS)
-      expect(persistenceHead(major).postgresqlCatalog?.postgresqlMajor).toBe(major)
   })
-  test('PG 17 catalog binds the plan, all 21 meta tables, and the native catalog', async () => {
+  // RFC-602 grows history from 3 to 13 versions and catalogs from 12 to 52.
+  // Give each major's history loader its own default test budget instead of
+  // combining four full validations into one case; retain every version check.
+  for (const major of SUPPORTED_POSTGRESQL_MAJORS)
+    test(`PostgreSQL ${major} has an embedded catalog on every history version`, () => {
+      expect(persistenceHead(major).postgresqlCatalog?.postgresqlMajor).toBe(major)
+      const history = persistenceHistory(major)
+      expect(history).toHaveLength(persistenceHistory().length)
+      for (const version of history) expect(version.postgresqlCatalog?.postgresqlMajor).toBe(major)
+    })
+  test('PG 17 catalog binds the plan, all 21 meta tables, and the native catalog', () => {
     const head = persistenceHead(17)
     const artifact = head.postgresqlCatalog!
-    const majors = persistencePostgresqlMajors()
-    expect(majors).toContain(17)
-    expect(majors).toEqual(
-      [...new Set(persistencePostgresqlCatalogs().map((entry) => entry.postgresqlMajor))].sort(
-        (a, b) => a - b,
-      ),
-    )
-    const unsupportedMajor = Math.max(...majors) + 1
     expect(EPOCH2_META_TABLES).toHaveLength(21)
     expect(artifact.metaDigest).toBe(digestSchemaContract(EPOCH2_META_TABLES))
     expect(artifact.planDigest).toBe(head.postgresql.digest)
@@ -78,8 +78,27 @@ describe('RFC-395 A-3 activated schema artifacts', () => {
     expect(() =>
       verifyPostgresqlCatalogArtifact(artifact, head.postgresql, HISTORY_META_TABLES, 17),
     ).toThrow('catalog-artifact-identity')
+  })
+  test('complete catalogs match admitted majors and the cache resolves the head or reports a missing major', async () => {
+    // Keep the complete cold history load on the default path. Reuse one catalog
+    // list for its major set, the PG 17 oracle and the cache; PG 17 head is checked above.
+    const head = persistenceHead()
+    const catalogs = persistencePostgresqlCatalogs()
+    const majors = [...new Set(catalogs.map((entry) => entry.postgresqlMajor))].sort(
+      (a, b) => a - b,
+    )
+    expect(majors).toContain(17)
+    // The separate exact-set case verifies persistencePostgresqlMajors against
+    // this same admitted set without rereading all catalogs inside this case.
+    expect(majors).toEqual([...SUPPORTED_POSTGRESQL_MAJORS])
+    const matches = catalogs.filter(
+      (entry) => entry.postgresqlMajor === 17 && entry.planDigest === head.postgresql.digest,
+    )
+    expect(matches).toHaveLength(1)
+    const artifact = matches[0]!
+    const unsupportedMajor = Math.max(...majors) + 1
     expect(() => persistenceHead(unsupportedMajor)).toThrow('catalog-postgresql-major')
-    const cache = new HistoryCatalogCache(postgresqlCatalogLoader(persistencePostgresqlCatalogs()))
+    const cache = new HistoryCatalogCache(postgresqlCatalogLoader(catalogs))
     expect(await cache.expected(head.postgresql, EPOCH2_META_TABLES, 17)).toEqual(artifact.catalog)
     await expect(
       cache.expected(head.postgresql, EPOCH2_META_TABLES, unsupportedMajor),
