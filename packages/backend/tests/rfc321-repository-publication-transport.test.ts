@@ -39,7 +39,7 @@ import {
 // RFC-475: the composition re-export only served the retired runner; the classifier lives in domain.
 import { classifyRepositoryPushFailure } from '../src/modules/source-control/domain/repositoryPushFailure'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
-import type { GitCredentialLeasePayloadV1 } from '../src/util/gitCredentialLease'
+import type { GitCredentialLeasePayloadV1 } from '../src/platform/execution/local/gitCredentialLease'
 import { runGit as executeGit } from '../src/platform/execution/local/gitProcess'
 import { createUser } from './helpers/userFixture'
 

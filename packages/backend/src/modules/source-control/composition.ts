@@ -133,8 +133,6 @@ export type {
   RepositoryPublicationTransport,
 } from './public/types'
 
-export { cleanupOrphanedGitCredentialLeases } from '@/util/gitCredentialLease'
-
 export interface RepositoryTransportCredentialModule {
   readonly ownCredentials: RepositoryTransportCredentials
   readonly adminConnections: RepositoryTransportCredentials

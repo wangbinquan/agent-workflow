@@ -21,7 +21,8 @@ const ENTRY_IMPORTS: Readonly<Record<string, string>> = {
   // RFC-574: the installation paths moved from util/ into platform's configuration directory.
   './platform/configuration/installationPaths':
     'the application home handed to the legacy epoch command',
-  './util/gitCredentialLease': 'the git credential-helper protocol (RFC-254 T20)',
+  './platform/execution/local/gitCredentialLease':
+    'the git credential-helper protocol (RFC-254 T20)',
 }
 const MAIN_FUNCTIONS = ['isE2eBuild', 'main', 'readFlag', 'readPortFlag']
 const UNITS = backendUnits(ROOT)

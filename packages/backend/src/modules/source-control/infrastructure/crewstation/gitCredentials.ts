@@ -1,7 +1,10 @@
 import { z } from 'zod'
 import { utf16MaxLength } from '@agent-workflow/shared'
 import type { BusinessEnvironmentValue } from '@/platform/crewstation/nativeMaterial'
-import { computeGitCredentialResponse, parseGitCredentialRequest } from '@/util/gitCredentialLease'
+import {
+  computeGitCredentialResponse,
+  parseGitCredentialRequest,
+} from '@/platform/execution/local/gitCredentialLease'
 
 const line = z
   .string()

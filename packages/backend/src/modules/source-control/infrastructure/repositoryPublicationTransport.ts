@@ -24,7 +24,7 @@ import {
   leaseGitCredential,
   leaseTargetBoundGitCredential,
   type GitCredentialLease,
-} from '@/util/gitCredentialLease'
+} from '@/platform/execution/local/gitCredentialLease'
 import type {
   RepositoryTransportCredentialRepository,
   StoredRepositoryTransportConnection,

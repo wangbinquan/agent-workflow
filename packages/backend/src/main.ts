@@ -14,7 +14,7 @@
 // deployment.
 
 import { appVersion } from './platform/execution/version'
-import { runGitCredentialSubcommand } from './util/gitCredentialLease'
+import { runGitCredentialSubcommand } from './platform/execution/local/gitCredentialLease'
 import { backupCommand } from './cli/backup'
 import { restoreCommand, parseRestoreArguments, RESTORE_USAGE } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'

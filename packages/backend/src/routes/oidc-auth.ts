@@ -15,7 +15,7 @@ import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { applyEmailTrust, decideProvisioning, type IdTokenClaims } from '@/auth/oidc/provisioning'
 import { registerRoute } from '@/routes/registry'
 import { DomainError } from '@/platform/errors/domainErrors'
-import { BadRequestErrorOrFriendlyHtml, friendly } from '@/util/oidcResponse'
+import { BadRequestErrorOrFriendlyHtml, friendly } from '@/routes/oidcResponse'
 import { safeJsonOrEmpty } from '@/platform/http/requestParsing'
 
 export interface OidcIdentitySeed {

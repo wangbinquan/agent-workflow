@@ -471,7 +471,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       'packages/backend/src/modules/source-control/application/employeeCaseWorkspace.ts',
       // RFC-499: moved from composition/ into infrastructure/.
       'packages/backend/src/modules/source-control/infrastructure/repositoryPublicationTransport.ts',
-      'packages/backend/src/util/gitCredentialLease.ts',
+      'packages/backend/src/platform/execution/local/gitCredentialLease.ts',
     ].map((file) => ({ file, source: read(file) }))
     expect(repositoryPublicationBoundaryViolations(publicationSources)).toEqual([])
 
@@ -490,7 +490,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
 
   test('security mutation fixtures prove target binding, no-fallback, route, and URL guards carry weight', () => {
     const production: PublicationSecuritySources = {
-      helper: read('packages/backend/src/util/gitCredentialLease.ts'),
+      helper: read('packages/backend/src/platform/execution/local/gitCredentialLease.ts'),
       selector: read(
         'packages/backend/src/modules/source-control/domain/repositoryTransportCredential.ts',
       ),

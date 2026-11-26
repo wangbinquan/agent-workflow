@@ -118,7 +118,7 @@ import type { composeMrTerminalControl } from '@/modules/integration/composition
 import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import { ensureDigitalEmployeeAgentTemplates } from '@/modules/development-automation/public/participants'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
-import { cleanupOrphanedGitCredentialLeases } from '@/util/gitCredentialLease'
+import { cleanupOrphanedGitCredentialLeases } from '@/platform/execution/local/gitCredentialLease'
 import { recoverInterruptedDeliveries } from '@/modules/integration/composition/webhookDelivery'
 import { Paths } from '@/platform/configuration/installationPaths'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'

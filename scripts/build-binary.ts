@@ -54,7 +54,13 @@ const managedProcessLauncherEntry = join(
   'local',
   'managedProcessLauncherEntry.ts',
 )
-const gitCredentialHelperEntry = join(backendSrc, 'util', 'gitCredentialHelper.ts')
+const gitCredentialHelperEntry = join(
+  backendSrc,
+  'platform',
+  'execution',
+  'local',
+  'gitCredentialHelper.ts',
+)
 // RFC-311 实现门 P0-1:`new Worker(new URL('./x.ts', import.meta.url))` 不被
 // bundler 追踪——worker 必须显式作为**额外入口**参与 --compile,否则发布版单
 // 二进制里它 ModuleNotFound,备份的 off-thread VACUUM 每次都落到回退路径。

@@ -52,7 +52,7 @@ import {
 } from '@/platform/execution/local/gitProcess'
 import { hardenGitArgs } from '@/platform/execution/local/gitHardening'
 import { createLogger } from '@/platform/logging/logger'
-import { leaseGitCredential } from '@/util/gitCredentialLease'
+import { leaseGitCredential } from '@/platform/execution/local/gitCredentialLease'
 import { redactSensitiveString } from '@/platform/logging/redact'
 import { Paths } from '@/platform/configuration/installationPaths'
 import { resolveSubmoduleParams } from '@/modules/source-control/infrastructure/local/submoduleParams'

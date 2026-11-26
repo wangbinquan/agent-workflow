@@ -1,3 +1,18 @@
+## 2026-11-26 RFC-619 util/ 清空（In Progress；`design/RFC-619-util-emptied/`）
+
+- **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W9-D，
+  接 RFC-617，`util/` 最后三个文件归位。
+- **范围**：git 凭据租约 `gitCredentialLease.ts` 与单二进制凭据助手入口 `gitCredentialHelper.ts` 迁入 `platform/execution/local/`（bootstrap、入口 `main.ts`
+  与 source-control 都用它，放进模块会让前两者深引模块内部），OIDC 回调失败页 `oidcResponse.ts` 移到唯一读者 `routes/oidc-auth.ts` 旁边（放进 identity-access
+  会成为 legacy 取模块内部的新边，随 OIDC 路由一族再迁）；`util/` 目录消失。
+  唯一的代码改动是租约在源码运行时找 `main.ts` 的相对路径（深了两层）。source-control 组合层里没有读者的租约清理转出删除。构建入口、`BINARY_ENTRIES`、
+  `rfc427` 入口白名单、`rfc321` 两处路径、`rfc575` 余量清单（清空）、owner 表与 Windows 路径过滤随之改。`legacy-horizontal-files` 47 → 45。新增 RFC-619 用例。
+- **集中验证**：候选导出（HEAD `4a39ec7be` + 本 RFC 路径）上 `tsc` / eslint / prettier 全过，凭据助手入口单独打包成功；用例第一轮 693 个文件抓到 OIDC 失败页
+  放进 identity-access 会成为 legacy 取模块内部的新边（`rfc317` R1、`rfc305`、`rfc439` 红，改放 `routes/`）与 `rfc575` 读已删目录抛错，均已修；`rfc167` 一条在负载 ~70 时
+  红、对照导出同样红、负载回落后通过，与本 RFC 无关；第二轮 483 个文件除 `rfc321`（导出无发布历史）外全过；架构报告只有 `legacy-horizontal-files` 47 → 45；变异 4 / 4 被抓。
+  RFC-616 在验证后改了共享工作树里的 `bootstrap/daemonApplication.ts`，本提交按 `origin/main` 上的该文件 + 本 RFC 的一行 import 提交，不带入其在制品。
+- **CI 侧**：待推送。
+
 ## 2026-11-26 RFC-618 四个不可达生产文件出生产树（In Progress；`design/RFC-618-unreachable-production-files-out-of-production-tree/`）
 
 - **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S11，

@@ -38,7 +38,7 @@ import {
   parseGitCredentialRequest,
   runGitCredentialSubcommand,
   type GitCredentialLeasePayloadV1,
-} from '../src/util/gitCredentialLease'
+} from '../src/platform/execution/local/gitCredentialLease'
 
 const tmps: string[] = []
 function tmp(): string {

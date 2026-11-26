@@ -62,7 +62,7 @@ import {
 // 原始日志里 118 秒的空窗夹在「`cloned new cached repo` 冷克隆成功」与 bun 的
 // `killed 1 dangling process` 之间，且确实**悬着一个 git 子进程**：挂点在冷克隆之后的那次 refresh fetch。
 //
-// 机理（`src/util/gitCredentialLease.ts`）：一次性租约是通过 `credential.helper=<bun 脚本>` 交进去的，
+// 机理（`src/platform/execution/local/gitCredentialLease.ts`）：一次性租约是通过 `credential.helper=<bun 脚本>` 交进去的，
 // **git 对凭据助手没有任何超时**——它会无限期等待该子进程写出 stdout 并退出。于是 macOS runner 上
 // Bun 启动一旦卡住，git 就永久阻塞，表现为「墙钟无限大」而不是「慢」。`GIT_TERMINAL_PROMPT=0` /
 // `credential.interactive=false` 只挡住了 tty 提示，挡不住这一条。

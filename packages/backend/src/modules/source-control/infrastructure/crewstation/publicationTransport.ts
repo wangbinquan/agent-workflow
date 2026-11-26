@@ -5,7 +5,7 @@
 // credentials (AW_GIT_CREDENTIAL_BINDINGS) as platform Secret references. The
 // control plane never runs Git against a `cs-workspace:` reference itself.
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
-import { credentialFreeHttpUrl } from '@/util/gitCredentialLease'
+import { credentialFreeHttpUrl } from '@/platform/execution/local/gitCredentialLease'
 import type {
   RepositoryPublicationGitResult,
   RepositoryPublicationSession,

@@ -63,13 +63,12 @@ const MOVED: ReadonlyArray<readonly [string, string, readonly string[], readonly
   ],
 ]
 const OLD = new Set(MOVED.map(([old]) => old))
-/** What `util/` still holds after RFC-575: the git, credential, file-trust, Windows ACL, OIDC, redaction and safe-path family. */
-const UTIL_REMAINDER = [
+/** What `util/` still holds after RFC-575 — nothing since RFC-619 (`util/` is gone). */
+const UTIL_REMAINDER: string[] = [
   // RFC-593: git.ts moved into source-control's local infrastructure.
   // RFC-617: fileTrust, win32Acl, gitHardening, gitRef, redact and safePath moved into platform.
-  'gitCredentialHelper.ts',
-  'gitCredentialLease.ts',
-  'oidcResponse.ts',
+  // RFC-619: the git credential lease and its helper entry moved into platform/execution/local, the OIDC failure page next
+  // to its route in routes/.
 ]
 
 function walk(dir: string): string[] {
@@ -261,10 +260,10 @@ describe('RFC-575 —— 新位置的文件', () => {
 
 describe('RFC-575 —— util/ 只剩安全相邻的一族', () => {
   test('util/ 的文件清单', () => {
+    // RFC-619: util/ itself is gone; an absent directory lists nothing.
+    const dir = join(SRC, 'util')
     expect(
-      readdirSync(join(SRC, 'util'))
-        .filter((name) => name.endsWith('.ts'))
-        .sort(),
+      (existsSync(dir) ? readdirSync(dir) : []).filter((name) => name.endsWith('.ts')).sort(),
     ).toEqual(UTIL_REMAINDER)
   })
 })

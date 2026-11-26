@@ -31,7 +31,7 @@ export const BINARY_ENTRIES = [
   'bootstrap/maintenanceWorkerEntry.ts',
   'platform/persistence/sqliteLogicalSourceWorker.ts',
   'platform/execution/local/managedProcessLauncherEntry.ts',
-  'util/gitCredentialHelper.ts',
+  'platform/execution/local/gitCredentialHelper.ts',
 ].map((path) => BACKEND_PREFIX + path)
 
 export interface ResolvedEdge extends ImportEdge {
