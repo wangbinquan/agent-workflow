@@ -27,4 +27,6 @@
 
 ## 共享发布范围
 
-首次发布仅包含 RFC-611 的 CI、脚本、测试与本目录文档等明确路径。共享 `STATE.md` / `design/plan.md` 同时包含 RFC-610 未发布文档的引用，完整保留在工作区，待其关联内容可以共同发布时再纳入；不剥离或回退并发条目。
+代码已发布为 `6c6185496d10181d4b47e6d2d765d024eb13ba46`，29 个明确路径；发布前后 fetch 核对 `main == origin/main`。RFC-610 已先行发布为父提交 `0fdb118d8`，其候选内容正是本次集中验证时的共享内容；未重跑相同候选全量验证。共享 `STATE.md` / `design/plan.md` 当前只剩本 RFC 条目，本次文档跟进可以完整按路径提交，无需剥离并发内容。
+
+首次代码 exact-SHA 运行：[完整 CI](https://github.com/wangbinquan/agent-workflow/actions/runs/45796122638)、[CI feedback](https://github.com/wangbinquan/agent-workflow/actions/runs/45796122676)。2026-11-26 发布时已被 GitHub 接受、处于排队状态；后续状态以运行页面和本次会话验收记录为准。

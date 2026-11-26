@@ -641,6 +641,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-608](./RFC-608-repository-facts-scan-selection/proposal.md) | 仓库事实扫描的选择归 infrastructure（RFC-294 S10 余项：development-automation 的 composition 只装配）：按工作区效果有没有树操作选卷内或进程内扫描的那处选择，从 `composition/repositoryFactsScanner.ts` 迁入采集器所在 infrastructure 的 `repositoryFactsScanFor`（直接给出两种扫描之一），composition 文件删去；`composition-control-flow-development-automation` 1 → 0。无用户可见变化。 | In Progress |
 | [RFC-609](./RFC-609-capability-template-owner-designated-adapter/proposal.md) | 能力模板的 PostgreSQL 归属方经指定 adapter 取资源目录的端口合同（RFC-294 S9 余项）：资源包 PostgreSQL 事务里能力模板一支的 owner-native 合同迁入 resource-catalog 的 application 端口（改名为中立的 `CapabilityTemplatePackageMutationOwner`）、经 `composition/required-ports` 交出；code-capability 的归属方经新的指定 adapter 只取类型，事务类型改用平台 `PersistenceTx`；跨 context 内部文件对 4 → 2。记下兼容岛物理并入受持久化 owner 身份约束（另立）。无用户可见变化。 | In Progress |
 | [RFC-610](./RFC-610-auto-upgrade-receipt-json/proposal.md) | 自动升级结论的回执取发布时的 JSON（RFC-294 S9 余项）：记录端口 `receipt()` 第一次与恢复时都返回发布字节的解析结果（平台 `JsonObject`），`AutoUpgradeConclusion.receipt` 改为 `JsonObject`，记录层其余载荷照旧不透明（RFC-398 §2.7）；public 类型偏差 12 → 11，余下的全是延后的能力 / 凭据 / 身份一族。CLI 打印的 JSON 逐字不变。 | In Progress |
+| [RFC-611](./RFC-611-ci-throughput-and-stability/proposal.md) | CI 吞吐与稳定性：两 lane 保留完整 SHA 验证、时长分片、升级夹具原子发布、外链检查分级和快速反馈 | In Progress；2026-11-26 用户授权按诊断建议实施 |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`
