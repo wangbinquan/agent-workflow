@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createHostedDevelopmentRepositoryPreparation } from '@/modules/source-control/infrastructure/crewstation/developmentRepository'
 import { composeCrewStationDevelopmentWorkspaces } from '@/modules/development-automation/infrastructure/crewstation/crewstationWorkspace'
 import {

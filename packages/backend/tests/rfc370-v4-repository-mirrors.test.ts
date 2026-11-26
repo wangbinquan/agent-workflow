@@ -28,7 +28,7 @@ import type { RepoRefsResponse } from '@agent-workflow/shared'
 import { Hono, type Context } from 'hono'
 import { buildActor } from '../src/auth/actor'
 import { mountRepoRoutes } from '../src/modules/source-control/inbound/http/repoRoutes'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import {
   composeRemoteRepositoryMirrors,
   composeRepositoryWorkspaceStore,

@@ -7,16 +7,12 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
+import type { SecretBox } from '../contracts/secretBox'
 
 const ALGO = 'aes-256-gcm'
 const KEY_BYTES = 32
 const IV_BYTES = 12
 const TAG_BYTES = 16
-
-export interface SecretBox {
-  seal(plaintext: string): string
-  unseal(packed: string): string
-}
 
 /** Read or create the daemon's secret.key file. Side-effects: chmod 600. */
 export function ensureSecretKey(keyPath: string): Buffer {

@@ -10,7 +10,7 @@ import { afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createInMemoryDb } from '@/db/client'
 import { composeSystemOperationsWithRecoveryAdapter } from '@/modules/system-operations/composition'
 

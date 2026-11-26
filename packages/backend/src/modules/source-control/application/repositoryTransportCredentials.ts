@@ -7,7 +7,7 @@ import type {
   RepositoryCredentialSubject,
   TestOwnCodeHostPushCredentialRequest,
 } from '@agent-workflow/shared'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import {
   selectRepositoryTransportCredential,
   type RepositoryTransportCredentialSelection,

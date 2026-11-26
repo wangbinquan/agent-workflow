@@ -1,7 +1,7 @@
 // RFC-398 S3: independent, source-derived relational and content projections.
 import { createHash } from 'node:crypto'
 import { redactGitUrl } from '@agent-workflow/shared'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, isAbsolute } from 'node:path'
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'

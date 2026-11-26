@@ -23,7 +23,7 @@ import {
   type Config,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type {
   WebhookEndpointAdministrationPort,
   WebhookEndpointRecord,

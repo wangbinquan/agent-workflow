@@ -1,4 +1,4 @@
-import { createSecretBox } from '@/auth/secretBox'
+import { createSecretBox } from '@/platform/crypto/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { Paths } from '@/platform/configuration/installationPaths'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'

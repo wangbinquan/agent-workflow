@@ -16,7 +16,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 
 import { eq } from 'drizzle-orm'
-import type { SecretBox } from '../src/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import { ne } from 'drizzle-orm'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import type { Hono } from 'hono'

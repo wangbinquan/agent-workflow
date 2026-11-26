@@ -16,7 +16,7 @@ import {
   type Task,
   type TaskStatus,
 } from '@agent-workflow/shared'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
 import { ConflictError, diagnosticTextOf } from '@/platform/errors/domainErrors'

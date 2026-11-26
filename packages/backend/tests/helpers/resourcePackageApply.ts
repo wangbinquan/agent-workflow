@@ -10,7 +10,7 @@
 // 这里做同一次翻译，让用例看到的就是用户看到的那一份。
 
 import type { Actor } from '../../src/auth/actor'
-import type { SecretBox } from '../../src/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '../../src/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '../../src/modules/identity-access/application/operationContext'

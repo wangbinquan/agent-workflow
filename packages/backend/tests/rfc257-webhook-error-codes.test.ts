@@ -18,7 +18,7 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { createUser } from './helpers/userFixture'

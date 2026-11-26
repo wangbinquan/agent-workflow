@@ -31,7 +31,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import type { DbClient } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'

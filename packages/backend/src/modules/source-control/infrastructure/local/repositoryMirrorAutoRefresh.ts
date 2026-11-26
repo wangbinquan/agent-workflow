@@ -11,7 +11,7 @@
 // a background refresh must never be able to take the daemon down.
 
 import { isFileSchemeUrl, type Config } from '@agent-workflow/shared'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { refreshCachedRepo } from './repositoryMirrorCache'
 import { createLogger } from '@/platform/logging/logger'

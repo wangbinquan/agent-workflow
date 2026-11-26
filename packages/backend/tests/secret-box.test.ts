@@ -5,7 +5,11 @@ import { randomBytes } from 'node:crypto'
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createSecretBox, createSecretBoxFromKey, ensureSecretKey } from '../src/auth/secretBox'
+import {
+  createSecretBox,
+  createSecretBoxFromKey,
+  ensureSecretKey,
+} from '@/platform/crypto/secretBox'
 import { statMetadataIsAuthoritative } from '@/platform/execution/local/fileTrust'
 
 describe('ensureSecretKey', () => {

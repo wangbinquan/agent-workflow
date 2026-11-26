@@ -11,7 +11,7 @@ import { queryRows, first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { Buffer } from 'node:buffer'
 
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createInMemoryDb } from '@/db/client'
 import { RepositoryTransportCredentials } from '@/modules/source-control/application/repositoryTransportCredentials'
 import { DrizzleRepositoryTransportCredentialRepository } from '@/modules/source-control/infrastructure/repositoryTransportCredentialRepository'

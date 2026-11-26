@@ -23,7 +23,7 @@ import {
 } from '@agent-workflow/shared'
 
 import { buildActor } from '@/auth/actor'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'

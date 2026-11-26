@@ -1,7 +1,7 @@
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { CommandContext } from '@/modules/identity-access/public/participants'
 import type { ResourceRequestContext } from '../public/participants'
 import type { PackageResourceRef } from '../public/types'

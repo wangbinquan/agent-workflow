@@ -2,7 +2,7 @@
 // configured default branch is fresh before a Digital Employee baseline is frozen (RFC-451: moved verbatim from
 // services/developmentDeliveryDeps; a deployment selection, chosen by the deployment profile).
 
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import { DomainError, NotFoundError } from '@/platform/errors/domainErrors'

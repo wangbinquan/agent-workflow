@@ -1,6 +1,6 @@
 import type { RepositoryWorkspaceTaskPorts } from '../../composition/required-ports'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import type { RepositoryPreparationEffectFactory } from '../../application/ports/repositoryPreparationEffects'

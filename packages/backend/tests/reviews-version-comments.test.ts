@@ -29,7 +29,7 @@ import {
 } from './helpers/providerHttpApplication'
 import type { Hono } from 'hono'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'

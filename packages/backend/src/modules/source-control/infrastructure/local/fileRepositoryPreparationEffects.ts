@@ -5,7 +5,7 @@ import {
 } from '@agent-workflow/shared'
 import type { GitCommitIdentity } from '@agent-workflow/shared'
 import { z } from 'zod'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import { DomainError, ConflictError, ValidationError } from '@/platform/errors/domainErrors'
 import { type WorktreeLifecycleHookEvent } from '@/modules/source-control/infrastructure/local/gitRepository'
 import { runGit } from '@/platform/execution/local/gitProcess'

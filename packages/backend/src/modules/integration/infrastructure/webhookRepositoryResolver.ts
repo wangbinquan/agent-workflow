@@ -2,7 +2,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { eq } from 'drizzle-orm'
 
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { unsealRepoUrl } from '@/services/repoCredentials'
 import type { WebhookEndpointRow } from '../application/ports/webhookDispatcher'

@@ -3,7 +3,7 @@
 // RFC-612 (RFC-294 S10 remainder): moved unchanged from `composition/` — it implements the `CachedRepositoryOperations` port
 // (a remote registration refreshes through the mirrors, the local mirror cache fetches the clone), so it is infrastructure.
 
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { CachedRepositoryOperations } from '../application/ports/cachedRepositoryOperations'
 import type { RepositoryMirrors } from '../application/ports/repositoryMirrors'
 import type { RepositoryWorkspaceStore } from '../ports/repositoryWorkspaceStore'

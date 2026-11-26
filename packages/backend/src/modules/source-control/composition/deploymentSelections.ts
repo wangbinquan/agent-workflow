@@ -3,7 +3,7 @@
 // local implementations (their parameters are supersets of these inputs; the extras are test seams); the hosted profile
 // hands over its task-volume implementations, which need none of the inputs.
 import type { Config } from '@agent-workflow/shared'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { RepositoryPublicationTransport } from '../public/types'
 import type { RepositoryTransportCredentialRepository } from '../ports/repositoryTransportCredentialRepository'
 import type { RepositoryWorkspaceStore } from '../ports/repositoryWorkspaceStore'

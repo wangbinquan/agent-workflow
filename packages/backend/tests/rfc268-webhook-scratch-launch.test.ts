@@ -21,7 +21,7 @@ import {
   type CodeHostEvent,
 } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createInMemoryDb } from '../src/db/client'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'

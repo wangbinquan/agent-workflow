@@ -2,7 +2,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import { z } from 'zod'
 // RFC-363: existing Git/FS materialization and compensation, owned by Source Control.
 // Task admission/row writes remain at the caller; this mechanism receives no DB client.
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { resolveSubmoduleParams } from '@/modules/source-control/infrastructure/local/submoduleParams'
 import { listAvailableRefs, resolveCachedRepo } from './local/repositoryMirrorCache'

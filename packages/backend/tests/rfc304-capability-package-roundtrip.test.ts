@@ -33,7 +33,7 @@ import { translateDecisions } from '../src/modules/resource-catalog/application/
 import { parseResourcePackage } from '../src/modules/resource-catalog/application/package/parse'
 import { randomBytes } from 'node:crypto'
 import { buildActor } from '../src/auth/actor'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { commitResourcePackageForTest } from './helpers/resourcePackageApply'
 import { buildPackagePreview } from './helpers/resourcePackageProvider'

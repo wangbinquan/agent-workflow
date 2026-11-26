@@ -5,12 +5,13 @@
       "claimAudit": "Claims to be the wrapper for secrets at rest. Not verified further in this pass; flagged as unaudited surface — no family audit opened auth/ at all except via the rfc305 identity-access module ratchets, which cover permission axes, not sealing.",
       "core": false,
       "files": [
-        "packages/backend/src/auth/secretBox.ts"
+        "packages/backend/src/platform/crypto/secretBox.ts",
+        "packages/backend/src/platform/contracts/secretBox.ts"
       ],
       "guards": [],
       "id": "at-rest-sealing-kernel",
       "layer": "infrastructure",
-      "owner": "identity-access",
+      "owner": "platform",
       "singleSourceOf": "AES-256-GCM seal/unseal over the daemon key file for OIDC client_secret and other at-rest secrets.",
       "title": "At-rest sealing kernel"
     },

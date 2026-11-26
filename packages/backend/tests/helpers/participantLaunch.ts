@@ -13,7 +13,7 @@ import { withLocalRepositoryPreparation } from './sourceControlTaskPorts'
 //
 // 装配逐格复刻 `server.ts` 的 `taskRouteLaunchDependencies`；两处刻意不同，各自写明理由。
 import type { Actor } from '../../src/auth/actor'
-import type { SecretBox } from '../../src/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { DbClient } from '../../src/db/client'
 import type { StartAgentTask, StartWorkgroupTask, Task } from '@agent-workflow/shared'
 import { composeIdentityAccess } from '../../src/modules/identity-access/composition'

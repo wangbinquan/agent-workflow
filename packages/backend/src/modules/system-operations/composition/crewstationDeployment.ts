@@ -10,7 +10,8 @@ import type { BusinessExecutionFence } from '@/platform/crewstation/businessExec
 // The platform injects every input through environment variables; a missing
 // input refuses to start and names all of them at once. Bootstrap passes the
 // returned selections to the one shared start sequence.
-import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { type PreparedPostgresqlProviderSchema } from '@/platform/persistence/databaseProviderRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'

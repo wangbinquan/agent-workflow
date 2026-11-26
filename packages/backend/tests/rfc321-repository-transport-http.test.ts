@@ -13,7 +13,7 @@ import { eq } from 'drizzle-orm'
 
 import { buildActor } from '../src/auth/actor'
 import { createPat } from './helpers/auth/patStore'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb } from '../src/db/client'
 import { mountAccountRepositoryTransportCredentialRoutes } from '../src/routes/accountRepositoryTransportCredentials'

@@ -29,7 +29,7 @@ import { withLocalRepositoryPreparation } from './helpers/sourceControlTaskPorts
 import { agentFixture, readTaskFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

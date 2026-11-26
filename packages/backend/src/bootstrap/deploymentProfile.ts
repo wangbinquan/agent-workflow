@@ -44,7 +44,7 @@ import type {
 } from '@/modules/development-automation/composition'
 import type { ApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
 import type { CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
 import type { EvidenceArtifactPort } from '@/modules/development-automation/composition'

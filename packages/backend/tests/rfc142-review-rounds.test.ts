@@ -42,7 +42,7 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'

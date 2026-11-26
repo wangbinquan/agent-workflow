@@ -1,4 +1,4 @@
-import { type SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createDevelopmentDeliveryProvider } from '@/modules/development-automation/composition'
 import {

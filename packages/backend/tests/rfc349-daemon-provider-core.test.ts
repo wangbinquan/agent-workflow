@@ -12,7 +12,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createInMemoryDb } from '@/db/client'
 import type { RealtimeCompositionPolicy } from '@/modules/runtime-management/composition'
 import type { LocalSystemOperationContext } from '@/modules/system-operations/public/types'

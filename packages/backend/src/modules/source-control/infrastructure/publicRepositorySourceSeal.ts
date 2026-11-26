@@ -2,7 +2,7 @@ import type { RepositoryWorkspaceTaskPorts } from '../composition/required-ports
 import { canonicalJson } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import { ensureCachedRepoIdentity } from './local/repositoryMirrorCache'
 import { ConflictError } from '@/platform/errors/domainErrors'
 import { sha256Hex } from '@/platform/contracts/hash'

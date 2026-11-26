@@ -45,7 +45,7 @@ import {
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import type { Hono } from 'hono'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'

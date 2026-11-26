@@ -52,7 +52,7 @@ import {
   type StartedSystemMockSuite,
 } from '@agent-workflow/system-mocks'
 
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import type { PipelineEvidencePort } from '@/modules/development-automation/application/ports/reconcilerPorts'
 import { composeDevelopmentEmployeeWorkspace } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'

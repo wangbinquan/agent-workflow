@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import {
   composeDaemonApplication,
   type DaemonApplicationInput,

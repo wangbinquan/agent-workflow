@@ -1,5 +1,5 @@
 // RFC-036 — OIDC providers service. CRUD with AES-256-GCM-wrapped client
-// secret at rest (via auth/secretBox), discovery probe for the /test endpoint,
+// secret at rest (via platform/crypto/secretBox), discovery probe for the /test endpoint,
 // and a redacted-for-output view that never leaks the secret.
 
 import { ulid } from 'ulid'
@@ -10,7 +10,7 @@ import type {
   PatchOidcProviderBody,
 } from '@agent-workflow/shared'
 import { OidcProviderSchema } from '@agent-workflow/shared'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import { resolveEndpoints, type EndpointSource } from '@/auth/oidc/endpoints'
 import {
   DrizzleOidcProviderRepository,

@@ -24,7 +24,7 @@ import {
 } from '@agent-workflow/shared'
 import { readNodeRunPrompt } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { buildActor } from '../src/auth/actor'
-import { createSecretBox } from '../src/auth/secretBox'
+import { createSecretBox } from '@/platform/crypto/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createCodeHostConnectionsService } from '../src/modules/integration/infrastructure/codeHost/connections'
 import {

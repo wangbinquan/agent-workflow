@@ -13,7 +13,7 @@ import ts from 'typescript'
 
 import { tmpdir } from 'node:os'
 
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createInMemoryDb } from '../src/db/client'
 import { ALL_TOOLS } from '../src/mcp/tools'
 import { allRouteMeta, resetRouteMetaRegistry } from '../src/routes/registry'

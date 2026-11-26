@@ -34,7 +34,7 @@ import {
   type ProviderHttpApplication,
 } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { eq } from 'drizzle-orm'
 import {
   deleteReviewComment,

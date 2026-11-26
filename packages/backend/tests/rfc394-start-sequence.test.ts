@@ -2,7 +2,7 @@ import * as epochBoot from '@/modules/system-operations/composition/epochBootAdm
 // RFC-394: exercise the real startup sequence for listen precedence, profile forwarding and fatal probes.
 import { expect, mock, spyOn, test } from 'bun:test'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { startCommand } from '@/bootstrap/daemonStart'
 import { standaloneSelections } from '@/bootstrap/standalone'
 import type { DeploymentProfile, DeploymentSelections } from '@/bootstrap/deploymentProfile'

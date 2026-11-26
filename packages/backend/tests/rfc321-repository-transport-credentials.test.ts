@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test'
 import { Buffer } from 'node:buffer'
 
 import { eq } from 'drizzle-orm'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeRepositoryTransportCredentials } from '../src/modules/source-control/composition'

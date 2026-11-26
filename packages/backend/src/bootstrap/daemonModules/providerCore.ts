@@ -6,7 +6,7 @@ import { type DatabaseSourceWriteWindow } from '@/auth/application/authPersisten
 import { type AuthRuntime } from '@/auth/application/authRuntime'
 import { type TokenCallAuditParticipant } from '@/auth/application/tokenCallAudit'
 import { createAuthRuntimeFor, createTokenCallAudit } from '@/auth/composition'
-import { type SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createIdentityAccessRuntime,

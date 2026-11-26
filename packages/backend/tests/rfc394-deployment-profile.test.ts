@@ -1,7 +1,7 @@
 // RFC-394: profile factories preserve every hosted selection, construction order and host diagnostic.
 import { expect, spyOn, test } from 'bun:test'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { composeStandaloneProfile } from '@/bootstrap/standalone'
 import { composeCrewStationProfile } from '@/bootstrap/crewstation'
 import { selectDeployment } from '@/bootstrap/deployment'

@@ -26,7 +26,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 
 import { ulid } from 'ulid'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { gitUrlCacheKeyWith, parseGitUrl, redactGitUrl } from '@agent-workflow/shared'

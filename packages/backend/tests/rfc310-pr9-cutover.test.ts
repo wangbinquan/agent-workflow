@@ -31,7 +31,7 @@ import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
 import type { CodeHostEvent } from '@agent-workflow/shared'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import {

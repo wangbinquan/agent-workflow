@@ -20,7 +20,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { composeEventCenter, standaloneEventCenterSelections } from './helpers/eventCenter'
 import type {
   EventObservationInput,

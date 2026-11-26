@@ -2,7 +2,7 @@
 // refresh are application use cases (application/repositoryMirrors.ts); this assembly selects standalone or
 // hosted and hands each its effects. RFC-527: two explicit assemblies. RFC-531: the deployment profile selects one (and
 // the matching mirror refresh) instead of the daemon branching on whether the deployment has a remote.
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import {
   ensureCachedRepoIdentity,
   rowToCached,

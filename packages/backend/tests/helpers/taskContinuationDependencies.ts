@@ -1,7 +1,7 @@
 // RFC-478 —— 原 `services/task.ts` 的任务续跑依赖袋，原样迁来。生产只经两处 `Pick` 取它的字段（运行时选项漏斗与延后
 // 仓库准备，现各有显式类型）；用例与 helper 仍用这一整袋描述装配参数。它取 collaboration composition 的类型，只在用例侧合法。
 import type { composeGateContinuationSupport } from '@/modules/collaboration/composition'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import type {
   RepositoryWorkspaceStore,

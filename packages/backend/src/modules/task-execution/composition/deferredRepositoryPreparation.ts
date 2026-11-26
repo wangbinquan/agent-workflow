@@ -1,7 +1,7 @@
 import type { RepositoryPreparationLookup } from '../application/ports/repositoryPreparationLookup'
 import type { TaskRepositoryPreparationBinding } from '../infrastructure/repositoryPreparationBinding'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { TerminalWorkspacePrunePolicy } from '../domain/terminalWorkspacePrune'
 import { type WorkspaceCleanupHookEvent } from '../application/ports/preparedWorkspace'
 

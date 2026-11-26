@@ -19,7 +19,7 @@ import { ulid } from 'ulid'
 import { patchTaskFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import {
   createCodeHostWebhookDeliveryConsumer,

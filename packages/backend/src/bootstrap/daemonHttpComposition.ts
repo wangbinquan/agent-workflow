@@ -44,7 +44,7 @@ import type {
   MaintenanceStatus,
 } from '@agent-workflow/shared'
 import { type Actor } from '@/auth/actor'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { BuildScheduleLaunch } from '@/modules/integration/composition/scheduledTasks'
 import { directOperationAuthority, directRequestAuthority } from '@/routes/operationAuthority'
 import { type ConfigConcurrencyHotApplyCommand } from '@/modules/system-operations/public/commands'

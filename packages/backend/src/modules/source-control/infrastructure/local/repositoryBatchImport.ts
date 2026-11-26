@@ -39,7 +39,7 @@ import {
   type RepoImportWsMessage,
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import type { RepositoryRegistration } from '../../application/ports/repositoryMirrors'
 import { REPO_IMPORT_CHANNEL, repoImportsBroadcaster } from '@/ws/broadcaster'

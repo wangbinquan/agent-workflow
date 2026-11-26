@@ -26,7 +26,7 @@ import { join } from 'node:path'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CommandContext,

@@ -12,7 +12,7 @@ import { logicalSchemaContract, persistenceSchemaBinding } from './persistenceSc
 import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { resolveDatabaseProviderRuntimeForRestore } from '@/platform/persistence/databaseProviderRuntime'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import { createSecretBox } from '@/auth/secretBox'
+import { createSecretBox } from '@/platform/crypto/secretBox'
 import { createAuthRuntimeFor } from '@/auth/composition'
 import { loadConfig } from '@/config'
 import {

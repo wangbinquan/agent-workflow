@@ -25,7 +25,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { readdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import {
   refreshCachedRepo,

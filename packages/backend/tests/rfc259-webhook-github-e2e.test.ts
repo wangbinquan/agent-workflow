@@ -14,7 +14,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createUser } from './helpers/userFixture'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import {

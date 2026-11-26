@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { gitUrlCacheKeyWith, parseGitUrl, redactGitUrl } from '@agent-workflow/shared'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import { sha1Hex } from '@/platform/contracts/hash'
 import { redactSensitiveString } from '@/platform/logging/redact'
 import { bytesDigest, valueDigest } from '@/platform/persistence/migration/conversion/digest'

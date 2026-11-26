@@ -29,7 +29,7 @@ import {
   type StartedSystemMockSuite,
 } from '@agent-workflow/system-mocks'
 
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createRepositoryEndpointDiscovery } from '../src/modules/integration/infrastructure/codeHost/repositoryEndpointDiscovery'

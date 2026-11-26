@@ -15,7 +15,7 @@ import {
   type CreateMcp,
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import type { McpCreateRecord } from '@/modules/resource-catalog/application/mcps/ports'

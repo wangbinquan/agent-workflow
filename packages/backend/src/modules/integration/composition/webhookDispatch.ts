@@ -1,4 +1,4 @@
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { TaskTriggerQueries } from '@/modules/task-execution/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WebhookDispatchDeps } from '../application/webhookDispatch'

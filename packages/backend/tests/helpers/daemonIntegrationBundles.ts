@@ -1,6 +1,6 @@
 // RFC-381: passive bundle fixtures keep the database/provider real; unused outbound effects fail explicitly.
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { composeDaemonScheduledTaskModules } from '@/bootstrap/daemonModules/scheduledTasks'
 import { composeDaemonIntegrationModules } from '@/bootstrap/daemonModules/integration'
 import { composeDaemonFusionModules } from '@/bootstrap/daemonModules/fusion'

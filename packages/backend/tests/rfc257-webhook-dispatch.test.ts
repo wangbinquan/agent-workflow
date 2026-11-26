@@ -16,7 +16,7 @@ import { ulid } from 'ulid'
 
 import { webhookTriggerContextOf, type CodeHostEvent } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createUser } from './helpers/userFixture'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'

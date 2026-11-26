@@ -24,7 +24,7 @@ import { prepareScratchWorkspace } from './scratchWorkspacePreparation'
 import { taskReadColumns } from './taskRepositorySql'
 export { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
 
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type {
   MaterializedRepo,
   WorkspaceCleanupHookEvent,

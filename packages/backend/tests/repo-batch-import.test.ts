@@ -9,7 +9,7 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { beforeEach, expect, test } from 'bun:test'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import {
   createRepositoryBatchImports,
   startBatchImport,

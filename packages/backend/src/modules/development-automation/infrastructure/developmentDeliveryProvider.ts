@@ -9,7 +9,7 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SelectedPipelineEvidenceRunnerPort } from '../application/ports/reconcilerPorts'
 import { unsealRepoUrl } from '@/services/repoCredentials'

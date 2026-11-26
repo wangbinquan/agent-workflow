@@ -94,7 +94,7 @@ import {
 import { codeHostNodeRequests } from '@/modules/integration/composition'
 import type { Config } from '@agent-workflow/shared'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { BuildScheduleLaunch } from '@/modules/integration/composition/scheduledTasks'
 import type { ScheduleAuthorityRuntime } from '@/modules/integration/composition/scheduledTasks'
 import { type RuntimeDiagnosticDependencies } from '@/modules/runtime-management/composition/runtimeManagement'

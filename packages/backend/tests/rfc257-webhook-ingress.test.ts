@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import type {
   EventCenterCodeHostDeliveryDispatcher,
   WebhookDispatcher,

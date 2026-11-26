@@ -1,3 +1,15 @@
+## 2026-11-26 RFC-620 静态加密盒归 platform（In Progress；`design/RFC-620-secret-box-into-platform/`）
+
+- **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W9-D，
+  接 RFC-619。
+- **范围**：`auth/secretBox.ts`（AES-256-GCM 静态加密盒，只取 node 内置，四个模块与 bootstrap 共用）拆成 `platform/contracts/secretBox.ts`（`SecretBox` 接口；
+  design §3：application 只取 `platform/contracts`）与 `platform/crypto/secretBox.ts`（密钥文件与加解密实现，原样迁移，取合同里的类型、不转出它）。156 个读者文件
+  按语法树改指：只取类型的取合同，取实现的取 `platform/crypto`，混合 import 拆成两条；owner 表删一行，commons 内核清单的 `at-rest-sealing-kernel` 改指两个新文件、
+  owner 改为 platform。`legacy-horizontal-files` 45 → 44。新增 RFC-620 用例。
+- **集中验证**：候选导出（HEAD `2b4eee088` + 本 RFC 路径）上 `tsc` / eslint / prettier 全过；798 个用例除 `rfc167`（负载 ~85 时与对照导出同样红，时序敏感、与本 RFC 无关）
+  与 `rfc321`（导出无发布历史）外全过；架构报告只有 `legacy-horizontal-files` 45 → 44；变异 4 / 4 被抓。五个带着 RFC-616 在制改动的读者文件按 `origin/main` + 本 RFC 的一行 import 提交。
+- **CI 侧**：待推送。
+
 ## 2026-11-26 RFC-619 util/ 清空（In Progress；`design/RFC-619-util-emptied/`）
 
 - **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W9-D，

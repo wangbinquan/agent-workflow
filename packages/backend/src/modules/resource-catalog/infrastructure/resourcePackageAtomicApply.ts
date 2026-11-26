@@ -9,7 +9,7 @@ import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { z } from 'zod'
 
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { Actor } from '@/auth/actor'
 import type { PostgresqlResourcePackageMutationSessionFactory } from './aggregateAdapters/postgresqlResourcePackageMutationParticipants'
 import type {

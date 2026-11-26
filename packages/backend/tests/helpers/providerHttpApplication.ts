@@ -8,7 +8,8 @@ import { afterEach } from 'bun:test'
 import { existsSync, readFileSync, rmSync, writeFileSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import {
   composeDaemonApplication,

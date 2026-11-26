@@ -1,5 +1,5 @@
 import type { CrewStationEventIngress } from './crewstationEvents'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { WebhookIngressEventCenter } from '../application/ports/webhookIngressEventCenter'
 import {
   supportsEventCenterCodeHostDelivery,

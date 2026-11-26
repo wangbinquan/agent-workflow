@@ -1,7 +1,7 @@
 // RFC-499 (RFC-294 S10 step 6): the preparation binding, moved here from composition/repositoryPreparation.ts
 // (composeRepositoryPreparation) unchanged except that both effect selections are required inputs; the local
 // fallback stays in that composition file.
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { RequestAuthority } from '@/modules/identity-access/public/participants'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { resolveRepoGroupLayout } from '../application/repositoryGroups'

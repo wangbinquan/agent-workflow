@@ -33,7 +33,7 @@ import {
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'

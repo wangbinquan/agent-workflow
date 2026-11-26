@@ -22,7 +22,7 @@ import { composeRepositoryPreparation } from '@/modules/source-control/compositi
 //
 // 现在这里逐格复刻 `server.ts` 的 `taskRouteLaunchDependencies`，终端是同一台根启动内核。
 // 形参一个字没动，三个调用点因此不必改。
-import type { SecretBox } from '../../src/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { DbClient } from '../../src/db/client'
 import type { SchedulerDriverPort } from '../../src/modules/task-execution/public/commands'
 import { composeAgentLaunchResourceOperations } from '../../src/modules/resource-catalog/composition/agentLaunchResources'

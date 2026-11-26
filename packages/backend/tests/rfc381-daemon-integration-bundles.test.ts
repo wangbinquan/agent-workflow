@@ -21,7 +21,7 @@ import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { integrationBundleFixture } from './helpers/daemonIntegrationBundles'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { testTaskExecutionModule as taskExecutionModule } from './helpers/taskExecutionModule'
 import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'

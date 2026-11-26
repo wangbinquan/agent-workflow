@@ -1,5 +1,5 @@
 import type { RepositoryWorkspaceTaskPorts } from '../../composition/required-ports'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { BusinessEnvironmentValue } from '@/platform/crewstation/nativeMaterial'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import type { Logger } from '@/platform/logging/logger'

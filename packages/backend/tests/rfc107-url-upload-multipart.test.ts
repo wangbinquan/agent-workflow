@@ -33,7 +33,7 @@ import {
   test,
   beforeAll,
 } from 'bun:test'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import type { Hono } from 'hono'
 import { execFileSync } from 'node:child_process'
 import {

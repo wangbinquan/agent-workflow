@@ -80,7 +80,7 @@ import { prepareDatabaseInstallation } from './application/prepareDatabaseInstal
 import { requireSchemaPlanForContract } from './application/schemaPlanAdmission'
 import { releaseArtifactAfterStageRestore } from './application/stageRestoreArtifactRelease'
 
-import { type SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { DbClient } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 

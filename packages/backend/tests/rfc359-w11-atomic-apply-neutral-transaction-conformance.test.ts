@@ -39,7 +39,7 @@ import {
 } from '@agent-workflow/shared'
 
 import type { Actor } from '@/auth/actor'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import type { IntentApplyInput } from '@/modules/intent/application/ports/intentApplyOperations'
 import { createIntentApplyEngine } from '@/modules/intent/infrastructure/intentApplyEngine'
 import type { IntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'

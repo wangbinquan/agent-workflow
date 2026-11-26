@@ -32,7 +32,7 @@ import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type {
   CachedRepositoryRecord,
   RepositoryWorkspaceStore,

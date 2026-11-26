@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
 import type { MissionRow } from '@/modules/development-automation/application/ports/missionStore'

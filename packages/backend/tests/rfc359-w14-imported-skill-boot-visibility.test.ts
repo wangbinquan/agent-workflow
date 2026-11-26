@@ -28,7 +28,7 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createManagedSkillWithFiles } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkillById, listSkills } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import {

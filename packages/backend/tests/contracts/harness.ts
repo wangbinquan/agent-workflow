@@ -26,7 +26,7 @@ import { tmpdir } from 'node:os'
 
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
-import { createSecretBoxFromKey } from '../../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createInMemoryDb, type DbClient } from '../../src/db/client'
 import {
   composeDatabaseMigrationModule,

@@ -18,7 +18,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { missionPublicationSubject } from '../src/modules/development-automation/application/missionDeliveryChain'

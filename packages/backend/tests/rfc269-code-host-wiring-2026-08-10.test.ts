@@ -23,7 +23,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import {
   createCodeHostConnectionsService,
   resolveCodeHostConnectionsFromKeyFile,

@@ -27,7 +27,7 @@ import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/domain/taskSubje
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import type { Hono } from 'hono'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

@@ -21,7 +21,7 @@ import {
 import { directOperationAuthority } from '@/routes/operationAuthority'
 // RFC-382: one passive task-execution graph and one live configuration source per session.
 import { type Actor } from '@/auth/actor'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createLogger } from '@/platform/logging/logger'

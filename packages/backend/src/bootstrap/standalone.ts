@@ -87,7 +87,7 @@ import {
   composeLocalExecutionAuthority,
   createPostgresqlAdminBackupCoordinator,
 } from '@/modules/system-operations/composition'
-import { createSecretBox } from '@/auth/secretBox'
+import { createSecretBox } from '@/platform/crypto/secretBox'
 import { createDevelopmentWorkspaceRepositoryPreparation } from '@/modules/source-control/composition'
 import {
   composeLocalRepositoryPreparationEffects,

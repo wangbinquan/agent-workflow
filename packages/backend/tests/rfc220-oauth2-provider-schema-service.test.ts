@@ -20,7 +20,7 @@ import { sql } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
 
 import { CreateOidcProviderBodySchema } from '@agent-workflow/shared'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   createOidcProvidersService,

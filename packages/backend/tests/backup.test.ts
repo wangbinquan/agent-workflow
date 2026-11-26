@@ -4,7 +4,7 @@ import { writeGenerationPointerV2 } from '@/platform/persistence/generationPoint
 
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { Database } from 'bun:sqlite'
 import {
   existsSync,

@@ -20,7 +20,7 @@ import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb } from '../src/db/client'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import {

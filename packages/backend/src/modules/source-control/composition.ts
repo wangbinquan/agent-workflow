@@ -2,7 +2,7 @@ import type { RepositoryBackupPreparationParticipant } from './public/participan
 import type { RepositoryPublicationTransport } from './public/types'
 import { ensurePlatformWorkspaceDirectory } from './infrastructure/platformWorkspaceDirectory'
 import type { PlatformWorkspaceKind } from '@agent-workflow/shared'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import { RepositoryTransportCredentials } from './application/repositoryTransportCredentials'
 import type { RepositoryTransportCredentialRepository } from './ports/repositoryTransportCredentialRepository'
 export { reconcileRepositoryTransportConnectionProjections } from './application/repositoryTransportConnectionProjection'

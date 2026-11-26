@@ -1,4 +1,4 @@
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { DeploymentSelections } from '../deploymentProfile'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createMissionCodeHostEventContinuation } from '@/modules/development-automation/composition'

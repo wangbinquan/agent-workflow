@@ -35,7 +35,7 @@ import {
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/infrastructure/mcpTransactionLifecycle'

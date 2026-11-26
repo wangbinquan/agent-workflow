@@ -1,5 +1,5 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { SecretBox } from '../../src/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { Actor } from '../../src/auth/actor'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '../../src/modules/code-capability/composition/capabilityTemplateOperations'
 import { createMcpTransactionLifecycle } from '../../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'

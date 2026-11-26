@@ -20,7 +20,7 @@ import { ulid } from 'ulid'
 import { WORKFLOW_SCHEMA_VERSION, type ResourceBundle } from '@agent-workflow/shared'
 
 import { buildActor } from '@/auth/actor'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { composeIntentApplyOperations } from '@/modules/intent/composition/apply'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'

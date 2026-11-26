@@ -25,7 +25,7 @@ import {
 } from '@agent-workflow/shared'
 import { DomainError } from '@/platform/errors/domainErrors'
 import { TextDecoder } from 'node:util'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type {
   RepositoryCredentialSealingMutation,
   RepositoryWorkspaceStore,

@@ -5,7 +5,7 @@
 import { expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { buildActor } from '@/auth/actor'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { composeWebhookEndpointServiceDependencies } from '@/modules/integration/composition/webhookEndpoints'
 import { createWebhookTriggerValidation } from '@/modules/integration/application/webhookAdmission'
 import {

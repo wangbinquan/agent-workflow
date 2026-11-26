@@ -16,7 +16,7 @@
 
 import type { PackagePreview as SharedPackagePreviewWire } from '@agent-workflow/shared'
 import { z } from 'zod'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { Actor } from '@/auth/actor'
 import { canonicalJson, type BundleOp, type BundleResourceType } from '@agent-workflow/shared'
 import { isVisibleRow } from '../../domain/resourceAccess'

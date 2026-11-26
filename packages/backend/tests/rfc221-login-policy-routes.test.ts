@@ -3,7 +3,7 @@
 
 import { expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createSession } from './helpers/auth/sessionStore'
 
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'

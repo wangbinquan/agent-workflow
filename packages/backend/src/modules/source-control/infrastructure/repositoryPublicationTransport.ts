@@ -14,7 +14,7 @@ import {
   type RepositoryPublicationReceipt,
   type ResolvedRepositoryHttpEndpoint,
 } from '@agent-workflow/shared'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import { isAbsolute } from 'node:path'
 import { runGit as defaultRunGit } from '@/platform/execution/local/gitProcess'
 import type { RepositoryGit } from '../application/repositoryCommit'

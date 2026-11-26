@@ -5,7 +5,7 @@
 import { beforeEach, expect, setDefaultTimeout, spyOn, test } from 'bun:test'
 import type { Hono } from 'hono'
 import type { DevelopmentAutomationModule } from '@/modules/development-automation/composition'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'

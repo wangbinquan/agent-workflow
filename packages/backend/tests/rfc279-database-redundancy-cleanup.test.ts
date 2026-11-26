@@ -18,11 +18,11 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { unsealRepoUrl } from '../src/services/repoCredentials'
 import { repositoryUrlEnvironment } from '@/modules/source-control/composition/conversion'
 import type { BootUpgradeCaptureInput } from '@/platform/persistence/migration/freeze/bootUpgradeEnvironment'
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 
 const MIGRATIONS = FROZEN_MIGRATIONS
 const MIGRATION = join(MIGRATIONS, '0147_rfc279_database_redundancy_cleanup.sql')

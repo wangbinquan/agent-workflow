@@ -19,7 +19,7 @@ import {
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'

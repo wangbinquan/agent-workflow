@@ -43,7 +43,7 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
 import { encodeZip } from '@/platform/content/zip'
 import { describeEachProvider } from './helpers/eachProvider'

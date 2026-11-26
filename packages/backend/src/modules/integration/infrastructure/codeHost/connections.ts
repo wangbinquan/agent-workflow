@@ -18,7 +18,8 @@ import {
   normalizeRepositoryTransportMappings,
   RepositoryTransportMappingV1Schema,
 } from '@agent-workflow/shared'
-import { createSecretBoxFromKey, type SecretBox } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import { ConflictError, ValidationError } from '@/platform/errors/domainErrors'
 import { sha256Hex } from '@/platform/contracts/hash'
 import type { CodeHostConnectionProbeInput } from '../../application/ports/codeHostCalls'

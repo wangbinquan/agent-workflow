@@ -1,6 +1,6 @@
 // RFC-499 (RFC-294 S10 step 6): the standalone preparation and scratch effects, moved here unchanged from
 // composition/repositoryPreparation.ts; the hosted pair is infrastructure/crewstation/repositoryPreparation.ts.
-import type { SecretBox } from '@/auth/secretBox'
+import type { SecretBox } from '@/platform/contracts/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RepositoryPreparationEffectFactory } from '../../application/ports/repositoryPreparationEffects'
 import type { ScratchWorkspaceEffects } from '../../application/ports/scratchWorkspaceEffects'

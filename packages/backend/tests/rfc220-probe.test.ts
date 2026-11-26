@@ -13,7 +13,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { beforeEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { clearEndpointCaches } from '../src/auth/oidc/endpoints'
 import { createOidcProvidersService, type OidcProvidersService } from '../src/auth/oidc/providers'
 

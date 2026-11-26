@@ -60,7 +60,7 @@ import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/module
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { composePostgresqlResourcePackageProvider } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { parseResourcePackage } from '@/modules/resource-catalog/application/package/parse'
 import { encodeZip } from '@/platform/content/zip'
 import { describeEachProvider } from './helpers/eachProvider'

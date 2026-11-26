@@ -7,7 +7,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { eq } from 'drizzle-orm'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { createSession } from './helpers/auth/sessionStore'
 
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'

@@ -17,7 +17,7 @@ import { eq, sql } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 import { resolveCachedRepo } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { unsealRepoUrl } from '../src/services/repoCredentials'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 

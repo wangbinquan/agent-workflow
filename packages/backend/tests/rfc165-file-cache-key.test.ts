@@ -30,7 +30,7 @@ import {
 } from '@agent-workflow/shared'
 
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import { resolveCachedRepo } from '../src/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 

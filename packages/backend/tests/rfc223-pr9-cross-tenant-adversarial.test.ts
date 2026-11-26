@@ -26,7 +26,7 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 //   - five-type transfer collision + workflow exception:
 //     rfc223-owner-transfer.test.ts
 

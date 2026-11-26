@@ -18,7 +18,7 @@ import { eq } from 'drizzle-orm'
 import { PACKAGE_SECRET_PLACEHOLDER } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CommandContext,

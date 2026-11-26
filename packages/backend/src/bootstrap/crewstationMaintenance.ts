@@ -10,7 +10,7 @@ import { PostgresqlDatabaseConfigSchema, type DatabaseConfig } from '@agent-work
 import { composeCrewStationDatabaseBackups } from '@/modules/system-operations/composition/crewstationDatabaseBackups'
 import { composeCrewStationObjectPublications } from '@/modules/system-operations/composition/crewstationObjectPublications'
 import { z } from 'zod'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import {
   composeCrewStationReviewArtifacts,
   composeCrewStationReviewObjectSweep,

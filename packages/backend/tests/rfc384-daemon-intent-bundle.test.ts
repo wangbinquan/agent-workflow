@@ -19,7 +19,7 @@ import {
   actorOfDirectAuthority,
   composeDurableWorkOwnerAdmission,
 } from '@/modules/identity-access/composition/authentication'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import {
   composeDaemonIntentModules,
   type DaemonIntentInput,

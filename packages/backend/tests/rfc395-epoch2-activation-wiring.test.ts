@@ -33,7 +33,7 @@ import {
 } from '@/modules/system-operations/composition/epochBootAdmission'
 import { epochMigrationKeys } from '@/bootstrap/epochMigrationKeys'
 import type { BootUpgradeCaptureInput } from '@/platform/persistence/migration/freeze/bootUpgradeEnvironment'
-import { createSecretBoxFromKey } from '@/auth/secretBox'
+import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
 import {
   captureEpochMetadata,
   restoreEpochMetadata,
