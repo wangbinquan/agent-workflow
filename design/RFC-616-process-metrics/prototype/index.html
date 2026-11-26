@@ -1,0 +1,1136 @@
+<title>过程度量原型</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one working column (max 1180px). Summary tiles first, then cards in an auto-fit two-column grid;
+   every table, canvas and chart scrolls inside its own wrapper so the page body never scrolls sideways.
+   Tokens mirror the product's styles.css; chart tokens follow the validated categorical / ordinal / sequential sets. */
+:root{
+  --font-ui:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --bg:#f8f9fb;--panel:#ffffff;--border:#e3e5ea;--border-strong:#a9aeb9;--text:#1f2328;--muted:#5b6271;
+  --accent:#1f5fda;--accent-fill:#1f5fda;--on-accent:#ffffff;--accent-wash:#eaf0fc;
+  --success-fg:#1b6d34;--success-bg:#e8f1ea;--success-border:#9cc3a8;
+  --warn-fg:#844700;--warn-bg:#f3ede5;--warn-border:#cdb292;
+  --danger-fg:#b42318;--danger-bg:#f8e9e7;--danger-border:#e0a59f;
+  --info-fg:#1d5d9f;--info-bg:#e8eff6;--info-border:#9db9d6;
+  --neutral-bg:#eef0f3;
+  --c1:#257de0;--c2:#f47230;--c3:#00b894;--c4:#f2a600;--c-other:#b4b9c2;
+  --c1-ink:#ffffff;--c2-ink:#ffffff;--c3-ink:#ffffff;--c4-ink:#0b0b0b;--c-other-ink:#0b0b0b;
+  --o1:#84b9f3;--o2:#257de0;--o3:#0f4a96;--o1-ink:#0b0b0b;--o2-ink:#ffffff;--o3-ink:#ffffff;
+  --heat-1:#cce3fd;--heat-2:#84b9f3;--heat-3:#338ced;--heat-4:#1b64be;--heat-5:#0e3d7e;
+  --heat-ink-1:#10141a;--heat-ink-2:#10141a;--heat-ink-3:#10141a;--heat-ink-4:#ffffff;--heat-ink-5:#ffffff;
+  --st-good:#0aac23;--st-warn:#fbb315;--st-crit:#dc3c3d;--st-good-ink:#ffffff;--st-warn-ink:#0b0b0b;--st-crit-ink:#ffffff;
+  --grid:#e7e9ee;--axis:#c2c6ce;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#15181d;--panel:#1c2028;--border:#2a2f38;--border-strong:#566070;--text:#e6e7ea;--muted:#95a0b3;
+    --accent:#8eb8ff;--accent-fill:#2759a5;--on-accent:#ffffff;--accent-wash:#232d40;
+    --success-fg:#66d17a;--success-bg:#1f2f29;--success-border:#356246;
+    --warn-fg:#ffc25c;--warn-bg:#2f2a22;--warn-border:#6b5630;
+    --danger-fg:#ff8b8b;--danger-bg:#33252a;--danger-border:#7a4448;
+    --info-fg:#8eb8ff;--info-bg:#232d3d;--info-border:#3d557a;
+    --neutral-bg:#262b34;
+    --c1:#338ced;--c2:#e76624;--c3:#00a888;--c4:#d28e05;--c-other:#5a6270;
+    --c1-ink:#ffffff;--c2-ink:#ffffff;--c3-ink:#ffffff;--c4-ink:#ffffff;--c-other-ink:#ffffff;
+    --o1:#1757ac;--o2:#338ced;--o3:#9dc8f7;--o1-ink:#ffffff;--o2-ink:#ffffff;--o3-ink:#0b0b0b;
+    --heat-1:#0e3d7e;--heat-2:#1b64be;--heat-3:#338ced;--heat-4:#84b9f3;--heat-5:#cce3fd;
+    --heat-ink-1:#eef1f6;--heat-ink-2:#ffffff;--heat-ink-3:#0b0b0b;--heat-ink-4:#0b0b0b;--heat-ink-5:#0b0b0b;
+    --st-good:#0aac23;--st-warn:#fbb315;--st-crit:#dc3c3d;--st-good-ink:#ffffff;--st-warn-ink:#0b0b0b;--st-crit-ink:#ffffff;
+    --grid:#2a2f38;--axis:#454c59;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#15181d;--panel:#1c2028;--border:#2a2f38;--border-strong:#566070;--text:#e6e7ea;--muted:#95a0b3;
+  --accent:#8eb8ff;--accent-fill:#2759a5;--on-accent:#ffffff;--accent-wash:#232d40;
+  --success-fg:#66d17a;--success-bg:#1f2f29;--success-border:#356246;
+  --warn-fg:#ffc25c;--warn-bg:#2f2a22;--warn-border:#6b5630;
+  --danger-fg:#ff8b8b;--danger-bg:#33252a;--danger-border:#7a4448;
+  --info-fg:#8eb8ff;--info-bg:#232d3d;--info-border:#3d557a;
+  --neutral-bg:#262b34;
+  --c1:#338ced;--c2:#e76624;--c3:#00a888;--c4:#d28e05;--c-other:#5a6270;
+  --c1-ink:#ffffff;--c2-ink:#ffffff;--c3-ink:#ffffff;--c4-ink:#ffffff;--c-other-ink:#ffffff;
+  --o1:#1757ac;--o2:#338ced;--o3:#9dc8f7;--o1-ink:#ffffff;--o2-ink:#ffffff;--o3-ink:#0b0b0b;
+  --heat-1:#0e3d7e;--heat-2:#1b64be;--heat-3:#338ced;--heat-4:#84b9f3;--heat-5:#cce3fd;
+  --heat-ink-1:#eef1f6;--heat-ink-2:#ffffff;--heat-ink-3:#0b0b0b;--heat-ink-4:#0b0b0b;--heat-ink-5:#0b0b0b;
+  --st-good:#0aac23;--st-warn:#fbb315;--st-crit:#dc3c3d;--st-good-ink:#ffffff;--st-warn-ink:#0b0b0b;--st-crit-ink:#ffffff;
+  --grid:#2a2f38;--axis:#454c59;
+}
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:14px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-width:0}
+.row--between{justify-content:space-between}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+p,h1,h2,h3,h4,ul,dl,dd{margin:0}
+ul{padding:0;list-style:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{font:inherit;color:inherit}
+
+/* prototype note */
+.proto{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;padding:10px 14px;border:1px solid var(--info-border);border-radius:6px;background:var(--info-bg);color:var(--info-fg);font-size:13px}
+.proto strong{font-weight:600}
+
+/* page chrome */
+.crumb{font-size:12px;color:var(--muted)}
+.page-title{font-size:22px;font-weight:600;line-height:1.3;text-wrap:balance}
+.tabs{display:flex;gap:4px;min-width:0;border-bottom:1px solid var(--border);overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
+.tabs__tab{flex:0 0 auto;background:none;border:0;padding:6px 12px;font-size:14px;line-height:1.25;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tabs__tab:hover{color:var(--text)}
+.tabs__tab--active,.tabs__tab--active:hover{color:var(--accent);border-bottom-color:var(--accent)}
+.tabs__tab[aria-disabled="true"]{opacity:.55;cursor:default}
+.tabs__tab[aria-disabled="true"]:hover{color:var(--muted)}
+.segmented{display:inline-flex;flex-wrap:wrap;border-radius:6px;background:var(--accent-wash);padding:2px;gap:2px;max-width:100%}
+.segmented__option{flex:0 1 auto;border:0;background:transparent;color:var(--text);font-size:13px;font-weight:600;padding:4px 10px;border-radius:4px;cursor:pointer;line-height:1.25;white-space:nowrap}
+.segmented__option:hover{background:var(--panel)}
+.segmented__option--active,.segmented__option--active:hover{background:var(--accent-fill);color:var(--on-accent)}
+.btn{display:inline-flex;align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--border-strong);border-radius:6px;padding:4px 10px;font-size:13px;color:var(--text);line-height:1.2;white-space:nowrap;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn--primary{background:var(--accent-fill);border-color:var(--accent-fill);color:var(--on-accent)}
+.btn[disabled]{opacity:.6;cursor:default}
+.linklike{background:none;border:0;padding:0;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-size:inherit}
+a{color:var(--accent);text-underline-offset:2px}
+.back{font-size:13px}
+.detail-title{font-size:18px;font-weight:600;line-height:1.35;text-wrap:balance}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between}
+
+/* cards and tiles */
+.card{display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--panel);border:1px solid var(--border);border-radius:10px;min-width:0}
+.card__title{font-size:14px;font-weight:600;line-height:1.45}
+.card__sub{font-size:12px;color:var(--muted)}
+.card>.segmented{align-self:flex-start}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:12px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:12px}
+.kpi{display:flex;flex-direction:column;gap:2px;padding:14px 16px;background:var(--panel);border:1px solid var(--border);border-radius:10px;min-width:0}
+.kpi__label{font-size:12px;color:var(--muted)}
+.kpi__value{font-size:22px;font-weight:600;line-height:1.25;overflow-wrap:anywhere}
+.kpi__detail{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.kpi__delta{font-size:12px;font-weight:600;margin-top:2px}
+.kpi__delta--good{color:var(--success-fg)}
+.kpi__delta--bad{color:var(--danger-fg)}
+.kpis--compact{grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))}
+.kpis--compact .kpi{padding:10px 12px;border-radius:8px;background:var(--bg)}
+.kpis--compact .kpi__value{font-size:18px}
+.notice{padding:10px 14px;border:1px solid var(--info-border);border-radius:6px;background:var(--info-bg);color:var(--info-fg);font-size:13px}
+.notice--warn{border-color:var(--warn-border);background:var(--warn-bg);color:var(--warn-fg)}
+
+/* tables */
+.tbl{overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:var(--panel)}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th,.tbl td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
+.tbl th{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;background:var(--panel)}
+.tbl tr:last-child>td{border-bottom:0}
+.tbl td.num,.tbl th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tbl tbody tr.is-link:hover>td{background:var(--accent-wash)}
+.tbl td.name{min-width:200px;font-weight:500}
+.tbl tr.sub>td{background:var(--bg);padding:12px}
+.tbl tr.grp>td{background:var(--bg);font-size:12px;font-weight:600;color:var(--muted)}
+.tbl td.indent{padding-left:28px}
+.chip{display:inline-flex;align-items:center;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:500;border:1px solid transparent;white-space:nowrap}
+.chip--success{background:var(--success-bg);color:var(--success-fg);border-color:var(--success-border)}
+.chip--warn{background:var(--warn-bg);color:var(--warn-fg);border-color:var(--warn-border)}
+.chip--danger{background:var(--danger-bg);color:var(--danger-fg);border-color:var(--danger-border)}
+.chip--info{background:var(--info-bg);color:var(--info-fg);border-color:var(--info-border)}
+.chip--neutral{background:var(--neutral-bg);color:var(--muted);border-color:var(--border)}
+.expander{background:none;border:0;padding:2px 8px 2px 0;cursor:pointer;color:var(--text);font-size:14px;line-height:1}
+
+/* tall segmented bar: one whole split into parts */
+.segbar{display:flex;gap:2px;height:28px;min-width:0}
+.segbar__seg{flex:0 0 auto;min-width:3px;border:0;border-radius:4px;display:flex;align-items:center;padding:0 8px;font-size:12px;font-weight:600;white-space:nowrap;cursor:default}
+.segbar__seg.is-tight{padding:0}
+.segbar__seg.is-tight>span{visibility:hidden;width:0}
+.segbar__seg:hover,.segbar__seg:focus-visible{filter:brightness(1.1)}
+.segbar--thin{height:8px;min-width:120px}
+.segbar--thin .segbar__seg{border-radius:4px;padding:0;min-width:2px}
+.fill-c1{background:var(--c1);color:var(--c1-ink)}.fill-c2{background:var(--c2);color:var(--c2-ink)}
+.fill-c3{background:var(--c3);color:var(--c3-ink)}.fill-c4{background:var(--c4);color:var(--c4-ink)}
+.fill-other{background:var(--c-other);color:var(--c-other-ink)}
+.fill-o1{background:var(--o1);color:var(--o1-ink)}.fill-o2{background:var(--o2);color:var(--o2-ink)}.fill-o3{background:var(--o3);color:var(--o3-ink)}
+.fill-good{background:var(--st-good);color:var(--st-good-ink)}.fill-warn{background:var(--st-warn);color:var(--st-warn-ink)}.fill-crit{background:var(--st-crit);color:var(--st-crit-ink)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px}
+.legend li{display:inline-flex;align-items:center;gap:6px;min-width:0}
+.legend i{flex:0 0 auto;width:10px;height:10px;border-radius:2px}
+.legend b{font-weight:600}
+.legend--stack{flex-direction:column;gap:6px}
+.legend--stack li{justify-content:space-between;gap:12px}
+.legend--stack li>span:first-child{display:inline-flex;align-items:center;gap:6px;min-width:0}
+.legend__val{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ranked bars inside table cells */
+.meter{display:flex;align-items:center;gap:8px;min-width:120px}
+.meter__track{flex:1 1 auto;height:8px;min-width:48px}
+.meter__bar{display:block;height:8px;background:var(--c1);border-radius:0 4px 4px 0;min-width:2px}
+.meter__val{flex:0 0 auto;width:38px;text-align:right;font-variant-numeric:tabular-nums}
+
+/* column chart */
+.cols{display:flex;gap:0;align-items:stretch;height:190px;min-width:0;overflow-x:auto}
+.cols__col{flex:1 0 56px;max-width:96px;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:6px;background:none;border:0;padding:0;cursor:default}
+.cols__track{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;border-bottom:1px solid var(--axis);min-height:0}
+.cols__val{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.cols__bar{width:24px;height:calc((100% - 24px) * var(--r));min-height:2px;background:var(--c1);border-radius:4px 4px 0 0}
+.cols__col:hover .cols__bar,.cols__col:focus-visible .cols__bar{filter:brightness(1.12)}
+.cols__lab{font-size:12px;color:var(--muted);text-align:center;white-space:nowrap}
+
+/* line chart */
+.linechart{display:block}
+.chart-scroll{overflow-x:auto}
+.linechart .grid{stroke:var(--grid);stroke-width:1}
+.linechart .axis{stroke:var(--axis);stroke-width:1}
+.linechart text{fill:var(--muted);font-size:11px;font-family:var(--font-ui)}
+.linechart .endlabel{fill:var(--text);font-size:12px;font-weight:600}
+.linechart .line{fill:none;stroke:var(--c1);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.linechart .area{fill:var(--c1);opacity:.1}
+.linechart .dot{fill:var(--c1);stroke:var(--panel);stroke-width:2}
+.linechart .cross{stroke:var(--axis);stroke-width:1;visibility:hidden}
+.linechart .hit{fill:transparent;outline:none}
+details.tview summary{cursor:pointer;font-size:12px;color:var(--accent)}
+details.tview .tbl{margin-top:8px}
+
+/* workflow heat canvas */
+.canvas-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
+.canvas{position:relative;width:1090px;height:228px}
+.canvas svg{position:absolute;inset:0;width:100%;height:100%}
+.canvas svg line{stroke:var(--border-strong);stroke-width:1.5}
+.canvas svg path{fill:var(--border-strong)}
+.loopframe{position:absolute;border:1px solid var(--border-strong);border-radius:10px;background:var(--panel)}
+.loopframe__label{position:absolute;left:10px;top:6px;font-size:11px;color:var(--muted);white-space:nowrap}
+.wfnode{position:absolute;width:104px;height:70px;display:flex;flex-direction:column;justify-content:center;gap:1px;padding:6px 8px;text-align:left;border:1px solid var(--border-strong);border-radius:8px;background:var(--panel);color:var(--text);cursor:pointer}
+.wfnode__name{font-size:12px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wfnode__kind{font-size:10px;line-height:1.25;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wfnode__val{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.3;white-space:nowrap}
+.wfnode[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:2px}
+/* doubled class: heat must win over the base fill of whichever card or cell carries it */
+.heat-1.heat-1{background:var(--heat-1);color:var(--heat-ink-1)}.heat-2.heat-2{background:var(--heat-2);color:var(--heat-ink-2)}
+.heat-3.heat-3{background:var(--heat-3);color:var(--heat-ink-3)}.heat-4.heat-4{background:var(--heat-4);color:var(--heat-ink-4)}
+.heat-5.heat-5{background:var(--heat-5);color:var(--heat-ink-5)}
+.scale{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.scale__steps{display:inline-flex;gap:2px}
+.scale__steps i{width:22px;height:10px;border-radius:2px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px 16px}
+.facts dt{font-size:12px;color:var(--muted)}
+.facts dd{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums}
+
+/* digital employee duty map */
+.duty{display:flex;flex-direction:column;gap:12px}
+.duty__region{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
+.duty__region-name{font-size:13px;font-weight:600}
+.duty__lane{display:grid;grid-template-columns:86px minmax(0,1fr);gap:8px;align-items:center}
+.duty__lane-name{font-size:12px;color:var(--muted)}
+.duty__items{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
+.duty__sep{color:var(--muted);font-size:12px}
+.duty__item{width:128px;min-height:62px;display:flex;flex-direction:column;justify-content:center;gap:1px;padding:6px 8px;text-align:left;border:1px solid var(--border-strong);border-radius:8px;background:var(--panel);color:var(--text);cursor:pointer}
+.duty__item[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:2px}
+.duty__item .wfnode__name{white-space:normal;overflow:visible}
+@media (max-width:520px){.duty__lane{grid-template-columns:1fr}}
+
+/* heat table */
+.tbl td.heatcell{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+
+/* hints and themes */
+.hints{display:flex;flex-direction:column;gap:10px}
+.hint{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;align-items:start;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--panel)}
+.hint__title{font-size:14px;font-weight:600}
+.hint__body{grid-column:2;font-size:13px;color:var(--muted)}
+.hint__go{grid-column:2;font-size:13px}
+.theme{display:flex;flex-direction:column;gap:6px;padding:12px 0;border-top:1px solid var(--border)}
+.theme:first-of-type{border-top:0;padding-top:0}
+.theme__head{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;justify-content:space-between}
+.theme__name{font-size:14px;font-weight:600}
+.theme__quote{font-size:13px;padding:6px 10px;border-radius:6px;background:var(--bg);color:var(--text)}
+.theme__advice{font-size:13px}
+.theme__advice b{font-weight:600}
+
+/* tooltip */
+.tip{position:fixed;z-index:50;pointer-events:none;max-width:260px;padding:6px 9px;border-radius:6px;background:var(--text);color:var(--panel);font-size:12px;line-height:1.4;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+.tip__v{font-weight:600;font-variant-numeric:tabular-nums}
+.tip__l{opacity:.82}
+@media (prefers-reduced-motion:no-preference){.segmented__option,.btn,.tabs__tab{transition:background-color .12s ease,color .12s ease,border-color .12s ease}}
+</style>
+
+<div class="wrap">
+  <aside class="proto" aria-label="原型说明">
+    <span><strong>页面原型 · 全部为示例数据。</strong> 可以点：能力类型、列表行、页签、热力图节点、任务行左侧的展开箭头、对比开关。</span>
+    <span class="row">
+      <span>查看身份</span>
+      <span class="segmented" id="role-seg" role="group" aria-label="查看身份">
+        <button type="button" class="segmented__option" data-v="manager">管理者</button>
+        <button type="button" class="segmented__option" data-v="member">普通成员</button>
+      </span>
+    </span>
+  </aside>
+
+  <header class="row row--between">
+    <div>
+      <p class="crumb">运行与仓库 / 运行观测与统计</p>
+      <h1 class="page-title">运行观测与统计</h1>
+    </div>
+    <span class="segmented" id="range-seg" role="group" aria-label="时间范围">
+      <button type="button" class="segmented__option" data-v="7d">近 7 天</button>
+      <button type="button" class="segmented__option" data-v="30d">近 30 天</button>
+      <button type="button" class="segmented__option" data-v="90d">近 90 天</button>
+    </span>
+  </header>
+
+  <nav class="tabs" aria-label="运行观测与统计的页签">
+    <button type="button" class="tabs__tab" aria-disabled="true" title="现有页签，原型未包含">总览</button>
+    <button type="button" class="tabs__tab" aria-disabled="true" title="现有页签，原型未包含">任务</button>
+    <button type="button" class="tabs__tab" aria-disabled="true" title="现有页签，原型未包含">Agent 与模型</button>
+    <button type="button" class="tabs__tab" aria-disabled="true" title="现有页签，原型未包含">系统执行</button>
+    <button type="button" class="tabs__tab tabs__tab--active" aria-current="page" id="tab-process">过程度量</button>
+  </nav>
+
+  <main id="view" class="stack"></main>
+</div>
+<div id="tip" class="tip" hidden></div>
+
+<script>
+(function () {
+  'use strict';
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  function $(s, r) { return (r || document).querySelector(s); }
+  function build(el, attrs, kids) {
+    if (attrs) Object.keys(attrs).forEach(function (k) {
+      var v = attrs[k];
+      if (v == null || v === false) return;
+      if (k === 'class') el.setAttribute('class', v);
+      else if (k === 'text') el.textContent = v;
+      else if (k.slice(0, 2) === 'on') el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? '' : v);
+    });
+    (function add(list) {
+      list.forEach(function (kid) {
+        if (kid == null || kid === false) return;
+        if (Array.isArray(kid)) add(kid);
+        else el.appendChild(kid.nodeType ? kid : document.createTextNode(String(kid)));
+      });
+    })(kids);
+    return el;
+  }
+  function h(tag, attrs) { return build(document.createElement(tag), attrs, Array.prototype.slice.call(arguments, 2)); }
+  function s(tag, attrs) { return build(document.createElementNS(SVGNS, tag), attrs, Array.prototype.slice.call(arguments, 2)); }
+
+  /* ---------- formatters ---------- */
+  function dur(min) {
+    if (min == null) return '—';
+    if (min < 1) return Math.round(min * 60) + ' 秒';
+    var d = Math.floor(min / 1440), hh = Math.floor((min % 1440) / 60), m = Math.round(min % 60);
+    if (d > 0) return d + ' 天' + (hh ? ' ' + hh + ' 小时' : '');
+    if (hh > 0) return hh + ' 小时' + (m ? ' ' + (m < 10 ? '0' + m : m) + ' 分' : '');
+    return m + ' 分';
+  }
+  function tok(n) {
+    if (n == null) return '—';
+    if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 1 : 2).replace(/\.?0+$/, '') + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(n >= 1e5 ? 0 : 1).replace(/\.0$/, '') + 'K';
+    return String(n);
+  }
+  function cny(v) { return v == null ? '—' : '¥' + v.toFixed(2); }
+  function pct(v) { return v == null ? '—' : Math.round(v) + '%'; }
+  function num1(v) { return v == null ? '—' : (Math.round(v * 10) / 10).toString(); }
+
+  /* ---------- state and routing ---------- */
+  var state = { kind: 'workflow', id: null, tab: 'overview', range: '30d', role: 'manager', compare: 'off', heat: 'active', stageView: 'canvas', dutyHeat: 'time', node: 'design', duty: 'implement', trend: 'lead', open: {}, stFilter: 'all', analyzing: false, analyzedAt: '11-25 16:40' };
+  var RANGE_K = { '7d': 0.25, '30d': 1, '90d': 2.8 };
+  function cnt(n) { return Math.max(1, Math.round(n * RANGE_K[state.range] * (state.role === 'member' ? 0.35 : 1))); }
+  function parseHash() {
+    var m = /^#d-(workflow|workgroup|employee)-(\d)-([a-z]+)$/.exec(location.hash);
+    if (m) { state.kind = m[1]; state.id = +m[2]; state.tab = m[3]; return; }
+    m = /^#list-(workflow|workgroup|employee)$/.exec(location.hash);
+    if (m) { state.kind = m[1]; state.id = null; }
+  }
+  function hashFor() { return state.id == null ? '#list-' + state.kind : '#d-' + state.kind + '-' + state.id + '-' + state.tab; }
+  function go(patch) {
+    Object.keys(patch).forEach(function (k) { state[k] = patch[k]; });
+    var target = hashFor();
+    if (location.hash !== target) { try { history.replaceState(null, '', target); } catch (e) { location.hash = target; } }
+    render();
+  }
+
+  /* ---------- tooltip ---------- */
+  var tip = $('#tip');
+  function showTip(el, lines, ev) {
+    tip.replaceChildren.apply(tip, lines.map(function (l, i) { return h('div', { class: i === 0 ? 'tip__v' : 'tip__l', text: l }); }));
+    tip.hidden = false;
+    var r = el.getBoundingClientRect();
+    var x = ev ? ev.clientX + 12 : r.left + r.width / 2, y = ev ? ev.clientY + 14 : r.bottom + 8;
+    var w = tip.offsetWidth, hgt = tip.offsetHeight;
+    if (x + w > window.innerWidth - 8) x = window.innerWidth - w - 8;
+    if (y + hgt > window.innerHeight - 8) y = (ev ? ev.clientY : r.top) - hgt - 10;
+    tip.style.left = Math.max(8, x) + 'px';
+    tip.style.top = Math.max(8, y) + 'px';
+  }
+  function hideTip() { tip.hidden = true; }
+  function bindTip(el, lines) {
+    el.addEventListener('pointermove', function (e) { showTip(el, lines, e); });
+    el.addEventListener('pointerleave', hideTip);
+    el.addEventListener('focus', function () { showTip(el, lines); });
+    el.addEventListener('blur', hideTip);
+    return el;
+  }
+
+  /* ---------- shared pieces ---------- */
+  function seg(label, options, value, onPick) {
+    return h('span', { class: 'segmented', role: 'group', 'aria-label': label }, options.map(function (o) {
+      return h('button', { type: 'button', class: 'segmented__option' + (o[0] === value ? ' segmented__option--active' : ''), 'aria-pressed': String(o[0] === value), text: o[1], onclick: function () { onPick(o[0]); } });
+    }));
+  }
+  function chip(kind, text) { return h('span', { class: 'chip chip--' + kind, text: text }); }
+  function notice(text, warn) { return h('p', { class: 'notice' + (warn ? ' notice--warn' : ''), text: text }); }
+  function card(title, sub) {
+    var kids = Array.prototype.slice.call(arguments, 2);
+    return h('section', { class: 'card' }, h('div', null, h('h3', { class: 'card__title', text: title }), sub ? h('p', { class: 'card__sub', text: sub }) : null), kids);
+  }
+  function kpis(items, compact) {
+    return h('div', { class: 'kpis' + (compact ? ' kpis--compact' : '') }, items.map(function (it) {
+      var delta = null;
+      if (state.compare !== 'off' && it.chg != null) {
+        var good = (it.chg < 0) === (it.good === 'down');
+        delta = h('p', { class: 'kpi__delta kpi__delta--' + (good ? 'good' : 'bad'), text: (it.chg < 0 ? '▼ 降 ' : '▲ 升 ') + Math.abs(it.chg) + '% · ' + (state.compare === 'period' ? '较上一时段' : '较分界之前') + (good ? '（变好）' : '（变差）') });
+      }
+      return h('div', { class: 'kpi' }, h('p', { class: 'kpi__label', text: it.label }), h('p', { class: 'kpi__value', text: it.value }), it.detail ? h('p', { class: 'kpi__detail', text: it.detail }) : null, delta);
+    }));
+  }
+  function valShare(p, share) { var sh = pct(share); return p.value === sh ? sh : p.value + ' · ' + sh; }
+  function segbar(parts, thin) {
+    var total = parts.reduce(function (a, p) { return a + p.share; }, 0);
+    return h('div', { class: 'segbar' + (thin ? ' segbar--thin' : ''), role: 'img', 'aria-label': parts.map(function (p) { return p.name + ' ' + pct(p.share / total * 100); }).join('，') }, parts.filter(function (p) { return p.share > 0; }).map(function (p) {
+      var share = p.share / total * 100;
+      var b = h('button', { type: 'button', class: 'segbar__seg fill-' + p.fill, style: 'width:calc(' + share.toFixed(3) + '% - 2px)', 'aria-label': p.name + '：' + valShare(p, share), tabindex: thin ? '-1' : '0' }, thin ? null : h('span', { text: pct(share) }));
+      return bindTip(b, [valShare(p, share), p.name]);
+    }));
+  }
+  function legendStack(parts) {
+    var total = parts.reduce(function (a, p) { return a + p.share; }, 0);
+    return h('ul', { class: 'legend legend--stack' }, parts.map(function (p) {
+      return h('li', null, h('span', null, h('i', { class: 'fill-' + p.fill }), h('span', { text: p.name })), h('span', { class: 'legend__val', text: valShare(p, p.share / total * 100) }));
+    }));
+  }
+  function legendRow(items) {
+    return h('ul', { class: 'legend' }, items.map(function (p) { return h('li', null, h('i', { class: 'fill-' + p[0] }), h('span', { text: p[1] })); }));
+  }
+  function segCard(title, sub, parts) { return card(title, sub, segbar(parts), legendStack(parts)); }
+  function fitSegLabels() {
+    document.querySelectorAll('.segbar:not(.segbar--thin) .segbar__seg').forEach(function (b) {
+      b.classList.remove('is-tight');
+      var span = b.firstElementChild;
+      if (span && span.scrollWidth + 16 > b.clientWidth) b.classList.add('is-tight');
+    });
+  }
+  function table(cols, rows, minWidth) {
+    return h('div', { class: 'tbl' }, h('table', { style: 'min-width:' + (minWidth || 640) + 'px' },
+      h('thead', null, h('tr', null, cols.map(function (c) { return h('th', { class: c.num ? 'num' : null, scope: 'col', text: c.label }); }))),
+      h('tbody', null, rows.map(function (r) {
+        if (r && r.nodeType) return r;
+        var cells = r.cells || r;
+        return h('tr', { class: r.cls || null }, cells.map(function (c, i) {
+          var attrs = { class: (cols[i] && cols[i].num ? 'num' : (i === 0 ? 'name' : '')) || null };
+          if (c && c.heat) { attrs.class = 'heatcell heat-' + c.heat; return h('td', attrs, c.text); }
+          if (c && c.indent) { attrs.class = 'name indent'; return h('td', attrs, c.text); }
+          return h('td', attrs, c == null ? '—' : c);
+        }));
+      }))));
+  }
+  function meter(share, label) {
+    return h('div', { class: 'meter' }, h('span', { class: 'meter__track' }, h('span', { class: 'meter__bar', style: 'width:' + Math.max(1, share) + '%' })), h('span', { class: 'meter__val', text: label || pct(share) }));
+  }
+  function axis(maxV) {
+    var raw = maxV / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
+    var step = (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p, top = Math.ceil(maxV / step) * step, ticks = [];
+    for (var t = 0; t <= top + 1e-9; t += step) ticks.push(+t.toFixed(6));
+    return { top: top, ticks: ticks };
+  }
+  function columns(items, fmt, title) {
+    var top = axis(Math.max.apply(null, items.map(function (i) { return i.value; }))).top;
+    return h('div', { class: 'cols', role: 'group', 'aria-label': title }, items.map(function (it) {
+      var col = h('button', { type: 'button', class: 'cols__col', 'aria-label': it.label + '：' + fmt(it.value) },
+        h('span', { class: 'cols__track' }, h('span', { class: 'cols__val', text: fmt(it.value) }), h('span', { class: 'cols__bar', style: '--r:' + (it.value / top).toFixed(4) })),
+        h('span', { class: 'cols__lab', text: it.label }));
+      return bindTip(col, [fmt(it.value), it.label + (it.note ? ' · ' + it.note : '')]);
+    }));
+  }
+  function lineChart(values, labels, fmt, title) {
+    var W = Math.max(440, Math.min(1100, ($('#view').clientWidth || 700) - 34)), H = 230, L = 52, R = 64, T = 14, B = 30, n = values.length;
+    var ax = axis(Math.max.apply(null, values));
+    function x(i) { return L + (W - L - R) * i / (n - 1); }
+    function y(v) { return T + (H - T - B) * (1 - v / ax.top); }
+    var pts = values.map(function (v, i) { return x(i).toFixed(1) + ',' + y(v).toFixed(1); });
+    var svg = s('svg', { class: 'linechart', width: W, height: H, viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': title });
+    ax.ticks.forEach(function (t) {
+      svg.appendChild(s('line', { class: t === 0 ? 'axis' : 'grid', x1: L, x2: W - R, y1: y(t), y2: y(t) }));
+      svg.appendChild(s('text', { x: L - 8, y: y(t) + 4, 'text-anchor': 'end', text: fmt(t) }));
+    });
+    labels.forEach(function (lab, i) { svg.appendChild(s('text', { x: x(i), y: H - 9, 'text-anchor': 'middle', text: lab })); });
+    svg.appendChild(s('path', { class: 'area', d: 'M' + x(0) + ',' + y(0) + ' L' + pts.join(' L') + ' L' + x(n - 1) + ',' + y(0) + ' Z' }));
+    svg.appendChild(s('path', { class: 'line', d: 'M' + pts.join(' L') }));
+    var cross = s('line', { class: 'cross', y1: T, y2: y(0) });
+    svg.appendChild(cross);
+    svg.appendChild(s('circle', { class: 'dot', cx: x(n - 1), cy: y(values[n - 1]), r: 5 }));
+    svg.appendChild(s('text', { class: 'endlabel', x: x(n - 1) + 10, y: y(values[n - 1]) + 4, text: fmt(values[n - 1]) }));
+    var band = (W - L - R) / (n - 1);
+    values.forEach(function (v, i) {
+      var hit = s('rect', { class: 'hit', x: x(i) - band / 2, y: T, width: band, height: H - T - B, tabindex: '0', 'aria-label': labels[i] + '：' + fmt(v) });
+      function on(e) { cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.style.visibility = 'visible'; showTip(hit, [fmt(v), labels[i] + ' 当周'], e && e.clientX != null ? e : null); }
+      function off() { cross.style.visibility = 'hidden'; hideTip(); }
+      hit.addEventListener('pointermove', on); hit.addEventListener('pointerleave', off);
+      hit.addEventListener('focus', function () { on(null); }); hit.addEventListener('blur', off);
+      svg.appendChild(hit);
+    });
+    return h('div', { class: 'chart-scroll' }, svg);
+  }
+  function tview(cols, rows, minWidth) { return h('details', { class: 'tview' }, h('summary', { text: '查看数据表' }), table(cols, rows, minWidth || 360)); }
+  function scaleLegend(minText, maxText, lowWord, highWord, note) {
+    return h('div', { class: 'scale' }, h('span', { text: (lowWord || '低') + ' ' + minText }), h('span', { class: 'scale__steps' }, [1, 2, 3, 4, 5].map(function (i) { return h('i', { class: 'heat-' + i }); })), h('span', { text: (highWord || '高') + ' ' + maxText }), h('span', { text: '· 按数值从低到高分五档' + (note || '；没有颜色的不适用这个指标') }));
+  }
+  /* five bins by rank, so one extreme value does not flatten everything else into the lightest step */
+  function binner(values) {
+    var distinct = values.filter(function (v, i, a) { return v != null && a.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
+    return function (v) {
+      if (v == null) return 0;
+      if (distinct.length < 2) return 3;
+      return 1 + Math.round(4 * distinct.indexOf(v) / (distinct.length - 1));
+    };
+  }
+  function scopeNote() {
+    return state.role === 'manager' ? '统计范围：全部任务（管理者和管理员可见全部）' : '统计范围：你发起或参与的任务；按人明细对你不可见';
+  }
+  function dataNote() {
+    if (state.kind === 'employee') return '数据说明：进行中的交办只在明细里列出，不进统计。';
+    return '数据说明：有 ' + cnt(2) + ' 个任务开始于最早的调用记录之前，不进 Token 统计；进行中的任务只在明细里列出，不进统计。';
+  }
+  function hintsCard(hints, brief) {
+    var sev = { high: ['danger', '优先处理'], mid: ['warn', '值得关注'], info: ['info', '供参考'] };
+    return card('提升点提示', brief ? '按固定规则从指标里算出来，不调用模型。这里只列前 3 条。' : '按固定规则从指标里算出来，不调用模型。',
+      h('ul', { class: 'hints' }, hints.map(function (x) {
+        return h('li', { class: 'hint' }, chip(sev[x.sev][0], sev[x.sev][1]), h('p', { class: 'hint__title', text: x.title }), h('p', { class: 'hint__body', text: x.body }),
+          x.tab ? h('p', { class: 'hint__go' }, h('button', { type: 'button', class: 'linklike', text: '去看：' + x.go, onclick: function () { go({ tab: x.tab }); } })) : null);
+      })),
+      brief ? h('p', null, h('button', { type: 'button', class: 'linklike', text: '查看全部提示和文本主题分析', onclick: function () { go({ tab: 'insights' }); } })) : null);
+  }
+  function themesCard(groups, scopeMgr, scopeMember) {
+    var busy = state.analyzing;
+    var head = h('div', { class: 'row row--between' },
+      h('p', { class: 'small muted', text: (state.role === 'manager' ? scopeMgr : scopeMember + '，结果只对你可见') + ' · 生成于 ' + state.analyzedAt }),
+      h('button', { type: 'button', class: 'btn btn--primary', disabled: busy, text: busy ? '分析中…' : '重新分析', onclick: function () {
+        state.analyzing = true; render();
+        setTimeout(function () { state.analyzing = false; state.analyzedAt = '刚刚'; render(); }, 1400);
+      } }));
+    return card('文本主题分析', '由模型归纳原文里反复出现的主题，会消耗 Token（计入“系统执行”）。触发方式：手动；可以在设置里改成定时。', head,
+      groups.map(function (g) {
+        return h('div', { class: 'stack' }, h('h4', { class: 'card__title', text: g.title }), g.themes.map(function (t) {
+          return h('div', { class: 'theme' },
+            h('div', { class: 'theme__head' }, h('span', { class: 'theme__name', text: t.name }), h('span', { class: 'small muted', text: t.count + ' · 涉及：' + t.where })),
+            meter(t.share),
+            t.quotes.map(function (q) { return h('p', { class: 'theme__quote', text: '“' + q + '”' }); }),
+            h('p', { class: 'theme__advice' }, h('b', { text: '模型建议：' }), t.advice));
+        }));
+      }));
+  }
+
+  /* ================= WORKFLOW ================= */
+  var WF_NODES = [
+    { id: 'in', name: '需求输入', kind: '输入', x: 12, y: 126 },
+    { id: 'design', name: '方案设计', kind: 'Agent · designer', x: 130, y: 126, runs: 2.9, active: 38, p90: 72, tok: 0.82e6, tshare: 28, fail: 4, retry: 6, reject: 62, ask: 71 },
+    { id: 'clarify', name: '需求澄清', kind: '反问 · 脑图', x: 130, y: 16, gate: true, runs: 1.5, wait: 133 },
+    { id: 'review1', name: '方案评审', kind: '评审', x: 248, y: 126, gate: true, runs: 1.9, wait: 185, first: 38 },
+    { id: 'code', name: '编码实现', kind: 'Agent · coder', x: 380, y: 126, runs: 3.4, active: 46, p90: 100, tok: 1.12e6, tshare: 39, fail: 7, retry: 9, reject: 29 },
+    { id: 'audit', name: '代码审计', kind: 'Agent · auditor · 扇出', x: 496, y: 126, runs: 10.4, active: 22, p90: 51, tok: 0.48e6, tshare: 17, fail: 9, retry: 18 },
+    { id: 'fix', name: '问题修复', kind: 'Agent · fixer', x: 612, y: 126, runs: 2.1, active: 19, p90: 44, tok: 0.36e6, tshare: 12, fail: 5, retry: 7 },
+    { id: 'review2', name: '代码评审', kind: '评审', x: 744, y: 126, gate: true, runs: 1.4, wait: 53, first: 71 },
+    { id: 'push', name: '提交与推送', kind: '脚本与系统', x: 862, y: 126, runs: 1.1, active: 3, p90: 6, tok: 0.12e6, tshare: 4, fail: 3, retry: 2 },
+    { id: 'out', name: '输出', kind: '输出', x: 980, y: 126 }
+  ];
+  var WF_HEAT = {
+    active: { label: '自动执行时长', key: 'active', fmt: dur },
+    tok: { label: 'Token', key: 'tok', fmt: tok },
+    wait: { label: '等人时长', key: 'wait', fmt: dur },
+    reject: { label: '被打回率', key: 'reject', fmt: pct },
+    fail: { label: '失败率', key: 'fail', fmt: pct }
+  };
+  var WF_TIME = [
+    { name: '自动执行', fill: 'c1', share: 162, value: dur(162) },
+    { name: '等待评审', fill: 'c2', share: 238, value: dur(238) },
+    { name: '等待反问回答', fill: 'c3', share: 133, value: dur(133) },
+    { name: '排队与中断', fill: 'other', share: 47, value: dur(47) }
+  ];
+  var WF_TOK = [
+    { name: '首次执行', fill: 'c1', share: 1.45, value: '1.45M' },
+    { name: '评审返工', fill: 'c2', share: 0.84, value: '0.84M' },
+    { name: '反问后续跑', fill: 'c3', share: 0.33, value: '0.33M' },
+    { name: '失败重试', fill: 'c4', share: 0.17, value: '0.17M' },
+    { name: '其它重跑与系统工作', fill: 'other', share: 0.11, value: '0.11M' }
+  ];
+  var WEEKS = ['10-05', '10-12', '10-19', '10-26', '11-02', '11-09', '11-16', '11-23'];
+  var WF_TREND = {
+    lead: { label: '总历时中位数', values: [12.4, 11.8, 12.9, 11.1, 10.6, 9.9, 10.2, 9.7], fmt: function (v) { return v + ' 小时'; } },
+    tok: { label: '每任务 Token', values: [3.4, 3.3, 3.5, 3.1, 3.0, 2.9, 3.0, 2.9], fmt: function (v) { return v + 'M'; } },
+    fpy: { label: '一次通过率', values: [22, 24, 21, 27, 29, 33, 30, 31], fmt: function (v) { return v + '%'; } }
+  };
+  var WF_HINTS = [
+    { sev: 'high', title: '等人时间占总历时的 64%', body: '其中等待方案评审占 41%：评审时长中位数 3 小时 05 分，P90 为 14 小时 20 分。', go: '人工介入', tab: 'gates' },
+    { sev: 'high', title: '方案设计的产出首轮通过率只有 38%', body: '代码评审是 71%。方案评审第 1 轮平均 6.4 条意见，返工用掉了方案设计 34% 的 Token。', go: '阶段分析', tab: 'stages' },
+    { sev: 'mid', title: '需求澄清的回答有 58% 直接采纳了推荐项', body: 'Agent 给出的默认选择大多被接受。可以把这些默认决定写进方案设计的提示词，减少反问轮次。', go: '人工介入', tab: 'gates' },
+    { sev: 'mid', title: '实现循环平均 2.6 轮，14% 的任务触顶', body: '循环上限是 5 轮；触顶的任务全部以失败收场。', go: '阶段分析', tab: 'stages' },
+    { sev: 'mid', title: '代码审计的自动重试率 18%', body: '主要失败码是 envelope-missing（没有按格式输出），占这个节点失败的 61%。', go: '阶段分析', tab: 'stages' },
+    { sev: 'info', title: '评审返工占全部 Token 的 29%', body: '相当于每个任务约 0.84M Token、¥11.90。', go: '概览', tab: 'overview' }
+  ];
+  var WF_THEMES = [
+    { title: '评审意见里反复出现的主题', themes: [
+      { name: '异常与边界情况没有覆盖', count: '31 条 · 23%', share: 23, where: '方案评审', quotes: ['回调重复到达时怎么处理没有写，幂等键是什么？', '分片失败后的重试和补偿没有设计。'], advice: '在方案设计的提示词里加一节固定模板，要求列出失败场景和对应处理。' },
+      { name: '接口契约描述不完整', count: '24 条 · 18%', share: 18, where: '方案评审', quotes: ['返回字段没有给出类型和是否必填。'], advice: '给方案设计挂一个接口契约自查的技能，输出前核对字段表。' },
+      { name: '测试没有覆盖并发场景', count: '19 条 · 14%', share: 14, where: '代码评审', quotes: ['并发导出同一订单的用例缺失。'], advice: '在代码审计的检查清单里加入并发与竞态检查项。' }
+    ] },
+    { title: '反问里反复出现的问题', themes: [
+      { name: '目标运行环境与版本约束', count: '22 次 · 20%', share: 20, where: '需求澄清', quotes: ['目标 JDK 版本是 17 还是 21？', '需要兼容 MySQL 5.7 吗？'], advice: '回答高度一致（91% 相同）。把运行环境写进工作流输入或仓库记忆，这类问题可以不再问。' },
+      { name: '是否需要兼容旧接口', count: '17 次 · 16%', share: 16, where: '需求澄清', quotes: ['旧版 /v1/export 还要保留吗？'], advice: '回答比较分散，建议保留这个反问。' }
+    ] }
+  ];
+  var WF_TASKS = [
+    { n: '订单导出支持异步分片', st: 'done', src: '手动', by: '李娜', at: '11-24 09:12', lead: 472, auto: 125, rv: 185, ck: 120, tok: 2.4e6, cost: 33.8, rr: 2, cr: 1, rt: 0 },
+    { n: '支付回调幂等改造', st: 'done', src: '手动', by: '王强', at: '11-23 14:40', lead: 1560, auto: 198, rv: 890, ck: 402, tok: 3.9e6, cost: 55.1, rr: 4, cr: 2, rt: 1 },
+    { n: '库存预占超时释放', st: 'done', src: '数字员工调用', by: '研发数字员工 · Java 后端', at: '11-23 10:05', lead: 318, auto: 141, rv: 122, ck: 35, tok: 2.2e6, cost: 30.4, rr: 2, cr: 1, rt: 0 },
+    { n: '对账文件解析容错', st: 'failed', src: '手动', by: '陈静', at: '11-22 16:31', lead: 402, auto: 231, rv: 96, ck: 44, tok: 4.6e6, cost: 66.0, rr: 2, cr: 1, rt: 3 },
+    { n: '退款单状态机梳理', st: 'done', src: '定时', by: '李娜', at: '11-22 08:00', lead: 286, auto: 109, rv: 88, ck: 61, tok: 1.9e6, cost: 26.2, rr: 2, cr: 1, rt: 0 },
+    { n: '优惠券叠加规则重构', st: 'awaiting_review', src: '手动', by: '赵磊', at: '11-25 11:20', lead: 1105, auto: 86, rv: 840, ck: 150, tok: 1.3e6, cost: 18.7, rr: 1, cr: 1, rt: 0 },
+    { n: '发票抬头校验', st: 'done', src: '子任务', by: '李娜', at: '11-21 13:48', lead: 204, auto: 92, rv: 73, ck: 22, tok: 1.6e6, cost: 22.9, rr: 2, cr: 1, rt: 0 },
+    { n: '地址库同步去重', st: 'done', src: 'Webhook', by: '王强', at: '11-21 09:30', lead: 655, auto: 176, rv: 310, ck: 120, tok: 3.1e6, cost: 43.5, rr: 3, cr: 2, rt: 1 },
+    { n: '会员等级批量降级', st: 'canceled', src: '手动', by: '陈静', at: '11-20 15:02', lead: 95, auto: 41, rv: 0, ck: 48, tok: 0.7e6, cost: 9.8, rr: 0, cr: 1, rt: 0 },
+    { n: '消息推送限流', st: 'running', src: '手动', by: '赵磊', at: '11-26 08:41', lead: 132, auto: 118, rv: 0, ck: 9, tok: 1.8e6, cost: 24.6, rr: 0, cr: 1, rt: 0 }
+  ];
+  var ST = { done: ['success', '已完成'], failed: ['danger', '失败'], canceled: ['neutral', '已取消'], running: ['info', '运行中'], awaiting_review: ['warn', '待评审'], awaiting_human: ['warn', '待回答'], merged: ['success', '已合入'], blocked: ['danger', '阻塞'], nochange: ['neutral', '无需修改'] };
+  function stChip(k) { return chip(ST[k][0], ST[k][1]); }
+
+  function wfOverview() {
+    var t = WF_TREND[state.trend];
+    return h('div', { class: 'stack' },
+      kpis([
+        { label: '任务', value: String(cnt(48)), detail: '成功 ' + cnt(40) + ' · 失败 ' + cnt(5) + ' · 取消 ' + cnt(3) + ' · 成功率 83%', chg: 9, good: 'up' },
+        { label: '总历时（成功任务）', value: '9 小时 40 分', detail: '中位数；P90 为 1 天 7 小时', chg: -14, good: 'down' },
+        { label: '流动效率', value: '28%', detail: '自动执行时长 ÷ 总历时', chg: 12, good: 'up' },
+        { label: '每任务 Token', value: '2.9M', detail: '均值；成本 ¥41.20', chg: -8, good: 'down' },
+        { label: '一次通过率', value: '31%', detail: '没有评审返工、失败和人工重试', chg: 19, good: 'up' },
+        { label: '人工介入', value: '4.6 次 / 任务', detail: '评审决定 2.7 · 反问提交 1.5 · 人工重试 0.4', chg: -6, good: 'down' }
+      ]),
+      h('div', { class: 'grid2' },
+        segCard('时间花在哪里', '平均每个成功任务的总历时 9 小时 40 分', WF_TIME),
+        segCard('Token 花在哪里', '平均每个任务 2.9M Token，按这次执行的原因拆分', WF_TOK)),
+      card('趋势 · ' + t.label, '按任务创建时间所在的周统计',
+        seg('趋势指标', [['lead', '总历时中位数'], ['tok', '每任务 Token'], ['fpy', '一次通过率']], state.trend, function (v) { go({ trend: v }); }),
+        lineChart(t.values, WEEKS, t.fmt, t.label + '的周趋势'),
+        tview([{ label: '周（起始日）' }, { label: t.label, num: true }], WEEKS.map(function (w, i) { return [w, t.fmt(t.values[i])]; }))),
+      hintsCard(WF_HINTS.slice(0, 3), true));
+  }
+
+  function wfCanvas() {
+    var def = WF_HEAT[state.heat], vals = WF_NODES.map(function (n) { return n[def.key]; }).filter(function (v) { return v != null; });
+    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals), bin5 = binner(vals);
+    var stage = h('div', { class: 'canvas' });
+    var svg = s('svg', { 'aria-hidden': 'true' }, s('defs', null, s('marker', { id: 'arr', markerWidth: 7, markerHeight: 7, refX: 6, refY: 3.5, orient: 'auto' }, s('path', { d: 'M0,0 L7,3.5 L0,7 Z' }))));
+    var order = ['in', 'design', 'review1', 'code', 'audit', 'fix', 'review2', 'push', 'out'], byId = {};
+    WF_NODES.forEach(function (n) { byId[n.id] = n; });
+    for (var i = 0; i < order.length - 1; i++) {
+      var a = byId[order[i]], b = byId[order[i + 1]];
+      svg.appendChild(s('line', { x1: a.x + 104, y1: a.y + 35, x2: b.x - 2, y2: b.y + 35, 'marker-end': 'url(#arr)' }));
+    }
+    svg.appendChild(s('line', { x1: 168, y1: 126, x2: 168, y2: 88, 'marker-end': 'url(#arr)' }));
+    svg.appendChild(s('line', { x1: 196, y1: 86, x2: 196, y2: 124, 'marker-end': 'url(#arr)' }));
+    stage.appendChild(h('div', { class: 'loopframe', style: 'left:366px;top:96px;width:364px;height:116px' }, h('span', { class: 'loopframe__label', text: '循环 · 平均 2.6 轮 · 触顶 14%' })));
+    stage.appendChild(svg);
+    WF_NODES.forEach(function (n) {
+      var v = n[def.key], bin = bin5(v);
+      var btn = h('button', { type: 'button', class: 'wfnode' + (bin ? ' heat-' + bin : ''), style: 'left:' + n.x + 'px;top:' + n.y + 'px', 'aria-pressed': String(state.node === n.id), 'aria-label': n.name + '，' + def.label + ' ' + (v == null ? '不适用' : def.fmt(v)), onclick: function () { go({ node: n.id }); } },
+        h('span', { class: 'wfnode__name', text: n.name }), h('span', { class: 'wfnode__kind', text: n.kind }), h('span', { class: 'wfnode__val', text: v == null ? '—' : def.fmt(v) }));
+      bindTip(btn, [v == null ? '不适用' : def.fmt(v), n.name + ' · ' + def.label]);
+      stage.appendChild(btn);
+    });
+    return h('div', { class: 'stack' }, scaleLegend(def.fmt(min), def.fmt(max)), h('div', { class: 'canvas-scroll' }, stage));
+  }
+  function wfNodeFacts() {
+    var n = WF_NODES.filter(function (x) { return x.id === state.node; })[0];
+    if (!n) return null;
+    var facts = n.gate
+      ? [['每任务轮次', num1(n.runs) + ' 轮'], ['每任务等人时长', dur(n.wait)], n.first != null ? ['首轮通过率', pct(n.first)] : ['回答采纳推荐项', '58%']]
+      : n.runs == null ? [['说明', '输入输出节点不产生执行']]
+        : [['每任务执行次数', num1(n.runs)], ['自动执行时长', dur(n.active) + '（P90 ' + dur(n.p90) + '）'], ['Token', tok(n.tok) + ' · 占 ' + pct(n.tshare)], ['失败率', pct(n.fail)], ['自动重试率', pct(n.retry)], n.reject != null ? ['产出被打回率', pct(n.reject)] : null, n.ask != null ? ['反问触发率', pct(n.ask)] : null];
+    return card('所选节点 · ' + n.name, n.kind, h('dl', { class: 'facts' }, facts.filter(Boolean).map(function (f) { return h('div', null, h('dt', { text: f[0] }), h('dd', { text: f[1] })); })));
+  }
+  function wfStageTable() {
+    var rows = [];
+    WF_NODES.forEach(function (n) {
+      if (n.id === 'code') rows.push({ cls: 'grp', cells: ['循环：实现循环（平均 2.6 轮，上限 5 轮，触顶 14%）', '', '', '', '', '', '', '', '', ''] });
+      var inLoop = n.id === 'code' || n.id === 'audit' || n.id === 'fix';
+      var nameCell = inLoop ? { indent: true, text: n.name } : n.name;
+      if (n.gate) rows.push([nameCell, n.kind, num1(n.runs) + ' 轮', '等人 ' + dur(n.wait), '—', '—', '—', '—', n.first != null ? '首轮通过 ' + pct(n.first) : '—', '—']);
+      else if (n.runs == null) rows.push([nameCell, n.kind, '—', '—', '—', '—', '—', '—', '—', '—']);
+      else rows.push([nameCell, n.kind, num1(n.runs), dur(n.active) + ' / ' + dur(n.p90), tok(n.tok), meter(n.tshare), pct(n.fail), pct(n.retry), n.reject != null ? pct(n.reject) : '—', n.ask != null ? pct(n.ask) : '—']);
+    });
+    return table([{ label: '节点' }, { label: '类型' }, { label: '每任务执行次数', num: true }, { label: '时长（中位 / P90）', num: true }, { label: 'Token', num: true }, { label: '占全部 Token' }, { label: '失败率', num: true }, { label: '自动重试率', num: true }, { label: '产出被打回率', num: true }, { label: '反问触发率', num: true }], rows, 1040);
+  }
+  function wfStages() {
+    return h('div', { class: 'stack' },
+      h('div', { class: 'toolbar' },
+        seg('呈现方式', [['canvas', '画布热力图'], ['table', '表格']], state.stageView, function (v) { go({ stageView: v }); }),
+        state.stageView === 'canvas' ? h('span', { class: 'row' }, h('span', { class: 'small muted', text: '着色指标' }), seg('着色指标', Object.keys(WF_HEAT).map(function (k) { return [k, WF_HEAT[k].label]; }), state.heat, function (v) { go({ heat: v }); })) : null),
+      state.stageView === 'canvas'
+        ? h('div', { class: 'stack' }, card('各节点的' + WF_HEAT[state.heat].label, '画布取时间范围内最近一个任务冻结的工作流定义；颜色越深数值越高。点节点看它的全部指标。', wfCanvas()), wfNodeFacts())
+        : card('各节点指标', '跨版本按节点汇总，每任务平均值', wfStageTable()));
+  }
+  function personTable(cols, rows) {
+    return state.role === 'manager' ? table(cols, rows, 560) : notice('按人的明细只对管理者和管理员显示。你看到的是上面的人均值。');
+  }
+  function wfGates() {
+    var decisions = [{ name: '通过', fill: 'good', share: 61, value: cnt(99) + ' 次' }, { name: '迭代（带意见重做）', fill: 'warn', share: 31, value: cnt(51) + ' 次' }, { name: '退回', fill: 'crit', share: 8, value: cnt(13) + ' 次' }];
+    var answers = [{ name: '采纳推荐项', fill: 'o1', share: 58, value: '58%' }, { name: '选了其它选项', fill: 'o2', share: 21, value: '21%' }, { name: '自己写', fill: 'o3', share: 17, value: '17%' }, { name: '跳过（暂不决定或不适用）', fill: 'other', share: 4, value: '4%' }];
+    var maturity = [{ name: '已决定', fill: 'o3', share: 64, value: '64%' }, { name: '暂定', fill: 'o2', share: 22, value: '22%' }, { name: '没有标注', fill: 'o1', share: 10, value: '10%' }, { name: '跳过', fill: 'other', share: 4, value: '4%' }];
+    var conv = [{ label: '第 1 轮', value: 6.4 }, { label: '第 2 轮', value: 2.7 }, { label: '第 3 轮', value: 1.1 }, { label: '第 4 轮', value: 0.4 }];
+    return h('div', { class: 'stack' },
+      card('评审', '一轮 = 一版内容就绪到作出决定',
+        kpis([
+          { label: '评审时长', value: '3 小时 05 分', detail: '中位数；P90 为 14 小时 20 分' },
+          { label: '首轮通过率', value: '52%', detail: '方案评审 38% · 代码评审 71%' },
+          { label: '每任务评审轮次', value: '3.3', detail: '方案评审 1.9 · 代码评审 1.4' },
+          { label: '每轮意见数', value: '4.3 条', detail: '人均 2.6 条（每轮 1.7 人提意见）' },
+          { label: '返工耗时', value: '41 分', detail: '打回到下一版就绪的中位数' }
+        ], true),
+        h('div', { class: 'grid2' },
+          h('div', { class: 'stack' }, h('h4', { class: 'card__title', text: '决定分布' }), segbar(decisions), legendStack(decisions)),
+          h('div', { class: 'stack' }, h('h4', { class: 'card__title', text: '意见数随轮次收敛' }), columns(conv, function (v) { return v + ' 条'; }, '各轮平均意见数'))),
+        h('h4', { class: 'card__title', text: '按评审节点' }),
+        table([{ label: '评审节点' }, { label: '被评审的节点' }, { label: '每任务轮次', num: true }, { label: '评审时长（中位 / P90）', num: true }, { label: '每轮意见数', num: true }, { label: '首轮通过率', num: true }],
+          [['方案评审', '方案设计', '1.9', '3 小时 05 分 / 14 小时 20 分', '4.9', '38%'], ['代码评审', '编码实现', '1.4', '53 分 / 4 小时 10 分', '3.1', '71%']], 720),
+        h('h4', { class: 'card__title', text: '按人' }),
+        personTable([{ label: '成员' }, { label: '身份' }, { label: '作出决定', num: true }, { label: '提出意见', num: true }, { label: '响应时长中位数', num: true }],
+          [['李娜', '任务成员', String(cnt(58)), String(cnt(212)), '1 小时 40 分'], ['王强', '任务成员', String(cnt(41)), String(cnt(96)), '4 小时 10 分'], ['陈静', '任务成员', String(cnt(22)), String(cnt(148)), '2 小时 05 分'], ['赵磊', '评审人（只提意见）', '—', String(cnt(61)), '—']])),
+      card('反问', '一轮 = Agent 提出问题到人提交回答',
+        kpis([
+          { label: '触发率', value: '71%', detail: cnt(34) + ' 个任务触发过反问' },
+          { label: '每任务反问轮次', value: '1.5', detail: '全部来自方案设计（经需求澄清）' },
+          { label: '每轮问题数', value: '3.2 个', detail: '脑图模式含追问生成的问题' },
+          { label: '回答时间', value: '1 小时 28 分', detail: '中位数；P90 为 9 小时 05 分' },
+          { label: '选择“停止反问”', value: '12%', detail: '提交回答时要求不再追问' }
+        ], true),
+        h('h4', { class: 'card__title', text: '回答是怎么给的' }), segbar(answers), legendStack(answers),
+        h('p', { class: 'small muted', text: '采纳推荐项的比例很高，说明这些问题 Agent 本可以自己决定；自己写的比例高，说明给出的选项不合用。' })),
+      card('脑图', '需求澄清使用脑图模式；深度按问题链的层数算，初始问题为第 1 层，每追问一次加 1',
+        kpis([
+          { label: '平均深度', value: '1.8 层', detail: '最大 4 层' },
+          { label: '脑图轮数', value: '1.5', detail: '同一提问节点提交脑图的次数' },
+          { label: '追问次数', value: '2.3 次 / 张', detail: '每张脑图里点了几次追问' },
+          { label: '问题数', value: '7.4 个 / 张', detail: '初始 4.1 · 追问生成 3.3' },
+          { label: '用时', value: '1 小时 28 分', detail: '脑图出现到提交的中位数' },
+          { label: '追问生成', value: '38 秒 / 次', detail: '每次约 21K Token' }
+        ], true),
+        h('h4', { class: 'card__title', text: '决定的成熟度' }), segbar(maturity), legendStack(maturity),
+        h('p', { class: 'small muted', text: '预设分类覆盖率 86%：配置的分类里，有问题落入的占比。' })));
+  }
+  function wfTaskBreakdown(t) {
+    var kA = t.auto / 128, kT = t.tok / 2.9e6;
+    var rows = WF_NODES.filter(function (n) { return n.runs != null; }).map(function (n) {
+      if (n.id === 'clarify') return [n.name, t.cr + ' 轮', '等人 ' + dur(t.ck), '—', t.cr ? '共 ' + (t.cr * 3 + 1) + ' 个问题' : '没有触发'];
+      if (n.id === 'review1') { var r1 = Math.min(t.rr, Math.ceil(t.rr * 0.6)); return [n.name, r1 + ' 轮', '等人 ' + dur(Math.round(t.rv * 0.78)), '—', r1 ? '共 ' + (r1 * 4 + 1) + ' 条意见' : '还没有到这一步']; }
+      if (n.id === 'review2') { var r2 = t.rr - Math.min(t.rr, Math.ceil(t.rr * 0.6)); return [n.name, r2 + ' 轮', '等人 ' + dur(Math.round(t.rv * 0.22)), '—', r2 ? '共 ' + (r2 * 3) + ' 条意见' : '还没有到这一步']; }
+      return [n.name, String(Math.max(1, Math.round(n.runs * kA))), dur(Math.max(1, Math.round(n.active * kA))), tok(Math.round(n.tok * kT / 1e4) * 1e4), n.id === 'audit' && t.rt ? '自动重试 ' + t.rt + ' 次' : ''];
+    });
+    return table([{ label: '环节' }, { label: '执行次数 / 轮次', num: true }, { label: '时长', num: true }, { label: 'Token', num: true }, { label: '备注' }], rows, 620);
+  }
+  function wfTasks() {
+    var list = WF_TASKS.filter(function (t) { return state.stFilter === 'all' || (state.stFilter === 'done' ? t.st === 'done' : state.stFilter === 'bad' ? (t.st === 'failed' || t.st === 'canceled') : (t.st !== 'done' && t.st !== 'failed' && t.st !== 'canceled')); });
+    if (state.role === 'member') list = list.filter(function (t) { return t.by === '李娜' || t.by === '王强'; });
+    var cols = [{ label: '任务' }, { label: '状态' }, { label: '来源' }, { label: '发起人' }, { label: '开始', num: true }, { label: '总历时', num: true }, { label: '时间构成' }, { label: 'Token', num: true }, { label: '成本', num: true }, { label: '评审轮次', num: true }, { label: '反问轮次', num: true }, { label: '重试', num: true }];
+    var rows = [];
+    list.forEach(function (t, i) {
+      var open = !!state.open[t.n];
+      var other = Math.max(0, t.lead - t.auto - t.rv - t.ck);
+      var name = h('span', null, h('button', { type: 'button', class: 'expander', 'aria-expanded': String(open), 'aria-label': (open ? '收起 ' : '展开 ') + t.n + ' 的各环节', text: open ? '▾' : '▸', onclick: function () { state.open[t.n] = !open; render(); } }), t.n);
+      rows.push([name, stChip(t.st), t.src, t.by, t.at, dur(t.lead),
+        segbar([{ name: '自动执行', fill: 'c1', share: t.auto, value: dur(t.auto) }, { name: '等待评审', fill: 'c2', share: t.rv, value: dur(t.rv) }, { name: '等待反问回答', fill: 'c3', share: t.ck, value: dur(t.ck) }, { name: '排队与中断', fill: 'other', share: other, value: dur(other) }], true),
+        tok(t.tok), cny(t.cost), String(t.rr), String(t.cr), String(t.rt)]);
+      if (open) rows.push(h('tr', { class: 'sub' }, h('td', { colspan: String(cols.length) }, wfTaskBreakdown(t))));
+    });
+    return h('div', { class: 'stack' },
+      h('div', { class: 'toolbar' },
+        seg('任务状态', [['all', '全部'], ['done', '成功'], ['bad', '失败或取消'], ['live', '进行中']], state.stFilter, function (v) { go({ stFilter: v }); }),
+        legendRow([['c1', '自动执行'], ['c2', '等待评审'], ['c3', '等待反问回答'], ['other', '排队与中断']])),
+      rows.length ? table(cols, rows, 1120) : notice('这个筛选下没有任务。'),
+      h('p', { class: 'small muted', text: '来源包含手动、定时、Webhook、事件、子任务和数字员工调用；数字员工把这个工作流当工具运行时产生的内部任务也计入。' }));
+  }
+  function wfInsights() {
+    return h('div', { class: 'stack' }, hintsCard(WF_HINTS, false),
+      themesCard(WF_THEMES, '范围：全部任务 · ' + cnt(132) + ' 条评审意见、' + cnt(109) + ' 个反问问题', '范围：你可见的任务 · ' + cnt(132) + ' 条评审意见、' + cnt(109) + ' 个反问问题'));
+  }
+
+  /* ================= WORKGROUP ================= */
+  var WG_TIME = [
+    { name: '自动执行', fill: 'c1', share: 155, value: dur(155) },
+    { name: '等待人类成员交付', fill: 'c2', share: 69, value: dur(69) },
+    { name: '等待反问回答', fill: 'c3', share: 30, value: dur(30) },
+    { name: '等待完成确认', fill: 'c4', share: 46, value: dur(46) },
+    { name: '排队与中断', fill: 'other', share: 30, value: dur(30) }
+  ];
+  var WG_TOK = [
+    { name: 'Leader（协调）', fill: 'c1', share: 0.58, value: '0.58M' },
+    { name: '成员（执行派单）', fill: 'c2', share: 1.93, value: '1.93M' },
+    { name: '系统工作（合并冲突、提交、记忆提取等）', fill: 'c3', share: 0.15, value: '0.15M' }
+  ];
+  var WG_ROUNDS = [[21, 3.1, 52, 0.61], [21, 2.6, 47, 0.52], [20, 2.2, 41, 0.44], [18, 1.9, 38, 0.38], [15, 1.6, 35, 0.31], [11, 1.4, 33, 0.27], [7, 1.2, 30, 0.22], [4, 1.0, 28, 0.19]];
+  var WG_MEMBERS = [
+    { n: 'planner', role: 'Leader', asg: null, time: 6, tok: 0.58e6, fail: 2, retry: 16, ask: 0.4, note: '每轮 6 分' },
+    { n: 'coder-a', role: '后端实现', asg: 5.2, time: 24, tok: 0.94e6, fail: 8, retry: 4, ask: 0.6 },
+    { n: 'coder-b', role: '前端实现', asg: 3.9, time: 21, tok: 0.61e6, fail: 5, retry: 3, ask: 0.2 },
+    { n: 'auditor', role: '代码审计', asg: 3.5, time: 12, tok: 0.38e6, fail: 3, retry: 7, ask: 0.1 },
+    { n: '张伟', role: '人类成员 · 产品把关', asg: 1.6, time: 112, human: true }
+  ];
+  var WG_HINTS = [
+    { sev: 'high', title: 'Leader 的协调开销占全部 Token 的 22%', body: '第 5 轮以后每轮只派 1.4 张单，Leader 在这些轮次里的开销占比升到 41%。', go: '轮次', tab: 'rounds' },
+    { sev: 'mid', title: '完成确认被驳回的比例是 19%', body: '每次驳回后平均多跑 1.8 轮。驳回意见里“测试没覆盖并发场景”出现了 5 次。', go: '人工介入', tab: 'gates' },
+    { sev: 'mid', title: '人类成员交付时长中位数 1 小时 52 分', body: '等待人类成员交付占总历时的 21%。', go: '成员', tab: 'members' },
+    { sev: 'mid', title: 'planner 的自动重试率 16%', body: '主要是派活单没有按协议输出，重试后都能成功。', go: '成员', tab: 'members' }
+    
+  ];
+  var WG_THEMES = [
+    { title: '人在房间里的介入', themes: [
+      { name: '方向纠偏：范围或依赖判断错了', count: '14 条 · 30%', share: 30, where: 'Leader 的派单', quotes: ['回调表已经废弃，改走 events 表。', '这个模块归结算组，不要动。'], advice: '把模块归属和已废弃的表写进组章程，Leader 每轮都会读到。' },
+      { name: '补充验收口径', count: '11 条 · 24%', share: 24, where: '成员执行中', quotes: ['幂等键用订单号加事件类型。'], advice: '启动任务时的目标里加一段固定的验收口径模板。' }
+    ] },
+    { title: '完成确认的驳回意见', themes: [
+      { name: '测试没有覆盖并发场景', count: '5 条 · 63%', share: 63, where: '完成确认', quotes: ['并发回调的用例没有补。'], advice: '给 auditor 的角色描述加上“必须检查并发用例”。' }
+    ] }
+  ];
+  function wgOverview() {
+    return h('div', { class: 'stack' },
+      kpis([
+        { label: '任务', value: String(cnt(21)), detail: '成功 ' + cnt(18) + ' · 失败 ' + cnt(2) + ' · 取消 ' + cnt(1) + ' · 成功率 86%', chg: 5, good: 'up' },
+        { label: '总历时（成功任务）', value: '5 小时 30 分', detail: '中位数；P90 为 13 小时', chg: -11, good: 'down' },
+        { label: '轮数', value: '6.8 轮', detail: '均值；上限 20 轮，触顶 5%', chg: -7, good: 'down' },
+        { label: '派单', value: '14.2 张 / 任务', detail: 'Leader 派 11.9 · 人直接派 1.6 · 自领 0.7' },
+        { label: '协调开销', value: '22%', detail: 'Leader 的 Token ÷ 全部 Token', chg: 6, good: 'down' },
+        { label: '协议重试率', value: '6%', detail: '没有按协议输出导致的重试' }
+      ]),
+      h('div', { class: 'grid2' },
+        segCard('时间花在哪里', '平均每个成功任务的总历时 5 小时 30 分', WG_TIME),
+        segCard('Token 花在哪里', '平均每个任务 2.66M Token，按谁在消耗拆分', WG_TOK)),
+      hintsCard(WG_HINTS.slice(0, 3), true));
+  }
+  function wgRounds() {
+    return h('div', { class: 'stack' },
+      card('每轮派单数', '第 k 轮的平均派单张数，只统计跑到这一轮的任务',
+        columns(WG_ROUNDS.map(function (r, i) { return { label: '第 ' + (i + 1) + ' 轮', value: r[1], note: cnt(r[0]) + ' 个任务跑到这一轮' }; }), function (v) { return v + ' 张'; }, '各轮平均派单数')),
+      card('按轮次', '一轮 = Leader 读现状并派单，到这批派单全部有结果',
+        table([{ label: '轮次' }, { label: '跑到这一轮的任务', num: true }, { label: '平均派单', num: true }, { label: '平均耗时', num: true }, { label: '平均 Token', num: true }, { label: 'Leader 占这一轮的 Token' }],
+          WG_ROUNDS.map(function (r, i) { return ['第 ' + (i + 1) + ' 轮', String(cnt(r[0])), r[1] + ' 张', dur(r[2]), r[3] + 'M', meter([15, 17, 20, 23, 29, 34, 38, 41][i])]; }), 760)),
+      notice('自由协作模式没有 Leader 轮次，这一页改为按成员执行的批次统计；动态工作流模式在人确认后，按生成的节点统计，和工作流的“阶段分析”相同。'));
+  }
+  function wgMembers() {
+    function col(key) { return binner(WG_MEMBERS.filter(function (m) { return !(key === 'time' && m.human); }).map(function (m) { return m[key]; })); }
+    var R = { asg: col('asg'), time: col('time'), tok: col('tok'), fail: col('fail'), retry: col('retry'), ask: col('ask') };
+    function cell(m, key, fmt) { var v = m[key]; if (v == null) return '—'; return { heat: R[key](v), text: fmt(v) }; }
+    var rows = WG_MEMBERS.map(function (m) {
+      return [m.n, m.role, cell(m, 'asg', function (v) { return v + ' 张'; }), m.human ? '交付 ' + dur(m.time) : cell(m, 'time', function (v) { return dur(v) + (m.note ? '（每轮）' : ''); }), cell(m, 'tok', tok), cell(m, 'fail', pct), cell(m, 'retry', pct), cell(m, 'ask', function (v) { return v + ' 次'; })];
+    });
+    return h('div', { class: 'stack' },
+      card('成员 × 指标', '每列各自着色，颜色越深数值越高；每任务平均值',
+        scaleLegend('', '', '本列最低', '本列最高', '；人类成员的交付时长不参与着色'),
+        table([{ label: '成员' }, { label: '角色' }, { label: '接单', num: true }, { label: '执行时长（中位）', num: true }, { label: 'Token', num: true }, { label: '派单失败率', num: true }, { label: '协议重试率', num: true }, { label: '反问', num: true }], rows, 820)),
+      state.role === 'manager' ? null : notice('人类成员按人的明细只对管理者和管理员显示。'));
+  }
+  function wgGates() {
+    return h('div', { class: 'stack' },
+      card('人的介入', '每任务平均值',
+        kpis([
+          { label: '人发的消息', value: '2.1 条', detail: '不带 @ 的指令进黑板，Leader 下一轮读到' },
+          { label: '人直接派单', value: '1.6 张', detail: '@ 某个成员即直接派单' },
+          { label: '人类成员交付时长', value: '1 小时 52 分', detail: '中位数；从派到人到交付' },
+          { label: '中途改配置', value: '0.2 次', detail: '加减成员、改开关' }
+        ], true)),
+      card('完成确认', 'Leader 宣布完成后等人确认',
+        kpis([
+          { label: '等待时长', value: '48 分', detail: '中位数；P90 为 6 小时 20 分' },
+          { label: '驳回率', value: '19%', detail: cnt(5) + ' 次驳回 / ' + cnt(26) + ' 次确认' },
+          { label: '驳回后多跑', value: '1.8 轮', detail: '每次驳回平均增加的轮数' }
+        ], true)),
+      card('反问', 'Leader 和成员都可以向人反问，各有次数上限',
+        kpis([
+          { label: '每任务反问轮次', value: '0.9', detail: 'Leader 0.4 · 成员 0.5' },
+          { label: '每轮问题数', value: '2.4 个', detail: '' },
+          { label: '回答时间', value: '35 分', detail: '中位数' },
+          { label: '用满反问上限', value: '8%', detail: '提问方被要求自行决断的比例' }
+        ], true)));
+  }
+  var WG_TASKS = [
+    ['支付回调改为幂等', 'done', '李娜', '11-24 10:02', 318, '7 轮', '15 张', '2.9M', '¥40.10', '1 次驳回'],
+    ['对账差异自动归因', 'done', '王强', '11-23 09:40', 262, '6 轮', '12 张', '2.2M', '¥30.60', '直接通过'],
+    ['结算单批量重算', 'failed', '李娜', '11-22 14:15', 540, '20 轮', '31 张', '6.4M', '¥88.20', '触顶'],
+    ['渠道费率配置化', 'done', '陈静', '11-21 11:30', 205, '5 轮', '9 张', '1.8M', '¥25.40', '直接通过'],
+    ['退款链路日志补齐', 'running', '王强', '11-26 08:12', 96, '3 轮', '7 张', '1.1M', '¥15.20', '—']
+  ];
+  function wgTasks() {
+    var list = state.role === 'member' ? WG_TASKS.filter(function (t) { return t[2] !== '陈静'; }) : WG_TASKS;
+    return table([{ label: '任务' }, { label: '状态' }, { label: '发起人' }, { label: '开始', num: true }, { label: '总历时', num: true }, { label: '轮数', num: true }, { label: '派单', num: true }, { label: 'Token', num: true }, { label: '成本', num: true }, { label: '完成确认' }],
+      list.map(function (t) { return [t[0], stChip(t[1]), t[2], t[3], dur(t[4]), t[5], t[6], t[7], t[8], t[9]]; }), 980);
+  }
+  function wgInsights() {
+    return h('div', { class: 'stack' }, hintsCard(WG_HINTS, false),
+      themesCard(WG_THEMES, '范围：全部任务 · ' + cnt(46) + ' 条人的消息、' + cnt(8) + ' 条驳回意见', '范围：你可见的任务 · ' + cnt(46) + ' 条人的消息、' + cnt(8) + ' 条驳回意见'));
+  }
+
+  /* ================= DIGITAL EMPLOYEE ================= */
+  var DUTY = [
+    { region: '交付一个 MR', lanes: [
+      { name: '主干', items: [
+        { id: 'prepare', n: '准备工作材料', by: '程序', rounds: 1.0, time: 2, tok: 0, fail: 1 },
+        { id: 'plan', n: '方案分析', by: 'Agent', rounds: 1.2, time: 14, tok: 0.42e6, fail: 3 },
+        { id: 'planreview', n: '人工审核方案', by: '人', rounds: 1.3, time: 160, human: true },
+        { id: 'implement', n: '分析与实现', by: 'Agent', rounds: 1.6, time: 52, tok: 1.61e6, fail: 9 },
+        { id: 'freeze', n: '校验并冻结修改', by: '系统', rounds: 1.6, time: 6, tok: 0, fail: 4 },
+        { id: 'mr', n: '提交 MR', by: '系统', rounds: 1.0, time: 1, tok: 0, fail: 2 }
+      ] }
+    ] },
+    { region: '持续看护 MR', lanes: [
+      { name: 'MR 主泳道', items: [
+        { id: 'watch', n: '关注 MR 状态', by: '系统' },
+        { id: 'ready', n: '判断随时可合入', by: '系统' },
+        { id: 'committer', n: '等待合入', by: '系统' }
+      ] },
+      { name: '检视意见', items: [
+        { id: 'fbfind', n: '识别检视问题', by: 'Agent', rounds: 1.9, time: 4, tok: 0.18e6, fail: 2 },
+        { id: 'fbfix', n: '修复检视问题', by: 'Agent', rounds: 1.9, time: 27, tok: 0.71e6, fail: 6 }
+      ] },
+      { name: '流水线门禁', items: [
+        { id: 'gate', n: '取得门禁', by: '程序', rounds: 3.4, time: 1, tok: 0, fail: 1 },
+        { id: 'cifind', n: '识别失败', by: 'Agent', rounds: 2.2, time: 5, tok: 0.21e6, fail: 4 },
+        { id: 'cifix', n: '按类型修绿', by: 'Agent', rounds: 2.6, time: 31, tok: 0.83e6, fail: 14 }
+      ] },
+      { name: '代码冲突', items: [{ id: 'conflict', n: '修复冲突', by: 'Agent', rounds: 0.4, time: 18, tok: 0.14e6, fail: 11 }] },
+      { name: '跨仓与审批', items: [
+        { id: 'approvalprep', n: '准备审批', by: '程序', rounds: 0.3, time: 2, tok: 0, fail: 0 },
+        { id: 'approval', n: '等待审批', by: '人', rounds: 0.3, time: 310, human: true }
+      ] }
+    ] }
+  ];
+  var DUTY_HEAT = {
+    time: { label: '每轮时长', key: 'time', fmt: dur },
+    rounds: { label: '每次交办的轮数', key: 'rounds', fmt: function (v) { return v + ' 轮'; } },
+    tok: { label: 'Token', key: 'tok', fmt: tok },
+    fail: { label: '失败率', key: 'fail', fmt: pct }
+  };
+  function dutyItems() { var all = []; DUTY.forEach(function (r) { r.lanes.forEach(function (l) { l.items.forEach(function (i) { all.push(i); }); }); }); return all; }
+  var DE_OUTCOME = [
+    { name: '已合入', fill: 'good', share: 25, value: '25 次' },
+    { name: '无需修改', fill: 'other', share: 3, value: '3 次' },
+    { name: '其他结束', fill: 'warn', share: 2, value: '2 次' },
+    { name: '执行失败', fill: 'crit', share: 4, value: '4 次' }
+  ];
+  var DE_CYCLE = [
+    { name: '交办到 MR 创建', fill: 'c1', share: 200, value: dur(200) },
+    { name: 'MR 创建到合入', fill: 'c2', share: 1560, value: dur(1560) }
+    
+  ];
+  var DE_HINTS = [
+    { sev: 'high', title: '工作项“按类型修绿”每次交办平均执行 2.6 轮', body: '失败率 14%。失败类型：单测失败 46%、静态检查 31%、编译 23%。', go: '职责图', tab: 'duties' },
+    { sev: 'mid', title: '外部审批的等待时长中位数 5 小时 10 分', body: '每次交办平均 0.3 次外部审批。', go: '人工介入', tab: 'gates' },
+    { sev: 'mid', title: '“分析与实现”的自动重试率 16%', body: '主要失败码是 envelope-missing（没有按格式输出）。', go: '职责图', tab: 'duties' },
+    { sev: 'mid', title: '阻塞率 21%', body: '阻塞时长中位数 2 小时 10 分；当前有 2 次交办仍在阻塞。', go: '人工介入', tab: 'gates' },
+    
+  ];
+  var DE_THEMES = [
+    { title: 'MR 检视意见里反复出现的主题', themes: [
+      { name: '缺少单元测试或断言不足', count: '28 条 · 23%', share: 23, where: '修复检视问题', quotes: ['这个分支没有用例覆盖。', '只断言了不抛异常，没有断言结果。'], advice: '给“分析与实现”换用带测试自查清单的 Agent，或在验证工具里加覆盖率门槛。' },
+      { name: '没有遵循模块分层约定', count: '21 条 · 17%', share: 17, where: '修复检视问题', quotes: ['Controller 里不要直接调 Mapper。'], advice: '把分层约定沉淀为仓库记忆，注入“分析与实现”。' }
+    ] },
+    { title: '方案审核的评审意见', themes: [
+      { name: '影响范围评估不完整', count: '9 条 · 31%', share: 31, where: '人工审核方案', quotes: ['下游报表也读这张表，方案里没有提。'], advice: '在方案分析的提示词里要求列出读写这张表的全部模块。' }
+    ] }
+  ];
+  function deOverview() {
+    return h('div', { class: 'stack' },
+      kpis([
+        { label: '交办', value: String(cnt(34)), detail: '已合入 ' + cnt(25) + ' · 无需修改 ' + cnt(3) + ' · 其他结束 ' + cnt(2) + ' · 执行失败 ' + cnt(4), chg: 13, good: 'up' },
+        { label: '合入率', value: '74%', detail: '已合入 ÷ 已结束的交办', chg: 4, good: 'up' },
+        { label: '交付周期', value: '1 天 6 小时', detail: '交办到合入的中位数', chg: -9, good: 'down' },
+        { label: '每次交办 Token', value: '4.1M', detail: '均值；成本 ¥58.30', chg: -5, good: 'down' },
+        { label: '一次通过率', value: '38%', detail: '没有返工也没有阻塞就合入', chg: 11, good: 'up' },
+        { label: '阻塞率', value: '21%', detail: '阻塞过的交办占比；阻塞时长中位数 2 小时 10 分', chg: -3, good: 'down' }
+      ]),
+      h('div', { class: 'grid2' },
+        segCard('交办的结局', '已结束的 34 次交办', DE_OUTCOME),
+        segCard('交付周期花在哪里', '已合入交办的中位数，共 1 天 5 小时 20 分；其中等人 5 小时 50 分', DE_CYCLE)),
+      hintsCard(DE_HINTS.slice(0, 3), true));
+  }
+  function deDuties() {
+    var def = DUTY_HEAT[state.dutyHeat], items = dutyItems();
+    var vals = items.map(function (i) { return i[def.key]; }).filter(function (v) { return v != null && !(def.key === 'tok' && v === 0); });
+    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals), bin5 = binner(vals);
+    var sel = items.filter(function (i) { return i.id === state.duty; })[0];
+    var map = h('div', { class: 'duty' }, DUTY.map(function (r) {
+      return h('section', { class: 'duty__region' }, h('h4', { class: 'duty__region-name', text: r.region }), r.lanes.map(function (l) {
+        var kids = [];
+        l.items.forEach(function (it, idx) {
+          if (idx) kids.push(h('span', { class: 'duty__sep', 'aria-hidden': 'true', text: '›' }));
+          var v = it[def.key], usable = v != null && !(def.key === 'tok' && v === 0), bin = usable ? bin5(v) : 0;
+          var b = h('button', { type: 'button', class: 'duty__item' + (bin ? ' heat-' + bin : ''), 'aria-pressed': String(state.duty === it.id), 'aria-label': it.n + '，' + def.label + ' ' + (usable ? def.fmt(v) : '不适用'), onclick: function () { go({ duty: it.id }); } },
+            h('span', { class: 'wfnode__name', text: it.n }), h('span', { class: 'wfnode__kind', text: '执行者：' + it.by }), h('span', { class: 'wfnode__val', text: usable ? def.fmt(v) : '—' }));
+          kids.push(bindTip(b, [usable ? def.fmt(v) : '不适用', it.n + ' · ' + def.label]));
+        });
+        return h('div', { class: 'duty__lane' }, h('span', { class: 'duty__lane-name', text: l.name }), h('div', { class: 'duty__items' }, kids));
+      }));
+    }));
+    var facts = sel ? card('所选工作项 · ' + sel.n, '执行者：' + sel.by, h('dl', { class: 'facts' }, [
+      ['每次交办的轮数', sel.rounds != null ? sel.rounds + ' 轮' : '持续进行'], [sel.human ? '每轮等人时长' : '每轮时长', dur(sel.time)], ['Token', sel.tok ? tok(sel.tok) : '不消耗'], ['失败率', sel.fail != null ? pct(sel.fail) : '—']
+    ].map(function (f) { return h('div', null, h('dt', { text: f[0] }), h('dd', { text: f[1] })); }))) : null;
+    var rows = [];
+    DUTY.forEach(function (r) {
+      rows.push({ cls: 'grp', cells: [r.region, '', '', '', '', ''] });
+      r.lanes.forEach(function (l) { l.items.forEach(function (it) {
+        rows.push([{ indent: true, text: it.n }, l.name + ' · ' + it.by, it.rounds != null ? it.rounds + ' 轮' : '持续', it.time != null ? (it.human ? '等人 ' : '') + dur(it.time) : '—', it.tok ? tok(it.tok) : '—', it.fail != null ? pct(it.fail) : '—']);
+      }); });
+    });
+    return h('div', { class: 'stack' },
+      h('div', { class: 'toolbar' }, h('span', { class: 'small muted', text: '职责图取这名员工所属分类的固定职责；同一工作项跑多轮时累计。' }),
+        h('span', { class: 'row' }, h('span', { class: 'small muted', text: '着色指标' }), seg('着色指标', Object.keys(DUTY_HEAT).map(function (k) { return [k, DUTY_HEAT[k].label]; }), state.dutyHeat, function (v) { go({ dutyHeat: v }); }))),
+      card('各工作项的' + def.label, '颜色越深数值越高。点工作项看它的全部指标。', scaleLegend(def.fmt(min), def.fmt(max)), map),
+      facts,
+      card('各工作项指标', '每次交办的平均值', table([{ label: '工作项' }, { label: '泳道 · 执行者' }, { label: '轮数', num: true }, { label: '每轮时长', num: true }, { label: 'Token', num: true }, { label: '失败率', num: true }], rows, 720)));
+  }
+  function deGates() {
+    return h('div', { class: 'stack' },
+      card('方案审核', '启用了人工审核方案的交办',
+        kpis([
+          { label: '审核时长', value: '2 小时 40 分', detail: '中位数' },
+          { label: '首轮通过率', value: '62%', detail: '' },
+          { label: '每轮意见数', value: '3.4 条', detail: '人均 2.1 条' }
+        ], true)),
+      card('MR 上的人工介入', '代码托管平台上人提的意见与外部审批',
+        kpis([
+          { label: '人提的检视意见', value: '7.2 条 / 交办', detail: '处理轮数见职责图里的“修复检视问题”' },
+          
+          { label: '外部审批', value: '0.3 次 / 交办', detail: '等待中位数 5 小时 10 分' }
+        ], true)),
+      card('阻塞处理', '交办进入阻塞后需要人恢复或终止',
+        kpis([
+          { label: '阻塞次数', value: '0.3 次 / 交办', detail: cnt(7) + ' 次交办出现过阻塞' },
+          { label: '阻塞时长', value: '2 小时 10 分', detail: '阻塞到恢复的中位数' },
+          { label: '人工恢复', value: cnt(6) + ' 次', detail: '另有 ' + cnt(1) + ' 次被终止' }
+        ], true),
+        table([{ label: '当前仍在阻塞的交办：原因' }, { label: '交办', num: true }, { label: '占比' }], [['外部依赖不可用', '1', meter(50)], ['需要补充信息', '1', meter(50)]], 420),
+        h('p', { class: 'small muted', text: '阻塞原因在恢复时清空，所以只能统计当前仍在阻塞的交办。' })));
+  }
+  var DE_CASES = [
+    ['订单导出支持异步分片', 'merged', '李娜', '11-23 09:05', 1420, '2 轮', '3 轮', '4.4M', '¥62.10'],
+    ['库存预占超时释放', 'merged', '王强', '11-22 13:30', 980, '1 轮', '1 轮', '2.9M', '¥41.00'],
+    ['会员积分过期任务', 'blocked', '李娜', '11-25 10:12', 640, '1 轮', '4 轮', '5.1M', '¥72.40'],
+    ['日志脱敏规则补齐', 'nochange', '陈静', '11-21 15:44', 85, '—', '—', '0.6M', '¥8.20'],
+    ['账单导出字段对齐', 'failed', '王强', '11-20 11:02', 1960, '3 轮', '6 轮', '7.8M', '¥109.60']
+  ];
+  function deCases() {
+    var list = state.role === 'member' ? DE_CASES.filter(function (t) { return t[2] !== '陈静'; }) : DE_CASES;
+    return table([{ label: '交办' }, { label: '状态' }, { label: '发起人' }, { label: '开始', num: true }, { label: '历时', num: true }, { label: '检视意见处理', num: true }, { label: '流水线修绿', num: true }, { label: 'Token', num: true }, { label: '成本', num: true }],
+      list.map(function (t) { return [t[0], stChip(t[1]), t[2], t[3], dur(t[4]), t[5], t[6], t[7], t[8]]; }), 940);
+  }
+  function deInsights() {
+    return h('div', { class: 'stack' }, hintsCard(DE_HINTS, false),
+      themesCard(DE_THEMES, '范围：全部交办 · ' + cnt(121) + ' 条 MR 检视意见、' + cnt(29) + ' 条方案评审意见', '范围：你可见的交办 · ' + cnt(121) + ' 条 MR 检视意见、' + cnt(29) + ' 条方案评审意见'));
+  }
+
+  /* ================= kinds, list and detail ================= */
+  var KINDS = {
+    workflow: {
+      label: '工作流', foot: '进入方式：这里的列表，或工作流编辑页“更多”里的“查看度量”。',
+      sub: function (r) { return '工作流 · 负责人 ' + r.owner + ' · 跨版本按节点汇总'; },
+      rows: [
+        { name: '需求到合入（设计·评审·实现·审计·修复）', owner: '李娜', tasks: 48, ok: 83, lead: 580, wait: 64, tok: 2.9e6, cost: 41.2, touch: 4.6, fpy: 31, hints: 6 },
+        { name: '缺陷修复快车道', owner: '王强', tasks: 112, ok: 92, lead: 78, wait: 22, tok: 0.8e6, cost: 9.6, touch: 1.2, fpy: 68, hints: 2 },
+        { name: '文档翻译与校对', owner: '陈静', tasks: 37, ok: 97, lead: 42, wait: 35, tok: 0.4e6, cost: 3.1, touch: 1.0, fpy: 81, hints: 1 },
+        { name: '依赖升级巡检', owner: '赵磊', tasks: 64, ok: 78, lead: 125, wait: 8, tok: 1.1e6, cost: 12.4, touch: 0.4, fpy: 59, hints: 3 }
+      ],
+      cols: [{ label: '工作流' }, { label: '任务', num: true }, { label: '成功率', num: true }, { label: '总历时中位数', num: true }, { label: '等人占比' }, { label: '每任务 Token', num: true }, { label: '每任务成本', num: true }, { label: '人工介入', num: true }, { label: '一次通过率', num: true }],
+      cells: function (r) { return [String(cnt(r.tasks)), pct(r.ok), dur(r.lead), meter(r.wait), tok(r.tok), cny(r.cost), r.touch + ' 次', pct(r.fpy)]; },
+      tabs: [['overview', '概览'], ['stages', '阶段分析'], ['gates', '人工介入'], ['tasks', '任务明细'], ['insights', '提升点']],
+      render: { overview: wfOverview, stages: wfStages, gates: wfGates, tasks: wfTasks, insights: wfInsights },
+      compare: [['off', '不对比'], ['period', '对比上一时段'], ['version', '以版本 v57 为分界']]
+    },
+    workgroup: {
+      label: '工作组', foot: '进入方式：这里的列表，或工作组详情页“更多”里的“查看度量”。',
+      sub: function (r) { return '工作组 · ' + r.mode + ' · 负责人 ' + r.owner; },
+      rows: [
+        { name: '支付模块攻坚组', mode: 'Leader 派单', owner: '李娜', tasks: 21, ok: 86, lead: 330, rounds: '6.8 轮', asg: '14.2 张', coord: 22, touch: 5.1, hints: 5 },
+        { name: '全仓 TODO 清理组', mode: '自由协作', owner: '王强', tasks: 9, ok: 78, lead: 190, rounds: '—', asg: '22.4 张', coord: null, touch: 1.3, hints: 2 },
+        { name: '重构方案编排组', mode: '动态工作流', owner: '陈静', tasks: 12, ok: 92, lead: 160, rounds: '—', asg: '—', coord: null, touch: 2.2, hints: 1 }
+      ],
+      cols: [{ label: '工作组' }, { label: '模式' }, { label: '任务', num: true }, { label: '成功率', num: true }, { label: '总历时中位数', num: true }, { label: '平均轮数', num: true }, { label: '每任务派单', num: true }, { label: '协调开销' }, { label: '人工介入', num: true }],
+      cells: function (r) { return [r.mode, String(cnt(r.tasks)), pct(r.ok), dur(r.lead), r.rounds, r.asg, r.coord == null ? '—' : meter(r.coord), r.touch + ' 次']; },
+      tabs: [['overview', '概览'], ['rounds', '轮次'], ['members', '成员'], ['gates', '人工介入'], ['tasks', '任务明细'], ['insights', '提升点']],
+      render: { overview: wgOverview, rounds: wgRounds, members: wgMembers, gates: wgGates, tasks: wgTasks, insights: wgInsights },
+      compare: [['off', '不对比'], ['period', '对比上一时段']]
+    },
+    employee: {
+      label: '数字员工', foot: '进入方式：这里的列表，或数字员工卡片操作区里的“查看度量”。统计单元是一次交办。',
+      sub: function (r) { return '数字员工 · ' + r.type + ' · 负责人 ' + r.owner; },
+      rows: [
+        { name: '研发数字员工 · Java 后端', type: '研发数字员工', owner: '李娜', tasks: 34, merged: 74, lead: 1800, tok: 4.1e6, cost: 58.3, fpy: 38, block: 21, hints: 5 },
+        { name: '研发数字员工 · C++ 平台', type: '研发数字员工', owner: '赵磊', tasks: 15, merged: 60, lead: 2640, tok: 5.6e6, cost: 79.4, fpy: 27, block: 33, hints: 4 }
+      ],
+      cols: [{ label: '数字员工' }, { label: '交办', num: true }, { label: '合入率', num: true }, { label: '交付周期中位数', num: true }, { label: '每次交办 Token', num: true }, { label: '每次交办成本', num: true }, { label: '一次通过率', num: true }, { label: '阻塞率' }],
+      cells: function (r) { return [String(cnt(r.tasks)), pct(r.merged), dur(r.lead), tok(r.tok), cny(r.cost), pct(r.fpy), meter(r.block)]; },
+      tabs: [['overview', '概览'], ['duties', '职责图'], ['gates', '人工介入'], ['cases', '交办明细'], ['insights', '提升点']],
+      render: { overview: deOverview, duties: deDuties, gates: deGates, cases: deCases, insights: deInsights },
+      compare: [['off', '不对比'], ['period', '对比上一时段'], ['version', '以员工修订 r12 为分界']]
+    }
+  };
+  function listView() {
+    var K = KINDS[state.kind];
+    var rows = K.rows.map(function (r, i) {
+      var link = h('a', { href: '#d-' + state.kind + '-' + i + '-overview', text: r.name, onclick: function (e) { e.preventDefault(); go({ id: i, tab: 'overview' }); } });
+      return { cls: 'is-link', cells: [link].concat(K.cells(r)) };
+    });
+    return h('section', { class: 'stack' },
+      h('div', { class: 'toolbar' },
+        seg('能力类型', [['workflow', '工作流'], ['workgroup', '工作组'], ['employee', '数字员工']], state.kind, function (v) { go({ kind: v, id: null }); }),
+        h('span', { class: 'small muted', text: scopeNote() })),
+      table(K.cols, rows, 1020),
+      h('p', { class: 'small muted', text: K.foot + ' 时长按墙钟时间计，统计量取中位数和 P90；时长类只算成功完成的样本，Token 与成本算全部已结束的样本。' }));
+  }
+  function detailView() {
+    var K = KINDS[state.kind], row = K.rows[state.id] || K.rows[0];
+    if (!K.render[state.tab]) state.tab = K.tabs[0][0];
+    if (!K.compare.some(function (c) { return c[0] === state.compare; })) state.compare = 'off';
+    return h('section', { class: 'stack' },
+      h('div', null,
+        h('a', { class: 'back', href: '#list-' + state.kind, text: '← 返回' + K.label + '列表', onclick: function (e) { e.preventDefault(); go({ id: null }); } }),
+        h('h2', { class: 'detail-title', text: row.name }),
+        h('p', { class: 'small muted', text: K.sub(row) })),
+      state.id !== 0 ? notice('原型只为每一类的第一项准备了完整示例，这里显示的是同一份示例数据。') : null,
+      h('div', { class: 'toolbar' }, h('span', { class: 'small muted', text: scopeNote() }), seg('对比方式', K.compare, state.compare, function (v) { go({ compare: v }); })),
+      h('p', { class: 'small muted', text: dataNote() }),
+      h('nav', { class: 'tabs', 'aria-label': row.name + ' 的度量页签' }, K.tabs.map(function (t) {
+        return h('button', { type: 'button', class: 'tabs__tab' + (t[0] === state.tab ? ' tabs__tab--active' : ''), 'aria-current': t[0] === state.tab ? 'page' : null, text: t[1], onclick: function () { go({ tab: t[0] }); } });
+      })),
+      K.render[state.tab]());
+  }
+  function syncSeg(id, value, key) {
+    document.querySelectorAll('#' + id + ' .segmented__option').forEach(function (b) {
+      var on = b.getAttribute('data-v') === value;
+      b.classList.toggle('segmented__option--active', on);
+      b.setAttribute('aria-pressed', String(on));
+      if (!b._bound) { b._bound = true; b.addEventListener('click', function () { var p = {}; p[key] = b.getAttribute('data-v'); go(p); }); }
+    });
+  }
+  function render() {
+    hideTip();
+    syncSeg('role-seg', state.role, 'role');
+    syncSeg('range-seg', state.range, 'range');
+    var view = $('#view');
+    view.replaceChildren(state.id == null ? listView() : detailView());
+    requestAnimationFrame(fitSegLabels);
+  }
+  window.addEventListener('hashchange', function () { parseHash(); render(); });
+  var resizeTimer = null, lastWidth = 0;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { var w = $('#view').clientWidth; if (w !== lastWidth) { lastWidth = w; render(); } else fitSegLabels(); }, 150);
+  });
+  parseHash();
+  render();
+})();
+</script>
