@@ -21,13 +21,13 @@ import { ulid } from 'ulid'
 import { taskSubjectFromDefinition } from '../domain/taskSubject'
 import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
 
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 
 import {
   CANCELABLE_TASK_STATUSES,
   DAEMON_RESTART_ERROR_SUMMARY,
   REPO_PREP_NODE_ID,
+  SYSTEM_USER_ID,
 } from '@agent-workflow/shared'
 import type {
   RecordTaskRecoveryEventInput,

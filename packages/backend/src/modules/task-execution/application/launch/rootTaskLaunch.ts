@@ -8,12 +8,13 @@ import {
   type Task,
   type TaskCatalogVisibility,
   type TaskStartOptions,
+  SYSTEM_USER_ID,
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { launchTask } from './launchTask'
 import type { TaskLaunchConfigurationQueries } from '../ports/taskLaunchConfiguration'
 import { definitionAnchorId } from '../../domain/taskSubject'
-import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import type { Actor } from '@/auth/actor'
 import {
   assertTriggerPreflight,
   triggerSourceFromContext,

@@ -4,7 +4,7 @@ import type { CollaborationTaskRolePolicy } from '../application/ports/collabora
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
-import { SYSTEM_USER_ID } from '@/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ReviewTaskAccessPort } from '../application/ports/reviewTaskAccess'
 import type { ReviewActor } from '../public/types'

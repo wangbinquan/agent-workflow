@@ -11,7 +11,7 @@ import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
-import { SYSTEM_USER_ID } from '../src/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Hono } from 'hono'
 import {

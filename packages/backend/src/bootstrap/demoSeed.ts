@@ -3,9 +3,8 @@
 // Each bounded context owns its rows. This file owns only the durable marker
 // and the sample description; it never receives a database client.
 
-import { DEMO_RESOURCE_ID_PREFIX } from '@agent-workflow/shared'
+import { DEMO_RESOURCE_ID_PREFIX, SYSTEM_USER_ID } from '@agent-workflow/shared'
 
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { CodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/public/types'
 import type { DemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/public/participants'
 import type { InstallationSeedCompletionPort } from '@/modules/system-operations/public/participants'

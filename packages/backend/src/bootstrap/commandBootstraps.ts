@@ -11,7 +11,7 @@ import { createCodeHistoryIndexCommands } from '@/modules/code-capability/compos
 import { logicalSchemaContract, persistenceSchemaBinding } from './persistenceSchema'
 import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { resolveDatabaseProviderRuntimeForRestore } from '@/platform/persistence/databaseProviderRuntime'
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import { createSecretBox } from '@/platform/crypto/secretBox'
 import { createAuthRuntimeFor } from '@/auth/composition'
 import { loadConfig } from '@/config'

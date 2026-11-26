@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ensureTokenFile, generateToken, rotateTokenFile } from '../src/auth/token'
+import { ensureTokenFile, generateToken, rotateTokenFile } from '@/platform/crypto/tokenFile'
 import { statMetadataIsAuthoritative } from '@/platform/execution/local/fileTrust'
 
 describe('token file management', () => {

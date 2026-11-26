@@ -18,9 +18,10 @@ import {
   type StartTask,
   type Task,
   type GitCommitIdentity,
+  SYSTEM_USER_ID,
 } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import { buildActor, type Actor } from '@/auth/actor'
 import {
   createIdentityAccessRuntime,
   composeIdentityAccess,

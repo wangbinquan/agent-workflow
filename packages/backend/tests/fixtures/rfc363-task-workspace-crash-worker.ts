@@ -2,7 +2,6 @@ import { withLocalRepositoryPreparation } from '../helpers/sourceControlTaskPort
 // Hosted real-process oracle: kill a production Task launch before its row is committed.
 
 import { readTaskFixtures, workflowFixture } from '../helpers/model'
-import { SYSTEM_USER_ID } from '@/auth/actor'
 import { applyUploadsToWorktree } from '../helpers/nativeWorkspaceUploads'
 import { applyTaskWorkspaceUploads } from '@/modules/task-execution/infrastructure/taskWorkspaceUploads'
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
@@ -11,6 +10,7 @@ import {
   WorkflowDefinitionSchema,
   StartTaskSchema,
   type DatabaseConfig,
+  SYSTEM_USER_ID,
 } from '@agent-workflow/shared'
 import { openDb } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'

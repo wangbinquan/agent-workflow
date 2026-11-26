@@ -19,7 +19,7 @@ import type {
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
-import { SYSTEM_USER_ID } from '@/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { NotFoundError } from '@/platform/errors/domainErrors'

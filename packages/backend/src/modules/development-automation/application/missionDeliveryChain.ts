@@ -16,7 +16,7 @@
 // 被谓词读到，属 PR-6 注记（plan.md 交付注记）。
 
 import { ulid } from 'ulid'
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 
 import type { AutomationPolicyContent } from '../domain/automationPolicy'
 import { canonicalDigest } from '../domain/canonicalJson'

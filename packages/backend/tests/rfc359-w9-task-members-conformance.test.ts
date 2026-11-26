@@ -27,7 +27,8 @@ import { expect, test } from 'bun:test'
 import { monotonicFactory } from 'ulid'
 import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 
-import { type Actor, buildActor, SYSTEM_USER_ID } from '@/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
+import { type Actor, buildActor } from '@/auth/actor'
 
 import {
   getTaskMembers,

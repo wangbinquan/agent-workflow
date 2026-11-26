@@ -48,7 +48,7 @@ import {
   ACTOR_REPLAY_COMMANDS,
   mayAuthorizeReplay,
 } from '@/modules/task-execution/domain/executionIntent'
-import { SYSTEM_USER_ID } from '@/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import { composeDigitalEmployeeTestTasks } from './helpers/taskCancellation'

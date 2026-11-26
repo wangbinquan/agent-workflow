@@ -8,7 +8,7 @@ import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composi
 
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createExecutionExitRequests } from './executionActivation'
-import { ensureTokenFile } from '@/auth/token'
+import { ensureTokenFile } from '@/platform/crypto/tokenFile'
 import { schemaDriftGuidance } from '@/modules/system-operations/composition/schemaDriftGuidance'
 import { IS_EMBEDDED } from '@/embed'
 import {

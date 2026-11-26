@@ -5,9 +5,9 @@ import {
   CreateAgentSchema,
   type Agent,
   type CreateAgent,
+  SYSTEM_USER_ID,
 } from '@agent-workflow/shared'
 
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { DigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/public/participants'
 import { ConflictError } from '@/platform/errors/domainErrors'
 import {

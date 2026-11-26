@@ -5,9 +5,9 @@ import {
   type Agent,
   type CreateAgent,
   type UpdateAgent,
+  SYSTEM_USER_ID,
 } from '@agent-workflow/shared'
 
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import {
   reconcileCreatedAgentExecutionContractPorts,
   reconcileUpdatedAgentExecutionContractPorts,

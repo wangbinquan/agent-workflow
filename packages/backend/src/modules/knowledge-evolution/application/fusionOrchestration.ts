@@ -29,10 +29,10 @@ import {
   FusionResultManifestSchema,
   PLATFORM_FUSION_MANIFEST,
   TERMINAL_TASK_STATUSES,
+  SYSTEM_USER_ID,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DirectTaskInitiator } from '@/modules/task-execution/public/types'
-import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { MemoryScopeAuthority } from '@/modules/memory/public/queries'
 import type { FusionTreeFile } from '../domain/fusionTree'
 import type { FusionEngineTaskOperations } from './ports/fusionEngineTasks'

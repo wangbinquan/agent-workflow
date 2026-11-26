@@ -11,7 +11,7 @@ import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createDigitalEmployeeAgentTemplateRepository } from '@/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog'
 import type { CreateAgent } from '@agent-workflow/shared'

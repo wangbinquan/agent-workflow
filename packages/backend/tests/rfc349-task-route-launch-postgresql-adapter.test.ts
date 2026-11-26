@@ -18,9 +18,10 @@ import {
   WorkflowDefinitionSchema,
   WorkgroupSchema,
   type GitCommitIdentity,
+  SYSTEM_USER_ID,
 } from '@agent-workflow/shared'
 
-import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import { buildActor, type Actor } from '@/auth/actor'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'

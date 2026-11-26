@@ -14,10 +14,11 @@ import {
   ResolveAgentImportRefsRequestSchema,
   RenameAgentRequestSchema,
   ResourceRefSchema,
+  SYSTEM_USER_ID,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { Hono } from 'hono'
-import { actorOf, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import { actorOf, type Actor } from '@/auth/actor'
 import type { AgentOperationDescriptors } from '../../application/agents/operationContracts'
 import type { AgentOperationContext } from '@/modules/resource-catalog/public/participants'
 import type { AgentQueries } from '@/modules/resource-catalog/public/queries'

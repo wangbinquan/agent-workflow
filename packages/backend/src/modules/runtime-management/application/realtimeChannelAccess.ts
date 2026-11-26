@@ -2,7 +2,7 @@
 
 import type { TaskWsMessage } from '@agent-workflow/shared'
 
-import { SYSTEM_USER_ID } from '@/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import type {
   AuthenticatedAuthoritySnapshot,
   DirectRequestAuthority,

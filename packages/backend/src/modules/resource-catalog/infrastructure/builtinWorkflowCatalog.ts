@@ -2,7 +2,6 @@
 // unchanged from composition/builtinWorkflowCatalog.ts; the factory is now createBuiltinWorkflowCatalog (the composition file is
 // gone; bootstrap takes it via resource-catalog's composition.ts).
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { broadcastWorkflowCreated, getWorkflow } from './legacy/workflow'
 import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
 import { createWorkflowMutationParticipant } from './workflowMutationParticipant'
@@ -13,6 +12,7 @@ import {
   planCanonicalWorkflowLayout,
   WorkflowDefinitionSchema,
   type CreateWorkflow,
+  SYSTEM_USER_ID,
 } from '@agent-workflow/shared'
 
 /**

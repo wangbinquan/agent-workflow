@@ -13,8 +13,6 @@ import {
 } from '@agent-workflow/shared'
 import { UnauthorizedError } from '@/platform/errors/domainErrors'
 
-export { SYSTEM_USER_ID } from './systemIdentity'
-
 export interface ActorUser {
   id: string
   username: string

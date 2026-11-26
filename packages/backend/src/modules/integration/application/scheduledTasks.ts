@@ -32,10 +32,11 @@ import {
   type TriggerDependencySource,
   wallClockAt,
   redactGitUrl,
+  SYSTEM_USER_ID,
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 
-import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import type { Actor } from '@/auth/actor'
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/platform/errors/domainErrors'
 import type { TaskExecutionResourceBinding } from '@/modules/task-execution/public/commands'

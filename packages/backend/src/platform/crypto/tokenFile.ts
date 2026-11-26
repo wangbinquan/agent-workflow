@@ -1,4 +1,5 @@
 // Daemon token FILE management (design.md §10.2 的存量半边)。
+// RFC-621: moved unchanged from `auth/token.ts` — a random token file kept beside the daemon's other local key material.
 // Daemon startup -> ensureTokenFile() reads or generates a 32-byte hex token
 // at ~/.agent-workflow/token (chmod 600). Rotating the token invalidates all
 // existing sessions (clients must re-read URL from daemon stdout or settings).

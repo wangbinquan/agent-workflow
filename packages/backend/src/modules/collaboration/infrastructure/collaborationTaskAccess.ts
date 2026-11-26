@@ -9,7 +9,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { and, desc, eq } from 'drizzle-orm'
 
-import { SYSTEM_USER_ID } from '@/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CollaborationTaskAccessDecision,

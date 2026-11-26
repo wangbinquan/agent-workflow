@@ -21,7 +21,7 @@ async function createUserCommandFixture() {
     { resolveMigrationsFolder },
     { Paths },
   ] = await Promise.all([
-    import('../src/auth/systemIdentity'),
+    import('@agent-workflow/shared'),
     import('../src/cli/userBootstrap'),
     import('../src/auth/composition'),
     import('../src/db/client'),

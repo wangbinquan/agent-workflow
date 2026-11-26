@@ -19,7 +19,7 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { createSecretBoxFromKey } from '@/platform/crypto/secretBox'
-import { SYSTEM_USER_ID } from '../src/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'

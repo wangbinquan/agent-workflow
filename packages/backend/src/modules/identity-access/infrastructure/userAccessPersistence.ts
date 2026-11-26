@@ -23,9 +23,9 @@ import {
   resolveEffectiveAccountPermissions,
   type Permission,
   type Role,
+  SYSTEM_USER_ID,
 } from '@agent-workflow/shared'
 
-import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { EngineCapabilities } from '@/platform/persistence/capabilities'
 import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'

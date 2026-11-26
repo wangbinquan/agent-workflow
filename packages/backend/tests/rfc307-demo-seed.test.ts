@@ -24,7 +24,7 @@ import { join } from 'node:path'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { SYSTEM_USER_ID } from '../src/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import {
   DEMO_AGENT_ID,
   DEMO_TEMPLATE_ID,

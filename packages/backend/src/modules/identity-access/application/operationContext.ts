@@ -1,3 +1,4 @@
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import type {
   AdmittedDaemonCredential,
   AdmittedPatCredential,
@@ -30,8 +31,6 @@ import {
   projectDirectLegacyActor,
   type DirectLegacyProjection,
 } from './legacyActorProjection'
-
-const SYSTEM_USER_ID = '__system__'
 
 export type {
   AdmittedDaemonCredential,

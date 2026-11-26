@@ -1,3 +1,4 @@
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { TrackUserPresence } from './application/commands/trackUserPresence'
@@ -47,8 +48,6 @@ import type {
   UserAccessReadRepository,
 } from './application/ports/userAccessRepository'
 import type { UserAccessTransactionRunner } from './application/ports/userAccessTransaction'
-
-const SYSTEM_USER_ID = '__system__'
 
 interface RuntimeIdentityAccessEventSink {
   authorityRevisionChanged(input: {

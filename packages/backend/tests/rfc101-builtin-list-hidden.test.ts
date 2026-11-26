@@ -28,7 +28,7 @@
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { SYSTEM_USER_ID } from '../src/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'

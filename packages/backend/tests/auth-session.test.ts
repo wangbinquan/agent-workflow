@@ -8,8 +8,8 @@ import { beforeEach, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { Hono } from 'hono'
-import { READ_POINTS, type Permission } from '@agent-workflow/shared'
-import { actorOf, SYSTEM_USER_ID } from '../src/auth/actor'
+import { READ_POINTS, type Permission, SYSTEM_USER_ID } from '@agent-workflow/shared'
+import { actorOf } from '../src/auth/actor'
 import { createPat } from './helpers/auth/patStore'
 import { createAuthRuntimeFor } from '@/auth/composition'
 import {
@@ -244,7 +244,7 @@ describeEachProvider('HTTP auth middleware — no token / malformed header', (ha
   })
 
   // RFC-285 B4 源码文本锁：REST 面（全部 routes/）不得 import WS 专用的 extractUpgradeToken；
-  // auth/token.ts 的 tokenAuth 死体不得复活。RFC-472：auth/session 兼容转出退役，REST 唯一的 Bearer 读点是
+  // 守护进程令牌文件（RFC-621 起在 platform/crypto/tokenFile.ts）里的 tokenAuth 死体不得复活。RFC-472：auth/session 兼容转出退役，REST 唯一的 Bearer 读点是
   // identity-access `public/types` 转出的 parseLocalBearerHeader（定义在 domain），routes/auth.ts 经它读当前请求的令牌。
   test('B4 双入口边界文本锁：REST 只有一个 Bearer 读点、不碰 upgrade 入口，tokenAuth 不复活', () => {
     const src = (rel: string): string =>
@@ -286,7 +286,7 @@ describeEachProvider('HTTP auth middleware — no token / malformed header', (ha
         queryReader,
       ) ?? [],
     ).toHaveLength(0)
-    expect(src('auth/token.ts')).not.toContain('export function tokenAuth')
+    expect(src('platform/crypto/tokenFile.ts')).not.toContain('export function tokenAuth')
     expect(src('ws/server.ts')).toContain('deps.realtime.credentials.resolveUpgrade({')
     expect(src('ws/server.ts')).not.toContain('extractUpgradeToken')
     for (const route of readdirSync(resolve(import.meta.dir, '..', 'src', 'routes'))) {

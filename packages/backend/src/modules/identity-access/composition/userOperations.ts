@@ -2,7 +2,7 @@
 
 import { ulid } from 'ulid'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
-import { SYSTEM_USER_ID } from '@/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import { hashPassword } from '@/auth/passwords'
 import type { IdentityAccessModule } from '@/modules/identity-access/composition'
 import { createResetUserPassword } from '@/modules/identity-access/application/commands/resetUserPassword'

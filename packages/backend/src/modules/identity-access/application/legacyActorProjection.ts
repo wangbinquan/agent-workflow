@@ -1,13 +1,12 @@
 import {
   resolveEffectiveAccountPermissions,
   resolveTokenPermissions,
+  SYSTEM_USER_ID,
   type PatPurpose,
   type Permission,
 } from '@agent-workflow/shared'
 import type { AuthenticatedAuthoritySnapshot, LegacyActorProjection } from '../public/participants'
 import type { ResolvedAuthoritySubject } from '../public/types'
-
-const SYSTEM_USER_ID = '__system__'
 
 export type DirectLegacyProjectionInput = Readonly<{
   source: 'session' | 'pat' | 'daemon'

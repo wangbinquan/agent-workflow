@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import {
   createDigitalEmployeeAgentTemplateCatalogPersistence,
   type DigitalEmployeeAgentTemplateRepository,

@@ -10,9 +10,8 @@ import { composeSubjectTaskReferencePort } from '@/modules/task-execution/compos
 // writer deduplicated ID lists, and Intent reported self-dependency as a cycle and a missing
 // dependency as `acl-missing-refs`.
 import { beforeEach, expect, test } from 'bun:test'
-import { CreateAgentSchema, type CreateAgent } from '@agent-workflow/shared'
+import { CreateAgentSchema, type CreateAgent, SYSTEM_USER_ID } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type { VersionedIntentResourceChangesetPlan } from '@/modules/resource-catalog/public/types'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'

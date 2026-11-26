@@ -28,7 +28,8 @@ import { beforeEach, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { buildActor, SYSTEM_USER_ID, type Actor } from '../src/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
+import { buildActor, type Actor } from '../src/auth/actor'
 import {
   actorOfDirectAuthority,
   admitDaemonIdentity,

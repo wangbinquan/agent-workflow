@@ -5,7 +5,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm'
 
-import { SYSTEM_USER_ID } from '@/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   WebhookDeliveryQueries,

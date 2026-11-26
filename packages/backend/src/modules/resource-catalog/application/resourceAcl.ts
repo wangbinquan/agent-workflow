@@ -4,10 +4,10 @@ import {
   type ResourceAcl,
   type ResourceVisibility,
   type UpdateResourceAclBody,
+  SYSTEM_USER_ID,
 } from '@agent-workflow/shared'
 import type { GetResourceAclCatalogInput, UpdateResourceAclCatalogInput } from '../public/types'
 import type { Actor } from '@/auth/actor'
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import {
   ConflictError,
   ForbiddenError,

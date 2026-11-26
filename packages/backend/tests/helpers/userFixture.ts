@@ -3,7 +3,7 @@
 import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { ulid } from 'ulid'
 import type { CreateUserBody, PatchUserBody, UserPublic } from '@agent-workflow/shared'
-import { SYSTEM_USER_ID } from '@/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { createAuthRuntimeFor } from '@/auth/composition'
 import { hashPassword } from '@/auth/passwords'

@@ -1,6 +1,5 @@
-import { DEMO_RESOURCE_ID_PREFIX } from '@agent-workflow/shared'
+import { DEMO_RESOURCE_ID_PREFIX, SYSTEM_USER_ID } from '@agent-workflow/shared'
 
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { lookupStageContract } from '../domain/capabilityRegistry'
 import type {
   CodeCapabilityDemoSeedAggregate,

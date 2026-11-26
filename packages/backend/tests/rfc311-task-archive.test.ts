@@ -39,7 +39,7 @@ import { count, eq } from 'drizzle-orm'
 
 import type { Hono } from 'hono'
 
-import { SYSTEM_USER_ID } from '../src/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 
 import { schemaFixtureDb } from './helpers/schemaFixture'
 import { cascadeClosure, cascadeEdges, closureOverEdges } from './architecture/cascadeClosure'

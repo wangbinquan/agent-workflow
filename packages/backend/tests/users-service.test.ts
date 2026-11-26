@@ -16,7 +16,7 @@ import {
   resetPassword,
   searchUsersPublic,
 } from './helpers/userFixture'
-import { SYSTEM_USER_ID } from '../src/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import { verifyPassword } from '../src/auth/passwords'
 
 describeEachProvider('users service', (harness) => {

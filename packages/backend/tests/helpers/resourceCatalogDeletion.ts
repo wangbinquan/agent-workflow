@@ -4,8 +4,9 @@ import {
   DeleteWorkgroupSchema,
   type DeleteWorkflow,
   type DeleteWorkgroup,
+  SYSTEM_USER_ID,
 } from '@agent-workflow/shared'
-import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
+import { buildActor, type Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'

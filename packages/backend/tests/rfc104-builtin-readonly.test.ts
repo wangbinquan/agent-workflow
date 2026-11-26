@@ -32,7 +32,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
-import { SYSTEM_USER_ID } from '../src/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,

@@ -17,7 +17,7 @@ import { tablesOf, type PersistenceTables } from '@/platform/persistence/session
 import { and, eq, inArray, isNull, lt } from 'drizzle-orm'
 import type { AuthLoginPolicy, AuthMethodDiscovery, OidcDefaultRole } from '@agent-workflow/shared'
 
-import { SYSTEM_USER_ID } from '@/auth/actor'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { EngineCapabilities } from '@/platform/persistence/capabilities'

@@ -1,3 +1,15 @@
+## 2026-11-26 RFC-621 `auth/` 的两个中性原语离开 legacy 目录（In Progress；`design/RFC-621-system-identity-and-token-file/`）
+
+- **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W9-D，
+  接 RFC-620。
+- **范围**：`SYSTEM_USER_ID`（框架 built-in 的 owner、框架自发写入的主体 id）迁入 `@agent-workflow/shared`（新文件 `systemIdentity.ts`），`auth/actor.ts` 不再转出它；
+  守护进程令牌文件（唯一的生产读者是 bootstrap）原样迁入 `platform/crypto/tokenFile.ts`。58 个读者按语法树改写（剩下只有类型的 import 改成 `import type`，`SYSTEM_USER_ID`
+  并入已有的 shared 值 import）；owner 表删两行，`auth-session` 按路径读令牌文件的锁改指。`legacy-horizontal-files` 44 → 42。新增 RFC-621 用例。
+- **集中验证**：候选导出（HEAD `3fc01a40a` + 本 RFC 路径）上 backend / shared 的 `tsc`、eslint、prettier 全过；shared 2,362 条用例全过；backend 第一轮 799 个文件里
+  RFC-621 用例查出 identity-access 自己声明的三份 `SYSTEM_USER_ID`，改取 shared 后第二轮 316 个文件全过（`rfc167` 时序敏感、`rfc321` 环境性，与本 RFC 无关）；
+  架构报告只有 `legacy-horizontal-files` 44 → 42；变异 4 / 4 被抓。三个带着 RFC-616 在制改动的文件按 `origin/main` + 本 RFC 的行提交。
+- **CI 侧**：待推送。
+
 ## 2026-11-26 RFC-620 静态加密盒归 platform（In Progress；`design/RFC-620-secret-box-into-platform/`）
 
 - **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W9-D，

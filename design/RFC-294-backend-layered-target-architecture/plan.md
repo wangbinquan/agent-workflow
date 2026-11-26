@@ -1120,6 +1120,8 @@ provenance 按 RFC-395 design §5.1 不建列；先后判据只用 `seq`（RFC-3
 
 2026-11-26 [RFC-620](../RFC-620-secret-box-into-platform/proposal.md)（In Progress）：`auth/secretBox.ts` 拆成 `platform/contracts/secretBox.ts`（接口）与 `platform/crypto/secretBox.ts`（实现与密钥文件）；`legacy-horizontal-files` 45 → 44。`auth/` 里其余的中性原语与认证主体一族另立。
 
+2026-11-26 [RFC-621](../RFC-621-system-identity-and-token-file/proposal.md)（In Progress）：`SYSTEM_USER_ID` 归 shared、守护进程令牌文件归 `platform/crypto`；`legacy-horizontal-files` 44 → 42。
+
 迁入时按内容分层落位（proposal C10）：用例编排与规则判定进 application / domain，持久化与外部 effect 进 infrastructure；不再把
 用例文件原样停放到 infrastructure，确需原样迁入的在该 RFC 的 design 里列明理由并呈用户确认。RFC-476（第二十三步）
 按原方式收口（2026-11-09 Done，`9184e1e5a`；收口前对 C10～C13 的对账见其 design §7）。此后逐步记录写进各后继自己的三件套与 `STATE.md`；本文 §1.1 的 W9 行与 §4.6 只在一族关闭时记一行，不再逐步

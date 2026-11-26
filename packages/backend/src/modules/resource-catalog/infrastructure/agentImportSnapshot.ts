@@ -5,7 +5,7 @@ import type {
   ImportRefType,
   ResourceVisibility,
 } from '@agent-workflow/shared'
-import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
+import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type {
   AgentImportCandidateSet,

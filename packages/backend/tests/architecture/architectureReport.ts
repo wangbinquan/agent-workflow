@@ -217,8 +217,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/auth/oidc/provisioning.ts': 'identity-access',
   'packages/backend/src/auth/oidc/tokens.ts': 'identity-access',
   'packages/backend/src/auth/passwords.ts': 'identity-access',
-  'packages/backend/src/auth/systemIdentity.ts': 'identity-access',
-  'packages/backend/src/auth/token.ts': 'identity-access',
   'packages/backend/src/cli/auth.ts': 'identity-access',
   'packages/backend/src/cli/backup.ts': 'system-operations',
   'packages/backend/src/cli/config-cli.ts': 'bootstrap',
