@@ -1,6 +1,6 @@
 # RFC-616 技术设计：过程度量
 
-> 状态：Draft，2026-11-26（设计门后修订）。产品口径见 [proposal.md](./proposal.md)，任务分解见 [plan.md](./plan.md)，设计门的发现与处置见 plan.md §4.2。
+> 状态：In Progress，2026-11-26 用户批准（设计门后修订稿）。产品口径见 [proposal.md](./proposal.md)，任务分解见 [plan.md](./plan.md)，设计门的发现与处置见 plan.md §4.2。
 > 取证基线：`6c92e2be2`。文中的 `path:line` 都是该提交上的位置；标“调研”的结论来自并行读码、我没有逐行复核，实现前须再核一遍（§15）。
 
 ## 1. 摘要
