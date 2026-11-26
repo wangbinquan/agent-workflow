@@ -1,6 +1,6 @@
 # RFC-603 development-automation 的 reconciler 端口必填（RFC-294 W4-E8：application 一侧按用例的必填端口）
 
-- **状态**：In Progress（2026-11-25）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
+- **状态**：Done（2026-11-26，落地 `0f2ded0db`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
   本会话自行裁定落位与 RFC-359 P0 `p0-9-launchers` 的去留（见 design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) design §3 的 development-automation 一行（可选袋拆为按用例、非可选的
   required 端口）；接 [RFC-597](../RFC-597-development-automation-required-providers/proposal.md)（装配边界）与

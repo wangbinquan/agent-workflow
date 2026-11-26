@@ -1,0 +1,266 @@
+{
+  "$comment": "RFC-546 (RFC-294 S12 item 4): the architecture report's module-level mutable singletons (tests/architecture/architectureReport.ts mutableSingletons) must equal exceptions + pending. exceptions are process-level facts kept by design (design §14 counts them out); pending are credential / access-adjacent service state that moves to composition-built instances with the deferred ws/ and legacy families and only shrinks. Changes come with an RFC; tests/architecture/rfc546-module-singleton-exceptions.test.ts pins both lists.",
+  "exceptions": [
+    {
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts",
+      "symbol": "npmProbeCache",
+      "kind": "top-level-let",
+      "category": "host-probe",
+      "reason": "Whether this host has a usable npm binary, kept for five minutes; every instance would probe the same host."
+    },
+    {
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts",
+      "symbol": "resetNpmProbeCacheForTests",
+      "kind": "exported-state-mutator",
+      "category": "host-probe",
+      "reason": "Test reset of the npm host probe above."
+    },
+    {
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/versionRegistry.ts",
+      "symbol": "resetOpencodeBinaryVersionsForTests",
+      "kind": "exported-state-mutator",
+      "category": "host-probe",
+      "reason": "Test reset of the per-path opencode binary version probe; the binary on disk is the same for every instance."
+    },
+    {
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/gitRepository.ts",
+      "symbol": "isoTmpIndexCounter",
+      "kind": "top-level-let",
+      "category": "unique-counter",
+      "reason": "Process-unique sequence for temporary index paths (joined with the pid); uniqueness is per process by construction."
+    },
+    {
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/gitRepository.ts",
+      "symbol": "subsnapNonce",
+      "kind": "top-level-let",
+      "category": "unique-counter",
+      "reason": "Process-unique nonce for snapshot pin refs."
+    },
+    {
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/gitSubmodule.ts",
+      "symbol": "gitlinkIdxCounter",
+      "kind": "top-level-let",
+      "category": "unique-counter",
+      "reason": "Process-unique sequence for temporary gitlink index paths (joined with the pid)."
+    },
+    {
+      "file": "packages/backend/src/modules/workspace-insight/engine/lang/grammars.ts",
+      "symbol": "_grammarsDir",
+      "kind": "top-level-let",
+      "category": "runtime-initialisation",
+      "reason": "Resolved location of the tree-sitter grammar directory; fixed for the life of the binary."
+    },
+    {
+      "file": "packages/backend/src/modules/workspace-insight/engine/lang/grammars.ts",
+      "symbol": "_runtimeWasm",
+      "kind": "top-level-let",
+      "category": "runtime-initialisation",
+      "reason": "Resolved location of the tree-sitter runtime WASM; fixed for the life of the binary."
+    },
+    {
+      "file": "packages/backend/src/modules/workspace-insight/engine/lang/parser.ts",
+      "symbol": "_initPromise",
+      "kind": "top-level-let",
+      "category": "runtime-initialisation",
+      "reason": "The tree-sitter runtime initialises once per process (Parser.init)."
+    },
+    {
+      "file": "packages/backend/src/platform/execution/local/process.ts",
+      "symbol": "ownershipDegradationWarned",
+      "kind": "top-level-let",
+      "category": "warn-once",
+      "reason": "The process-ownership degradation warning is logged once per process."
+    },
+    {
+      "file": "packages/backend/src/platform/execution/local/windowsJobObject.ts",
+      "symbol": "kernel32",
+      "kind": "top-level-let",
+      "category": "host-probe",
+      "reason": "The kernel32 FFI handle (or the fact that it cannot load); one per process."
+    },
+    {
+      "file": "packages/backend/src/platform/execution/local/windowsJobObject.ts",
+      "symbol": "resetKernel32CacheForTests",
+      "kind": "exported-state-mutator",
+      "category": "host-probe",
+      "reason": "Test reset of the kernel32 handle above."
+    },
+    {
+      "file": "packages/backend/src/platform/logging/logger.ts",
+      "symbol": "configureLogger",
+      "kind": "exported-state-mutator",
+      "category": "process-output",
+      "reason": "Sets the process log level and format once at start."
+    },
+    {
+      "file": "packages/backend/src/platform/logging/logger.ts",
+      "symbol": "resetLoggerForTest",
+      "kind": "exported-state-mutator",
+      "category": "process-output",
+      "reason": "Test reset of the process logger configuration."
+    },
+    {
+      "file": "packages/backend/src/platform/logging/logger.ts",
+      "symbol": "setLoggerStdoutWriterForTest",
+      "kind": "exported-state-mutator",
+      "category": "process-output",
+      "reason": "Test capture of the process stdout writer."
+    },
+    {
+      "file": "packages/backend/src/platform/logging/logger.ts",
+      "symbol": "stdoutWriter",
+      "kind": "top-level-let",
+      "category": "process-output",
+      "reason": "The process stdout writer; hundreds of createLogger call sites bind at module evaluation."
+    },
+    {
+      "file": "packages/backend/src/platform/persistence/archive.ts",
+      "symbol": "resetTarProbeForTests",
+      "kind": "exported-state-mutator",
+      "category": "host-probe",
+      "reason": "Test reset of the tar host probe above."
+    },
+    {
+      "file": "packages/backend/src/platform/persistence/archive.ts",
+      "symbol": "tarProbe",
+      "kind": "top-level-let",
+      "category": "host-probe",
+      "reason": "Whether this host has a usable tar binary."
+    },
+    {
+      "file": "packages/backend/src/platform/persistence/capabilities.ts",
+      "symbol": "postgresqlCapabilities",
+      "kind": "top-level-let",
+      "category": "immutable-memo",
+      "reason": "The frozen PostgreSQL engine capability table, built once on first use."
+    },
+    {
+      "file": "packages/backend/src/platform/persistence/capabilities.ts",
+      "symbol": "sqliteCapabilities",
+      "kind": "top-level-let",
+      "category": "immutable-memo",
+      "reason": "The frozen SQLite engine capability table, built once on first use."
+    },
+    {
+      "file": "packages/backend/src/platform/persistence/migration/legacy/postgresqlMigrationHistory.ts",
+      "symbol": "runtimeHeadContract",
+      "kind": "top-level-let",
+      "category": "immutable-memo",
+      "reason": "The binary head contract the embedded history is validated against."
+    },
+    {
+      "file": "packages/backend/src/platform/persistence/migration/legacy/postgresqlMigrationHistory.ts",
+      "symbol": "runtimeHistory",
+      "kind": "top-level-let",
+      "category": "immutable-memo",
+      "reason": "The migration history embedded in the binary; validating it costs about two seconds of CPU, so one copy per process."
+    },
+    {
+      "file": "packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts",
+      "symbol": "resetPostgresqlGenerationWriteCache",
+      "kind": "exported-state-mutator",
+      "category": "identity-keyed",
+      "reason": "The PostgreSQL runtime is a frozen object; which generations are marked can only be recorded by identity (a module WeakSet)."
+    },
+    {
+      "file": "packages/backend/src/platform/persistence/schema/canonical.ts",
+      "symbol": "activeFragments",
+      "kind": "top-level-let",
+      "category": "dynamic-scope-cache",
+      "reason": "Active only during one synchronous replay and restored afterwards; output is byte-identical to the uncached path."
+    },
+    {
+      "file": "packages/backend/src/platform/persistence/sessionTables.ts",
+      "symbol": "bindDatabaseHandle",
+      "kind": "exported-state-mutator",
+      "category": "identity-keyed",
+      "reason": "RFC-395 T18 X1: frozen handles and clients also carry a context, which only an identity table can hold (RFC-543)."
+    },
+    {
+      "file": "packages/backend/src/platform/workspace/local/gitVersion.ts",
+      "symbol": "cached",
+      "kind": "top-level-let",
+      "category": "host-probe",
+      "reason": "The version and capabilities of the host git binary."
+    },
+    {
+      "file": "packages/backend/src/util/win32Acl.ts",
+      "symbol": "cachedUserSid",
+      "kind": "top-level-let",
+      "category": "host-probe",
+      "reason": "The SID of the Windows user this process runs as."
+    },
+    {
+      "file": "packages/backend/src/util/win32Acl.ts",
+      "symbol": "sinkCounter",
+      "kind": "top-level-let",
+      "category": "unique-counter",
+      "reason": "Process-unique sequence for temporary output files."
+    }
+  ],
+  "pending": [
+    {
+      "file": "packages/backend/src/db/client.ts",
+      "symbol": "registerLegacyDaemonTestFixture",
+      "kind": "exported-state-mutator",
+      "family": "legacy-test-database",
+      "reason": "Marks the legacy daemon test database; retires with the legacy database client."
+    },
+    {
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts",
+      "symbol": "bootReverifyActivated",
+      "kind": "top-level-let",
+      "family": "skill-boot-reverify",
+      "reason": "Daemon service state of the skill boot re-verification; belongs to an instance the composition root constructs."
+    },
+    {
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts",
+      "symbol": "resetSkillBootVerifyForTest",
+      "kind": "exported-state-mutator",
+      "family": "skill-boot-reverify",
+      "reason": "Test reset of the skill boot re-verification state above."
+    },
+    {
+      "file": "packages/backend/src/ws/connections.ts",
+      "symbol": "resetConnectionsForTest",
+      "kind": "exported-state-mutator",
+      "family": "websocket-registry",
+      "reason": "Test reset of the WebSocket connection registry."
+    },
+    {
+      "file": "packages/backend/src/ws/connections.ts",
+      "symbol": "revalidationEpoch",
+      "kind": "top-level-let",
+      "family": "websocket-registry",
+      "reason": "WebSocket connection revalidation epoch; daemon service state that moves with the ws/ family."
+    },
+    {
+      "file": "packages/backend/src/ws/registry.ts",
+      "symbol": "onExpiredCredential",
+      "kind": "top-level-let",
+      "family": "websocket-registry",
+      "reason": "Handler the WebSocket registry calls for an expired credential; moves with the ws/ family."
+    },
+    {
+      "file": "packages/backend/src/ws/registry.ts",
+      "symbol": "setExpiredCredentialHandler",
+      "kind": "exported-state-mutator",
+      "family": "websocket-registry",
+      "reason": "Installs the expired-credential handler above."
+    },
+    {
+      "file": "packages/backend/src/ws/revalidationHook.ts",
+      "symbol": "impl",
+      "kind": "top-level-let",
+      "family": "websocket-registry",
+      "reason": "The registered WebSocket revalidation trigger; moves with the ws/ family."
+    },
+    {
+      "file": "packages/backend/src/ws/revalidationHook.ts",
+      "symbol": "registerRevalidationTrigger",
+      "kind": "exported-state-mutator",
+      "family": "websocket-registry",
+      "reason": "Installs the revalidation trigger above."
+    }
+  ]
+}

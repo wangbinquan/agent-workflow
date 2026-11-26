@@ -18,7 +18,7 @@
 - [x] AC-1 四个引用是 `OpaqueIdentity`，铸造点都用 `mintOpaqueIdentity()`，运行期行为不变
 - [x] AC-2 任务房间参与方的结果不带 `eventRef`
 - [x] AC-3 `PUBLIC_SURFACE_DEBT` 去掉 3 条且逐条相等；计数降到 16；检测器正反用例
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿
 
 ## 集中验证
 
@@ -52,7 +52,7 @@
 
 ## CI（AC-4）
 
-待推送。
+- `170f3e2cc`（实现）：exact SHA 主 CI run 45772006810 70 / 70 全绿。2026-11-26 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

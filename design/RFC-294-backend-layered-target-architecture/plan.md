@@ -536,11 +536,11 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 | 要补全具名 DTO 的 `unknown`                            | 8    | development-automation 两个操作面与配置身份视图 3（约四十处入参与返回）；system-operations 的配置补丁与升级回执 2；runtime-management 的探测回执视图、用量事件与材料证据 3                                                                                                                                                        | 各自立 RFC。其中“原始请求体交给应用层校验”的入参（development-automation 的操作面、system-operations 的配置补丁）先要裁决：改成传输层按 shared 的 schema 解析后交具名类型，还是认作合同的正当形态（后者要改检测规则，须用户确认）；探测回执视图收紧时要给存量回执定兼容口径 |
 | 其他                                                   | 2    | runtime-management `AgentMaterialEvidence` 的两个端口式回调（可按 RFC-569 的做法收，随同一合同上的日志器一并处理）；`AgentInvocationProtocol` 经 shared 的清单类型带入的映射类型                                                                                                                                                    | 随上面两类                                                                                               |
 
-2026-11-25 [RFC-604](../RFC-604-public-contract-behaviour-types/proposal.md)（In Progress）：“要先定检测规则”一类里的日志器与函数类型、“其他”一类里的端口式回调
+2026-11-25 [RFC-604](../RFC-604-public-contract-behaviour-types/proposal.md)（Done，`be07a4e96`）：“要先定检测规则”一类里的日志器与函数类型、“其他”一类里的端口式回调
 由本会话裁定（用户 2026-11-25 授权）。平台 `Logger` 是指定的平台合同接口（规则一）；方法参数里带类型的回调是方法签名的一部分（规则二）；输入对象里函数类型的
 成员改写为方法签名。`PUBLIC_SURFACE_DEBT` 27 → 19。余下：不透明身份引用 `object` 2 条、`CommittedEventRef` 1 条（结果里的事件引用是给事务属主在提交后发布
 用的，收法另议）、有限键映射类型 1 条、`unknown` DTO 4 条，以及能力 / 凭据 / 身份一族 11 条。
-2026-11-25 [RFC-605](../RFC-605-opaque-identity-handles/proposal.md)（In Progress）：不透明身份引用 2 条改为平台的带品牌令牌 `OpaqueIdentity`（指定的平台
+2026-11-25 [RFC-605](../RFC-605-opaque-identity-handles/proposal.md)（Done，`170f3e2cc`）：不透明身份引用 2 条改为平台的带品牌令牌 `OpaqueIdentity`（指定的平台
 合同类型）；任务房间结果里的 `CommittedEventRef` 1 条去掉（唯一的事务属主从未读它，事件由持久投递送达）。`PUBLIC_SURFACE_DEBT` 19 → 16。余下：有限键映射
 类型 1 条、`unknown` DTO 4 条，以及能力 / 凭据 / 身份一族 11 条。
 2026-11-25 [RFC-606](../RFC-606-runtime-contract-json-and-closed-mapped-types/proposal.md)（In Progress）：runtime-management 的 4 条收口——平台 `JsonValue` /
@@ -692,6 +692,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 > 后继：第 4 项第十四步 [RFC-548](../RFC-548-source-control-daemon-state/proposal.md)（Done，2026-11-23，`9612c16e6`）：source-control 的批量导入不再放在模块级，由 daemon 应用的组合构造一份交给三处；缓存仓库读缓存的代次与在途合并按库挂在句柄上下文上（句柄上下文多一格按键的模块状态）。模块级可变单例 43 → 39。集中验证没有查出本人缺陷。其余 39 条：可迁移的只剩 schema 历史运行时的登记 2 条（RFC-549）；凭据 / 访问 / 完整性相邻的 9 条与进程级 28 条的处理待用户确认（RFC-546 Q1～Q3）。
 >
 > 后继：第 4 项第十五步 [RFC-549](../RFC-549-schema-history-runtime-explicit/proposal.md)（Done，2026-11-23，`85c36f1c0`）：schema 历史运行时不再经 platform 的进程级登记，bootstrap 的 live 绑定带着它交到迁移、恢复、备份、逻辑复制、启动准入与 Worker。模块级可变单例 39 → 37。集中验证查出两类本人缺陷（两条源码锁钉着被改的入参；Worker 用例认不出恒真校验的变异），已改并复验。其余 37 条：「可迁移」一类拆完；凭据 / 访问 / 完整性相邻的 9 条与进程级 28 条的处理待用户确认（RFC-546 Q1～Q3）。
+>
+> 后继：第 4 项第十六步 [RFC-546](../RFC-546-module-singleton-process-exceptions/proposal.md)（In Progress，2026-11-26）：Q1～Q3 由本会话裁定（用户 2026-11-25 授权）。进程级的 28 条登记为例外，design §14 该行改为“不计登记的进程级例外”；凭据 / 访问 / 完整性相邻的 9 条是待迁的服务状态（不登记为例外），随延后的 `ws/` 与 legacy 一族处理，在此之前列在只减不增的 `pending` 里。两份清单在 `architecture/module-singleton-exceptions.json`，RFC-546 守卫钉住判据结果等于两份之和。`pending` 清空时第 4 项的退出门达成。
 
 - **范围**（design §9.3、§10.2 的现状偏差，review F14）：
   1. 模块 composition 的 `select*` 助手与适配器回退改为必填注入，单机默认值只留在单机 profile（`bootstrap/standalone.ts` 与维护 worker 的单机部分
@@ -847,7 +849,7 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   development-automation 收口）。余下：员工两个装配继承来的可选 provider 与 `ReconcilerPorts`（后者涉及 RFC-359 P0 指纹，须用户定）。
   2026-11-25 [RFC-601](../RFC-601-employee-compositions-required-providers/proposal.md)（Done，`ed283f335`）：员工两个装配继承来的可选 provider 在装配边界改为必填
   （application 的可选成员与“未接入”分支不变）；W4-E8 在装配边界上的部分至此收完，余下 application 一侧按用例拆分（含 `ReconcilerPorts`，须用户定）。
-  2026-11-25 [RFC-603](../RFC-603-reconciler-ports-required/proposal.md)（In Progress）：application 一侧——`ReconcilerPorts` 的 25 个成员必填，命令与四条发布链
+  2026-11-25 [RFC-603](../RFC-603-reconciler-ports-required/proposal.md)（Done，`0f2ded0db`）：application 一侧——`ReconcilerPorts` 的 25 个成员必填，命令与四条发布链
   只取自己读的端口（`Pick`），端口缺席时的 typed block、失败结果与静默跳过删去；RFC-359 P0 的 `p0-9-launchers` 退役（漏给启动器在编译期就被挡下，理由见其
   design §0）。余下 launch / admission 的可选依赖与需求物化器的 `source`。
   2026-11-25 [RFC-607](../RFC-607-requirement-materializer-stated-inputs/proposal.md)（In Progress）：需求物化器的 `source` 必填、删去只供用例的 `documents`

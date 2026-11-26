@@ -21,6 +21,7 @@ export const ARCHITECTURE_FILES = [
   'e2e-capability-ledger.json',
   'e2e-endpoint-coverage.json',
   'e2e-route-coverage.json',
+  'module-singleton-exceptions.json',
   'repository-publication-call-sites.json',
 ] as const
 export const BINARY_ENTRIES = [

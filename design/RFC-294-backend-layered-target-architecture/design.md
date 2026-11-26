@@ -729,7 +729,7 @@ S9 实施，落地前现状仍是只进报告）。新增例外须在后继 RFC 
 | 业务层部署模式分支                                                   | 0                                               |
 | 装配                                                                 | 唯一模块工厂图；每模块每进程构造一次            |
 | 后台作业                                                             | 全部经唯一生命周期程序，均有 stop；直接定时器只出现在平台定时原语与有 owner / stop 的执行局部计时 |
-| 模块级可变单例（生产态，bootstrap 外）                               | 0                                               |
+| 模块级可变单例（生产态，bootstrap 外，不计登记的进程级例外：`architecture/module-singleton-exceptions.json`，2026-11-26 RFC-546） | 0 |
 | NodeRun 先后判据                                                     | 只用 `seq`；生产路径无 id 顺序比较              |
 | `node_runs INSERT` 站点                                              | 1                                               |
 | AtomicApply lifecycle / 资源写入栈                                   | 1 / 1                                           |

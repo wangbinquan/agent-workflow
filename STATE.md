@@ -1,3 +1,17 @@
+## 2026-11-26 RFC-546 模块级可变单例的进程级例外清单与 §14 口径修订（In Progress；`design/RFC-546-module-singleton-process-exceptions/`）
+
+- **来由**：2026-11-23 落档为 Draft、待用户确认 Q1～Q3；用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」
+  答复了包括它在内的四件待定事项，裁定由本会话给出（proposal §5）。RFC-294 S12 第 4 项。
+- **范围**：
+  - HEAD `a3def727e` 上判据余 37 条：进程级的 28 条登记为例外（6 处落档后迁过文件，按新位置）；凭据 / 访问 / 完整性相邻的 9 条是待迁的服务状态，
+    列在只减不增的 `pending` 里，随延后的 `ws/` 与 legacy 一族处理。
+  - 两份清单在 `architecture/module-singleton-exceptions.json`（登记进 `ARCHITECTURE_FILES`）；新增守卫 `rfc546-module-singleton-exceptions`：判据在
+    全部生产文件上的结果等于两份之和，条数只减不增，带负对照。
+  - RFC-294 design §14 该行改为“不计登记的进程级例外”并指向清单。生产代码不改。
+- **集中验证**（基于 `a3def727e`，详见 plan）：tsc 0 错，eslint / prettier 无告警；候选导出 370 个用例文件只有 `rfc321` 照例红，守卫在真实语料上与
+  两份清单逐条相等；6 种变异都被认出；架构报告除时间与源 SHA 外相同。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-25 RFC-608 仓库事实扫描的选择归 infrastructure（In Progress；`design/RFC-608-repository-facts-scan-selection/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S10
@@ -33,7 +47,7 @@
   架构报告除偏差 16 → 12 与只记不门的 import 清单外不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：待推送。
 
-## 2026-11-25 RFC-605 不透明身份引用改为带品牌的句柄，任务房间结果不再带事件引用（In Progress；`design/RFC-605-opaque-identity-handles/`）
+## 2026-11-25 RFC-605 不透明身份引用改为带品牌的句柄，任务房间结果不再带事件引用（Done；`design/RFC-605-opaque-identity-handles/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-604 留下的
   不透明身份引用 `object` 与 `CommittedEventRef`（收法由本会话裁定，见 design §0）。
@@ -44,9 +58,9 @@
 - **集中验证**（基于 `be07a4e96`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 926 个用例文件 6 红：`rfc321` 照例、三个并发时序红
   （单跑都过）、`rfc508` 的替身与 `rfc359-w26` 的源码摘要已改，复跑全绿；5 种变异都被认出（铸造点判据改为透过类型断言）；架构报告除偏差 19 → 16 与只记不门
   的清单外不变。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-605 的提交 `170f3e2cc`：exact SHA 主 CI run 45772006810 70 / 70 全绿；2026-11-26 转 Done。
 
-## 2026-11-25 RFC-604 public 合同里的行为类型：日志器与回调的检测规则（In Progress；`design/RFC-604-public-contract-behaviour-types/`）
+## 2026-11-25 RFC-604 public 合同里的行为类型：日志器与回调的检测规则（Done；`design/RFC-604-public-contract-behaviour-types/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S9 余项里
   “要先定检测规则”的日志器与函数类型（design §3.2 要求改规则须用户确认，用户已把裁定交给本会话，见 design §0）。
@@ -57,9 +71,11 @@
 - **集中验证**（基于 `0f2ded0db`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 872 个用例文件 4 红：`rfc321` 照例、`rfc167` 为并发时序红
   （单跑候选与控制都过）、两个负对照已改，复跑 6 个文件全绿；6 种变异认出 5 种（max 留在 27 不报是 design §13.4 允许的）；架构报告除偏差 27 → 19 与报告预算的
   方法数外相同。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-604 的提交 `be07a4e96`：exact SHA 主 CI run 45766174418 结论 cancelled——shard 20 在 1498 pass / 0 fail 跑完后被作业时限取消，shard 22、31 是
+  RFC-395 历史用例在 PostgreSQL 上的 5 秒超时（shard 22 那条已由另一会话的 `1b5eb8944` 按 PostgreSQL major 拆分），与本 RFC 的检测规则与类型改写无关、未重跑。
+  后继证据：包含本提交的 `170f3e2cc`（RFC-605）run 45772006810 70 / 70 全绿；2026-11-26 转 Done。
 
-## 2026-11-25 RFC-603 development-automation 的 reconciler 端口必填（In Progress；`design/RFC-603-reconciler-ports-required/`）
+## 2026-11-25 RFC-603 development-automation 的 reconciler 端口必填（Done；`design/RFC-603-reconciler-ports-required/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W4-E8
   application 一侧（RFC-601 留下的 `ReconcilerPorts` 按用例拆分与 RFC-359 P0 指纹的去留，本会话自行裁定，见 design §0）。
@@ -74,7 +90,10 @@
   本 RFC 的 6 个已修（静默依赖现形与上述缺陷），复跑 18 个文件与文档读者 148 个全绿；P0 `p0-9-terminal-observer` 与前后控制在 SQLite 判定有效；运行期 8 种
   变异认出 7 种（未认出的 saga 摘要缺失是既有缺口）、类型检查 3 种都报错；架构报告除新增 `DeliveryChainPorts` 类型外不变，计数不变。实现门 PASS（本会话按路径
   限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-603 的提交 `0f2ded0db`：exact SHA 主 CI run 45760585469 红在 shard 1、2、17、23、41、42——全部是另一会话 RFC-602（`c37b675ff` / `c1f722673`）
+  的用例与门（新路由缺契约 / MCP / 错误码条目、`backup` 表数、PostgreSQL 聚合映射、守护进程装配、epoch-2 桥、账外的新用例），与 RFC-602 自己的 run 同一批，
+  由它的 `5ebf425f5` 修复；本 RFC 的用例（含 PostgreSQL 一半与 P0 变异）都过，未重跑。后继证据：包含本提交与该修复的 `170f3e2cc`（RFC-605）run 45772006810
+  70 / 70 全绿；2026-11-26 转 Done。
 
 ## 2026-11-25 RFC-602 模块查询按需读取与完整子任务分页（实现与本地验证完成）
 

@@ -1,6 +1,6 @@
 # RFC-605 不透明身份引用改为带品牌的句柄，任务房间结果不再带事件引用（RFC-294 S9 余项）
 
-- **状态**：In Progress（2026-11-25）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
+- **状态**：Done（2026-11-26，落地 `170f3e2cc`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
   收法由本会话裁定（见 design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) S9；接
   [RFC-604](../RFC-604-public-contract-behaviour-types/proposal.md) 留下的“不透明身份引用 `object`”与 `CommittedEventRef`。
