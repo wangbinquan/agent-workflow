@@ -636,6 +636,8 @@ PostgreSQL 事务的 owner-native 合同迁入 resource-catalog 的 application 
 ### S11 治理补洞
 
 > 后继：[RFC-479](../RFC-479-governance-gap-fill/proposal.md)（Done，2026-11-10，`0d591604b`）：减速带 42 项每项 `max` = 实测（4 项收紧；当时另把低于上限也判红，与 design §13.4 相悖，2026-11-11 由 [RFC-484](../RFC-484-count-gate-not-above-max/proposal.md) 撤回，Done，`067169518`）；未消费 public 符号 322、public 类型偏差 88 与 19 个模块的 composition 控制流（F13 口径、按语法树计数，合计 1,197 行，临时至 S10）入带；§1.2 增「结构锁 / 覆盖范围」列。
+>
+> 后继：[RFC-618](../RFC-618-unreachable-production-files-out-of-production-tree/proposal.md)（In Progress，2026-11-26）：`unreachable-production-files` 8 → 4——Intent 的字段对账表（测试数据）迁入 `tests/helpers/`，写成起就没有消费方的 portable-import 引用一对与 RFC-271 后只剩用例在用的 YAML 预览 / 选择子投影删除；余下四个各有登记理由（执行权一族按既有约定暂缓、`rfc333` 锁住的续跑测试调用方、RFC-359 §5hn 的方言参照、内嵌插件资产）。
 
 - **范围**：`architecture/counts.json` 六项高于实测的 `max` 收紧到实测值；未消费 public 符号与 public 类型污染条数进入减速带；
   S10 的门落地前临时纳入各模块 `composition/` 的控制流计数（review F13 的口径：行首 `if / for / while / switch / try` 与 `throw`

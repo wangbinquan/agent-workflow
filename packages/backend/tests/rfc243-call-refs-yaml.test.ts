@@ -10,10 +10,12 @@
 //      grandfathered (an update that adds no new name never re-checks). This
 //      gate is the ONLY thing between a name-guessing editor and the ACL-free
 //      launch closure freeze — if these red, that exfiltration fence broke;
-//   3. YAML: export strips the installation-local `workflowId` cache (shared +
-//      backend faces). (The import half — RFC-223 resolution, dangling names,
-//      id backfill — went with the test-only YAML import writer, RFC-401 T6.)
-import { agentFixture, readWorkflowFixtures, workflowFixture } from './helpers/model'
+//   3. YAML: the shared name selectors strip the installation-local `workflowId`
+//      cache. (The import half — RFC-223 resolution, dangling names, id backfill —
+//      went with the test-only YAML import writer, RFC-401 T6; the backend selector
+//      projection, test-only once RFC-271 retired the single-file YAML export,
+//      went with RFC-618.)
+import { readWorkflowFixtures, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -28,7 +30,6 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 import { extractWorkflowWorkflowRefs } from '../src/modules/resource-catalog/infrastructure/legacy/resourceRefs'
 import { getWorkflow } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
-import { workflowDefinitionToSelectors } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.yaml'
 import { copyWorkflow, createWorkflow, updateWorkflow } from './helpers/model/resourceWrites'
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
@@ -280,7 +281,7 @@ describeEachProvider('RFC-243 §5.3 — save-time call-ref ACL (name domain, D15
 })
 
 // ---------------------------------------------------------------------------
-describeEachProvider('RFC-243 §5.5 — YAML export strips the workflowId cache', (harness) => {
+describe('RFC-243 §5.5 — the shared name selectors strip the workflowId cache', () => {
   test('shared workflowDefinitionToNameSelectors drops workflowId, keeps workflowName', () => {
     const portable = workflowDefinitionToNameSelectors({
       $schema_version: 4,
@@ -298,48 +299,10 @@ describeEachProvider('RFC-243 §5.5 — YAML export strips the workflowId cache'
       'req',
     )
   })
-
-  test('backend workflowDefinitionToSelectors drops workflowId on BOTH the agent-free fast path and the agent path', async () => {
-    const db = harness.db
-    await seedUser(db, 'owner-a')
-    const viewer = actor('viewer')
-
-    // Agent-free definition → the early-return path must already be stripped.
-    const fast = await workflowDefinitionToSelectors(db, viewer, {
-      $schema_version: 4,
-      inputs: [],
-      nodes: [{ id: 'c1', kind: 'call-workflow', workflowName: 'child-wf', workflowId: 'LOCAL' }],
-      edges: [],
-    } as unknown as WorkflowDefinition)
-    expect((fast.nodes[0] as Record<string, unknown>).workflowId).toBeUndefined()
-    expect((fast.nodes[0] as Record<string, unknown>).workflowName).toBe('child-wf')
-
-    // With an agent node the main mapping path runs; the call node still loses
-    // only its id cache while the agent node gains its portable selector.
-    await agentFixture(db, {
-      id: 'agent-a',
-      name: 'helper',
-      ownerUserId: 'owner-a',
-      visibility: 'public',
-    })
-    const full = await workflowDefinitionToSelectors(db, viewer, {
-      $schema_version: 4,
-      inputs: [],
-      nodes: [
-        { id: 'a1', kind: 'agent-single', agentId: 'agent-a', agentName: 'stale' },
-        { id: 'c1', kind: 'call-workflow', workflowName: 'child-wf', workflowId: 'LOCAL' },
-      ],
-      edges: [],
-    } as unknown as WorkflowDefinition)
-    const call = full.nodes.find((n) => n.id === 'c1') as Record<string, unknown>
-    const agent = full.nodes.find((n) => n.id === 'a1') as Record<string, unknown>
-    expect(call.workflowId).toBeUndefined()
-    expect(call.workflowName).toBe('child-wf')
-    expect(agent.agentId).toBeUndefined()
-    expect(agent.agentName).toBe('helper')
-  })
 })
 
 // RFC-401 T6 (proposal G5): the YAML import writer and its legacy reference resolver
 // (`legacy/importRefs.ts`) are deleted — no production route imported a workflow through them — so the
-// import round-trip and W53 resolution suites went with them. Export and save-time gates above stay.
+// import round-trip and W53 resolution suites went with them. RFC-618: the backend selector projection
+// (`legacy/workflow.yaml.ts`, test-only once RFC-271 retired the single-file YAML export) is deleted too; the shared
+// selectors and the save-time gates above stay.

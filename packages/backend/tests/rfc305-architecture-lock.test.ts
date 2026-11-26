@@ -379,7 +379,6 @@ describe('RFC-305 identity-access architecture', () => {
       // RFC-504: the resource-package staging and the intent-context authority resolver moved out of composition.
       'packages/backend/src/modules/resource-catalog/application/package/stagedExecution.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/application/participants/intentContextResourceAuthorization.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/resource-catalog/application/portableImportReferences.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/application/resourceCatalogQuery.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/composition/catalogOperationDescriptors.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/composition/providerResourceCatalog.ts -> @/modules/identity-access/public/participants',

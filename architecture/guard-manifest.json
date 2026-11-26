@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1007
+      "lines": 988
     },
     {
       "assertsAbsence": true,
@@ -2035,7 +2035,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc305-architecture-lock.test.ts",
       "id": "rfc305-architecture-lock",
-      "lines": 959,
+      "lines": 958,
       "mechanism": "ast",
       "minCorpusFiles": 900,
       "negativeFixture": true,
@@ -5061,6 +5061,18 @@
       "file": "packages/backend/tests/rfc617-util-primitives-into-platform-boundary.test.ts",
       "id": "rfc617-util-primitives-into-platform-boundary",
       "lines": 155,
+      "mechanism": "ast",
+      "minCorpusFiles": 3000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc618-unreachable-production-files-boundary.test.ts",
+      "id": "rfc618-unreachable-production-files-boundary",
+      "lines": 212,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
       "negativeFixture": true,

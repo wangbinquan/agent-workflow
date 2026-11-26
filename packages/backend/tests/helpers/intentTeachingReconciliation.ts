@@ -16,6 +16,9 @@
 //     the uncovered map with a reason.
 //
 // Pure module: zod schema introspection only.
+//
+// RFC-618: moved verbatim from `src/modules/intent/domain/teaching/reconciliation.ts` — it is test data (only the two
+// tests above import it), so it lives next to them instead of in the production tree.
 
 import { z } from 'zod'
 import {
@@ -59,15 +62,15 @@ import {
   WrapperFanoutNodeSchema,
   type IntentResourceType,
 } from '@agent-workflow/shared'
-import { INTENT_NODE_TEACHING } from './nodeKinds'
+import { INTENT_NODE_TEACHING } from '@/modules/intent/domain/teaching/nodeKinds'
 import {
   WORKFLOW_EDGE_TEACHING,
   WORKFLOW_INPUT_TEACHING,
   WORKFLOW_OUTPUT_TEACHING,
   WORKFLOW_PORT_REF_TEACHING,
   type WorkflowInputKind,
-} from './workflowParts'
-import type { NodeBaseKey, StrictNodeSchemaOf } from './types'
+} from '@/modules/intent/domain/teaching/workflowParts'
+import type { NodeBaseKey, StrictNodeSchemaOf } from '@/modules/intent/domain/teaching/types'
 
 // ───────────────────────── zod introspection ─────────────────────────
 

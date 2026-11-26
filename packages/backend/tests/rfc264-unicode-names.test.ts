@@ -8,7 +8,9 @@ import { describeEachProvider } from './helpers/eachProvider'
 // are covered in packages/shared/tests/resource-display-name.test.ts; this file
 // locks the SERVICE-level consequences that unit-testing the regex cannot:
 //
-//   1. create / rename / YAML-import accept Chinese and store the FOLDED name;
+//   1. create / rename accept Chinese and store the FOLDED name (a package import
+//      creates through the same `CreateWorkflowSchema`; the YAML-import preview,
+//      test-only once RFC-271 retired the bare YAML import, went with RFC-618);
 //   2. the workgroup owner-unique index still holds — and now cannot be evaded
 //      by padding a name with spaces (they fold away before the insert);
 //   3. an illegal name is still refused with the same error codes as before;
@@ -22,7 +24,6 @@ import {
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { getWorkflow } from '../src/modules/resource-catalog/infrastructure/legacy/workflow'
-import { previewWorkflowYaml } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.yaml'
 import { getWorkgroupById } from '../src/modules/resource-catalog/infrastructure/legacy/workgroups'
 import { ulid } from 'ulid'
 import { createWorkflow, createWorkgroup, renameWorkgroup } from './helpers/model/resourceWrites'
@@ -110,32 +111,6 @@ describeEachProvider('RFC-264 workflow names', (harness) => {
     const second = await createWorkflow(db, workflowInput('代码审计'))
     expect(first.id).not.toBe(second.id)
     expect(second.name).toBe('代码审计')
-  })
-})
-
-describe('RFC-264 YAML import', () => {
-  test('a Chinese name previews as the folded value', () => {
-    const preview = previewWorkflowYaml(
-      ['name: 代码审计流水线', 'description: ""', 'definition:', '  $schema_version: 4'].join('\n'),
-    )
-    expect(preview.name).toBe('代码审计流水线')
-  })
-
-  test('the name is folded on the way in', () => {
-    const preview = previewWorkflowYaml(
-      ['name: "代码审计  流程 "', 'description: ""', 'definition:', '  $schema_version: 4'].join(
-        '\n',
-      ),
-    )
-    expect(preview.name).toBe('代码审计 流程')
-  })
-
-  test('an illegal name is a workflow-name-invalid 422, not a silent rewrite', () => {
-    expect(() =>
-      previewWorkflowYaml(
-        ['name: _reserved', 'description: ""', 'definition:', '  $schema_version: 4'].join('\n'),
-      ),
-    ).toThrow(expect.objectContaining({ code: 'workflow-name-invalid' }))
   })
 })
 

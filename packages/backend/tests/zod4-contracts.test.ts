@@ -16,7 +16,7 @@ import { toInputJsonSchema, withInputJsonSchema } from '../src/platform/operatio
 import { graphOutputInstructions } from '../src/modules/development-automation/application/graph-development/builtinResources'
 import { GraphAssistOutputSchema } from '../src/modules/development-automation/application/graph-development/viewPlanning'
 import zod3SchemaDigests from './fixtures/zod3-json-schema-digests.json'
-import { schemaKeys } from '../src/modules/intent/domain/teaching/reconciliation'
+import { schemaKeys } from './helpers/intentTeachingReconciliation'
 
 // Golden digests were captured from the pre-upgrade sources with Zod 3.
 // These are the ONLY normalized differences: non-validating default annotations,

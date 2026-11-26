@@ -955,16 +955,6 @@
     {
       "table": "users",
       "owner": "identity-access",
-      "file": "resource-catalog/infrastructure/legacy/workflow.yaml.ts",
-      "module": "resource-catalog",
-      "tableId": "users",
-      "kind": "other",
-      "why": "resource-catalog/infrastructure/legacy/workflow.yaml.ts 仍依赖 users；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
-      "removeWhen": "RFC-395 T11 resource-catalog/workflow.yaml 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
-    },
-    {
-      "table": "users",
-      "owner": "identity-access",
       "file": "resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
       "module": "resource-catalog",
       "tableId": "users",

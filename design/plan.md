@@ -648,6 +648,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-615](./RFC-615-ci-critical-path-and-query-cost/proposal.md) | CI第二轮：历史行桥重复计算、G1查询成本、job内测试准备缓存与计算/聚合队列分离；保留测试覆盖与门禁标准 | Done；6c92完整CI70/70成功，保留macOS容量取消与补领证据 |
 | [RFC-616](./RFC-616-process-metrics/proposal.md) | 过程度量：按工作流、工作组、数字员工统计每个执行单元各阶段的时长、Token、人工介入（评审、反问、脑图等），含提升点提示、热力图、文本主题分析与两段对比；节点执行、人工门、调用三路读现有账本并归一，只新增“人的操作”一路的声明式感知。 | In Progress；2026-11-26 用户批准，实现中 |
 | [RFC-617](./RFC-617-util-primitives-into-platform/proposal.md) | util/ 的六个通用原语原样归 platform（RFC-294 W9-D 余项）：`redact` → `platform/logging`，`safePath` → `platform/workspace/local`，`fileTrust`、`win32Acl`、`gitHardening` → `platform/execution/local`，`gitRef` → `platform/contracts`；逐字迁移、读者一次改指，钉着旧路径的账本与源码锁随之改；`legacy-horizontal-files` 53 → 47。无用户可见变化。 | In Progress |
+| [RFC-618](./RFC-618-unreachable-production-files-out-of-production-tree/proposal.md) | 四个不可达生产文件出生产树（RFC-294 S11 余项）：Intent 的平台 / 意图字段对账表（测试数据）原样迁入 `tests/helpers/`；写成起就没有消费方的 portable-import 引用一对、RFC-271 下线单文件 YAML 后只剩用例在用的 YAML 预览与选择子投影删除（只测它们的四条用例随之删去，行为由生产路径上的既有用例覆盖）；`unreachable-production-files` 8 → 4，余下四个各有登记理由。无用户可见变化。 | In Progress |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

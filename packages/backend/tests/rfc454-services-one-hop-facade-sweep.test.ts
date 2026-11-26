@@ -325,9 +325,7 @@ describe('RFC-454 —— 原位置不再导出迁走的名字', () => {
     for (const name of ['INTERPRETER_SPEC', 'resolveScriptInterpreter', 'ResolvedInterpreter'])
       expect([name, exportsName(scriptRun, name)]).toEqual([name, false])
     expect(exportsName(scriptRun, 'runScriptProcess')).toBe(true)
-    expect(
-      exportsName(source(RC + 'infrastructure/legacy/workflow.yaml.ts'), 'stringifyWorkflowYaml'),
-    ).toBe(false)
+    // RFC-618 deleted `legacy/workflow.yaml.ts` (test-only after RFC-271), so it cannot carry a second `stringifyWorkflowYaml`.
     expect(
       exportsName(source(RC + 'infrastructure/legacy/resourceRefs.ts'), 'extractWorkflowAgentRefs'),
     ).toBe(false)

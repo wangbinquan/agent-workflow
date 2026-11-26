@@ -235,8 +235,8 @@
       "reason": "max=0: public symbols of workspace-insight that no other module consumes, by entry id (the architecture report section unconsumedPublicSymbols for this context). RFC-480 (RFC-294 S9) split the RFC-479 total per context at the measured census; the S9 successors for this context drive it down; no growth authorized."
     },
     "unreachable-production-files": {
-      "max": 8,
-      "reason": "max=8: RFC-584 (RFC-294 S11, RFC-370 closure) moves five contract-test-only compatibility entries to tests/helpers and deletes the one-hop MCP diagnostics address and the pre-RFC-503 intent maintenance copy, 15 -> 8, measured. max=15: RFC-479 (RFC-294 S11) tightens every max to the measured census (27 -> 18); a lower count now fails until this max is lowered in the same change; RFC-491 moves the two contract-test-only native task agent run files to tests/helpers (18 -> 16); RFC-492 moves the RFC-108 driver-lease compatibility fixture to tests/helpers (16 -> 15); no growth authorized."
+      "max": 4,
+      "reason": "max=4: RFC-618 (RFC-294 S11 remainder) takes four unreachable files out of the production tree: the RFC-348 intent reconciliation table (test data) moves to tests/helpers, and the portable-import reference pair (no consumer since it was written) and the test-only YAML preview / selector projection (RFC-271 retired the single-file YAML routes) are deleted; the four left each keep a recorded reason: 8 -> 4, measured. max=8: RFC-584 (RFC-294 S11, RFC-370 closure) moves five contract-test-only compatibility entries to tests/helpers and deletes the one-hop MCP diagnostics address and the pre-RFC-503 intent maintenance copy, 15 -> 8, measured. max=15: RFC-479 (RFC-294 S11) tightens every max to the measured census (27 -> 18); a lower count now fails until this max is lowered in the same change; RFC-491 moves the two contract-test-only native task agent run files to tests/helpers (18 -> 16); RFC-492 moves the RFC-108 driver-lease compatibility fixture to tests/helpers (16 -> 15); no growth authorized."
     }
   }
 }

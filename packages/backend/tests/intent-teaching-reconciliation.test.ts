@@ -33,7 +33,7 @@ import {
   reconcile,
   walkObjectNodes,
   type ReconciliationEntry,
-} from '../src/modules/intent/domain/teaching/reconciliation'
+} from './helpers/intentTeachingReconciliation'
 
 const entryById = (id: string): ReconciliationEntry => {
   const entry = INTENT_PLATFORM_FIELD_RECONCILIATION.find((e) => e.id === id)

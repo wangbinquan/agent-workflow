@@ -208,19 +208,12 @@ describe('C4/C5/C6 · 导出与覆盖侧的三条收缩仍然生效', () => {
 })
 
 describe('保留项 —— 下线不得误伤仍被使用的帮手', () => {
-  test('`workflowDefinitionToSelectors` / `stripCallWorkflowNodeIds` 还在', () => {
-    const yaml = read(
-      resolve(
-        BACKEND,
-        'src',
-        'modules',
-        'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'workflow.yaml.ts',
-      ),
-    )
-    expect(yaml).toContain('workflowDefinitionToSelectors')
-    expect(yaml).toContain('stripCallWorkflowNodeIds')
+  // RFC-618：后端的 `workflowDefinitionToSelectors`（`legacy/workflow.yaml.ts`）在本次下线后只剩用例在用，已删除；
+  // 它调用的 shared `stripCallWorkflowNodeIds` 仍被 shared 的 `workflowDefinitionToNameSelectors` 使用，照旧保留。
+  test('`stripCallWorkflowNodeIds` 与 `workflowDefinitionToNameSelectors` 还在', () => {
+    const yaml = read(resolve(BACKEND, '..', 'shared', 'src', 'workflow-yaml.ts'))
+    expect(yaml).toContain('export function stripCallWorkflowNodeIds(')
+    expect(yaml).toContain('stripCallWorkflowNodeIds(definition)')
+    expect(yaml).toContain('workflowDefinitionToNameSelectors')
   })
 })

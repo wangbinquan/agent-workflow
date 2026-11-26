@@ -27,16 +27,6 @@ describe('RFC-345 Agent import queries', () => {
     expect(infrastructure).not.toMatch(/as unknown|DbClient|dbTxSync|Postgresql|fallback/)
   })
 
-  test('portable import fences bind to the caller-owned provider transaction', () => {
-    const application = source('application/portableImportReferences.ts')
-    const composition = source('composition/portableImportReferences.ts')
-
-    expect(application).toContain('createPortableImportReferenceApplication')
-    // RFC-359 W4-D14：SQLite 专属的同步终写围栏（无生产消费方）退役，只剩绑定统一事务的一份。
-    expect(application).not.toContain('createPortableImportReferenceSyncFence')
-    expect(application).toContain("'workflow',")
-    expect(application).toContain("'workgroup',")
-    expect(composition).toContain('composePortableImportReferencesInTransaction')
-    expect(composition).not.toMatch(/as unknown|deasync|fallback|Sqlite|Postgresql/)
-  })
+  // RFC-618: the portable-import reference application and its composition never had a consumer and are deleted, so the
+  // lock on their transaction binding went with them; the live import path is the agent import queries above.
 })

@@ -241,7 +241,6 @@ test('源码锁：Agent 聚合没有 provider 命名的仓库 / 语义 / 快照�
     'composition/agentOperations.ts',
     'composition/agentImportQueries.ts',
     'composition/agentResourceIntegrity.ts',
-    'composition/portableImportReferences.ts',
   ]) {
     const source = readFileSync(join(root, neutral), 'utf8')
       .split('\n')

@@ -1,3 +1,16 @@
+## 2026-11-26 RFC-618 四个不可达生产文件出生产树（In Progress；`design/RFC-618-unreachable-production-files-out-of-production-tree/`）
+
+- **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S11，
+  `unreachable-production-files` 余 8 个，逐个读源码与历史后，后继指向 RFC-294 W4 / W9-D 与 RFC-348 的四个由本 RFC 清掉。
+- **范围**：Intent 的平台 / 意图字段对账表（`domain/teaching/reconciliation.ts`，只有两条用例取它）原样迁入 `tests/helpers/intentTeachingReconciliation.ts`；
+  resource-catalog 的 portable-import 引用一对（写成起就没有消费方）与 `legacy/workflow.yaml.ts`（RFC-271 下线单文件 YAML 导出 / 导入后只剩四条用例在用）删除，
+  四条用例随之删去（RFC-264 的折叠由 `CreateWorkflowSchema` 与创建边界的用例覆盖，RFC-243 的 id 缓存剥离由 shared 选择子的用例覆盖）。
+  `rfc376` 基线与保留理由、`rfc305` 的 identity-access 边账、`rfc359-w4-d14` 的中立装配清单、表归属债清单与按路径读这些文件的三条源码锁（`rfc271`、`rfc345`、
+  `rfc454`）随之改；计数 8 → 4。余下四个各有登记理由，不动。新增 RFC-618 用例。
+- **集中验证**：候选导出（HEAD `9f1b2535f` + 本 RFC 路径）上 `tsc` / eslint / prettier 全过；用例第一轮 281 个文件里四份按路径读被删文件的锁红
+  （`rfc317` 表归属债清单、`rfc271`、`rfc345`、`rfc454`），按 design §1 改后第二轮全过；架构报告只有 `unreachable-production-files` 8 → 4；变异 4 / 4 被抓。
+- **CI 侧**：待推送。
+
 ## 2026-11-26 RFC-617 util/ 的六个通用原语原样归 platform（In Progress；`design/RFC-617-util-primitives-into-platform/`）
 
 - **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W9-D，

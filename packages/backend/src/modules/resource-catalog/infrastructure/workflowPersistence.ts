@@ -66,7 +66,7 @@ export function assertCanonicalWorkflowAgentIds(definition: WorkflowDefinition):
   )
 }
 
-/** Shared wording for the changed-name check and YAML import. */
+/** Wording for the changed-name check (RFC-618 retired the YAML import preview that shared it). */
 export const WORKFLOW_NAME_INVALID_MESSAGE = `workflow ${RESOURCE_DISPLAY_NAME_MSG}`
 
 /** Historical names may be saved unchanged; only a changed name is parsed. */

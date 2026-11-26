@@ -158,10 +158,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/platform/background/providerBackupScheduler.ts#startBackupScheduler.handle#setInterval#1',
   ],
   'unreachable-production-files': [
-    'packages/backend/src/modules/intent/domain/teaching/reconciliation.ts',
-    'packages/backend/src/modules/resource-catalog/application/portableImportReferences.ts',
-    'packages/backend/src/modules/resource-catalog/composition/portableImportReferences.ts',
-    'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.yaml.ts',
     'packages/backend/src/modules/runtime-management/infrastructure/drivers/opencode/plugin/aw-inventory-dump.mjs',
     'packages/backend/src/modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority.ts',
     'packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts',
@@ -173,6 +169,8 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     // RFC-492：RFC-108 的驱动租约兼容夹具（`services/driverLease.ts`）迁入 `tests/helpers/`（销账，1 个）；库存插件随一族换位置。
     // RFC-584：RFC-370 收口后，只供契约用例的五个兼容入口迁入 `tests/helpers/`，MCP 诊断的一跳旧地址与 RFC-503 之前的 Intent
     // 维护副本删除（销账，7 个）。
+    // RFC-618：Intent 的平台 / 意图字段对账表（只供两条用例的测试数据）迁入 `tests/helpers/`；写成起就没有消费方的 portable-import
+    // 引用一对、RFC-271 下线单文件 YAML 后只剩用例在用的 YAML 预览与选择子投影删除（销账，4 个）。
     'packages/backend/src/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts',
   ],
 }
@@ -227,23 +225,12 @@ const RETAINED_REACHABILITY_GROUPS = [
     files: ['modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts'],
   },
   {
-    successor: 'RFC-294 W4',
-    reason: 'Declared successor owners for the remaining portable-import debt.',
-    files: [
-      'modules/resource-catalog/application/portableImportReferences.ts',
-      'modules/resource-catalog/composition/portableImportReferences.ts',
-    ],
-  },
-  {
     successor: 'RFC-376 direct RFC-328 control-gateway assertion',
     reason: 'RFC-328 continuation control gateway remains covered by the direct closure assertion.',
     files: ['modules/task-execution/application/submitTaskContinuation.ts'],
   },
-  {
-    successor: 'RFC-348: retained test data, no scheduled successor',
-    reason: 'Retained test-driven domain reference; removal requires an explicit successor.',
-    files: ['modules/intent/domain/teaching/reconciliation.ts'],
-  },
+  // RFC-618: the RFC-348 reconciliation table (test data) moved to `tests/helpers/`; the portable-import pair (no consumer
+  // since it was written) and the test-only YAML preview / selector projection were deleted (retired, 4 files).
   // RFC-584: RFC-370 closed — its contract-test-only compatibility entries moved to `tests/helpers/`, the one-hop MCP
   // diagnostics address and the pre-RFC-503 intent maintenance copy were deleted (retired, 7 files).
   {
@@ -251,12 +238,6 @@ const RETAINED_REACHABILITY_GROUPS = [
     reason:
       'RFC-370 closed; the hosted standby execution authority its contract tests use stays with the deferred execution-authority family.',
     files: ['modules/system-operations/infrastructure/crewstation/standbyExecutionAuthority.ts'],
-  },
-  {
-    successor: 'RFC-294 W9-D: retire with the resource-catalog legacy workflow family',
-    reason:
-      'RFC-454 moved its one production export (stringifyWorkflowYaml) to shared; the YAML preview and selector projection left here are test-only since RFC-401 T6 removed the import writer.',
-    files: ['modules/resource-catalog/infrastructure/legacy/workflow.yaml.ts'],
   },
   {
     successor: 'RFC-375 section 4 / RFC-029: retain embedded asset',
