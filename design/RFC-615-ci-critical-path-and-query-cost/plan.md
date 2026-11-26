@@ -1,4 +1,4 @@
-# RFC-615 实施与验收
+# RFC-615 实施与验收（Done，2026-11-26）
 
 用户已明确授权第二轮；全部实现与用例完成后集中验证。
 
@@ -8,7 +8,7 @@
 - [x] T4 job内冻结SQLite缓存、并发/完整性/隔离/失效回归；compiled缓存经成本验证撤回，保持原每case编译。
 - [x] T5 计算workflow与required分离、runner调整、计时来源兼容、全部拓扑与守卫接线。
 - [x] T6 集中验证、实际计时对照、独立功能复核；修复本人缺陷并复验相关范围。
-- [ ] T7 精确路径发布、exact-SHA CI跟踪，记录两个失败及后端长尾/队列的实际变化。
+- [x] T7 精确路径发布、exact-SHA CI跟踪，记录两个失败及后端长尾/队列的实际变化。
 
 ## 验证记录
 
@@ -60,3 +60,29 @@ T2–T5完整实现及全部用例已于集中验证前写齐。静态复核确�
 后端长尾另以干净成功来源重平衡：旧shard1权重552.446s，922相同132文件实测809.208s；63实际job880s中的843s在带coverage测试step。完整44份/3092文件重新通过严格collector校验，投影当前3102文件，10个未测文件不造时长。按同版Bun原生算法复现922所有44片后，当前全集的样本内最长片拟合809.208s→611.594s，保持44片/15分钟/coverage；这不作为后继托管提速承诺。
 
 独立只读功能复核通过；最终统一backend tsc（8GB）0错误，相关ESLint/Prettier与design本地链接检查通过。后继候选将按15个明确路径发布，继续以完整exact-SHA CI验收，首轮失败和成功片段均保留，不取消或重跑追绿。
+
+## 最终托管验收
+
+最终代码为[`6c92e2be270cc50ab339bd0efb33d134e0af1ef1`](https://github.com/wangbinquan/agent-workflow/commit/6c92e2be270cc50ab339bd0efb33d134e0af1ef1)，15个明确路径，发布前后main与origin/main精确同步。完整[CI 45846353277](https://github.com/wangbinquan/agent-workflow/actions/runs/45846353277)最终70/70成功：44个后端分片、独立真实PG作业、全部11个E2E分片及其余门禁均通过。`CI required`的调用结果和13组独立输出全部为success，实际ubuntu-slim执行4秒。最终同一候选的独立只读复核PASS。
+
+原两项失败在原门槛下均通过：历史桥仍是13版本/78fold同一个默认5秒case，托管2410.22ms；G1仍9样本、50x/250ms、原语料/coverage/180秒预算，PG P95 15.52ms、SQLite26.00ms，4条SQL/52行/最大50参数。
+
+首次attempt运行40m26s后，macOS E2E 3/4因未取得runner而cancelled：runner_id=0、steps为空，GitHub注释明确为hosted runner多次领取失败，并提示macOS arm64容量受限；required按原标准拒绝。仅为该**从未执行**的分片定向重新申请runner；attempt2实际只执行macOS3和依赖它的required，68个已成功作业沿用原实际开始/结束时间、runner和全部steps。GitHub虽分配了新的check/job ID，不能把140条原始记录当140个执行作业，也不能把这次补领写成一次无基础设施故障的全绿运行。未修改代码、跳过平台、放宽门槛或重跑测试失败case。
+
+以下均为观测值；不同运行的runner负载不受控，最新总时间完整包含第一次容量取消及重新申请的等待：
+
+| 指标 | 原失败对照523725652 / 45808141402 | 最终6c92e2be / 45846353277 |
+| --- | ---: | ---: |
+| 创建→首个实际step | 63m24s | 3s |
+| 首个实际step→最后计算完成（含内部排队） | 38m30s | 59m45s，含容量取消与补领 |
+| 最后计算完成→required首个实际step | 20m12s | 6s |
+| required作业执行 | 2s | 4s |
+| 首次创建→最终完成/更新时间 | 2h02m08s | 59m57s |
+| 后端作业中位数 | 601.5s | 625.5s |
+| 后端作业P95 | 844.55s | 806.1s |
+| 后端最长作业 | 877s | 831s |
+| 后端≥810s / ≥855s作业数 | 5 / 1 | 2 / 0 |
+
+后端最长片距900秒预算的余量23s→69s，但没有达到样本内拟合的611.594s；最慢两片约95%的时间在测试+coverage step，Codecov仅4秒。不能把所有墙钟变化归因于代码，也不能由单次全绿推断长期失败率。macOS托管容量仍是外部风险；本轮没有减少平台覆盖来绕过它。
+
+辅助[CI feedback 45846352947](https://github.com/wangbinquan/agent-workflow/actions/runs/45846352947)成功5m22s，[windows-platform 45846353226](https://github.com/wangbinquan/agent-workflow/actions/runs/45846353226)成功10m26s。[CI timing refresh 45856204550](https://github.com/wangbinquan/agent-workflow/actions/runs/45856204550)成功30秒，实际验证了新同SHA子workflow来源解析和44+11完整产物：backend3102文件，unmeasured/removed均空；E2E输出updated、无测试retry样本，10份attempt1加macOS3的attempt2，真实平台population为Linux/macOS各532、Windows526。新计时仅保留为可审阅产物，本轮不再反复刷新权重触发验证循环。

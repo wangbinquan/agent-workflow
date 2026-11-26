@@ -1,4 +1,4 @@
-# RFC-611 实施计划
+# RFC-611 实施计划（Done，2026-11-26）
 
 用户已于 2026-11-26 授权按诊断建议实施。先完成全部实现与用例，再集中验证。
 
@@ -9,7 +9,7 @@
 - [x] T5 build-success 下游条件、仓内/变更外链提交门与全外链 nightly。
 - [x] T6 更新受影响的拓扑测试、必要文档/清单；只做静态自查至此完成。
 - [x] T7 集中验证、只读功能复核、缺陷修复与对应复验。
-- [ ] T8 精确路径提交、推送、核对同步与 exact-SHA CI，记录有效结果及外部阻塞。
+- [x] T8 精确路径提交、推送、核对同步与 exact-SHA CI，记录有效结果及外部阻塞。
 
 ## 验证记录
 
@@ -40,3 +40,11 @@
 计时资格修补：完整且通过但有重试的 E2E 样本，在全部 11 片来源/全集/结果序列/文件 metadata 校验完毕后中性跳过刷新，并输出 status JSON；普通验证错误仍失败。覆盖 serial 重试中的 passed/skipped/failed 组合、损坏证据与 retry 共存的顺序无关性、旧输出防复用。相关 2 文件 22 项通过，严格 TypeScript 与 ESLint 通过；此修补不改主测试选择或结果。累计新增/受影响测试的有效通过证据为 93 项。
 
 最初两条带有已知旧上传断言缺陷的本会话 run（45796122638、45796337118）已手动取消，随后其剩余 queued 聚合 job 占住 lane，核实无运行步骤后 force-cancel 释放；没有取消其他会话运行。该人工清理不改变两 lane 保留所有 SHA 的常规策略。包含本 RFC 的后继 `1d4faeac5` 经候选路径与祖先核对，CI feedback 及 Windows CI 已成功；前者实际执行 8m53s、后者 9m54s，属于后继证据。
+
+## 最终验收
+
+核心候选`92222f0c3c3890eca5ec2ec71c2d5dc452d58042`的[CI 45797271947](https://github.com/wangbinquan/agent-workflow/actions/runs/45797271947)最终70/70成功，完整44份backend计时覆盖3092文件。该run的11份E2E产物完整，但4个文件有测试retry，刷新器按设计中性跳过，未用作干净E2E权重。以上“持续验收中”为当时记录，最终状态以本节为准。
+
+第二轮[RFC-615](../RFC-615-ci-critical-path-and-query-cost/plan.md)进一步修复历史桥和G1、固定SQLite有界查询计划、复用冻结SQLite准备、刷新后端权重，并把计算lane与required排队分开。最终后继`6c92e2be270cc50ab339bd0efb33d134e0af1ef1`的[CI 45846353277](https://github.com/wangbinquan/agent-workflow/actions/runs/45846353277)全部70个门禁成功，保留本RFC的完整测试/平台/PG/coverage与逐SHA策略；macOS3因未领取runner取消后仅定向补领，68个成功执行复用，真实端到端59m57s，不能记成一次无基础设施故障的运行。
+
+后继[计时收集45856204550](https://github.com/wangbinquan/agent-workflow/actions/runs/45856204550)实际校验全部44+11产物并成功输出审阅结果：backend3102文件全部覆盖，E2E为updated、无测试retry；10份attempt1与一份未执行后补领的attempt2按相同SHA归属验证。真实平台population为Linux/macOS各532、Windows526，与922的原始hosted discovery产物一致；早期本机macOS模拟Windows discovery的527不是托管Windows基线。本轮未减少E2E测试选择或平台条件，详细指标和容量故障证据见RFC615最终验收。
