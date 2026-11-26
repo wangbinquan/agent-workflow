@@ -5,26 +5,25 @@ import { prepareCapabilityTemplatePackageWrite } from '../application/capability
 import type { CapabilityTemplateRecord } from '../application/ports/capabilityTemplatePersistence'
 import { createCapabilityTemplatePersistence } from './capabilityTemplatePersistence'
 import { createPostgresqlCapabilityTemplatePackageCommit } from './capabilityTemplatePackageCommit'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { PostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
-import type { PostgresqlResourceCatalogTransaction } from '@/modules/resource-catalog/infrastructure/postgresql/repositorySupport'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import type { CapabilityTemplatePackageMutationOwner } from '../application/adapters/resource-catalog-adapter'
 import { ValidationError } from '@/platform/errors/domainErrors'
 
 type CapabilityTemplateOwnerPrepareContext = Parameters<
-  PostgresqlCapabilityTemplatePackageMutationOwner['prepareOwnerNative']
+  CapabilityTemplatePackageMutationOwner['prepareOwnerNative']
 >[0]
 type CapabilityTemplateOwnerPrepareRequest = Parameters<
-  PostgresqlCapabilityTemplatePackageMutationOwner['prepareOwnerNative']
+  CapabilityTemplatePackageMutationOwner['prepareOwnerNative']
 >[1]
 type CapabilityTemplateOwnerCommitContext = Parameters<
-  PostgresqlCapabilityTemplatePackageMutationOwner['commitOwnerNativeInTransaction']
+  CapabilityTemplatePackageMutationOwner['commitOwnerNativeInTransaction']
 >[1]
 type CapabilityTemplateOwnerCommitRequest = Parameters<
-  PostgresqlCapabilityTemplatePackageMutationOwner['commitOwnerNativeInTransaction']
+  CapabilityTemplatePackageMutationOwner['commitOwnerNativeInTransaction']
 >[2]
 
 async function ownerNameExists(
-  transaction: PostgresqlResourceCatalogTransaction,
+  transaction: PersistenceTx,
   input: {
     readonly ownerUserId: string | null
     readonly name: string
@@ -48,7 +47,7 @@ async function ownerNameExists(
 export function createPostgresqlCapabilityTemplatePackageMutationOwner(input: {
   readonly db: PersistenceDb
   readonly now?: () => number
-}): PostgresqlCapabilityTemplatePackageMutationOwner {
+}): CapabilityTemplatePackageMutationOwner {
   const persistence = createCapabilityTemplatePersistence(input.db)
   const now = input.now ?? Date.now
   const preparedStates = new WeakMap<object, CapabilityTemplateRecord | null>()
@@ -70,7 +69,7 @@ export function createPostgresqlCapabilityTemplatePackageMutationOwner(input: {
       return token
     },
     async commitOwnerNativeInTransaction(
-      transaction: PostgresqlResourceCatalogTransaction,
+      transaction: PersistenceTx,
       context: CapabilityTemplateOwnerCommitContext,
       request: CapabilityTemplateOwnerCommitRequest,
     ) {

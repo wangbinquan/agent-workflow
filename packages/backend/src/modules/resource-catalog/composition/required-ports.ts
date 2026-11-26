@@ -14,3 +14,5 @@ export type {
   McpDiagnosticExecutionFactory,
 } from '../application/ports/mcpDiagnosticExecution'
 export type { LocalMcpDiagnosticExecution } from '../application/ports/localMcpDiagnosticExecution'
+/** RFC-609: implemented by the capability templates' PostgreSQL owner-native arm, taken through its designated adapter. */
+export type { CapabilityTemplatePackageMutationOwner } from '../application/ports/capabilityTemplatePackageOwner'

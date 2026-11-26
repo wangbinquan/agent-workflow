@@ -330,8 +330,8 @@ describe('RFC-294 W0-R target architecture scanner contract', () => {
 
 // BEGIN COMMITTED G3 BASELINES — committed source 2a70c93285000d9413dfb7c2c835714a99701e2d.
 const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
-  'packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityTemplatePackageMutationOwner.ts -> packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts',
-  'packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityTemplatePackageMutationOwner.ts -> packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts',
+  // RFC-609: both code-capability -> resource-catalog pairs are settled (the owner contract through Resource Catalog's
+  // required ports and the designated adapter, the transaction as the platform's `PersistenceTx`).
   // RFC-555: the Mission continuation implements Integration's port in development-automation's designated
   // integration adapter, type-only through `composition/required-ports` (a required-implementation edge).
   'packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts -> packages/backend/src/modules/task-execution/application/sourceTerminationCapability.ts',

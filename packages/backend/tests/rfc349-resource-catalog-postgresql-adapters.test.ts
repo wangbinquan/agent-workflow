@@ -233,9 +233,8 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
       )
       expect(atom).toContain(`.update(${table})`)
     }
-    expect(postgresqlMutationParticipants).toContain(
-      'PostgresqlCapabilityTemplatePackageMutationOwner',
-    )
+    // RFC-609: the owner-native contract is Resource Catalog's provider-neutral application port (it takes `PersistenceTx`).
+    expect(postgresqlMutationParticipants).toContain('CapabilityTemplatePackageMutationOwner')
     expect(postgresqlMutationParticipants).toContain('prepareOwnerNative(')
     expect(postgresqlMutationParticipants).toContain('commitOwnerNativeInTransaction(')
     expect(postgresqlMutationParticipants).toContain('authority: input.context.authority')

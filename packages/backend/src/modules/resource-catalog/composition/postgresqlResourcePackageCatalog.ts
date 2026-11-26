@@ -6,9 +6,9 @@ import type {
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ResourceCurrentAuthorityResolver } from '../application/participants/resourceAuthorization'
+import type { CapabilityTemplatePackageMutationOwner } from '../application/ports/capabilityTemplatePackageOwner'
 import {
   createPostgresqlResourcePackageMutationSessionFactory,
-  type PostgresqlCapabilityTemplatePackageMutationOwner,
   type PostgresqlResourcePackageMutationSessionFactory,
 } from '../infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
 import type { McpTransactionLifecycle } from '../infrastructure/mcpRepository'
@@ -54,7 +54,7 @@ export interface PostgresqlResourcePackageProviderDependencies {
   readonly pluginArtifacts: ResourcePackagePluginArtifactOwner
   readonly authorityResolver: ResourceCurrentAuthorityResolver
   readonly mcpLifecycle: McpTransactionLifecycle
-  readonly capabilityTemplates: PostgresqlCapabilityTemplatePackageMutationOwner
+  readonly capabilityTemplates: CapabilityTemplatePackageMutationOwner
   readonly id?: () => string
   readonly now?: () => number
 }

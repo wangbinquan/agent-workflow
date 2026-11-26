@@ -80,8 +80,9 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
   'context-value-sccs': [],
   'context-value-pairs-off-dag': [],
   'cross-context-internal-file-pairs': [
-    'packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityTemplatePackageMutationOwner.ts -> packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts',
-    'packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityTemplatePackageMutationOwner.ts -> packages/backend/src/modules/resource-catalog/infrastructure/postgresql/repositorySupport.ts',
+    // RFC-609: the capability templates' PostgreSQL owner-native arm takes Resource Catalog's owner contract from its
+    // designated adapter (type-only through `composition/required-ports`) and types the transaction as the platform's
+    // `PersistenceTx`; both code-capability -> resource-catalog pairs are settled.
     // RFC-555: the Mission continuation implements Integration's port in development-automation's designated
     // integration adapter, type-only through `composition/required-ports` (a required-implementation edge).
     'packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts -> packages/backend/src/modules/task-execution/application/sourceTerminationCapability.ts',

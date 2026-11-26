@@ -66,6 +66,7 @@ import {
   type PostgresqlResourcePackageSkillPublication,
 } from './postgresqlResourcePackageMutationArms'
 import type { AgentMutationBatch } from '../../application/ports/agentMutation'
+import type { CapabilityTemplatePackageMutationOwner } from '../../application/ports/capabilityTemplatePackageOwner'
 import type {
   PreparedPackageMutation,
   ResourcePackageMutationReceipt,
@@ -617,33 +618,6 @@ export interface PostgresqlResourcePackageTransactionSession {
   readonly participants: PostgresqlResourcePackageTransactionParticipants
 }
 
-/** Capability-template persistence remains owned by its native aggregate. */
-export interface PostgresqlCapabilityTemplatePackageMutationOwner {
-  prepareOwnerNative(
-    context: PostgresqlResourcePackageMutationRequestContext,
-    input: Readonly<{
-      mutation: CapabilityTemplatePackageMutation
-      resourceId: string
-    }>,
-  ): Promise<unknown>
-  commitOwnerNativeInTransaction(
-    transaction: PostgresqlResourceCatalogTransaction,
-    context: PostgresqlResourcePackageMutationRequestContext,
-    input: Readonly<{
-      mutation: CapabilityTemplatePackageMutation
-      resourceId: string
-      payload: Readonly<Record<string, unknown>>
-      prepared: unknown
-      ownership: Readonly<{
-        authority: ResourceRequestContext
-        ownerUserId: string
-        visibility: 'private'
-        builtin: false
-      }>
-    }>,
-  ): Promise<void>
-}
-
 export interface PostgresqlResourcePackagePrestageInput {
   /** Must durably persist the artifact before resolving. */
   recordArtifact(artifact: PostgresqlResourcePackageMutationArtifact): Promise<void>
@@ -690,7 +664,7 @@ export interface PostgresqlResourcePackageMutationSessionFactoryInput {
   readonly mcpLifecycle: McpTransactionLifecycle
   readonly pluginArtifacts: PostgresqlResourcePackagePluginArtifactOwner
   readonly skillArtifacts: PostgresqlResourcePackageSkillArtifactOwner
-  readonly capabilityTemplates: PostgresqlCapabilityTemplatePackageMutationOwner
+  readonly capabilityTemplates: CapabilityTemplatePackageMutationOwner
   readonly afterCommitted?: (
     context: PostgresqlResourcePackageMutationRequestContext,
     receipt: PostgresqlResourcePackageApplyReceipt,
@@ -838,7 +812,7 @@ function packageMutationReceipt<K extends ResourcePackageMutationReceipt['resour
 type PreparedAgentState = Readonly<{ mutation: AgentPackageMutation; resourceId: string }>
 
 function preparationParticipants(input: {
-  readonly owner: PostgresqlCapabilityTemplatePackageMutationOwner
+  readonly owner: CapabilityTemplatePackageMutationOwner
   readonly context: PostgresqlResourcePackageMutationRequestContext
   readonly states: WeakMap<object, PostgresqlResourcePackagePreparedState>
   readonly agentStates: PreparedAgentState[]
@@ -951,7 +925,7 @@ function transactionParticipants(input: {
   readonly skillPublications: WeakMap<object, PostgresqlResourcePackageSkillPublication>
   readonly pluginPublications: WeakMap<object, PostgresqlResourcePackagePluginPublication>
   readonly lifecycle: McpTransactionLifecycle
-  readonly capabilityTemplates: PostgresqlCapabilityTemplatePackageMutationOwner
+  readonly capabilityTemplates: CapabilityTemplatePackageMutationOwner
   readonly id: () => string
   readonly now: () => number
 }): PostgresqlResourcePackageTransactionParticipants {

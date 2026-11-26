@@ -1,3 +1,19 @@
+## 2026-11-26 RFC-609 能力模板的 PostgreSQL 归属方经指定 adapter 取资源目录的端口合同（In Progress；`design/RFC-609-capability-template-owner-designated-adapter/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S9
+  （跨 context 内部 import 为 0），全仓跨 context 内部文件对余 4 条，其中 2 条是 code-capability 的能力模板归属方直接 import resource-catalog
+  infrastructure 的合同与事务类型。
+- **范围**：合同迁入 resource-catalog 的 `application/ports/capabilityTemplatePackageOwner.ts`、经 `composition/required-ports` 交出，参与方文件与装配
+  改从端口取，合同改名为中立的 `CapabilityTemplatePackageMutationOwner`；code-capability 新增指定 adapter `application/adapters/resource-catalog-adapter.ts`（只以 `import type` 取 required-ports），归属方改从
+  它取合同、事务类型用平台 `PersistenceTx`。跨 context 内部文件对 4 → 2（`counts.json`、RFC-376 基线、preflight 债务清单同步）。新增 RFC-609 用例。
+  design §5 记下兼容岛物理并入受持久化 owner 身份约束（另立）；`docs/dev-gotchas.md` 记一条（经 required-ports 交出的合同用中立名字）。
+  RFC-606 随本提交转 Done（exact SHA CI 全绿）。
+- **集中验证**（基于 `03008a73a`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警。1,049 个用例文件里查出一处本人缺陷：
+  `rfc349-provider-cutover` 不许 application 层按名字取引擎专属符号，合同改名为中立的 `CapabilityTemplatePackageMutationOwner` 后重选 237 个复验
+  全部通过（`rfc321` 照例红，`rfc167` 并行下超时、单跑通过）。5 种变异都被认出；架构报告除该计数 4 → 2 与新增两个文件外相同。实现门 PASS
+  （本会话按路径限定自审，只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-26 RFC-546 模块级可变单例的进程级例外清单与 §14 口径修订（In Progress；`design/RFC-546-module-singleton-process-exceptions/`）
 
 - **来由**：2026-11-23 落档为 Draft、待用户确认 Q1～Q3；用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」
@@ -35,7 +51,7 @@
   （缺席判据改为透过类型断言的 AST）；架构报告生产文件少 2 个，计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：待推送。
 
-## 2026-11-25 RFC-606 runtime-management 合同里的开放类型：JSON 值、有限键映射与失败原因（In Progress；`design/RFC-606-runtime-contract-json-and-closed-mapped-types/`）
+## 2026-11-25 RFC-606 runtime-management 合同里的开放类型：JSON 值、有限键映射与失败原因（Done；`design/RFC-606-runtime-contract-json-and-closed-mapped-types/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-605 之后
   runtime-management 的 4 条 public 类型偏差（检测规则与收法由本会话裁定，见 design §0；存量探测回执的兼容口径即现有的展示规则）。
@@ -45,7 +61,7 @@
   `public-surface-deviations` 降到 12。新增 RFC-606 用例。
 - **集中验证**（基于 `170f3e2cc`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 658 个用例文件只有 `rfc321` 照例红；6 种变异都被认出；
   架构报告除偏差 16 → 12 与只记不门的 import 清单外不变。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-606 的提交 `01306b9ce`：exact SHA 主 CI run 45776307924 70 / 70 全绿，Windows 平台 run 45776307935 全绿；2026-11-26 转 Done。
 
 ## 2026-11-25 RFC-605 不透明身份引用改为带品牌的句柄，任务房间结果不再带事件引用（Done；`design/RFC-605-opaque-identity-handles/`）
 

@@ -77,6 +77,10 @@ context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`
   `daemonModules/*`）构造后注入，测试构造入口同样显式注入，不留「没传就静态 import provider」的默认分支。新端口同批登记进
   RFC-294 design §3.1 的虚线与 `rfc294Target.ts` 的 `REQUIRED_CONTEXT_EDGES`（`rfc294-design-parity` 两向比对）。
 - 常量、纯函数放错 owner 就迁到真正的 owner；两个 context 都要用、谁也不能依赖谁时进 `@agent-workflow/shared` 或 `platform/`。
+- **经 required-ports 交出的合同用中立的名字**（RFC-609 集中验证查出）：指定 adapter 在 application 层，`rfc349-provider-cutover` 不许
+  application / domain / engine / public 按名字取带 `Sqlite` / `Postgresql` 的符号。把 infrastructure 里的 `PostgresqlXxx` 合同挪进端口、
+  交给别的 context 实现时，参数是中立类型（如 `PersistenceTx`）就去掉引擎前缀；实现工厂留在 infrastructure 的引擎命名文件里，名字可以带
+  前缀。`tsc`、eslint 与跨 context 文件对的门都看不出这一条。
 - 要按模块分派的 platform 机制（例如维护作业）：处理器放回 owner 模块，bootstrap 只装「键 → 处理器」表，platform 只按键调用。
 - 不算修好的做法：改走 `@/services/*` 的 `export *` facade（门不数 `services/`，依赖还在——RFC-399 实测经 `services/` 绕行的
   越界 context 对仍有 18 对）、写一份同形的本地类型、在原位置留转导出、把 import 改成 `import type` 却仍在用对方的值。

@@ -543,9 +543,12 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 2026-11-25 [RFC-605](../RFC-605-opaque-identity-handles/proposal.md)（Done，`170f3e2cc`）：不透明身份引用 2 条改为平台的带品牌令牌 `OpaqueIdentity`（指定的平台
 合同类型）；任务房间结果里的 `CommittedEventRef` 1 条去掉（唯一的事务属主从未读它，事件由持久投递送达）。`PUBLIC_SURFACE_DEBT` 19 → 16。余下：有限键映射
 类型 1 条、`unknown` DTO 4 条，以及能力 / 凭据 / 身份一族 11 条。
-2026-11-25 [RFC-606](../RFC-606-runtime-contract-json-and-closed-mapped-types/proposal.md)（In Progress）：runtime-management 的 4 条收口——平台 `JsonValue` /
+2026-11-25 [RFC-606](../RFC-606-runtime-contract-json-and-closed-mapped-types/proposal.md)（Done，`01306b9ce`）：runtime-management 的 4 条收口——平台 `JsonValue` /
 `JsonObject`（指定的平台合同类型）用于用量事件与探测回执视图，清扫失败原因为 `string`，键集合封闭的映射类型算闭合（检测器规则三）。`PUBLIC_SURFACE_DEBT`
 16 → 12。余下：system-operations 的自动升级回执 1 条（记录层载荷按 RFC-398 §2.7 不透明，另立），以及能力 / 凭据 / 身份一族 11 条（等 RFC-546）。
+2026-11-26 [RFC-609](../RFC-609-capability-template-owner-designated-adapter/proposal.md)（In Progress）：跨 context 内部文件对里能力模板归属方的 2 条收口——资源包
+PostgreSQL 事务的 owner-native 合同迁入 resource-catalog 的 application 端口、经 `composition/required-ports` 交出，code-capability 经指定 adapter 只取类型，
+事务类型用平台 `PersistenceTx`。跨 context 内部文件对 4 → 2，余下 Integration 用 Task Execution 来源终止能力的 2 条（能力合同一族，延后）。
 
 ### S10 `composition/` 只装配：全模块收口
 
@@ -854,6 +857,10 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   design §0）。余下 launch / admission 的可选依赖与需求物化器的 `source`。
   2026-11-25 [RFC-607](../RFC-607-requirement-materializer-stated-inputs/proposal.md)（In Progress）：需求物化器的 `source` 必填、删去只供用例的 `documents`
   覆盖；只供用例的本机兼容物化器迁入 `tests/helpers/`。余下 launch 的 `uploadAdmission?`（子任务启动不收上传，是用例差异，按用例拆入参另议）。
+  2026-11-26 兼容岛物理并入的约束（[RFC-609](../RFC-609-capability-template-owner-designated-adapter/proposal.md) design §5 记下）：报告与表归属早已把
+  code-capability 算作 development-automation，余下的只是物理目录；表的 owner `code-capability` / `code-capability/history` 进入逻辑契约（`ownerContext`、
+  `retention.owner`），RFC-395 的贡献约定又按 owner 首段定位 schema 文件，所以物理并入要么改 owner（按 RFC-398 立 schema 历史版本、种子与映射预言），
+  要么改贡献约定让一个模块承载两个持久化 owner，另立。
 - **E9 digital-employee / event-center / execution-contract**（2026-11-03 路由部分由 [RFC-436](../RFC-436-module-inbound-http-bindings/proposal.md)
   Done，`3cb987341`：两个 HTTP 绑定归入各自模块 `inbound/http`，句柄合同留在 `application/ports`；XC 兼容 seam 仍开放）：在 RFC-361/365/368 已落切片之上，完成路由到 public command / query、
   Event observer 进入生命周期程序、XC 对 legacy agent / workflow / scriptRun 的兼容 seam 退役。

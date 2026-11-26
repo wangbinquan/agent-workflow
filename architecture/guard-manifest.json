@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1006
+      "lines": 1007
     },
     {
       "assertsAbsence": true,
@@ -4989,6 +4989,18 @@
       "file": "packages/backend/tests/architecture/rfc546-module-singleton-exceptions.test.ts",
       "id": "rfc546-module-singleton-exceptions",
       "lines": 166,
+      "mechanism": "ast",
+      "minCorpusFiles": 3000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc609-capability-template-owner-designated-adapter-boundary.test.ts",
+      "id": "rfc609-capability-template-owner-designated-adapter-boundary",
+      "lines": 220,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
       "negativeFixture": true,
