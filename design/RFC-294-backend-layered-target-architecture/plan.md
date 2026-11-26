@@ -829,7 +829,7 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   本机回落另立。
   2026-11-25 [RFC-599](../RFC-599-employee-compositions-stated-effects/proposal.md)（Done，`84be64f92`）：员工工作区与平台工作项两个装配的效果选择同样改为
   必填；它们继承来的可选 provider（`graphDelivery`、`approvalGateway`、`pipelineEvidence`）与 RFC-597 同类，另立。
-  2026-11-25 [RFC-600](../RFC-600-development-automation-infrastructure-stated-effects/proposal.md)（In Progress）：infrastructure 的选择核对与收工厂的
+  2026-11-25 [RFC-600](../RFC-600-development-automation-infrastructure-stated-effects/proposal.md)（Done，`b3723ab3c`）：infrastructure 的选择核对与收工厂的
   包装不再在没给时造本机实现，生产代码里调用本机效果构造的只剩 standalone profile、本机一族与托管任务镜像里的执行器（S12 的这条原则在
   development-automation 收口）。余下：员工两个装配继承来的可选 provider 与 `ReconcilerPorts`（后者涉及 RFC-359 P0 指纹，须用户定）。
 - **E9 digital-employee / event-center / execution-contract**（2026-11-03 路由部分由 [RFC-436](../RFC-436-module-inbound-http-bindings/proposal.md)

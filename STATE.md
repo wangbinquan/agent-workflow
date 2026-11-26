@@ -1,4 +1,4 @@
-## 2026-11-25 RFC-600 development-automation 的 infrastructure 不再替调用方造本机效果（In Progress；`design/RFC-600-development-automation-infrastructure-stated-effects/`）
+## 2026-11-25 RFC-600 development-automation 的 infrastructure 不再替调用方造本机效果（Done；`design/RFC-600-development-automation-infrastructure-stated-effects/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；接 RFC-598 design §5 / RFC-599 留下的一项（RFC-294 S12：
   单机默认值只留在 standalone profile）。
@@ -10,8 +10,8 @@
 - **集中验证**（基于 `84be64f92`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 515 个
   用例文件只有 `rfc321` 照例红（主树 10 / 10）；四种变异都被认出；架构计数都不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-600 的提交 `b3723ab3c`：主 CI run 45721890938 70 个 job 里 68 个成功；后端第 40/44 片 `rfc398-start-auto-upgrade-takeover` 的一个次序在 183.7
-  秒时报 barrier / readiness 超时（CI required 随之红），归因环境性多进程时序（同一次运行里另一个次序与其余接管用例通过，本提交没改接管路径）；转 Done 等
-  下一个以本提交为祖先的运行作后继证据。
+  秒时报 barrier / readiness 超时（CI required 随之红），归因环境性多进程时序（同一次运行里另一个次序与其余接管用例通过，本提交没改接管路径）；后继证据为
+  文档提交 `1c64695a9` 的 run 45730431178 70 / 70 全绿（该用例两个次序 29.5 / 27.4 秒）。2026-11-25 转 Done。
 
 ## 2026-11-25 RFC-599 员工工作区与平台工作项装配的效果选择必填（Done；`design/RFC-599-employee-compositions-stated-effects/`）
 

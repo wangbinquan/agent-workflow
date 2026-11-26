@@ -1,6 +1,6 @@
 # RFC-600 development-automation 的 infrastructure 不再替调用方造本机效果（RFC-294 S12 余项）
 
-- **状态**：In Progress（2026-11-25）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话自行裁定落位（见
+- **状态**：Done（2026-11-25，落地 `b3723ab3c`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话自行裁定落位（见
   design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) S12 第 1 项（单机默认值只留在 standalone profile）；接
   [RFC-598](../RFC-598-development-automation-stated-composition-inputs/proposal.md) design §5 与 [RFC-599](../RFC-599-employee-compositions-stated-effects/proposal.md)
