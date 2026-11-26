@@ -10,7 +10,7 @@
 //    工厂（远端树操作时原样、否则先选本机实现）交给 application 的同名函数。
 // ④ 全部生产文件、用例与 e2e 不从旧位置取迁出的名字：composition 文件只给三个组合名字，两个 infrastructure 文件只给包装与转出，
 //    `attemptSupport.ts` 不再给三组常量；命名 import、type-only、re-export、命名空间成员与动态 import 的解构都认，带负对照。
-// ⑤ 新文件的依赖面是闭集：三个 application 文件只取 zod、shared、`@/platform/contracts/hash`、`@/util/gitRef`、digital-employee 的 `public/types` 与本
+// ⑤ 新文件的依赖面是闭集：三个 application 文件只取 zod、shared、`@/platform/contracts/hash`、`@/platform/contracts/gitRef`、digital-employee 的 `public/types` 与本
 //    模块的 domain / application；domain 文件没有 import；都不用进程全局（带负对照）。
 //
 // 覆盖范围（C12）：① ④ 读全部生产文件（语料下限 3,000）、全部用例（语料下限 2,500）与仓库根的 e2e，先按名字或路径文本筛、再逐个解析
@@ -350,7 +350,7 @@ function allowedDependency(file: string, specifier: string): boolean {
     [
       'zod',
       '@/platform/contracts/hash',
-      '@/util/gitRef',
+      '@/platform/contracts/gitRef',
       '@/modules/digital-employee/public/types',
     ].includes(specifier)
   )
@@ -594,7 +594,7 @@ describe('RFC-496 ④ 没有文件从旧位置取迁出的名字', () => {
 })
 
 describe('RFC-496 ⑤ 新文件的依赖面是闭集、不用进程全局', () => {
-  test('三个 application 文件只取 zod、shared、@/platform/contracts/hash、@/util/gitRef、digital-employee 的 public/types 与本模块 domain / application', () => {
+  test('三个 application 文件只取 zod、shared、@/platform/contracts/hash、@/platform/contracts/gitRef、digital-employee 的 public/types 与本模块 domain / application', () => {
     for (const location of [WORKSPACE, SNAPSHOT, VALIDATOR]) {
       const path = sourceOf(location)
       expect([location, purityFindings(path, text(path))]).toEqual([location, []])

@@ -5,7 +5,7 @@
 // / portArtifacts.existsInsideRoot）是真·四象限不同判：envelope 对不存在目标回退
 // 词法放行（存在性由 handler 另报、喂 followup），并在 RFC-193 绝对路径同位证明
 // 分支重写 targetAbs/relativePath；portArtifacts 两份对 resolve 失败一律拒、且
-// 接受绝对路径存量行。**迁移到共享骨架（util/safePath.checkLexicalThenRealpath）
+// 接受绝对路径存量行。**迁移到共享骨架（platform/workspace/local/safePath.checkLexicalThenRealpath）
 // 前先用本文件把每个象限的现行为拍死；迁移后逐条同判，任何一条变红 = 迁移改了
 // 安全语义，打回。** 这是设计门明令「不能统一语义、只共享骨架」的执行锁。
 
@@ -153,7 +153,7 @@ describe('RFC-284 T6 — 双查骨架唯一性文本锁', () => {
   const src = (p: string) => readFileSync(join(import.meta.dir, '../src', p), 'utf8')
 
   test('checkLexicalThenRealpath 在 src 恰好一处定义、三个迁移点全部消费', () => {
-    const safePath = src('util/safePath.ts')
+    const safePath = src('platform/workspace/local/safePath.ts')
     expect(safePath.match(/export function checkLexicalThenRealpath\(/g)?.length).toBe(1)
     expect(
       src('modules/task-execution/infrastructure/local/filePortOutputValidation.ts').includes(

@@ -30,7 +30,7 @@ import {
   type InstallResult,
 } from '../local/filePluginInstallation'
 import { createSha256DigestBuilder, sha256Hex } from '@/platform/contracts/hash'
-import { assertSameFileIdentityForHost } from '@/util/fileTrust'
+import { assertSameFileIdentityForHost } from '@/platform/execution/local/fileTrust'
 
 const Request = z.discriminatedUnion('method', [
   z

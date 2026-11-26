@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSecretBox, createSecretBoxFromKey, ensureSecretKey } from '../src/auth/secretBox'
-import { statMetadataIsAuthoritative } from '../src/util/fileTrust'
+import { statMetadataIsAuthoritative } from '@/platform/execution/local/fileTrust'
 
 describe('ensureSecretKey', () => {
   test('creates a 32-byte file with mode 0600 on first call', () => {

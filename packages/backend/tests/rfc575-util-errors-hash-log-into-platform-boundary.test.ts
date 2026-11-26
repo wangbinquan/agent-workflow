@@ -65,16 +65,11 @@ const MOVED: ReadonlyArray<readonly [string, string, readonly string[], readonly
 const OLD = new Set(MOVED.map(([old]) => old))
 /** What `util/` still holds after RFC-575: the git, credential, file-trust, Windows ACL, OIDC, redaction and safe-path family. */
 const UTIL_REMAINDER = [
-  'fileTrust.ts',
   // RFC-593: git.ts moved into source-control's local infrastructure.
+  // RFC-617: fileTrust, win32Acl, gitHardening, gitRef, redact and safePath moved into platform.
   'gitCredentialHelper.ts',
   'gitCredentialLease.ts',
-  'gitHardening.ts',
-  'gitRef.ts',
   'oidcResponse.ts',
-  'redact.ts',
-  'safePath.ts',
-  'win32Acl.ts',
 ]
 
 function walk(dir: string): string[] {

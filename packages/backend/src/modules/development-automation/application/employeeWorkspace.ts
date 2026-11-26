@@ -16,7 +16,7 @@ import { GIT_METADATA_SKIP_PREFIXES } from '../domain/gitMetadataOwnership'
 
 import { z } from 'zod'
 import { PLATFORM_WORKSPACE_DIR, utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
-import { stableGitRefComponent, stableIdentityComponent } from '@/util/gitRef'
+import { stableGitRefComponent, stableIdentityComponent } from '@/platform/contracts/gitRef'
 import type { EmployeeWorkspacePersistence } from './ports/employeeWorkspacePersistence'
 import type { GraphMrCare } from './graph-development/mrCare'
 import {

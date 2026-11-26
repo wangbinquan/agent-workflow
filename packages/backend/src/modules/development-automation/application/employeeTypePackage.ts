@@ -24,7 +24,7 @@ import {
   type ExecutionContractField,
   type ExecutionContractRegistration,
 } from '@/modules/execution-contract/public/types'
-import { stableIdentityComponent } from '@/util/gitRef'
+import { stableIdentityComponent } from '@/platform/contracts/gitRef'
 import { projectDevelopmentToolResultV2 } from './digitalEmployeeToolContractProjectionV2'
 import {
   developmentExecutionContractRegistrationsV2,

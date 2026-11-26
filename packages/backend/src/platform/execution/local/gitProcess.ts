@@ -4,7 +4,7 @@
 // trees); this runner knows none of them, which is why it is platform: platform's own version probe, worktree backup and
 // boot-upgrade environment run git too, and platform depends on no module.
 
-import { hardenGitArgs } from '@/util/gitHardening'
+import { hardenGitArgs } from './gitHardening'
 import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
 import { raceWithFallback } from '@/platform/execution/local/process'
 
@@ -99,7 +99,7 @@ export async function runGit(
     // RFC-252 G1: every daemon-side git spawn carries the hardening overrides.
     // `-c` outranks EVERY config scope (system/global/local/worktree/modules), so
     // this is the only mechanism that can beat what an agent writes into the git
-    // dir it legitimately owns. See util/gitHardening.ts for the threat model and
+    // dir it legitimately owns. See ./gitHardening.ts for the threat model and
     // the measured evidence.
     cmd: ['git', ...hardenGitArgs(['-C', cwd, ...args])],
     // Explicit env passthrough — Bun.spawn under `bun test` does not pick up

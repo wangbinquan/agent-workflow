@@ -32,7 +32,7 @@ import type {
 } from './ports/repositoryCandidateEffects'
 import type { RepositoryGit } from './repositoryCommit'
 import { classifyRepositoryPushFailure } from '../domain/repositoryPushFailure'
-import { redactSensitiveString } from '@/util/redact'
+import { redactSensitiveString } from '@/platform/logging/redact'
 import type {
   RepositoryPublicationSession,
   RepositoryPublicationSubject,

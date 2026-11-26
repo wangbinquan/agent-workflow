@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import { checkLexicalThenRealpath } from '@/util/safePath'
+import { checkLexicalThenRealpath } from '@/platform/workspace/local/safePath'
 
 export function readInsideRoot(rootAbs: string, rel: string): Buffer | null {
   const v = checkLexicalThenRealpath(rootAbs, rel)

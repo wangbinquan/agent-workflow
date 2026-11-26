@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { requireWorkPathWithoutSymlinks } from '@/platform/crewstation/workVolumePath'
 import { assertWorkVolumeWritersSettled } from '@/platform/crewstation/workVolumeWriters'
 import { createSha256DigestBuilder } from '@/platform/contracts/hash'
-import { assertSameFileIdentityForHost } from '@/util/fileTrust'
+import { assertSameFileIdentityForHost } from '@/platform/execution/local/fileTrust'
 
 const Request = z
   .object({

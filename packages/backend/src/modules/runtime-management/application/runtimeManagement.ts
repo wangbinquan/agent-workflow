@@ -1,6 +1,6 @@
 // RFC-360: management behavior lives in one application, shared by every database provider.
 import { ConflictError, NotFoundError } from '@/platform/errors/domainErrors'
-import { redactSensitiveString } from '@/util/redact'
+import { redactSensitiveString } from '@/platform/logging/redact'
 import {
   parseRuntimeExtraArgs,
   runtimeProbeTargetOf,

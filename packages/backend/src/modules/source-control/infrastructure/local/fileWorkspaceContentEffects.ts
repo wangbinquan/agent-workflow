@@ -19,7 +19,7 @@ import type {
  * Resolve `relPath` against `worktreePath` and assert the result is still
  * inside the worktree. Empty `relPath` resolves to the worktree root itself
  * (used by the tree-list endpoint for the root directory). Mirrors the
- * lexical containment check in `util/safePath.ts` but tolerates the empty
+ * lexical containment check in `platform/workspace/local/safePath.ts` but tolerates the empty
  * path that `safeJoin` rejects.
  */
 function resolveInsideWorktree(worktreePath: string, relPath: string): string {

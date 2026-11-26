@@ -22,7 +22,7 @@ import {
   statMetadataIsAuthoritative,
   type FileTrustVerdict,
   type TrustStats,
-} from '@/util/fileTrust'
+} from '@/platform/execution/local/fileTrust'
 
 function stats(overrides: Partial<TrustStats> & { mode?: number } = {}): TrustStats {
   return {

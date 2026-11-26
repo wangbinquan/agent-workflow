@@ -15,7 +15,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { hardenGitArgs, hardenedGitLeadingArgs } from '@/util/gitHardening'
+import { hardenGitArgs, hardenedGitLeadingArgs } from '@/platform/execution/local/gitHardening'
 import { nullDevice } from '@/platform/execution/local/platformExec'
 import { join, resolve } from 'node:path'
 
@@ -135,7 +135,7 @@ describe('RFC-254 — the framework pins line endings on Windows', () => {
   test('they ride in the SAME leading args every daemon-side git call passes through', () => {
     // A second injection point is how two copies of one rule drift apart.
     const source = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'util', 'gitHardening.ts'),
+      resolve(import.meta.dir, '..', 'src', 'platform', 'execution', 'local', 'gitHardening.ts'),
       'utf8',
     )
     // Comments here DISCUSS autocrlf at length — that is the behaviour being

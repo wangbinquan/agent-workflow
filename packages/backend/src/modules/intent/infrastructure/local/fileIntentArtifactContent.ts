@@ -1,7 +1,7 @@
 import { decodeSkillPath } from '@/platform/content/locations/skill'
 import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
-import { safeJoin } from '@/util/safePath'
+import { safeJoin } from '@/platform/workspace/local/safePath'
 import type { IntentApplyArtifact } from '@/modules/resource-catalog/public/types'
 import type { IntentJournalArtifact } from '../../domain/journalArtifacts'
 import type { PostgresqlSkillArtifactCompensation } from '../../ports/skillArtifactCompensation'

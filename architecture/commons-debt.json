@@ -1097,7 +1097,7 @@
     },
     {
       "anchors": [
-        "packages/backend/src/util/safePath.ts:14-41",
+        "packages/backend/src/platform/workspace/local/safePath.ts:14-41",
         "packages/backend/src/modules/development-automation/domain/requirementManifest.ts:13-27",
         "packages/backend/src/modules/development-automation/application/employeeTypePackage.ts:2633-2670",
         "packages/backend/src/modules/development-automation/application/employeeWorkspace.ts:56-69",

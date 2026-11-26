@@ -184,14 +184,14 @@
       "reason": "The version and capabilities of the host git binary."
     },
     {
-      "file": "packages/backend/src/util/win32Acl.ts",
+      "file": "packages/backend/src/platform/execution/local/win32Acl.ts",
       "symbol": "cachedUserSid",
       "kind": "top-level-let",
       "category": "host-probe",
       "reason": "The SID of the Windows user this process runs as."
     },
     {
-      "file": "packages/backend/src/util/win32Acl.ts",
+      "file": "packages/backend/src/platform/execution/local/win32Acl.ts",
       "symbol": "sinkCounter",
       "kind": "top-level-let",
       "category": "unique-counter",

@@ -11,7 +11,7 @@ import {
 } from '../databaseSkillTrees'
 import type { SkillContentReference } from '../../application/skills/contentReader'
 import type { FileNode } from '@agent-workflow/shared'
-import { realpathInside, safeJoin } from '@/util/safePath'
+import { realpathInside, safeJoin } from '@/platform/workspace/local/safePath'
 import { ValidationError } from '@/platform/errors/domainErrors'
 
 /** File reads retain the original local semantics; a full-tree listing is not a file lookup. */

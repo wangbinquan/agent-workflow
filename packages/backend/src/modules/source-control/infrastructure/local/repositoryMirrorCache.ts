@@ -50,10 +50,10 @@ import {
   nonInteractiveGitEnv,
   runGit,
 } from '@/platform/execution/local/gitProcess'
-import { hardenGitArgs } from '@/util/gitHardening'
+import { hardenGitArgs } from '@/platform/execution/local/gitHardening'
 import { createLogger } from '@/platform/logging/logger'
 import { leaseGitCredential } from '@/util/gitCredentialLease'
-import { redactSensitiveString } from '@/util/redact'
+import { redactSensitiveString } from '@/platform/logging/redact'
 import { Paths } from '@/platform/configuration/installationPaths'
 import { resolveSubmoduleParams } from '@/modules/source-control/infrastructure/local/submoduleParams'
 import {

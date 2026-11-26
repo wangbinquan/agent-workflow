@@ -19,7 +19,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '@/platform/errors/domainErrors'
-import { stableIdentityComponent } from '@/util/gitRef'
+import { stableIdentityComponent } from '@/platform/contracts/gitRef'
 import type {
   EmployeeCaseDetailInputProjection,
   EmployeeCaseDetailProjectionInputV1,

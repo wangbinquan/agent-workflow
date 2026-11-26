@@ -46,7 +46,7 @@ import type {
 } from '@agent-workflow/shared'
 import { ValidationError } from '@/platform/errors/domainErrors'
 import { createLogger } from '@/platform/logging/logger'
-import { redactSensitiveString } from '@/util/redact'
+import { redactSensitiveString } from '@/platform/logging/redact'
 
 const log = createLogger('mcpProbe')
 

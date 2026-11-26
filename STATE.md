@@ -1,3 +1,17 @@
+## 2026-11-26 RFC-617 util/ 的六个通用原语原样归 platform（In Progress；`design/RFC-617-util-primitives-into-platform/`）
+
+- **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W9-D，
+  design §2.2“`util/` 中的通用原语归 `platform/`”。
+- **范围**：`redact` → `platform/logging/`，`safePath` → `platform/workspace/local/`，`fileTrust`、`win32Acl`、`gitHardening` → `platform/execution/local/`，
+  `gitRef` → `platform/contracts/`；逐字迁移（只改两条模块内相对路径与一处注释），52 个读者文件改指，旧位置不留转出；别处指向旧路径的注释随之改指。钉着旧路径的账本（commons manifest / debt、
+  模块级单例例外清单、架构报告的旧文件 owner 表）与源码锁（`rfc575` 余量清单、`rfc284`、`rfc254`、RFC-494～498 的闭集依赖锁）随之改指。
+  `legacy-horizontal-files` 53 → 47。新增 RFC-617 用例。
+- **集中验证**：候选导出（HEAD `a36412c24` + 本 RFC 路径）上 `tsc` / eslint / prettier 全过；用例第一轮 1,656 个文件抓到三处真问题并已修——
+  `windows-platform.yml` 路径过滤钉着两条旧路径（Windows 任务会因此不再触发）、改指脚本误改了 `rfc593` 写在字符串里的近似对照、仓库根 `tests/perf/run.ts`
+  未改指；第二轮 473 个文件除 `rfc321`（导出没有发布历史，环境性）外全过；架构报告只有 `legacy-horizontal-files` 53 → 47；变异 4 / 4 被抓。
+  RFC-616 在验证之后改了共享工作树里的 `employeeTypePackage.ts`，本提交按验证过的版本提交该文件，不带入其在制品。
+- **CI 侧**：待推送。
+
 ## 2026-11-26 RFC-616 过程度量：工作流、工作组、数字员工的统一过程观测（In Progress；`design/RFC-616-process-metrics/`）
 
 - **来由**：用户 2026-11-26「我现在想增加一个度量，也就是按工作流来统计每个工作流的每个任务的各阶段时长、token消耗、人工介入次数等等所有针对过程的度量，目的是帮助团队去分析这个工作流中的能力提升点从而进行改进」「能不能做统一观测打点感知能力，不要到处做特殊打点」；同日多轮讨论逐项确认口径（proposal §13）。

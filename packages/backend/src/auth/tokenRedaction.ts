@@ -33,7 +33,7 @@ import {
 import type { Task } from '@agent-workflow/shared'
 import type { Actor, ActorSource } from './actor'
 import { REDACTED, redactMcpRecord, redactRepoUrl } from './application/tokenSnapshotRedaction'
-import { redactSensitiveString } from '@/util/redact'
+import { redactSensitiveString } from '@/platform/logging/redact'
 
 export { REDACTED, redactMcpRecord, redactRepoUrl }
 

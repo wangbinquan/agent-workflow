@@ -590,7 +590,7 @@
       "claimAudit": "Header explicitly disclaims being a security boundary (:17-20) — an honest, non-forgeable stance. No adoption ratchet exists: nothing asserts which persistence sites must call it. AUDITED BY NOBODY.",
       "core": false,
       "files": [
-        "packages/backend/src/util/redact.ts"
+        "packages/backend/src/platform/logging/redact.ts"
       ],
       "guards": [],
       "id": "secret-redaction-kernel",
@@ -604,7 +604,7 @@
       "claimAudit": "Header claims 'every fs read/write inside a skill must land strictly under the skill's root'. Adoption is 8 files (skill.ts, skillVersion.ts, skillTree.ts, worktreeFiles.ts, upload.ts, runtime/claudeCode/config.ts, programArtifactStore.ts) out of ~83 backend files containing an fs write call, and there is no allowlist ratchet on write sites the way there is on spawn sites. AUDITED BY NOBODY.",
       "core": false,
       "files": [
-        "packages/backend/src/util/safePath.ts"
+        "packages/backend/src/platform/workspace/local/safePath.ts"
       ],
       "guards": [],
       "id": "path-containment-kernel",

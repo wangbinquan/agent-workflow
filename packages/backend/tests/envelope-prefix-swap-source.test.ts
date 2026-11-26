@@ -93,7 +93,7 @@ describe('RFC-049 envelope.ts source-level prefix swap guard', () => {
     // statSync (a forgiveness existence-probe) stays gone.
     expect(ENVELOPE_SRC).not.toContain('statSync')
     // RFC-103 T7 → RFC-284 T6 改判：realpath containment 不再由本文件手写——
-    // 双查骨架收敛到 util/safePath.checkLexicalThenRealpath（containment-only
+    // 双查骨架收敛到 platform/workspace/local/safePath.checkLexicalThenRealpath（containment-only
     // by construction），envelope 内直接 realpathSync 归零。锁的意图不变：
     // resolveWorktreePath 的 realpath 消费必须仍是 containment（经骨架），
     // 且绝不许回潮为 auto-read/promote 路径（上面两条 not.toContain 继续守）。

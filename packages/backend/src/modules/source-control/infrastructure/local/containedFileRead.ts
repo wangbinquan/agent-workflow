@@ -19,7 +19,7 @@ import {
   type Stats,
 } from 'node:fs'
 import { isAbsolute, join, resolve, sep } from 'node:path'
-import { assertSameFileIdentityForHost } from '@/util/fileTrust'
+import { assertSameFileIdentityForHost } from '@/platform/execution/local/fileTrust'
 
 const NUL_PROBE_BYTES = 8192
 
@@ -66,7 +66,7 @@ export function openContainedFileWithin(
   // G7 之前空 `worktreePath` 只在物化失败（罕见终态、无人会去读它的文件）时出现；
   // 现在**每一次** JSON-body 启动在准备窗口内都是这个状态，时长等于整个克隆。
   //
-  // 这是同一个 bug 的**第二套实现**：`util/safePath.checkLexicalThenRealpath` 那道
+  // 这是同一个 bug 的**第二套实现**：`platform/workspace/local/safePath.checkLexicalThenRealpath` 那道
   // 守卫喂的是 portArtifacts 一族，而本函数自己写了一份 realpath 包含性，从不经过
   // 它——所以必须在这里独立堵一次。AC-10 点名的四扇读洞里，本函数覆盖两扇
   // （worktreeFileContent 与 codeIntel.fileSymbols 都走它）。

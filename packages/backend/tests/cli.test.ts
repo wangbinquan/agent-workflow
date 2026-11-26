@@ -24,7 +24,7 @@ import { migrateCommand } from '../src/bootstrap/migrate'
 import { statusCommand, formatStatus } from '../src/cli/status'
 import { stopCommand } from '../src/cli/stop'
 import { removeTempDirSync } from './fixtures/tempDir'
-import { statMetadataIsAuthoritative } from '../src/util/fileTrust'
+import { statMetadataIsAuthoritative } from '@/platform/execution/local/fileTrust'
 import { readControlFile, requestShutdown } from '../src/platform/execution/local/controlListener'
 
 const mainPath = resolve(import.meta.dir, '..', 'src', 'main.ts')

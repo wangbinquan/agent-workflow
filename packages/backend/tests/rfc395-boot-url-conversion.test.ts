@@ -1,7 +1,7 @@
 // RFC-395 U-4: escrow conversion is offline, byte-linked, and replayable. Authored for T18.
 import { expect, test } from 'bun:test'
 import { gitUrlCacheKeyWith, parseGitUrl, redactGitUrl } from '@agent-workflow/shared'
-import { redactSensitiveString } from '@/util/redact'
+import { redactSensitiveString } from '@/platform/logging/redact'
 import { sha1Hex } from '@/platform/contracts/hash'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import {

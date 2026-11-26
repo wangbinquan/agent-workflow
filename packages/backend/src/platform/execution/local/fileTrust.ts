@@ -183,7 +183,7 @@ export function assertSameDirectoryIdentity(
 // PRIVACY is the one proof win32 cannot answer from stat metadata (its `mode` is
 // synthesized). There the answer lives in the DACL, read by PATH — so these
 // variants take the path and, on win32 only, defer to an injected reader that
-// inspects the actual ACL (`util/win32Acl.ts:assertWindowsFilePrivate` in
+// inspects the actual ACL (`./win32Acl.ts:assertWindowsFilePrivate` in
 // production). The reader is a parameter, not an import, so this module stays pure
 // and BOTH branches run on any OS: a POSIX test passes a fake win32 reader.
 //

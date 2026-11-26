@@ -123,7 +123,7 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
     count: 5,
     why: '平台杀链自身的 ps/探测 spawnSync ×3 + RFC-284 T8 的 spawnVersionProbe 骨架（三胞胎探针唯一 spawn 点）+ isProcessAlive 的 `ps -o stat=` 僵尸判定：POSIX `kill(pid,0)` 对等待回收的僵尸同样成功，把僵尸当活会让 TERM→KILL 恢复误判「agent 还活着」并中止 daemon 启动，故必须另读进程状态位。',
   },
-  'util/win32Acl.ts': {
+  'platform/execution/local/win32Acl.ts': {
     governance: 'short-lived',
     count: 3,
     why: 'win32 icacls DACL 平台工具（node:child_process import + 同步调用）。',

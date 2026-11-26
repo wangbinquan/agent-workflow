@@ -19,7 +19,7 @@
 #     checkout from changing it.
 #
 # The framework already pins `core.autocrlf=false` for the git operations it
-# performs itself (`util/gitHardening.ts`), because CRLF rewriting reaches port
+# performs itself (`platform/execution/local/gitHardening.ts`), because CRLF rewriting reaches port
 # values and model input. This file extends the same rule to the repository's
 # own checkout, which that pin cannot cover.
 #

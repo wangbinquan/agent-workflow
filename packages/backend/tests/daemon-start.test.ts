@@ -17,7 +17,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { applyConfigPatch, loadConfig } from '../src/config'
-import { statMetadataIsAuthoritative } from '../src/util/fileTrust'
+import { statMetadataIsAuthoritative } from '@/platform/execution/local/fileTrust'
 
 const mainPath = resolve(import.meta.dir, '..', 'src', 'main.ts')
 

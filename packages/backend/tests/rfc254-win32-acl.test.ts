@@ -17,7 +17,7 @@ import {
   parseDaclAllowSids,
   parseWhoamiSid,
   verifyDaclPrivate,
-} from '@/util/win32Acl'
+} from '@/platform/execution/local/win32Acl'
 
 // Measured on the VM: a file created under %USERPROFILE% inherits exactly this.
 const USER_SID = 'S-1-5-21-347848904-4037236529-1378664798-1000'

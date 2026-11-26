@@ -30,8 +30,8 @@ import {
   extractLastEnvelope,
   parseEnvelope,
 } from '../../packages/shared/src/workflowOutputEnvelope'
-import { redactSensitiveString } from '../../packages/backend/src/util/redact'
-import { safeJoin } from '../../packages/backend/src/util/safePath'
+import { redactSensitiveString } from '../../packages/backend/src/platform/logging/redact'
+import { safeJoin } from '../../packages/backend/src/platform/workspace/local/safePath'
 import { WorkflowDefinitionSchema } from '../../packages/shared/src/schemas/workflow'
 
 interface SampleStats {

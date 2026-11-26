@@ -32,7 +32,7 @@
 
 import { chmodSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { appHome } from '../platform/configuration/installationPaths'
+import { appHome } from '../../configuration/installationPaths'
 
 /**
  * 平台自有的空 hooks 目录。放在 appHome 下 —— 它在两层沙箱里都是拒绝区，agent 写不进

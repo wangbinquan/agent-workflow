@@ -3,7 +3,7 @@
 // secrets reach the mcp_probes.error_detail_json column.
 
 import { describe, expect, test } from 'bun:test'
-import { redactSensitiveString } from '../src/util/redact'
+import { redactSensitiveString } from '@/platform/logging/redact'
 
 describe('redactSensitiveString', () => {
   test('null / undefined → empty string', () => {

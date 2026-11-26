@@ -7,7 +7,7 @@ import type {
   ChangeCandidateParticipant,
   EmployeeCaseWorkspaceParticipant,
 } from '@/modules/source-control/public/types'
-import { stableGitRefComponent, stableIdentityComponent } from '@/util/gitRef'
+import { stableGitRefComponent, stableIdentityComponent } from '@/platform/contracts/gitRef'
 import type { AutomationWorkspaceEffectsFactory } from '../ports/automationWorkspaceEffects'
 import type { EmployeeWorkspacePersistence } from '../ports/employeeWorkspacePersistence'
 import type { EmployeePlatformWorkItemPersistence } from '../ports/employeePlatformWorkItemPersistence'

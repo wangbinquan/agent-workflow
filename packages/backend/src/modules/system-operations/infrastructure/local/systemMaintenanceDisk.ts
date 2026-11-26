@@ -118,7 +118,7 @@ export function reportMeasuredDiskReclaimable(
  * 给整棵树里的**目录**补上 owner 写位，让随后的 `rmSync` 能 unlink 里面的文件。
  *
  * RFC-276 时代的 store 把每个 business 的 `explicit-config/` 落成 `0o500`
- * （`dr-x------`，同 util/fileTrust.ts 的 `OWNER_READ_EXECUTE_MODE`）。unlink 一个文件
+ * （`dr-x------`，同 platform/execution/local/fileTrust.ts 的 `OWNER_READ_EXECUTE_MODE`）。unlink 一个文件
  * 要的是**父目录**的写位、而不是文件自己的，所以 `rmSync(recursive)` 会在第一处这样的
  * 密封目录上以 EACCES 把整棵树的删除中断掉——本机 2.9GB 的退役 store 里 1254 个
  * `explicit-config/` 无一例外，也就是说这个「删除退役运行时存储」按钮在**真实数据**上

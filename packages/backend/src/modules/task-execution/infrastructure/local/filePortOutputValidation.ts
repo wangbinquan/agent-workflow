@@ -1,5 +1,5 @@
 import { toPortableRelativePath } from '@/platform/execution/local/platformExec'
-import { checkLexicalThenRealpath } from '@/util/safePath'
+import { checkLexicalThenRealpath } from '@/platform/workspace/local/safePath'
 import { readFileSync } from 'node:fs'
 import { isAbsolute, relative } from 'node:path'
 import { runNativeOutputValidationPolicy, type ValidateIO } from '@agent-workflow/shared'
@@ -21,7 +21,7 @@ import type {
 // 是安全关键面，迁移到共享骨架前后必须逐字节同判。
 export const NODE_VALIDATE_IO: ValidateIO = {
   resolveWorktreePath(worktreeAbsPath, rawContent) {
-    // RFC-284 T6：双查骨架收敛到 util/safePath.checkLexicalThenRealpath，
+    // RFC-284 T6：双查骨架收敛到 platform/workspace/local/safePath.checkLexicalThenRealpath，
     // 本适配层只保留 envelope 的**判定策略**（与迁移前逐字节同判，由
     // rfc284-containment-quadrants.test.ts 锁定）：
     //   - RFC-103 T7：词法 containment 先行，词法内再 realpath 收紧（根内

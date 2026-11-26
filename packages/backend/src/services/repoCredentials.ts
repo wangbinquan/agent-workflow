@@ -31,7 +31,7 @@ import type {
   RepositoryWorkspaceStore,
 } from '@/modules/source-control/public/operations'
 import { createLogger } from '@/platform/logging/logger'
-import { redactSensitiveString } from '@/util/redact'
+import { redactSensitiveString } from '@/platform/logging/redact'
 import { sha1Hex } from '@/platform/contracts/hash'
 
 const log = createLogger('repo-credentials')

@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ensureTokenFile, generateToken, rotateTokenFile } from '../src/auth/token'
-import { statMetadataIsAuthoritative } from '../src/util/fileTrust'
+import { statMetadataIsAuthoritative } from '@/platform/execution/local/fileTrust'
 
 describe('token file management', () => {
   let tmp: string

@@ -5,7 +5,7 @@
 // 语义，下一步整体归 source-control。锁四件事：
 // ① 五个名字只在新文件定义，`util/git.ts` 不再导出它们。
 // ② `src` / `tests` / `scripts` 里没有任何 import 从 `util/git` 取这五个名字（判据带负对照）。
-// ③ 新文件只取 platform 与 `util/gitHardening`，不取任何模块（判据带负对照）。
+// ③ 新文件只取 platform，不取任何模块（判据带负对照；RFC-617 起加固参数 `gitHardening` 也在 platform，原来对 `util/gitHardening` 的放行随之删去）。
 // ④ 运行器的几处要害仍在新文件里（加固参数、非交互环境、进程组杀法、两个退出码），`util/git.ts` 里不再有 `Bun.spawn`。
 //
 // 覆盖范围（C12）：② 覆盖 backend 的 `src`、`tests`、`scripts` 与仓库根 `scripts` 的全部 TS / MJS 文件；① ③ ④ 只读两个文件。运行器的行为由既有
@@ -65,7 +65,7 @@ function utilGitImportsOfMoved(path: string, text: string): string[] {
   return out
 }
 
-/** Module specifiers of the runner that leave platform and `util/gitHardening`. */
+/** Module specifiers of the runner that leave platform (RFC-617 moved `gitHardening` into platform). */
 function runnerLeaks(text: string): string[] {
   const source = ts.createSourceFile(RUNNER, text, ts.ScriptTarget.Latest, true)
   return source.statements.flatMap((statement) =>
@@ -73,8 +73,7 @@ function runnerLeaks(text: string): string[] {
     statement.moduleSpecifier !== undefined &&
     ts.isStringLiteral(statement.moduleSpecifier) &&
     statement.moduleSpecifier.text.startsWith('@/') &&
-    !statement.moduleSpecifier.text.startsWith('@/platform/') &&
-    statement.moduleSpecifier.text !== '@/util/gitHardening'
+    !statement.moduleSpecifier.text.startsWith('@/platform/')
       ? [statement.moduleSpecifier.text]
       : [],
   )
@@ -170,14 +169,14 @@ describe('RFC-591 —— 运行器在 platform', () => {
 })
 
 describe('RFC-591 —— 运行器只取 platform 与加固参数', () => {
-  test('新文件只 import platform 与 util/gitHardening', () => {
+  test('新文件只 import platform', () => {
     expect(runnerLeaks(read(RUNNER))).toEqual([])
   })
 
-  test('负对照：取模块、取别的 util 都会被认出', () => {
+  test('负对照：取模块、取 util 都会被认出', () => {
     expect(
       runnerLeaks(
-        "import { hardenGitArgs } from '@/util/gitHardening'\n" +
+        "import { hardenGitArgs } from '@/platform/execution/local/gitHardening'\n" +
           "import type { Probe } from '@/modules/source-control/public/types'\n" +
           "import { classifyBaseRef } from '@/util/git'\n",
       ),

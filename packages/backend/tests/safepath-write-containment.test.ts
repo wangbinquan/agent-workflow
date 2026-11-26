@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { assertWriteAncestorInside, realpathWriteInside } from '../src/util/safePath'
+import { assertWriteAncestorInside, realpathWriteInside } from '@/platform/workspace/local/safePath'
 import { ValidationError } from '../src/platform/errors/domainErrors'
 
 describe('realpathWriteInside', () => {

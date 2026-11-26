@@ -35,7 +35,7 @@ import { skillFromPersistenceRow } from '@/modules/resource-catalog/infrastructu
 import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
 import { parseFrontmatter } from '@/platform/content/frontmatter'
 import { renderSkillMarkdown } from '../skillMarkdown'
-import { safeJoin } from '@/util/safePath'
+import { safeJoin } from '@/platform/workspace/local/safePath'
 import {
   ConflictError,
   NotFoundError,

@@ -6,7 +6,7 @@
 // collision)；不允许覆盖/删除未知 ref——本文件只产判定，任何 ref 写动作都在
 // application 层且只走「新建或 fast-forward」。
 
-import { stableGitRefComponent } from '@/util/gitRef'
+import { stableGitRefComponent } from '@/platform/contracts/gitRef'
 
 export const MISSION_BRANCH_PREFIX = 'aw/mission-'
 const SUFFIX_LIMIT = 9

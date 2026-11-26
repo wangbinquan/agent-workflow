@@ -22,7 +22,7 @@ import {
   assertWindowsFilePrivate,
   getCurrentUserSid,
   sealDirectoryOwnerOnly,
-} from '@/util/win32Acl'
+} from '@/platform/execution/local/win32Acl'
 
 const isWin32 = process.platform === 'win32'
 

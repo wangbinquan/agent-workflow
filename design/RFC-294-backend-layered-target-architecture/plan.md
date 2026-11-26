@@ -1112,6 +1112,8 @@ provenance 按 RFC-395 design §5.1 不建列；先后判据只用 `seq`（RFC-3
 | git 一族：`gitSubmodule.ts`、`mergeAgent.ts`、`repoCredentials.ts`                                   | 3      | source-control（W5）              | 与 `util/git.ts` 迁入 source-control infrastructure 一并设计。RFC-585（`gitSubmodule.ts`，Done）、RFC-586（`mergeAgent.ts`，Done）与 RFC-593（`util/git.ts` 整份进 source-control 的 infrastructure，纯部分进 domain）已迁；`repoCredentials.ts` 属凭据一族，暂缓 |
 | 其余                                                                                                 | 5      | 各自 owner                        | `taskDelete.ts` 与 `reviewMutationCoordinator.ts`（RFC-476 Done，`9184e1e5a`，已迁入 task-execution）、`codeRoundContract.ts`（W4-E8；RFC-594：唯一读者是 task-execution 的执行结果投影，节点 id 归 task-execution 的 domain、只有用例用的合成函数移到 `tests/helpers/`——偏离 W4-E8 标注，理由见其 design §0）、`digitalEmployeeAgentTemplates.ts` 与 `demoSeed.ts`（RFC-544 Done，`bbcc840e2`：模板按内容迁入 development-automation 的 domain / application——偏离原 W4-E9 标注，理由见其 design D2；演示种子迁入 bootstrap） |
 
+2026-11-26 [RFC-617](../RFC-617-util-primitives-into-platform/proposal.md)（In Progress）：`util/` 的六个通用原语（`redact`、`safePath`、`fileTrust`、`win32Acl`、`gitHardening`、`gitRef`）原样归 platform，`legacy-horizontal-files` 53 → 47；`util/` 只剩 git 凭据助手（独立二进制入口）与它的租约、OIDC 响应助手。`auth/actor` 的去向是 identity-access 的 `AuthenticatedAuthoritySnapshot`（design §270），属权限传递语义，不按搬文件处理。
+
 迁入时按内容分层落位（proposal C10）：用例编排与规则判定进 application / domain，持久化与外部 effect 进 infrastructure；不再把
 用例文件原样停放到 infrastructure，确需原样迁入的在该 RFC 的 design 里列明理由并呈用户确认。RFC-476（第二十三步）
 按原方式收口（2026-11-09 Done，`9184e1e5a`；收口前对 C10～C13 的对账见其 design §7）。此后逐步记录写进各后继自己的三件套与 `STATE.md`；本文 §1.1 的 W9 行与 §4.6 只在一族关闭时记一行，不再逐步

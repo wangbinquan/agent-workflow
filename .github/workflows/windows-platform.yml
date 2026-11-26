@@ -27,7 +27,6 @@ on:
   push:
     branches: [main]
     paths:
-      - 'packages/backend/src/util/fileTrust.ts'
       - 'packages/backend/src/modules/source-control/infrastructure/local/gitRepository.ts'
       - 'packages/backend/src/platform/workspace/local/fsReclaim.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/assembly.ts'
@@ -35,7 +34,6 @@ on:
       - 'packages/backend/src/modules/task-execution/engine/kernel/merge.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/isolationCleanup.ts'
       - 'packages/backend/tests/rfc356-*.test.ts'
-      - 'packages/backend/src/util/gitHardening.ts'
       - 'packages/backend/src/modules/source-control/**'
       - 'packages/backend/src/modules/task-execution/infrastructure/*Preparation*.ts'
       - 'packages/backend/src/modules/task-execution/infrastructure/taskWorkspaceUploads.ts'
@@ -49,6 +47,7 @@ on:
       # resolution is under platform/execution/local/** below.
       - 'packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts'
       - 'packages/backend/src/embed.generated.ts'
+      # RFC-617: fileTrust.ts, win32Acl.ts and gitHardening.ts moved here from util/.
       - 'packages/backend/src/platform/execution/local/**'
       - 'packages/backend/src/util/gitCredentialHelper.ts'
       - 'packages/backend/src/util/gitCredentialLease.ts'
@@ -491,7 +490,6 @@ on:
     # git, gitHardening were watched on push only), and the existing guard only
     # checks push ⊇ pull_request, so it structurally cannot see the reverse.
     paths:
-      - 'packages/backend/src/util/fileTrust.ts'
       - 'packages/backend/src/modules/source-control/infrastructure/local/gitRepository.ts'
       - 'packages/backend/src/platform/workspace/local/fsReclaim.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/assembly.ts'
@@ -499,7 +497,6 @@ on:
       - 'packages/backend/src/modules/task-execution/engine/kernel/merge.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/isolationCleanup.ts'
       - 'packages/backend/tests/rfc356-*.test.ts'
-      - 'packages/backend/src/util/gitHardening.ts'
       - 'packages/backend/src/modules/source-control/**'
       - 'packages/backend/src/modules/task-execution/infrastructure/*Preparation*.ts'
       - 'packages/backend/src/modules/task-execution/infrastructure/taskWorkspaceUploads.ts'
@@ -513,6 +510,7 @@ on:
       # resolution is under platform/execution/local/** below.
       - 'packages/backend/src/modules/task-execution/infrastructure/local/scriptRun.ts'
       - 'packages/backend/src/embed.generated.ts'
+      # RFC-617: fileTrust.ts, win32Acl.ts and gitHardening.ts moved here from util/.
       - 'packages/backend/src/platform/execution/local/**'
       - 'packages/backend/src/util/gitCredentialHelper.ts'
       - 'packages/backend/src/util/gitCredentialLease.ts'

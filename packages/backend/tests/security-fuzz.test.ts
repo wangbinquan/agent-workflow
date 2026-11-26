@@ -32,8 +32,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { ValidationError } from '../src/platform/errors/domainErrors'
-import { realpathInside, safeJoin } from '../src/util/safePath'
-import { redactSensitiveString } from '../src/util/redact'
+import { realpathInside, safeJoin } from '@/platform/workspace/local/safePath'
+import { redactSensitiveString } from '@/platform/logging/redact'
 import { redactGitUrl } from '@agent-workflow/shared'
 
 // ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@ import type {
   TargetRow,
 } from '@/platform/persistence/migration/conversion/types'
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
-import { redactSensitiveString } from '@/util/redact'
+import { redactSensitiveString } from '@/platform/logging/redact'
 import {
   decodeRequestedSourceJson,
   encodeRequestedSource,

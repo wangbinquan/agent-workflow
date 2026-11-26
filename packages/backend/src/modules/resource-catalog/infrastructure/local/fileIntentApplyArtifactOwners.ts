@@ -42,7 +42,7 @@ import {
   skillVersionRelPath,
 } from '../legacy/skillIdentityPaths'
 import { installPlugin, plannedGenerationDir } from './filePluginInstallation'
-import { safeJoin } from '@/util/safePath'
+import { safeJoin } from '@/platform/workspace/local/safePath'
 
 function copyRegularTree(source: string, target: string): void {
   const sourceStat = lstatSync(source)

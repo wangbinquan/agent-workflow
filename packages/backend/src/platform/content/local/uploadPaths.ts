@@ -2,7 +2,7 @@
 import { existsSync, lstatSync, type Stats } from 'node:fs'
 import { dirname, isAbsolute, normalize, resolve, sep } from 'node:path'
 import { ValidationError } from '@/platform/errors/domainErrors'
-import { realpathInside } from '@/util/safePath'
+import { realpathInside } from '@/platform/workspace/local/safePath'
 
 export function assertTargetDirInsideWorktree(worktreeRoot: string, targetAbs: string): void {
   let probe = targetAbs

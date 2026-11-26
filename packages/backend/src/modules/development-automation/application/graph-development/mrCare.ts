@@ -4,7 +4,7 @@ import {
   type RepositoryContentBaseline,
 } from '@agent-workflow/shared'
 import type { EmployeeCaseWorkspaceParticipant } from '@/modules/source-control/public/types'
-import { stableIdentityComponent } from '@/util/gitRef'
+import { stableIdentityComponent } from '@/platform/contracts/gitRef'
 import { graphDigest, staleGraphReads } from '../../domain/graph-development/model'
 import type { EmployeePlatformWorkItemPersistence } from '../ports/employeePlatformWorkItemPersistence'
 import type { GraphDesignStore } from '../ports/graphDesignStore'

@@ -11,7 +11,7 @@
 //     在修复被摘掉时变红，而不是一个恒绿的空断言；
 //   - `runGit`（生产路径）：**必须不**触发。
 //
-// 任何一天有人把 util/gitHardening.ts 的覆盖集拆掉，下半截立刻红。
+// 任何一天有人把 platform/execution/local/gitHardening.ts 的覆盖集拆掉，下半截立刻红。
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -24,7 +24,7 @@ import {
   hardenedGitLeadingArgs,
   hardenGitArgs,
   withExternalDiffDisabled,
-} from '@/util/gitHardening'
+} from '@/platform/execution/local/gitHardening'
 import { syncSubmodules } from '@/modules/source-control/infrastructure/local/gitSubmodule'
 
 let home: string

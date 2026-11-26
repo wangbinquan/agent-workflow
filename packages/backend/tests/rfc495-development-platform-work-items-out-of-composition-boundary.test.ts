@@ -7,7 +7,7 @@
 //    语句（语法树）；装配函数把输入连同选定的工作区效果、基线读取、证据存储、业务树摘要与默认时钟交给 application 的用例。
 // ③ 全部生产文件、用例与 e2e 从 composition 文件只取三个组合名字：命名 import、type-only、re-export、命名空间成员与动态 import 的解构
 //    都认，带负对照。
-// ④ 新文件的依赖面是闭集：zod、shared、`@/platform/contracts/hash`、`@/util/gitRef`、digital-employee 的 `public/types` 与本模块的 domain /
+// ④ 新文件的依赖面是闭集：zod、shared、`@/platform/contracts/hash`、`@/platform/contracts/gitRef`、digital-employee 的 `public/types` 与本模块的 domain /
 //    application；不取 infrastructure、composition、IO 包，不用进程全局（带负对照）。
 //
 // 覆盖范围（C12）：① ③ 读全部生产文件（语料下限 3,000）、全部用例（语料下限 2,500）与仓库根的 e2e，先按名字或路径文本筛、再逐个解析
@@ -237,7 +237,7 @@ function allowedDependency(file: string, specifier: string): boolean {
     [
       'zod',
       '@/platform/contracts/hash',
-      '@/util/gitRef',
+      '@/platform/contracts/gitRef',
       '@/modules/digital-employee/public/types',
     ].includes(specifier)
   )
@@ -391,7 +391,7 @@ describe('RFC-495 ③ 没有文件从 composition 取迁出的名字', () => {
 })
 
 describe('RFC-495 ④ 新文件的依赖面是闭集、不用进程全局', () => {
-  test('只取 zod、shared、@/platform/contracts/hash、@/util/gitRef、digital-employee 的 public/types 与本模块 domain / application', () => {
+  test('只取 zod、shared、@/platform/contracts/hash、@/platform/contracts/gitRef、digital-employee 的 public/types 与本模块 domain / application', () => {
     const path = join(SRC, `${NEW_FILE}.ts`)
     expect(purityFindings(path, text(path))).toEqual([])
   })

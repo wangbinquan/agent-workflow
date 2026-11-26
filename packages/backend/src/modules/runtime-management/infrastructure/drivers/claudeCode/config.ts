@@ -18,8 +18,11 @@ import {
 import type { Stats } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import type { Logger } from '@/platform/logging/logger'
-import { assertSameDirectoryIdentityForHost, assertSameFileIdentityForHost } from '@/util/fileTrust'
-import { assertWriteAncestorInside, safeJoin } from '@/util/safePath'
+import {
+  assertSameDirectoryIdentityForHost,
+  assertSameFileIdentityForHost,
+} from '@/platform/execution/local/fileTrust'
+import { assertWriteAncestorInside, safeJoin } from '@/platform/workspace/local/safePath'
 import { stringify as stringifyYaml } from 'yaml'
 import { stageSkills, type StagedSkill } from '../stageSkills'
 import type { ClaudeAgentEntry } from './inject'

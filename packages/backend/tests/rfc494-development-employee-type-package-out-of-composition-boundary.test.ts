@@ -7,7 +7,7 @@
 // ② `composition/employeeTypePackage.ts` 交出的恰好是登记对象与给 bootstrap 的三个转出，不声明清单里的名字；迁走的两个文件不存在。
 // ③ 全部生产文件、用例与 e2e 都不从旧位置取清单里的名字：import / export-from / type-only / 动态 import 的解构都认，带负对照；登记对象
 //    照常可取，只有 bootstrap 的装配根经 composition 取那三个转出。
-// ④ 三个新文件的依赖面是闭集：zod、shared、`@/util/gitRef`、其他模块 public 的精确入口与本模块的 domain / application；不取
+// ④ 三个新文件的依赖面是闭集：zod、shared、`@/platform/contracts/gitRef`、其他模块 public 的精确入口与本模块的 domain / application；不取
 //    infrastructure、composition、IO 包与进程全局，没有 async 与 await（带负对照）。
 //
 // 覆盖范围（C12）：① ③ 读全部生产文件（语料下限 3,000）、全部用例（语料下限 2,500）与仓库根的 e2e，先按名字或路径文本筛、再逐个解析
@@ -205,7 +205,7 @@ const mentionsOldLocation = (source: string) =>
 
 /** The closed dependency surface of the new files (design §3 ④). */
 function allowedDependency(file: string, specifier: string): boolean {
-  if (specifier === 'zod' || specifier === '@/util/gitRef') return true
+  if (specifier === 'zod' || specifier === '@/platform/contracts/gitRef') return true
   if (specifier === '@agent-workflow/shared' || specifier.startsWith('@agent-workflow/shared/'))
     return true
   if (
@@ -336,7 +336,7 @@ describe('RFC-494 ③ 没有文件从旧位置取它们', () => {
 })
 
 describe('RFC-494 ④ 新文件的依赖面是闭集、没有 effect', () => {
-  test('三个新文件只取 zod、shared、@/util/gitRef、其他模块 public 精确入口与本模块 domain / application', () => {
+  test('三个新文件只取 zod、shared、@/platform/contracts/gitRef、其他模块 public 精确入口与本模块 domain / application', () => {
     for (const file of NEW_FILES) {
       const path = join(SRC, `${file}.ts`)
       expect([file, purityFindings(path, text(path))]).toEqual([file, []])

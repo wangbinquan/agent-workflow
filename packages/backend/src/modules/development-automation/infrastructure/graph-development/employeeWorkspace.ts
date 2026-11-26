@@ -10,7 +10,7 @@ import type {
   WorkspaceFailureClass,
 } from '@/modules/digital-employee/public/types'
 import type { EmployeeCaseWorkspaceParticipant } from '@/modules/source-control/public/types'
-import { stableIdentityComponent } from '@/util/gitRef'
+import { stableIdentityComponent } from '@/platform/contracts/gitRef'
 import { graphDigest } from '../../domain/graph-development/model'
 import { sha256Hex } from '@/platform/contracts/hash'
 import { ValidationError } from '@/platform/errors/domainErrors'

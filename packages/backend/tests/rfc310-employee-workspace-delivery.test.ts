@@ -31,7 +31,7 @@ import type { ReactionExecutionPlan as EmployeeReactionExecutionPlan } from '@/m
 import { canonicalDigest } from '@/modules/development-automation/domain/canonicalJson'
 import { staticCachedRepositoryPreparation } from './helpers/staticCachedRepositoryPreparation'
 import { createHeldEmployeeCaseFactory } from './fixtures/rfc370-employee-case-held-effects'
-import { stableIdentityComponent } from '@/util/gitRef'
+import { stableIdentityComponent } from '@/platform/contracts/gitRef'
 import {
   CandidatePublicationStore,
   MappedCandidateFactory,

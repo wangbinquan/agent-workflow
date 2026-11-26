@@ -26,7 +26,7 @@ import {
   writeControlFile,
   type ControlEndpoint,
 } from '@/platform/execution/local/controlListener'
-import { statMetadataIsAuthoritative } from '@/util/fileTrust'
+import { statMetadataIsAuthoritative } from '@/platform/execution/local/fileTrust'
 
 const roots: string[] = []
 function root(): string {

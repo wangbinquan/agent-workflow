@@ -22,7 +22,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { resourcePackageSkillRecoveryDisposition } from '../../domain/resourcePackageSkillRecovery'
 
 import { ValidationError } from '@/platform/errors/domainErrors'
-import { safeJoin } from '@/util/safePath'
+import { safeJoin } from '@/platform/workspace/local/safePath'
 import { assertRegularDirectory, SKILL_MAIN } from '../packageSkillTree'
 import {
   cleanupOpDirs,

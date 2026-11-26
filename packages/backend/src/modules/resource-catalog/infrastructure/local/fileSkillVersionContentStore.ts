@@ -17,7 +17,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
-import { realpathWriteInside, safeJoin } from '@/util/safePath'
+import { realpathWriteInside, safeJoin } from '@/platform/workspace/local/safePath'
 import { writeFileSkillTree } from './fileSkillTree'
 import type {
   SkillVersionContentChange,

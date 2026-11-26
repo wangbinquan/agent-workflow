@@ -14,7 +14,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { checkLexicalThenRealpath } from '@/util/safePath'
+import { checkLexicalThenRealpath } from '@/platform/workspace/local/safePath'
 import { existsInsideRoot, readInsideRoot } from '@/platform/content/local/rootFileQueries'
 
 describe('RFC-287 G7 — 空根一律判否（共用底座）', () => {

@@ -274,7 +274,7 @@ describe('RFC-247 impl-gate — redaction covers every door onto node output', (
   test('KNOWN GAP: a prefixed env-var name is NOT masked', () => {
     // `SENSITIVE_KV_RE` is `\b(token|api_key|…)\b`, and `_` is a word
     // character, so `\bapi_key\b` does not match inside `OPENAI_API_KEY`.
-    // Asserted deliberately rather than left as a surprise: `util/redact.ts`
+    // Asserted deliberately rather than left as a surprise: `platform/logging/redact.ts`
     // says in its own header that it is "not a security boundary", and node
     // output echoing `FOO_API_KEY=…` is exactly the shape it misses.
     //

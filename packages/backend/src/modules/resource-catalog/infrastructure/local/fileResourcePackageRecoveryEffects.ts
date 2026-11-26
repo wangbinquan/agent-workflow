@@ -1,7 +1,7 @@
 import { decodeSkillPath } from '@/platform/content/locations/skill'
 import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { safeJoin } from '@/util/safePath'
+import { safeJoin } from '@/platform/workspace/local/safePath'
 import type { ResourcePackageRecoveryEffectsFactory } from '../../application/package/recoveryContentEffects'
 import { assertManagedPath } from '../resourcePackageMaintenancePaths'
 import {
