@@ -29,6 +29,7 @@ import {
 import { resolveCachedRepo } from '@/modules/source-control/infrastructure/local/repositoryMirrorCache'
 import { DomainError } from '@/platform/errors/domainErrors'
 import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
+import { graphDeliveryWithoutDesign } from './helpers/developmentAutomation'
 
 const root = mkdtempSync(join(tmpdir(), 'rfc310-workspace-freshness-'))
 
@@ -230,6 +231,7 @@ describeEachProvider('RFC-310 Digital Employee workspace repository freshness', 
       }),
     )
     const workspaceInput = {
+      graphDelivery: graphDeliveryWithoutDesign(),
       automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
       db,
       appHome,

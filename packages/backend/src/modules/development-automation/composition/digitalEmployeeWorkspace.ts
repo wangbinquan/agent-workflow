@@ -23,9 +23,14 @@ export function createDevelopmentEmployeeCaseWorkspaceDetailReader(
 
 export interface DevelopmentEmployeeWorkspaceCompositionInput extends Omit<
   DevelopmentEmployeeWorkspaceInput,
-  'automationWorkspaceEffects' | 'now'
+  'automationWorkspaceEffects' | 'now' | 'graphDelivery'
 > {
   readonly automationWorkspaceEffects: AutomationWorkspaceEffectsFactory
+  /**
+   * RFC-601: required here (the daemon gives the graph delivery care); the use case keeps its own optional member and its
+   * fallback for an input that lacks it.
+   */
+  readonly graphDelivery: NonNullable<DevelopmentEmployeeWorkspaceInput['graphDelivery']>
   readonly now?: () => number
 }
 

@@ -23,10 +23,26 @@ export interface DevelopmentEmployeePlatformWorkItemsCompositionInput extends Om
   | 'evidenceStore'
   | 'businessTreeDigest'
   | 'now'
+  | 'approvalGateway'
+  | 'pipelineEvidence'
+  | 'graphDelivery'
+  | 'mrFacts'
 > {
   readonly automationWorkspaceEffects: AutomationWorkspaceEffectsFactory
   readonly repositoryBaselines: RepositoryBaselineEffectsFactory
   readonly evidenceArtifacts: EvidenceArtifactPort
+  /**
+   * RFC-601: the providers the daemon gives are required here; the use case keeps its own optional members and their
+   * "not connected" results for an input that lacks them (RFC-396's missing graph verification binding among them).
+   */
+  readonly approvalGateway: NonNullable<
+    DevelopmentEmployeePlatformWorkItemsInput['approvalGateway']
+  >
+  readonly pipelineEvidence: NonNullable<
+    DevelopmentEmployeePlatformWorkItemsInput['pipelineEvidence']
+  >
+  readonly graphDelivery: NonNullable<DevelopmentEmployeePlatformWorkItemsInput['graphDelivery']>
+  readonly mrFacts: NonNullable<DevelopmentEmployeePlatformWorkItemsInput['mrFacts']>
   readonly now?: () => number
 }
 

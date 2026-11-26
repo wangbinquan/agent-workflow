@@ -832,6 +832,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   2026-11-25 [RFC-600](../RFC-600-development-automation-infrastructure-stated-effects/proposal.md)（Done，`b3723ab3c`）：infrastructure 的选择核对与收工厂的
   包装不再在没给时造本机实现，生产代码里调用本机效果构造的只剩 standalone profile、本机一族与托管任务镜像里的执行器（S12 的这条原则在
   development-automation 收口）。余下：员工两个装配继承来的可选 provider 与 `ReconcilerPorts`（后者涉及 RFC-359 P0 指纹，须用户定）。
+  2026-11-25 [RFC-601](../RFC-601-employee-compositions-required-providers/proposal.md)（In Progress）：员工两个装配继承来的可选 provider 在装配边界改为必填
+  （application 的可选成员与“未接入”分支不变）；W4-E8 在装配边界上的部分至此收完，余下 application 一侧按用例拆分（含 `ReconcilerPorts`，须用户定）。
 - **E9 digital-employee / event-center / execution-contract**（2026-11-03 路由部分由 [RFC-436](../RFC-436-module-inbound-http-bindings/proposal.md)
   Done，`3cb987341`：两个 HTTP 绑定归入各自模块 `inbound/http`，句柄合同留在 `application/ports`；XC 兼容 seam 仍开放）：在 RFC-361/365/368 已落切片之上，完成路由到 public command / query、
   Event observer 进入生命周期程序、XC 对 legacy agent / workflow / scriptRun 的兼容 seam 退役。

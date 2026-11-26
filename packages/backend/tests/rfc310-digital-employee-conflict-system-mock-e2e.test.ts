@@ -59,7 +59,11 @@ import {
 } from '@/modules/source-control/composition'
 import { codeHostRequests } from '@/modules/integration/composition'
 import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
-import { composeStandalonePlatformWorkItemEvidence } from './helpers/developmentAutomation'
+import {
+  composeStandalonePlatformWorkItemEvidence,
+  graphDeliveryWithoutDesign,
+  unusedEmployeePlatformProviders,
+} from './helpers/developmentAutomation'
 import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
 import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 
@@ -150,6 +154,7 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
           join(appHome, 'artifacts', 'employee-inputs'),
         )
         const workspace = composeDevelopmentEmployeeWorkspace({
+          graphDelivery: graphDeliveryWithoutDesign(),
           automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
           db,
           appHome,
@@ -208,6 +213,8 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
           }),
         }
         const platform = composeDevelopmentEmployeePlatformWorkItems({
+          ...unusedEmployeePlatformProviders(),
+          graphDelivery: graphDeliveryWithoutDesign(),
           automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
           repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
           evidenceArtifacts: composeStandalonePlatformWorkItemEvidence({ appHome: appHome }),

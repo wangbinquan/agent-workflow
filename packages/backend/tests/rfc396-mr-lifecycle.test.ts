@@ -33,7 +33,10 @@ import {
   employeeTypePackageDescriptorSchema,
   validateTypePackage,
 } from '@/modules/digital-employee/domain/model'
-import { composeStandalonePlatformWorkItemEvidence } from './helpers/developmentAutomation'
+import {
+  composeStandalonePlatformWorkItemEvidence,
+  unusedEmployeePlatformProviders,
+} from './helpers/developmentAutomation'
 import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
 import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 
@@ -460,7 +463,11 @@ function platformFixture(
   const unexpected = async (): Promise<never> => {
     throw new Error('unexpected fixture effect')
   }
-  const input: DevelopmentEmployeePlatformWorkItemsCompositionInput = {
+  // RFC-601: the composition requires the graph delivery (and the other providers). The 'missing' case forges an input
+  // without it, as a deployment that omitted the binding would, to keep locking the use case's own fail-safe: a missing
+  // graph verification binding is a visible blocked result. The assertion is that omission.
+  const input = {
+    ...unusedEmployeePlatformProviders(),
     automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
     repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
     appHome: '/tmp/rfc396-lifecycle-port-fixture',
@@ -589,7 +596,7 @@ function platformFixture(
             },
           },
         }),
-  }
+  } as DevelopmentEmployeePlatformWorkItemsCompositionInput
   const runner = composeDevelopmentEmployeePlatformWorkItemsFromPersistence(input)
   const candidateContext = () =>
     context('development.change-candidate', {

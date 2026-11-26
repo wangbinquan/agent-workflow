@@ -23,6 +23,8 @@ import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/developme
 import { createFileEvidenceDocumentCommands } from '@/modules/development-automation/infrastructure/local/fileEvidenceDocumentCommands'
 import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 import type { DevelopmentAutomationProviders } from '@/modules/development-automation/composition'
+import type { DevelopmentEmployeeWorkspaceCompositionInput } from '@/modules/development-automation/composition/digitalEmployeeWorkspace'
+import type { DevelopmentEmployeePlatformWorkItemsCompositionInput } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 export interface StandaloneDevelopmentAutomationSelections {
@@ -145,6 +147,43 @@ export function unusedDevelopmentProviders(): DevelopmentAutomationProviders {
       finish: notUsed('conflictMerge.finish'),
       discard: notUsed('conflictMerge.discard'),
     },
+  }
+}
+
+/**
+ * RFC-601 — a graph delivery for a case without a graph design: verification before publishing passes and there is no
+ * repair material. That is what the graph MR care answers for such a case, and what the use cases did when they were given
+ * no graph delivery. Both employee compositions take it.
+ */
+export function graphDeliveryWithoutDesign(): DevelopmentEmployeeWorkspaceCompositionInput['graphDelivery'] &
+  DevelopmentEmployeePlatformWorkItemsCompositionInput['graphDelivery'] {
+  return {
+    beforePublish: async () => ({ ok: true }),
+    repairMaterial: async () => null,
+  }
+}
+
+/**
+ * RFC-601 — the platform work items' approval gateway, pipeline evidence and MR facts for a test that does not exercise
+ * them: every method throws a named error, so a test that reaches one fails loudly instead of being blocked as "not
+ * connected" (the composition requires them; the use case keeps that result for an input that lacks them).
+ */
+export function unusedEmployeePlatformProviders(): Pick<
+  DevelopmentEmployeePlatformWorkItemsCompositionInput,
+  'approvalGateway' | 'pipelineEvidence' | 'mrFacts'
+> {
+  return {
+    approvalGateway: {
+      submit: notUsed('approvalGateway.submit'),
+      lookupByIdempotencyKey: notUsed('approvalGateway.lookupByIdempotencyKey'),
+      observe: notUsed('approvalGateway.observe'),
+    },
+    pipelineEvidence: {
+      collect: notUsed('pipelineEvidence.collect'),
+      trigger: notUsed('pipelineEvidence.trigger'),
+      rerun: notUsed('pipelineEvidence.rerun'),
+    },
+    mrFacts: { collect: notUsed('mrFacts.collect') },
   }
 }
 

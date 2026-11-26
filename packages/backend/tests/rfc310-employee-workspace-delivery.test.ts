@@ -39,7 +39,11 @@ import {
   completionBarrier,
   enteredBeforeOutcome,
 } from './helpers/repositoryCandidatePublication'
-import { composeStandalonePlatformWorkItemEvidence } from './helpers/developmentAutomation'
+import {
+  composeStandalonePlatformWorkItemEvidence,
+  graphDeliveryWithoutDesign,
+  unusedEmployeePlatformProviders,
+} from './helpers/developmentAutomation'
 import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
 import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 
@@ -261,6 +265,8 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
     const transport = Object.freeze(new MappedCandidatePublicationTransport(store))
     let ensures = 0
     const platform = composeDevelopmentEmployeePlatformWorkItems({
+      ...unusedEmployeePlatformProviders(),
+      graphDelivery: graphDeliveryWithoutDesign(),
       automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
       repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
       evidenceArtifacts: composeStandalonePlatformWorkItemEvidence({ appHome: appHome }),
@@ -658,6 +664,7 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       },
     }
     const workspace = composeDevelopmentEmployeeWorkspace({
+      graphDelivery: graphDeliveryWithoutDesign(),
       automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
       db,
       appHome,
@@ -1035,6 +1042,8 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
     let observedState: 'opened' | 'merged' | 'closed' = 'opened'
     let observedMergedCommitSha: string | null = null
     const platform = composeDevelopmentEmployeePlatformWorkItems({
+      ...unusedEmployeePlatformProviders(),
+      graphDelivery: graphDeliveryWithoutDesign(),
       automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
       repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
       evidenceArtifacts: composeStandalonePlatformWorkItemEvidence({ appHome: appHome }),

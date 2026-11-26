@@ -11,6 +11,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { held, MemoryPurposeContent } from './helpers/developmentPurpose'
 import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
 import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
+import {
+  graphDeliveryWithoutDesign,
+  unusedEmployeePlatformProviders,
+} from './helpers/developmentAutomation'
 
 const headSha = 'a'.repeat(40),
   targetSha = 'b'.repeat(40)
@@ -43,6 +47,8 @@ describeEachProvider('RFC-370 selected employee pipeline materialization', (harn
       },
     }
     const platform = composeDevelopmentEmployeePlatformWorkItems({
+      ...unusedEmployeePlatformProviders(),
+      graphDelivery: graphDeliveryWithoutDesign(),
       automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
       repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
       db: harness.db,

@@ -108,7 +108,11 @@ import { exampleProgramFixture } from './helpers/executionContractFixture'
 import { createWebhookDispatcher } from '@/modules/integration/application/webhookDispatch'
 import { codeHostRequests } from '@/modules/integration/composition'
 import { standaloneDigitalEmployeeSelections } from './helpers/digitalEmployeeSelections'
-import { composeStandalonePlatformWorkItemEvidence } from './helpers/developmentAutomation'
+import {
+  composeStandalonePlatformWorkItemEvidence,
+  graphDeliveryWithoutDesign,
+  unusedEmployeePlatformProviders,
+} from './helpers/developmentAutomation'
 import { createTaskTriggerQueries } from '@/modules/task-execution/infrastructure/taskTriggerQueries'
 import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
 import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
@@ -296,6 +300,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           join(appHome, 'artifacts', 'employee-inputs'),
         )
         const workspace = composeDevelopmentEmployeeWorkspace({
+          graphDelivery: graphDeliveryWithoutDesign(),
           automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
           db,
           appHome,
@@ -823,6 +828,8 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
             repositoryId === 'repo-system-mock-review' ? reviewHostBinding : null,
         })
         const platform = composeDevelopmentEmployeePlatformWorkItems({
+          ...unusedEmployeePlatformProviders(),
+          graphDelivery: graphDeliveryWithoutDesign(),
           automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
           repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
           evidenceArtifacts: composeStandalonePlatformWorkItemEvidence({ appHome: appHome }),

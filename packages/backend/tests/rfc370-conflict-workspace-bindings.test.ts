@@ -28,6 +28,7 @@ import {
   OpaqueEmployeeCaseFactory,
   WorkspaceReferenceCodec,
 } from './helpers/rfc370ConflictWorkspaceEffects'
+import { graphDeliveryWithoutDesign } from './helpers/developmentAutomation'
 
 function calls(source: ts.SourceFile, expression: string) {
   const result: ts.CallExpression[] = []
@@ -347,6 +348,7 @@ describeEachProvider(
         const caseEffects = new OpaqueEmployeeCaseFactory(codec)
         const compose = () =>
           composeDevelopmentEmployeeWorkspace({
+            graphDelivery: graphDeliveryWithoutDesign(),
             db,
             appHome: codec.reference(home),
             automationWorkspaceEffects: contents,

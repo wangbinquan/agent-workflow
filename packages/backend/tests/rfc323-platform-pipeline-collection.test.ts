@@ -18,7 +18,11 @@ import type { PipelineEvidencePort } from '@/modules/development-automation/appl
 import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/development-automation/composition/digitalEmployeePlatformWorkItems'
 import { mergeRequestContextSchema } from '@/modules/development-automation/application/employeeTypePackage'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { composeStandalonePlatformWorkItemEvidence } from './helpers/developmentAutomation'
+import {
+  composeStandalonePlatformWorkItemEvidence,
+  graphDeliveryWithoutDesign,
+  unusedEmployeePlatformProviders,
+} from './helpers/developmentAutomation'
 import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
 import { createFileRepositoryBaselineEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects'
 
@@ -158,6 +162,8 @@ function harness(input: {
     },
   }
   const deps = {
+    ...unusedEmployeePlatformProviders(),
+    graphDelivery: graphDeliveryWithoutDesign(),
     automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
     repositoryBaselines: createFileRepositoryBaselineEffectsFactory(),
     // The harness lends ONE database per file (truncated between tests); a test

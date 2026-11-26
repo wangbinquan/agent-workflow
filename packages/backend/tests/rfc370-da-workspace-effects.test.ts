@@ -31,6 +31,7 @@ import { sha256Hex } from '@/platform/contracts/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
+import { graphDeliveryWithoutDesign } from './helpers/developmentAutomation'
 
 function gate() {
   let release!: () => void
@@ -599,6 +600,7 @@ describeEachProvider('RFC-370 actual DA selected workspace ordering', (harness) 
       })
       let checkpoints = 0
       const participant = composeDevelopmentEmployeeWorkspace({
+        graphDelivery: graphDeliveryWithoutDesign(),
         db,
         appHome: 'logical:home',
         automationWorkspaceEffects: tree,
