@@ -37,7 +37,11 @@
 
 ## CI（AC-4）
 
-待推送。
+- `0339842ab`（实现）：exact SHA 主 CI run 45803731041 结论 failure，后端各格全绿，红在两格 e2e，都是等任务到达某个状态超时：
+  - Windows shard 2/4：`e2e/clarify.spec.ts:274` RFC-023 澄清主路径（同一格另有两条标记为 flaky）；
+  - macOS shard 1/4：`e2e/rfc294-webhook-runtime-failures.spec.ts:619` opencode 运行时超时一族（重试一次仍超时）。
+  - 本 RFC 不改生产行为（两种部署的 bootstrap 一直给驱动绑定，那一支逐字不变），e2e 跑的正是生产装配；上一个提交 `1d4faeac5` 的 run 里同几格 e2e 全绿。
+    原因未查实，未重跑。Windows 平台 run 45803731038 与快速反馈 run 45803731064 全绿。后继证据待包含本提交的 run 全绿。
 
 ## 实现门（本会话自审，只审功能）
 

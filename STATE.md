@@ -1,3 +1,13 @@
+## 2026-11-26 注记：RFC-294 的独立对账已到期；`03008a73a` 之后的主 CI 每轮都有与改动无关的超时红格
+
+- **对账到期**：RFC-294 plan §0 第 10 条——距上一次 dated review（2026-11-09）满 14 天或其后关闭 20 个后继即须做一次独立对账（design §13.5），最迟
+  2026-11-23；现已过期（17 天、约 130 个后继）。对账须由**没有实施被抽查后继的会话**执行：本会话实施了 RFC-579～614，不能自审。已在会话里向用户说明。
+- **CI**：`03008a73a`（RFC-546）的 run 45785450678 之后，主 CI 每轮都有一到两格与提交无关的超时（RFC-609～614 各自 plan 的 CI 节逐格记录）。只有一条反复出现：
+  `tests/rfc401-epoch2-history-bridge.test.ts` 的“the additive bridge carries every older version to the head across whole new tables”对每个 epoch-2 历史版本
+  建一座桥，RFC-602 的 `c37b675ff`（2026-11-25）把 `db/schema-history/epoch2/` 从 3 个版本加到 13 个之后，在 CI 上 5.1～5.5 秒，超过 5 秒上限（run 45778901981、
+  45795931974、45799714886 三轮超时，早些的绿 run 里通过）。按 CLAUDE.md 文首第 4 条，属引入方的问题，本会话保留证据、未代改。
+- **后继**：RFC-609、610、612、613、614 的 Done 待包含它们的一轮主 CI 全绿。
+
 ## 2026-11-26 RFC-614 收上传的 launch 把 upload admission 当必填端口，子任务委派是不收上传的另一个用例（In Progress；`design/RFC-614-launch-upload-admission-required/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W4-E8
@@ -7,7 +17,8 @@
   同名报错删去。三个夹具改调不收上传的入口，“未接线”用例改写。新增 RFC-614 用例。随本提交把 RFC-546、RFC-607、RFC-608 转 Done。
 - **集中验证**（基于 `0339842ab`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 390 个用例文件只有 `rfc321` 照例红；4 种变异都被认出；
   架构报告有门禁的计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-614 的提交 `5c7a72129`：exact SHA 主 CI run 45814242489 红在 shard 28（`rfc395-staging-page-cost` 一条 5 秒超时，用例自 10-26 起未改），
+  与本 RFC 无关、未重跑。后继证据待包含本提交的 run 全绿。
 
 ## 2026-11-26 RFC-613 provider 运行期的驱动绑定必填，旧的逐次驱动直绑只供用例（In Progress；`design/RFC-613-task-run-binding-required/`）
 
@@ -19,7 +30,8 @@
 - **集中验证**（基于 `1d4faeac5`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警。715 个用例文件里查出一处本人缺陷（`rfc510` 逐字钉着
   那次绑定核对的实参），改钉值后复验通过；`rfc321` 照例红。4 种变异都被认出；架构报告除该计数 10 → 9 与文件导出外有门禁的计数不变。实现门 PASS
   （本会话按路径限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-613 的提交 `0339842ab`：exact SHA 主 CI run 45803731041 后端全绿，红在两格 e2e（Windows 2/4 的 RFC-023 澄清主路径、macOS 1/4 的 opencode
+  运行时超时一族，都是等任务状态超时）；本 RFC 不改生产行为，原因未查实、未重跑。后继证据待包含本提交的 run 全绿。
 
 ## 2026-11-26 RFC-612 source-control 组合层里余下的两份实现归 infrastructure（In Progress；`design/RFC-612-source-control-composition-implementations/`）
 
@@ -30,7 +42,8 @@
   新增 RFC-612 用例。
 - **集中验证**（基于 `b90d7ee7c`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 559 个用例文件只有 `rfc321` 照例红；4 种变异都被认出；
   架构报告除该计数 6 → 4 与文件位置外相同。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-612 的提交 `1d4faeac5`：exact SHA 主 CI run 45799714886 红在 shard 41（RFC-401 历史行桥 5 秒超时，见下面的注记），与本 RFC 无关、未重跑；
+  Windows 平台与快速反馈全绿。后继证据待包含本提交的 run 全绿。
 
 ## 2026-11-26 RFC-611 CI 吞吐与稳定性（In Progress；`design/RFC-611-ci-throughput-and-stability/`）
 

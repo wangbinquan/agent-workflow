@@ -33,7 +33,9 @@
 
 ## CI（AC-4）
 
-待推送。
+- `5c7a72129`（实现）：exact SHA 主 CI run 45814242489 结论 failure，红在 shard 28 一格：`rfc395-staging-page-cost` 的“page insertion equals sequential
+  insertion …”6,105 ms 超过 5 秒上限（这份用例自 2026-10-26 起没改过，与 Mission launch 无关），未重跑。快速反馈 run 45814242606 全绿。后继证据待包含本提交的
+  run 全绿。
 
 ## 实现门（本会话自审，只审功能）
 
