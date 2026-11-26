@@ -549,6 +549,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 
 ### S10 `composition/` 只装配：全模块收口
 
+> 2026-11-25 [RFC-608](../RFC-608-repository-facts-scan-selection/proposal.md)（In Progress）：development-automation 的最后一处选择（仓库事实在卷内还是进程内扫描）迁入采集器所在的 infrastructure，`composition-control-flow-development-automation` 1 → 0。余下：task-execution 10、source-control 6、system-operations 2（数据库准备的选择受发布升级门预载钩子约束）、integration 1（webhook 入站，挨着密钥箱，不动）、resource-catalog 1（`resourceAcl`，访问控制一族，不动）。
+
 > 后继：development-automation 第一步 [RFC-494](../RFC-494-development-employee-type-package-out-of-composition/proposal.md)（Done，2026-11-13，`e11313b6b`）：`employeeTypePackage.ts` 除登记对象外的合同与编解码、它依赖的工具合同登记与旧程序升级迁入 development-automation 的 application，composition 只留登记对象与给 bootstrap 的三个转出，`composition-control-flow-development-automation` 660 → 491。落 application 而非下面“归 domain”的字面：内容按 execution-contract 与 digital-employee 的 public 合同定型，design §3 的矩阵不许 domain 取其他模块的文件（RFC-494 design §6 取舍 1）；其中只依赖 zod 与 shared 的上下文 schema 与工作范围规则可再分进 domain（RFC-494 design §8）。S10 的其余范围由后继步骤承接。
 >
 > 后继：development-automation 第二步 [RFC-495](../RFC-495-development-platform-work-items-out-of-composition/proposal.md)（Done，2026-11-14，`c08c4db2e`）：`digitalEmployeePlatformWorkItems.ts` 的工作项用例、schema、辅助函数与输入接口迁入 development-automation 的 application（`employeePlatformWorkItems.ts`），四处 infrastructure 与默认时钟改由 composition 注入，composition 这个文件只剩装配，`composition-control-flow-development-automation` 491 → 371；按工作项拆分用例另立（RFC-495 design §8）。S10 的其余范围（`digitalEmployeeWorkspace.ts` 的工作区策略、`missionOperations.ts` / `configOperations.ts` / `graphDeliveryBridge.ts` 的命令处理）由后继步骤承接。

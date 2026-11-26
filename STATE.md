@@ -1,3 +1,14 @@
+## 2026-11-25 RFC-608 仓库事实扫描的选择归 infrastructure（In Progress；`design/RFC-608-repository-facts-scan-selection/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S10
+  （composition 只装配），development-automation 的 composition 只剩这一处控制流。
+- **范围**：`composition/repositoryFactsScanner.ts` 的选择（按工作区效果有没有树操作，在卷内扫描还是交回 `undefined` 让采集器回落）迁为采集器所在
+  infrastructure 的 `repositoryFactsScanFor`，直接给出两种扫描之一；composition 改调它，原文件删去；`rfc598` 钉住的调用名随之改。
+  `composition-control-flow-development-automation` 1 → 0（max 同步降）。新增 RFC-608 用例。
+- **集中验证**（基于 `e7fae1424`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 543 个用例文件只有 `rfc321` 照例红；3 种变异都被认出；
+  架构报告除该计数 1 → 0 与生产文件少 1 个外相同。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-25 RFC-607 需求物化器的需求源必填，本机兼容物化器迁入用例 helper（In Progress；`design/RFC-607-requirement-materializer-stated-inputs/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-603 design §7

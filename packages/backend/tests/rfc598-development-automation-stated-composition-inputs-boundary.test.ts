@@ -141,7 +141,7 @@ describe('RFC-598 —— development-automation 的装配入参全部显式给�
       conditionalEffects: [],
       effectCalls: [
         'createActionBaselineResolver(… deps.repositoryBaselines)',
-        'repositoryFactsScannerOf(… deps.automationWorkspaceEffects)',
+        'repositoryFactsScanFor(… deps.automationWorkspaceEffects)',
         'selectActionWorkspaceEffects(… deps.actionWorkspaceEffects)',
         'selectedAutomationWorkspaceEffects(… deps.automationWorkspaceEffects)',
       ],

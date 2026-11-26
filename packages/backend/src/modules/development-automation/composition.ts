@@ -111,8 +111,10 @@ import {
   createActionTemplatePersistence,
   createVerificationProfilePersistence,
 } from './infrastructure/configResourceStore'
-import { createRepositoryFactsCollector } from './infrastructure/repositoryFactsCollector'
-import { repositoryFactsScannerOf } from './composition/repositoryFactsScanner'
+import {
+  createRepositoryFactsCollector,
+  repositoryFactsScanFor,
+} from './infrastructure/repositoryFactsCollector'
 import { recordUploadPublicationReceipt } from './infrastructure/uploadPublicationReceipt'
 import { runVerificationProfileWithEffects } from './application/verificationRunner'
 import { verificationProfileContentSchema } from './domain/verificationProfile'
@@ -445,7 +447,7 @@ export function composeDevelopmentAutomation(
     // RFC-370 §10 V18 (a): a volume selection scans where the repository lives.
     repositoryFacts: createRepositoryFactsCollector(
       deps.db,
-      repositoryFactsScannerOf(deps.automationWorkspaceEffects),
+      repositoryFactsScanFor(deps.automationWorkspaceEffects),
     ),
     uploadPublication: {
       record: (input) => recordUploadPublicationReceipt(deps.db, input),

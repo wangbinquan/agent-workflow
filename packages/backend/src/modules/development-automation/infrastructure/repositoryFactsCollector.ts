@@ -19,6 +19,7 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { FactCell } from '../domain/factCell'
 import type { FactCellValue } from '../domain/facts'
+import type { AutomationWorkspaceEffectsFactory } from '../application/ports/automationWorkspaceEffects'
 import type { RepositoryFactsCollectorPort } from '../application/ports/reconcilerPorts'
 import type { RepositoryLocationRead } from '../application/ports/repositoryLocationRead'
 import { createRepositoryLocationRead } from './gitBaselineReader'
@@ -26,6 +27,20 @@ import { scanRepositoryFacts, type RepositoryFactsScan } from './repositoryFacts
 
 /** Scans the repository at its stored location (a local path or a volume reference). */
 export type RepositoryFactsScanner = (localPath: string) => Promise<RepositoryFactsScan>
+
+/**
+ * RFC-608 (RFC-294 S10): the scan the selected workspace effects run — next to the files for a volume selection (its tree
+ * operations run `repository-facts-scan`), in-process for the native selection (no tree operations). The choice depends
+ * on the effects implementation, so it lives here; the composition only hands the selection over.
+ */
+export function repositoryFactsScanFor(
+  workspace: AutomationWorkspaceEffectsFactory,
+): RepositoryFactsScanner {
+  const tree = workspace.treeOperations
+  if (tree === undefined) return scanRepositoryFacts
+  return async (localPath) =>
+    (await tree.run('repository-facts-scan', { root: localPath })) as RepositoryFactsScan
+}
 
 export function createRepositoryFactsCollectorFromLocations(
   repositories: RepositoryLocationRead,
