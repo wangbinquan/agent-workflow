@@ -1,6 +1,7 @@
 import {
   seedCodeHistoryRows,
   historyFixtureReader,
+  preparedHistoryFixtureReader,
   seedEmptyCodeHistory,
   type HistoryFixtureInsert,
 } from './helpers/legacyCapabilitySeed'
@@ -299,7 +300,6 @@ describeEachProvider(
       })
       expect(await read.findNodeRun('missing')).toBeNull()
 
-      const attempts = createRoundAttemptsRead(historyFixtureReader(db))
       const attempt = (id: string, over: HistoryFixtureInsert<'code_ai_attempts'>) => ({
         id,
         roundId: 'round-b5a',
@@ -317,6 +317,7 @@ describeEachProvider(
         attempt('mm-second', { rerunSeq: 1, startedAt: NOW + 10, status: 'failed' }),
         attempt('aa-third', { attemptSeq: 1, startedAt: NOW + 20, endedAt: NOW + 30 }),
       ])
+      const attempts = createRoundAttemptsRead(await preparedHistoryFixtureReader(db))
       expect((await attempts.load('round-b5a', 10)).map((row) => row.attemptId)).toEqual([
         'zz-first',
         'mm-second',

@@ -2,7 +2,7 @@
 
 - 用户明确要求完成四项优化及功能、性能、边界用例，验证后提交。范围、技术设计与验收见 [RFC-602](design/RFC-602-bounded-module-queries/proposal.md)。
 - 历史采用可重建持久查询投影，资源摘要按精确 kind/id 读取，仓库组按用例读取可达子图，子任务以窄 keyset 页完整消费。
-- 全部实现与用例完成后集中验证：后端相关 55 文件合并有效结果 706 条、前端 5 文件 96 条通过；前后端完整类型、任务范围静态质量、schema-history、依赖边界与相关合同检查通过。独立功能实现门 PASS；验证与实际限制见 [实施记录](design/RFC-602-bounded-module-queries/plan.md)。
+- 全部实现与用例完成后集中验证：后端相关 57 文件合并有效结果 718 条、前端 5 文件 96 条通过；前后端完整类型、任务范围静态质量、schema-history、依赖边界与相关合同检查通过。独立功能实现门 PASS；验证与实际限制见 [实施记录](design/RFC-602-bounded-module-queries/plan.md)。
 - 新增 epoch-2 0003–0012 additive 资产和 PG15/16/17/18 catalog，原版本资产/历史包不改。首次初始化一次构建派生索引；显式维护入口为 `db rebuild-code-history-index [--json]`。发布后另查 exact-SHA CI；本记录不冒充服务端全仓结果。
 
 ## 2026-11-25 模块对外合同补测与历史分页修复（实现与本地验证完成）

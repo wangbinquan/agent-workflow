@@ -1,6 +1,6 @@
 import {
   seedCodeHistoryRows,
-  historyFixtureReader,
+  preparedHistoryFixtureReader,
   seedEmptyCodeHistory,
   type HistoryFixtureInsert,
 } from './helpers/legacyCapabilitySeed'
@@ -153,7 +153,6 @@ describeEachProvider(
 
     test('投递链读取 / 工作项投影分页', async () => {
       const db = harness.db
-      const deliveries = createDeliveryChainRead(historyFixtureReader(db))
       const delivery = (
         id: string,
         over: HistoryFixtureInsert<'code_trigger_deliveries'> & {
@@ -176,6 +175,7 @@ describeEachProvider(
         delivery('d4', { createdAt: NOW + 3, outcome: 'failed', stableProjectId: 'proj-other' }),
         delivery('d5', { createdAt: NOW + 4, outcome: 'dropped', stableProjectId: 'proj-other' }),
       ])
+      const deliveries = createDeliveryChainRead(await preparedHistoryFixtureReader(db))
       expect(
         (await deliveries.recent({ stableProjectId: 'proj-b5b' })).map((row) => row.id),
       ).toEqual(['d3', 'd2', 'd1'])
@@ -203,7 +203,7 @@ describeEachProvider(
         updatedAt: NOW,
       })
 
-      const projection = createWorkItemProjectionRead(historyFixtureReader(db))
+      const projection = createWorkItemProjectionRead(await preparedHistoryFixtureReader(db))
       expect(await projection.readPage({})).toEqual({ items: [], nextCursor: null })
       await seedWorkItem(db, 'wi-old', NOW, 3)
       await seedWorkItem(db, 'wi-new', NOW + 100, 0)
@@ -225,6 +225,7 @@ describeEachProvider(
           status: 'done',
         },
       ])
+      await preparedHistoryFixtureReader(db)
       const first = await projection.readPage({ limit: 1, roundLimit: 2 })
       expect(first.items.map((item) => item.workItemId)).toEqual(['wi-new'])
       expect(first.items[0]).toMatchObject({ rounds: [], roundsHidden: 0, epoch: 1 })
