@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { sha256Hex } from '@/platform/contracts/hash'
+import type { JsonObject } from '@/platform/contracts/json'
 import type { AutoUpgradeRecordPort } from '../../application/ports/epochSwitch'
 import {
   foldAutoUpgradeSession,
@@ -39,9 +40,11 @@ export function createAutoUpgradeRecords(appHome: string): AutoUpgradeRecordPort
     async receipt(operationId, value) {
       const path = join(sessionRoot(operationId), 'receipt.json')
       // Recovery after receipt publication uses its original timings/bytes.
-      if (existsSync(path)) return JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>
-      writeEpochFile(path, Buffer.from(JSON.stringify(value)), true)
-      return value
+      if (existsSync(path)) return JSON.parse(readFileSync(path, 'utf8')) as JsonObject
+      const published = JSON.stringify(value)
+      writeEpochFile(path, Buffer.from(published), true)
+      // RFC-610: the first call returns the published JSON too, the same form recovery reads back.
+      return JSON.parse(published) as JsonObject
     },
     async acceptance(operationId, runId) {
       const operationRoot = join(

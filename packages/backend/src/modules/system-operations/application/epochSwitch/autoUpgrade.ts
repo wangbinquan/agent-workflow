@@ -1,3 +1,4 @@
+import type { JsonObject } from '@/platform/contracts/json'
 import { persistenceDialect } from '@/platform/persistence/nativeDialect'
 import type { EpochSwitchApplication } from '../../public/commands'
 import type { EpochSwitchPlanInput, EpochSwitchStatusView } from '../../public/types'
@@ -50,7 +51,7 @@ export async function autoUpgrade(
   const conclusion = (
     outcome: AutoUpgradeConclusion['outcome'],
     guidance: readonly string[],
-    receipt?: Readonly<Record<string, unknown>>,
+    receipt?: JsonObject,
   ): AutoUpgradeConclusion => ({
     mode: 'auto',
     outcome,

@@ -1,3 +1,4 @@
+import type { JsonObject } from '@/platform/contracts/json'
 import type { DatabaseProvisioning } from '@/platform/persistence/migration/databaseProvisioning'
 import type { MigrationProgressCallback } from '@/platform/persistence/migration/run/progress'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
@@ -68,10 +69,11 @@ export interface AutoUpgradeRecordPort {
     kind: AutoUpgradeRecordKind,
     data: Readonly<Record<string, unknown>>,
   ): Promise<AutoUpgradeRecord>
-  receipt(
-    operationId: string,
-    value: Readonly<Record<string, unknown>>,
-  ): Promise<Readonly<Record<string, unknown>>>
+  /**
+   * Publishes the session's receipt once and returns it as published: the JSON of the first value, also when a later call
+   * (recovery) passes a new one. The value stays opaque (RFC-398 §2.7); only the published form is typed (RFC-610).
+   */
+  receipt(operationId: string, value: Readonly<Record<string, unknown>>): Promise<JsonObject>
   acceptance(operationId: string, runId: string): Promise<readonly AutoUpgradeAcceptanceEvidence[]>
 }
 export interface SessionLockPort {

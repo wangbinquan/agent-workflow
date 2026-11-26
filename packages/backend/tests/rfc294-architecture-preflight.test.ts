@@ -415,10 +415,8 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/source-control/ports/repositoryWorkspaceStore.ts#RepositoryWorkspaceStore: unsafe/open type ObjectKeyword',
   'modules/system-operations/application/ports/executionAuthority.ts#ExecutionAuthorityPort: forbidden type Partial',
   'modules/system-operations/application/ports/executionAuthority.ts#ExecutionAuthorityPort: unsafe/open type FunctionType',
-  // RFC-398 §2.7: the automatic-upgrade receipt is a JSON evidence document assembled from the
-  // session records (whose payloads stay opaque by design) and printed verbatim by
-  // `db migration auto --json`; typing it closed means typing every record payload first.
-  'modules/system-operations/domain/epochSwitch/autoUpgrade.ts#AutoUpgradeConclusion: unsafe/open type UnknownKeyword',
+  // RFC-610: the automatic-upgrade receipt is the JSON the record port published (the platform JsonObject, a designated
+  // contract type); the session record payloads stay opaque (RFC-398 §2.7). Settled.
   // RFC-562: the hosted object publication journal is the content owner's contract (platform/content) and the restore
   // normalization participant is a System Operations required port; neither is on a module's public surface any more.
   // RFC-583: the configuration command port left the public surface with its HTTP binding (now in system-operations' application).

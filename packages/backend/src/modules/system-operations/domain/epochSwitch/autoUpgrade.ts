@@ -1,4 +1,5 @@
 // RFC-398 §2: pure session and approval policy.
+import type { JsonObject } from '@/platform/contracts/json'
 import type { InstallationFacts, EpochInstallationState } from './classification'
 import type { MigrationPlanDocument } from './documents'
 
@@ -204,5 +205,6 @@ export interface AutoUpgradeConclusion {
   readonly exitCode: 0 | 1 | 3
   readonly operationId: string | null
   readonly guidance: readonly string[]
-  readonly receipt?: Readonly<Record<string, unknown>>
+  /** RFC-610: the receipt as published (the JSON `db migration auto --json` prints and recovery reads back). */
+  readonly receipt?: JsonObject
 }

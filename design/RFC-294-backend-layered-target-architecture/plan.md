@@ -549,6 +549,9 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 2026-11-26 [RFC-609](../RFC-609-capability-template-owner-designated-adapter/proposal.md)（In Progress）：跨 context 内部文件对里能力模板归属方的 2 条收口——资源包
 PostgreSQL 事务的 owner-native 合同迁入 resource-catalog 的 application 端口、经 `composition/required-ports` 交出，code-capability 经指定 adapter 只取类型，
 事务类型用平台 `PersistenceTx`。跨 context 内部文件对 4 → 2，余下 Integration 用 Task Execution 来源终止能力的 2 条（能力合同一族，延后）。
+2026-11-26 [RFC-610](../RFC-610-auto-upgrade-receipt-json/proposal.md)（In Progress）：system-operations 的自动升级回执 1 条收口——记录端口
+`receipt()` 返回发布出去的 JSON（平台 `JsonObject`），结论的回执随之定型，记录层其余载荷照旧不透明。`PUBLIC_SURFACE_DEBT` 12 → 11，余下的全是
+能力 / 凭据 / 身份一族（延后）。
 
 ### S10 `composition/` 只装配：全模块收口
 

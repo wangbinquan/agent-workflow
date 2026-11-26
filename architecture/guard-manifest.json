@@ -1987,7 +1987,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "id": "rfc294-architecture-preflight",
-      "lines": 528,
+      "lines": 526,
       "mechanism": "ast",
       "minCorpusFiles": 120,
       "negativeFixture": true,
@@ -5003,6 +5003,18 @@
       "lines": 220,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": false,
+      "file": "packages/backend/tests/rfc610-auto-upgrade-receipt-json-boundary.test.ts",
+      "id": "rfc610-auto-upgrade-receipt-json-boundary",
+      "lines": 116,
+      "mechanism": "ast",
+      "minCorpusFiles": null,
       "negativeFixture": true,
       "runner": "bun"
     }

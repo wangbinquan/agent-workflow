@@ -1,3 +1,14 @@
+## 2026-11-26 RFC-610 自动升级结论的回执取发布时的 JSON（In Progress；`design/RFC-610-auto-upgrade-receipt-json/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S9
+  （public 类型污染清单为空），`PUBLIC_SURFACE_DEBT` 余 12 条，能力 / 凭据 / 身份一族之外只剩 `AutoUpgradeConclusion` 的回执。
+- **范围**：自动升级记录端口的 `receipt()` 第一次与恢复时都返回发布字节的解析结果（平台 `JsonObject`；此前第一次返回传入的对象本身），
+  `AutoUpgradeConclusion.receipt` 改为 `JsonObject`，记录层其余载荷照旧不透明（RFC-398 §2.7）。preflight 的清单去掉这 1 条、计数 12 → 11。
+  新增 RFC-610 用例。CLI 打印的 JSON 逐字不变。
+- **集中验证**（基于 `8cf8ee11d`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 302 个用例文件全部通过；4 种变异都被认出；
+  架构报告除 `public-surface-deviations` 12 → 11 外有门禁的计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-26 RFC-609 能力模板的 PostgreSQL 归属方经指定 adapter 取资源目录的端口合同（In Progress；`design/RFC-609-capability-template-owner-designated-adapter/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S9
