@@ -24,7 +24,7 @@ E2E 保留 Linux 3、macOS/Windows 各 4 片以及每片 4 workers。先由同�
 
 初始 E2E 权重来自成功日志的可见耗时估计，明确记录为 estimate，不能称为精确整文件测量。新增 reporter 记录文件运行时间窗口及成功状态，为后续刷新提供证据；仅接受完整成功运行，保留 setup/teardown 测量限制。其他 nightly 和本地默认入口继续原配置，避免误施主 CI 的 tier 分配。
 
-`CI timing refresh` 在 main push 的完整 CI 成功后下载 44 个后端及 11 个 E2E 产物，验证来源 SHA、测试全集、无遗漏/重复和各平台分片一致性。E2E 只接受完整且无重试的测量；重跑失败 job 后遗留的较早成功片可以使用，但逐片 attempt 必须不晚于最终 run attempt，并保留来源。输出 `reviewed-ci-timings-<run-id>` artifact，审阅后才更新仓内权重。手动刷新命令分别为 `bun scripts/ci/refresh-backend-timings.ts ARTIFACTS_DIR RUN_ID OUTPUT_JSON` 和 `bun scripts/ci/refresh-e2e-timings.ts ARTIFACTS_DIR RUN_ID OUTPUT_JSON`；需在主 checkout 中拥有对应源 commit，并通过 gh 访问该运行。
+`CI timing refresh` 在 main push 的完整 CI 成功后下载 44 个后端及 11 个 E2E 产物，验证来源 SHA、测试全集、无遗漏/重复和各平台分片一致性。E2E 只接受完整且无重试的测量；重跑失败 job 后遗留的较早成功片可以使用，但逐片 attempt 必须不晚于最终 run attempt，并保留来源。全部证据有效但存在测试重试时，中性跳过本次 E2E 权重刷新，输出 `.status.json` 记录原因/文件及 notice，仍允许后端审阅产物上传；不把重试窗口混入权重。外来、不完整、损坏或与逐测试结果不一致的文件计时仍报错，不能被之前遇到的重试遮蔽。输出 `reviewed-ci-timings-<run-id>` artifact，审阅后才更新仓内权重。手动刷新命令分别为 `bun scripts/ci/refresh-backend-timings.ts ARTIFACTS_DIR RUN_ID OUTPUT_JSON` 和 `bun scripts/ci/refresh-e2e-timings.ts ARTIFACTS_DIR RUN_ID OUTPUT_JSON`；需在主 checkout 中拥有对应源 commit，并通过 gh 访问该运行。
 
 ## 3. 测试夹具稳定性
 

@@ -1,6 +1,6 @@
 // RFC-611: only a complete, clean 3/4/4 main-CI population may replace E2E weights.
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { assertSuccessfulTimingSource } from './refresh-backend-timings'
 import {
@@ -22,6 +22,13 @@ export interface E2ETimingSource {
   sourceSha: string
   finalAttempt: number
   repository: string
+}
+/** Valid evidence can be unsuitable for weights without being a collector failure. */
+export class IneligibleE2ETimingSampleError extends Error {
+  constructor(readonly retriedFiles: string[]) {
+    super(`E2E timing refresh skipped: ${retriedFiles.length} files contain retries`)
+    this.name = 'IneligibleE2ETimingSampleError'
+  }
 }
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -79,6 +86,7 @@ export function mergeE2ETimings(
   const seen = new Set<string>()
   const populations = new Map<E2EPlatform, { digest: string; assignments: string; tests: number }>()
   const attempts: Record<string, number> = {}
+  const retriedFiles = new Set<string>()
   for (const artifact of artifacts) {
     const match = /^e2e-test-timings-(Linux|macOS|Windows)-(\d+)$/.exec(artifact.name)
     if (!match) throw new Error(`Unexpected E2E artifact name: ${artifact.name}`)
@@ -136,6 +144,7 @@ export function mergeE2ETimings(
     if (!Array.isArray(timing.tests) || timing.tests.length !== expected.length)
       throw new Error(`Missing E2E test results: ${artifact.name}`)
     const testIds = new Set<string>()
+    const fileResults = new Map<string, { attempts: number; clean: boolean }>()
     for (const entry of timing.tests) {
       const test = object(entry)
       const original = typeof test.id === 'string' ? expectedById.get(test.id) : undefined
@@ -145,16 +154,32 @@ export function mergeE2ETimings(
         test.file !== original.file ||
         test.expectedStatus !== original.expectedStatus ||
         !Array.isArray(test.results) ||
-        test.results.length !== 1
+        test.results.length === 0
       )
-        throw new Error(`Duplicate, omitted, foreign or retried E2E test: ${artifact.name}`)
+        throw new Error(`Duplicate, omitted or foreign E2E test: ${artifact.name}`)
       testIds.add(original.id)
-      const result = object(test.results[0])
-      if (
-        result.retry !== 0 ||
-        (result.status !== original.expectedStatus && result.status !== 'skipped')
-      )
-        throw new Error(`E2E test result is not clean: ${original.id}`)
+      const fileResult = fileResults.get(original.file) ?? { attempts: 0, clean: true }
+      let hasExpected = false
+      let hasUnexpected = false
+      for (const [retry, entry] of test.results.entries()) {
+        const result = object(entry)
+        if (
+          result.retry !== retry ||
+          typeof result.status !== 'string' ||
+          !['passed', 'failed', 'timedOut', 'skipped'].includes(result.status)
+        )
+          throw new Error(`Invalid E2E retry sequence or result: ${original.id}`)
+        const expected = result.status === original.expectedStatus || result.status === 'skipped'
+        hasExpected ||= result.status === original.expectedStatus
+        hasUnexpected ||= !expected
+        fileResult.attempts++
+        fileResult.clean &&= retry === 0 && expected
+      }
+      // Playwright computes outcome across all attempts. A serial sibling may
+      // pass before a later retry fails, while failed -> skipped is unexpected.
+      if (hasUnexpected && !hasExpected)
+        throw new Error(`E2E test has an unexpected outcome: ${original.id}`)
+      fileResults.set(original.file, fileResult)
     }
     const files = object(timing.files)
     const selectedFiles = plan.assignments[current - 1]!
@@ -166,14 +191,16 @@ export function mergeE2ETimings(
       const evidence = object(files[file])
       const fileTests = expected.filter((test) => test.file === file)
       const runnable = fileTests.some((test) => test.expectedStatus !== 'skipped')
+      const observed = fileResults.get(file)!
       if (
         evidence.complete !== true ||
-        evidence.clean !== true ||
-        evidence.attempts !== fileTests.length ||
+        evidence.clean !== observed.clean ||
+        evidence.attempts !== observed.attempts ||
         evidence.runnable !== runnable
       )
-        throw new Error(`E2E file measurement is incomplete or retried: ${file}`)
+        throw new Error(`E2E file measurement is incomplete or inconsistent: ${file}`)
       const duration = positive(evidence.durationMs)
+      if (!observed.clean) retriedFiles.add(`${platform}/${file}`)
       platforms[platform][file] = runnable ? duration : 1
     }
   }
@@ -183,6 +210,9 @@ export function mergeE2ETimings(
       if (!seen.has(`e2e-test-timings-${runner}-${current}`))
         throw new Error(`Missing E2E ${platform} shard ${current}`)
   }
+  // Validate every shard first: an earlier retry must not hide later corrupt,
+  // incomplete or foreign evidence behind a neutral skip.
+  if (retriedFiles.size) throw new IneligibleE2ETimingSampleError([...retriedFiles].sort())
   for (const platform of ['linux', 'macos', 'windows'] as const)
     platforms[platform] = Object.fromEntries(
       Object.entries(platforms[platform]).sort(([a], [b]) => a.localeCompare(b)),
@@ -214,6 +244,41 @@ export function mergeE2ETimings(
   }
 }
 
+export function writeE2ETimingReview(
+  artifacts: readonly E2ETimingArtifact[],
+  source: E2ETimingSource,
+  output: string,
+): 'updated' | 'skipped' {
+  const destination = resolve(output)
+  let result: ReturnType<typeof mergeE2ETimings>
+  try {
+    result = mergeE2ETimings(artifacts, source)
+  } catch (error) {
+    if (!(error instanceof IneligibleE2ETimingSampleError)) throw error
+    // Never let an old output be uploaded as if this skipped sample refreshed it.
+    if (existsSync(destination)) throw new Error(`Refusing stale timing output: ${destination}`)
+    mkdirSync(dirname(destination), { recursive: true })
+    writeFileSync(
+      `${destination}.status.json`,
+      `${JSON.stringify(
+        { status: 'skipped', reason: 'retried-tests', source, retriedFiles: error.retriedFiles },
+        null,
+        2,
+      )}\n`,
+    )
+    console.log(`::notice::${error.message}; existing scheduling weights are unchanged.`)
+    return 'skipped'
+  }
+  mkdirSync(dirname(destination), { recursive: true })
+  writeFileSync(destination, `${JSON.stringify(result, null, 2)}\n`)
+  writeFileSync(
+    `${destination}.status.json`,
+    `${JSON.stringify({ status: 'updated', source }, null, 2)}\n`,
+  )
+  console.log(JSON.stringify(result.provenance, null, 2))
+  return 'updated'
+}
+
 function command(program: string, args: string[]): string {
   const result = spawnSync(program, args, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
   if (result.error) throw result.error
@@ -242,14 +307,9 @@ if (import.meta.main) {
         readFileSync(join(directory, entry.name, 'e2e-timings.json'), 'utf8'),
       ) as unknown,
     }))
-  const result = mergeE2ETimings(artifacts, {
-    runId,
-    repository,
-    sourceSha,
-    finalAttempt: Number(object(run).run_attempt),
-  })
-  const destination = resolve(output)
-  mkdirSync(dirname(destination), { recursive: true })
-  writeFileSync(destination, `${JSON.stringify(result, null, 2)}\n`)
-  console.log(JSON.stringify(result.provenance, null, 2))
+  writeE2ETimingReview(
+    artifacts,
+    { runId, repository, sourceSha, finalAttempt: Number(object(run).run_attempt) },
+    output,
+  )
 }

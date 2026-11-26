@@ -32,3 +32,11 @@
 首次代码 exact-SHA 运行：[完整 CI](https://github.com/wangbinquan/agent-workflow/actions/runs/45796122638)、[CI feedback](https://github.com/wangbinquan/agent-workflow/actions/runs/45796122676)。2026-11-26 发布时已被 GitHub 接受、处于排队状态；后续状态以运行页面和本次会话验收记录为准。
 
 发布后只读复核发现旧 `root-test-entrypoint` 断言仍要求失败片也上传，未随 success-only 策略同步；补丁把断言限定到该步骤并要求仅成功上传。对应 root entrypoint + backend timing 共 36 项复验通过。原两条运行如果在旧断言处失败，属于本 RFC 遗漏；由包含此补丁的后继候选继续验收，不把重跑当修复。
+
+## 托管观察与计时资格修补
+
+`92222f0c3` 的主 CI [run 45797271947](https://github.com/wangbinquan/agent-workflow/actions/runs/45797271947) 持续验收中。macOS E2E 四片均通过，实际首 step 至 job 完成分别为 15m59s、11m47s、9m48s、11m16s；部分成功片存在 Playwright 重试，因此不作为 clean 权重来源，也不据此宣称整体尾片改善。Mac1 的长 spec 启动较晚，最后约 120s 单独占据尾段，说明总权重平衡仍不能保证四 worker 完成时间平衡。
+
+计时资格修补：完整且通过但有重试的 E2E 样本，在全部 11 片来源/全集/结果序列/文件 metadata 校验完毕后中性跳过刷新，并输出 status JSON；普通验证错误仍失败。覆盖 serial 重试中的 passed/skipped/failed 组合、损坏证据与 retry 共存的顺序无关性、旧输出防复用。相关 2 文件 22 项通过，严格 TypeScript 与 ESLint 通过；此修补不改主测试选择或结果。累计新增/受影响测试的有效通过证据为 93 项。
+
+最初两条带有已知旧上传断言缺陷的本会话 run（45796122638、45796337118）已手动取消，随后其剩余 queued 聚合 job 占住 lane，核实无运行步骤后 force-cancel 释放；没有取消其他会话运行。该人工清理不改变两 lane 保留所有 SHA 的常规策略。包含本 RFC 的后继 `1d4faeac5` 经候选路径与祖先核对，CI feedback 及 Windows CI 已成功；前者实际执行 8m53s、后者 9m54s，属于后继证据。

@@ -1,10 +1,14 @@
 // RFC-611: incomplete, mixed-source or retried samples must not replace scheduling weights.
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   assertE2EShardTopology,
   E2E_SHARD_COUNTS,
+  IneligibleE2ETimingSampleError,
   mergeE2ETimings,
+  writeE2ETimingReview,
   type E2ETimingArtifact,
 } from '../../../scripts/ci/refresh-e2e-timings'
 import { planE2EShards, selectedE2ETests, type E2EPlatform } from '../../../scripts/ci/e2e-shards'
@@ -15,6 +19,22 @@ const source = {
   sourceSha: 'a'.repeat(40),
   finalAttempt: 2,
   repository: 'owner/repo',
+}
+
+function retriedFixture() {
+  const artifacts = fixture()
+  const timing = artifacts[0]!.timings
+  const file = timing.tests[0]!.file
+  const tests = timing.tests.filter((test) => test.file === file)
+  // Serial retries also rerun earlier passes and tests skipped after a group failure.
+  for (const [index, test] of tests.entries())
+    test.results = [
+      { status: index === 0 ? 'failed' : 'skipped', retry: 0 },
+      { status: 'passed', retry: 1 },
+    ]
+  timing.files[file]!.attempts += tests.length
+  timing.files[file]!.clean = false
+  return artifacts
 }
 function fixture() {
   const tests = ['a', 'a', 'b', 'c', 'd', 'skip'].map((name, index) => ({
@@ -165,6 +185,92 @@ describe('complete E2E timing refresh', () => {
     expect(() => mergeE2ETimings(artifacts, { ...source, sourceSha: 'short' })).toThrow('source')
     expect(() => mergeE2ETimings(artifacts, { ...source, finalAttempt: 0 })).toThrow('source')
     expect(() => mergeE2ETimings(artifacts, source, 0)).toThrow('positive')
+  })
+  test('complete passed serial retries are ineligible weights, with an explicit file reason', () => {
+    const artifacts = retriedFixture()
+    expect(() => mergeE2ETimings(artifacts, source)).toThrow(IneligibleE2ETimingSampleError)
+    try {
+      mergeE2ETimings(artifacts, source)
+    } catch (error) {
+      expect(error).toBeInstanceOf(IneligibleE2ETimingSampleError)
+      expect((error as IneligibleE2ETimingSampleError).retriedFiles).toEqual([
+        `linux/${artifacts[0]!.timings.tests[0]!.file}`,
+      ])
+    }
+    // Previously passing serial siblings may also be rerun after another test fails.
+    artifacts[0]!.timings.tests[0]!.results[0]!.status = 'passed'
+    expect(() => mergeE2ETimings(artifacts, source)).toThrow(IneligibleE2ETimingSampleError)
+    artifacts[0]!.timings.tests[0]!.results[1]!.status = 'failed'
+    expect(() => mergeE2ETimings(artifacts, source)).toThrow(IneligibleE2ETimingSampleError)
+  })
+  test('retries cannot mask malformed sequences, metadata or a later foreign/incomplete shard', () => {
+    for (const mutation of [
+      'gap',
+      'unknown-status',
+      'interrupted',
+      'final-failure',
+      'failed-skipped',
+      'clean',
+      'attempts',
+      'foreign',
+      'partial',
+    ]) {
+      const artifacts = retriedFixture()
+      const timing = artifacts[0]!.timings
+      if (mutation === 'gap') timing.tests[0]!.results[1]!.retry = 2
+      if (mutation === 'unknown-status') timing.tests[0]!.results[0]!.status = 'unknown'
+      if (mutation === 'interrupted') timing.tests[0]!.results[0]!.status = 'interrupted'
+      if (mutation === 'final-failure') timing.tests[0]!.results[1]!.status = 'failed'
+      if (mutation === 'failed-skipped') timing.tests[0]!.results[1]!.status = 'skipped'
+      if (mutation === 'clean') timing.files[timing.tests[0]!.file]!.clean = true
+      if (mutation === 'attempts') timing.files[timing.tests[0]!.file]!.attempts++
+      if (mutation === 'foreign') artifacts[10]!.timings.sourceSha = 'b'.repeat(40)
+      if (mutation === 'partial') artifacts[10]!.timings.tests.pop()
+      for (const ordered of [artifacts, [...artifacts].reverse()]) {
+        let failure: unknown
+        try {
+          mergeE2ETimings(ordered, source)
+        } catch (error) {
+          failure = error
+        }
+        expect(failure).toBeInstanceOf(Error)
+        expect(failure).not.toBeInstanceOf(IneligibleE2ETimingSampleError)
+      }
+    }
+  })
+  test('the review writer records a neutral skip without emitting retry-contaminated weights', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'e2e-timing-review-'))
+    const output = join(directory, 'weights.json')
+    try {
+      expect(writeE2ETimingReview(retriedFixture(), source, output)).toBe('skipped')
+      expect(existsSync(output)).toBe(false)
+      expect(JSON.parse(readFileSync(`${output}.status.json`, 'utf8'))).toMatchObject({
+        status: 'skipped',
+        reason: 'retried-tests',
+        source,
+      })
+      expect(writeE2ETimingReview(fixture(), source, output)).toBe('updated')
+      expect(JSON.parse(readFileSync(output, 'utf8')).platforms.linux['e2e/a.spec.ts']).toBe(200)
+      expect(JSON.parse(readFileSync(`${output}.status.json`, 'utf8')).status).toBe('updated')
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+  test('corruption still fails the review writer, and skipped sources cannot reuse stale weights', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'e2e-timing-review-'))
+    const output = join(directory, 'weights.json')
+    try {
+      const artifacts = retriedFixture()
+      artifacts[10]!.timings.complete = false
+      expect(() => writeE2ETimingReview(artifacts, source, output)).toThrow('evidence')
+      expect(existsSync(output)).toBe(false)
+      expect(existsSync(`${output}.status.json`)).toBe(false)
+      writeFileSync(output, 'previous weights')
+      expect(() => writeE2ETimingReview(retriedFixture(), source, output)).toThrow('stale')
+      expect(readFileSync(output, 'utf8')).toBe('previous weights')
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
   test('the source-workflow contract keeps Linux 3, macOS 4 and Windows 4 shards', () => {
     const workflow = readFileSync(
