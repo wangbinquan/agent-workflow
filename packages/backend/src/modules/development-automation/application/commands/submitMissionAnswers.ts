@@ -49,8 +49,8 @@ export interface SubmitAnswersDeps {
   readonly store: MissionPersistence
   readonly snapshots: FactSnapshotReader
   readonly requirement: RequirementMaterializePort
-  /** PR-5 T55：新 answer revision 使 in-flight action 失效（cancel 走 launcher）。 */
-  readonly ports?: ReconcilerPorts
+  /** PR-5 T55：新 answer revision 使 in-flight action 失效（cancel 走 launcher）；RFC-603 起必填。 */
+  readonly ports: Pick<ReconcilerPorts, 'agentLauncher'>
   readonly now: () => number
 }
 

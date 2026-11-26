@@ -84,14 +84,6 @@ error: deferred-question-dispatcher-not-bound
 +   "errorMessage": "deferred-question-dispatcher-not-bound",
       at <anonymous> (/repo/packages/backend/tests/rfc359-w5-t21b-execution-chain.test.ts:134:55)`,
   ],
-  'p0-9-launchers': ['agent', 'script'].map(
-    (kind) => `error: {"blockCode":"${kind}-launcher-not-wired"}
--     "handled": "action-launched",
-+     "handled": "action-launch-failed",
--   "stop": "async-boundary",
-+   "stop": "failed-or-blocked",
-      at <anonymous> (/repo/packages/backend/tests/rfc359-w14-legacy-mission-execution.test.ts:380:11)`,
-  ),
   'p0-9-terminal-observer': ['agent', 'script'].map(
     (kind) => `422 |         expect(settlement).toEqual({
 error: expect(received).toEqual(expected)
@@ -396,8 +388,6 @@ describe('RFC-359 AC7 historical mutation verdict', () => {
         '+   "errorMessage": "deferred-question-dispatcher-not-bound",',
         '+   "errorMessage": "unrelated",',
       ],
-      ['p0-9-launchers', 'agent-launcher-not-wired', 'unrelated-launch-failure'],
-      ['p0-9-launchers', '+     "handled": "action-launch-failed",', '+     "handled": "blocked",'],
       [
         'p0-9-terminal-observer',
         '+   "attemptStatus": "claimed",',
@@ -429,7 +419,6 @@ describe('RFC-359 AC7 historical mutation verdict', () => {
 
   test('rejects timeout or unrelated exception in place of each observed omission failure', () => {
     for (const id of [
-      'p0-9-launchers',
       'p0-9-terminal-observer',
       'p0-11-barrier',
       'p0-11-reverify',

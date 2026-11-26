@@ -10,8 +10,9 @@
 // ③ 用例的测试替身给全 11 个 provider，每个方法一被调用就抛出带名字的错误。
 // ④ 编译期：`DevelopmentAutomationProviders` 没有可选键（typecheck 执行；daemon 漏给由 `tsc` 在装配处报错）。
 //
-// 覆盖范围（C12）：① ② 只读模块装配文件；③ 跑替身；④ 由 typecheck 执行。行为由既有用例覆盖（调用装配的 9 个用例文件与 RFC-359 的 P0 变异
-// `p0-9-launchers`——它在运行期复现漏给启动器，reconciler 照旧得到 `*-launcher-not-wired`）。
+// 覆盖范围（C12）：① ② 只读模块装配文件；③ 跑替身；④ 由 typecheck 执行。行为由既有用例覆盖（调用装配的 9 个用例文件）。RFC-359 的 P0 变异
+// `p0-9-launchers` 曾在运行期复现漏给启动器；RFC-603 起 `ReconcilerPorts` 也必填、`*-launcher-not-wired` 分支删去，该阶段退役，
+// 防线是本用例 ④ 与 RFC-603 用例的编译期断言。
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'

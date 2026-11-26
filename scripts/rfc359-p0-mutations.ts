@@ -275,24 +275,9 @@ export const PHASES: readonly Phase[] = [
       },
     ],
   },
-  {
-    id: 'p0-9-launchers',
-    mutation: 'p0-9-launchers',
-    passes: [rootExecution],
-    failures: [legacyAgent, legacyScript].map((test, index) => ({
-      test,
-      diagnostics: [
-        new RegExp(
-          `error: \\{"blockCode":"${index === 0 ? 'agent' : 'script'}-launcher-not-wired"\\}`,
-        ),
-        /^-\s+"handled": "action-launched",?$/m,
-        /^\+\s+"handled": "action-launch-failed",?$/m,
-        /^-\s+"stop": "async-boundary",?$/m,
-        /^\+\s+"stop": "failed-or-blocked",?$/m,
-        /rfc359-w14-legacy-mission-execution\.test\.ts:\d+:\d+/,
-      ],
-    })),
-  },
+  // RFC-603 retired `p0-9-launchers`: composing without either launcher no longer type-checks (RFC-597 and
+  // `ReconcilerPorts` require both), and with the `*-launcher-not-wired` branch gone a forged run fails with a
+  // TypeError, which this verdict rejects as unrelated. P0-9's terminal-observer half is still representable.
   {
     id: 'p0-9-terminal-observer',
     mutation: 'p0-9-terminal-observer',

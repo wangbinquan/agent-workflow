@@ -207,10 +207,6 @@ export async function handleReplyFeedback(
   feedbackReceiptRef: string,
 ): Promise<'collected' | 'blocked'> {
   const ports = deps.ports
-  if (ports.mrEffects === undefined) {
-    await deps.block(mission.id, 'mr-care-port-missing:mrEffects', null)
-    return 'blocked'
-  }
   const row = (await deps.store.listFeedback(mission.id)).find(
     (candidate) => candidate.id === feedbackReceiptRef,
   )

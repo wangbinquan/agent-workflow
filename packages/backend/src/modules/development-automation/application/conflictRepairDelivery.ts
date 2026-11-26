@@ -48,17 +48,6 @@ export async function publishConflictRepair(
   input: ConflictRepairPublishInput,
 ): Promise<ConflictRepairPublishResult> {
   const ports = deps.ports
-  if (ports.conflictMerge === undefined) {
-    return { ok: false, kind: 'protocol', code: 'conflict-merge-not-wired', detail: 'no port' }
-  }
-  if (ports.candidateDelivery === undefined || ports.repoRemote === undefined) {
-    return {
-      ok: false,
-      kind: 'protocol',
-      code: 'conflict-delivery-not-wired',
-      detail: 'candidateDelivery/repoRemote not wired',
-    }
-  }
   // 推回的是 MR 的 source 分支——它就是本次 merge 的 `S` 所在的 ref。Mission
   // 没记住这条 ref 时诚实停住：靠 policy 的命名模板猜一条分支去推，等于对着
   // 一个平台没确认过的 ref 做写操作。

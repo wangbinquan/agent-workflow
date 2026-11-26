@@ -138,7 +138,7 @@ describeEachProvider('rfc310 pr5 T55 — answers invalidate in-flight actions', 
     const missionId = await fx.launchDirect('t55-noop-1')
     const mission = (await fx.store.getMission(missionId))!
     const out = await invalidateInFlightAction(
-      { store: createMissionPersistence(fx.db), now: () => Date.now() },
+      { store: createMissionPersistence(fx.db), ports: fx.deps().ports, now: () => Date.now() },
       mission,
       'input-invalidated',
     )

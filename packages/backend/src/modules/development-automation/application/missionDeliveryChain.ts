@@ -40,9 +40,29 @@ export const DELIVERY_EFFECT_KINDS: ReadonlySet<string> = new Set([
   'mr-ensure',
 ])
 
+/**
+ * RFC-603: the ports the four publication chains (delivery, pipeline evidence, MR care, conflict repair) read — all
+ * required; the reconciler hands its full `ReconcilerPorts`.
+ */
+export type DeliveryChainPorts = Pick<
+  ReconcilerPorts,
+  | 'attemptContext'
+  | 'uploadPlanReader'
+  | 'candidateDelivery'
+  | 'verificationProfiles'
+  | 'verificationExecution'
+  | 'requirementMaterialize'
+  | 'repoRemote'
+  | 'uploadPublication'
+  | 'mrEffects'
+  | 'pipelineEvidence'
+  | 'pipelineImport'
+  | 'conflictMerge'
+>
+
 export interface DeliveryChainDeps {
   readonly store: MissionPersistence
-  readonly ports: ReconcilerPorts
+  readonly ports: DeliveryChainPorts
   readonly now: () => number
   /** reconciler 的 requirement cells 落盘通道（同一 bundle 快照链）。 */
   persistCells(
@@ -195,9 +215,6 @@ async function loadCandidateContext(
   const runId =
     knownString(cells, '__action.candidateRunId') ?? knownString(cells, '__action.runId')
   if (treeOid === null || runId === null) return { failCode: 'candidate-context-missing:cells' }
-  if (deps.ports.attemptContext === undefined) {
-    return { failCode: 'delivery-port-missing:attemptContext' }
-  }
   const attempts = await deps.store.listAttempts(runId)
   const validated = [...attempts].reverse().find((a) => a.status === 'validated')
   if (validated === undefined || validated.preSnapshotRef === null) {
@@ -220,7 +237,7 @@ async function loadCandidateContext(
   }
   const uploadPlan =
     mission.uploadPlanRef !== null
-      ? ((await deps.ports.uploadPlanReader?.read(mission.uploadPlanRef)) ?? null)
+      ? await deps.ports.uploadPlanReader.read(mission.uploadPlanRef)
       : null
   return {
     treeOid,
@@ -325,14 +342,6 @@ export async function handleRunVerification(
   requiredProfileRefs: readonly string[],
 ): Promise<'collected' | 'blocked'> {
   const ports = deps.ports
-  if (
-    ports.candidateDelivery === undefined ||
-    ports.verificationProfiles === undefined ||
-    ports.verificationExecution === undefined
-  ) {
-    await deps.block(mission.id, 'delivery-port-missing:verification', null)
-    return 'blocked'
-  }
   const ctx = await loadCandidateContext(deps, mission, cells)
   if ('failCode' in ctx) {
     await deps.block(mission.id, ctx.failCode, null)
@@ -368,7 +377,7 @@ export async function handleRunVerification(
     await deps.block(mission.id, staged.code, staged.detail)
     return 'blocked'
   }
-  let receipt: Awaited<ReturnType<NonNullable<ReconcilerPorts['verificationExecution']>['run']>>
+  let receipt: Awaited<ReturnType<ReconcilerPorts['verificationExecution']['run']>>
   try {
     if (staged.treeOid !== ctx.treeOid) {
       await deps.block(
@@ -424,17 +433,13 @@ export async function handleCommitAndPublish(
   publicationMode: 'new-branch' | 'fast-forward',
 ): Promise<'collected' | 'blocked'> {
   const ports = deps.ports
-  if (ports.candidateDelivery === undefined) {
-    await deps.block(mission.id, 'delivery-port-missing:candidateDelivery', null)
-    return 'blocked'
-  }
   const ctx = await loadCandidateContext(deps, mission, cells)
   if ('failCode' in ctx) {
     await deps.block(mission.id, ctx.failCode, null)
     return 'blocked'
   }
   const summarySource =
-    (await ports.requirementMaterialize?.getRequirementManifest(mission.id))?.title ?? mission.id
+    (await ports.requirementMaterialize.getRequirementManifest(mission.id))?.title ?? mission.id
 
   const committedSha = knownString(cells, '__delivery.commitSha')
   const committedTree = knownString(cells, '__delivery.publishedTreeOid')
@@ -501,10 +506,6 @@ export async function handleCommitAndPublish(
   }
 
   // ---- 阶段 B：push（committed → pushed）。
-  if (ports.repoRemote === undefined) {
-    await deps.block(mission.id, 'delivery-port-missing:repoRemote', null)
-    return 'blocked'
-  }
   const remote = await ports.repoRemote.resolve(mission.repositoryId)
   if (remote === null) {
     await deps.block(mission.id, 'repo-remote-unresolved', mission.repositoryId)
@@ -583,7 +584,7 @@ export async function handleCommitAndPublish(
 
   // upload plan 的 publication receipt：orchestrator 结算时把 candidate lineage
   // 的 finalDigests 冻结在 cells（`__delivery.uploadLineage`），push 即 published。
-  if (mission.uploadPlanRef !== null && ports.uploadPublication !== undefined) {
+  if (mission.uploadPlanRef !== null) {
     const lineageRaw = knownString(cells, '__delivery.uploadLineage')
     if (lineageRaw !== null) {
       try {
@@ -622,10 +623,6 @@ export async function handleEnsureMergeRequest(
   mission: MissionRow,
 ): Promise<'collected' | 'blocked'> {
   const ports = deps.ports
-  if (ports.mrEffects === undefined || ports.repoRemote === undefined) {
-    await deps.block(mission.id, 'delivery-port-missing:mrEffects', null)
-    return 'blocked'
-  }
   const branch = mission.deliverySourceBranch
   if (branch === null) {
     await deps.block(mission.id, 'publish-state-inconsistent', 'ensure-mr without source branch')
@@ -638,7 +635,7 @@ export async function handleEnsureMergeRequest(
   }
   const targetBranch = mission.deliveryTargetRef ?? remote.defaultBranch ?? 'main'
   const title =
-    (await ports.requirementMaterialize?.getRequirementManifest(mission.id))?.title ??
+    (await ports.requirementMaterialize.getRequirementManifest(mission.id))?.title ??
     `AW mission ${mission.id}`
 
   const claim = await claimDeliveryEffect(deps, mission, {

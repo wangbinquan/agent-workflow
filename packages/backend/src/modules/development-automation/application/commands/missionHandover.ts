@@ -39,8 +39,8 @@ import { parseOr422 } from './commandInput'
 export interface MissionHandoverDeps {
   readonly store: MissionPersistence
   readonly snapshots: FactSnapshotReader
-  /** attach 的 observe / handoff 的 agent cancel 走这里；缺席按 typed 409 呈现。 */
-  readonly ports?: ReconcilerPorts
+  /** attach 的 observe / handoff 的 agent cancel 走这里（RFC-603 起必填）。 */
+  readonly ports: Pick<ReconcilerPorts, 'agentLauncher' | 'mrEffects'>
   readonly now: () => number
   /** attach 的 claim 键推导（装配点注入 repo→provider/project 解析；入参可覆盖）。 */
   readonly repoBinding?: (repositoryId: string) => {
@@ -138,7 +138,7 @@ export async function handoffMission(
     await invalidateInFlightAction(
       {
         store: deps.store,
-        ...(deps.ports === undefined ? {} : { ports: deps.ports }),
+        ports: deps.ports,
         now: deps.now,
       },
       afterFence,
@@ -210,11 +210,7 @@ export async function attachMergeRequest(
   }
 
   // 平台主动校验 MR 存在与当前 head（不信入参自述）。
-  const observePort = deps.ports?.mrEffects
-  if (observePort === undefined) {
-    throw new ConflictError('mr-observe-unavailable', 'code-host observe port is not wired')
-  }
-  const observed = await observePort.observe(mission.repositoryId, input.mrIid)
+  const observed = await deps.ports.mrEffects.observe(mission.repositoryId, input.mrIid)
   if (!observed.ok) {
     throw new ConflictError('mr-observe-unavailable', `${observed.code}: ${observed.detail}`)
   }

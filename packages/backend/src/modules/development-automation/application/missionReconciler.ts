@@ -6,9 +6,10 @@
 // intent 同事务落库（input digest 去重）→ arm handler（外部 IO 全部在事务外）
 // → readiness 重算落 readinessJson。
 //
-// PR-2 的接线边界如实呈现：未注入的端口/未到批次的 arm 一律 typed block
-// （`*-not-wired` / `arm-not-wired:<kind>`），绝不静默跳过——「开单 ≠ 在跑」
-// 的 RFC-309 教训在这里用显式 blocked 表达。
+// 接线边界如实呈现：未到批次的 arm 一律 typed block（`arm-not-wired:<kind>`），
+// 绝不静默跳过——「开单 ≠ 在跑」的 RFC-309 教训在这里用显式 blocked 表达。
+// 端口缺席不再是运行期状态：RFC-603 起 `ReconcilerPorts` 每个成员都必填，
+// 漏接在编译期就被挡下。
 //
 // 确定性注记：canonical trace 覆盖的是**补全后**的 decision（run-agent-action
 // 的 templateRef 由员工 route 决定，属于 decision 的一部分而不是执行期细节）；
@@ -651,12 +652,10 @@ export async function runMissionReconcile(
   // ---- facts 组装 -----------------------------------------------------------
   const cells = projectRowCells(mission)
   await mergeCollectedCells(deps, mission, cells)
-  if (deps.ports.playbookSaga !== undefined) {
-    cells['__playbook.sagaDigest'] = {
-      state: 'known',
-      value: await deps.ports.playbookSaga.sagaDigest(mission.id),
-      sourceRevision: 'playbook-saga',
-    }
+  cells['__playbook.sagaDigest'] = {
+    state: 'known',
+    value: await deps.ports.playbookSaga.sagaDigest(mission.id),
+    sourceRevision: 'playbook-saga',
   }
   const policy = await loadPolicyContent(deps.lookup, mission)
 
@@ -853,7 +852,7 @@ async function redispatchNoChangeGate(
     return selected
   }
   if (mission.uploadPlanRef !== null) {
-    const plan = (await deps.ports.uploadPlanReader?.read(mission.uploadPlanRef)) ?? null
+    const plan = await deps.ports.uploadPlanReader.read(mission.uploadPlanRef)
     // plan 不可读 = 保守不开 gate（indeterminate 语义：宁可停在原 block）。
     if (plan === null) return selected
     if (plan.entries.some((entry) => entry.disposition !== 'already-present')) return selected
@@ -1083,10 +1082,7 @@ export async function stepFailureDetail(
   if (match === null) return null
   const stepId = match[1]!
   const failureCode = match[2]!
-  const runs =
-    deps.ports.playbookSaga === undefined
-      ? []
-      : await deps.ports.playbookSaga.listStepRuns(missionId)
+  const runs = await deps.ports.playbookSaga.listStepRuns(missionId)
   const failed = [...runs]
     .reverse()
     .find((run) => run.stepId === stepId && run.failureCode === failureCode)
@@ -1162,7 +1158,7 @@ async function pipelineRepairInputs(
   pipelineIssueRefs?: readonly string[]
 }> {
   const manifestRef = knownString(cells, '__pipeline.manifestRef')
-  if (manifestRef === null || deps.ports.attemptContext === undefined) return {}
+  if (manifestRef === null) return {}
   const raw = await deps.ports.attemptContext.load(manifestRef)
   if (raw === null) return {}
   let parsedJson: unknown
@@ -1281,12 +1277,7 @@ async function handleDecision(
       return 'wake-armed'
     }
     case 'collect-repository-facts': {
-      const collector = deps.ports.repositoryFacts
-      if (collector === undefined) {
-        await blockMission(deps, mission.id, 'collector-not-wired:repository', null)
-        return 'blocked'
-      }
-      const collected = await collector.collect({
+      const collected = await deps.ports.repositoryFacts.collect({
         missionId: mission.id,
         repositoryId: mission.repositoryId,
       })
@@ -1306,10 +1297,6 @@ async function handleDecision(
     }
     case 'collect-mr-facts': {
       const collector = deps.ports.mergeRequestFacts
-      if (collector === undefined) {
-        await blockMission(deps, mission.id, 'collector-not-wired:merge-request', null)
-        return 'blocked'
-      }
       // T109 抓出的健壮性缺陷：policy 规则在 MR 存在之前引用 mr.* fact 时，
       // 引擎按 indeterminate 停机派本 arm（正确），但此时还没有 claim——
       // loud throw 会让 mission 以未分类异常卡死。typed block 是静止态，
@@ -1425,10 +1412,6 @@ async function handleDecision(
     }
     case 'seed-repository-uploads': {
       const placement = deps.ports.uploadPlacement
-      if (placement === undefined) {
-        await blockMission(deps, mission.id, 'placement-not-wired', null)
-        return 'blocked'
-      }
       const placed = await placement.place({
         missionId: mission.id,
         uploadPlanRef: selected.uploadPlanRef,
@@ -1598,10 +1581,6 @@ async function handleDecision(
     case 'materialize-direct-requirement':
     case 'collect-external-requirement': {
       const port = deps.ports.requirementMaterialize
-      if (port === undefined) {
-        await blockMission(deps, mission.id, 'requirement-port-not-wired', null)
-        return 'blocked'
-      }
       const attempts = (knownNumber(snapshot.cells, '__requirement.acquireAttempts') ?? 0) + 1
       const failed = async (code: string, remediation: string): Promise<'blocked'> => {
         await persistRequirementCells(
@@ -1673,10 +1652,6 @@ async function handleDecision(
     // ---- 澄清闭环（PR-3 T38a）------------------------------------------------
     case 'publish-requirement-questions': {
       const port = deps.ports.requirementMaterialize
-      if (port === undefined) {
-        await blockMission(deps, mission.id, 'requirement-port-not-wired', null)
-        return 'blocked'
-      }
       const binding = adapterBindingRefOf(mission)
       if (selected.channel === 'requirement-source' && binding === null) {
         await blockMission(deps, mission.id, 'requirement-adapter-unresolved', null)
@@ -1732,10 +1707,6 @@ async function handleDecision(
     }
     case 'collect-requirement-answers': {
       const port = deps.ports.requirementMaterialize
-      if (port === undefined) {
-        await blockMission(deps, mission.id, 'requirement-port-not-wired', null)
-        return 'blocked'
-      }
       const correlationRef = knownString(snapshot.cells, '__requirement.questionCorrelationRef')
       if (correlationRef === null) {
         await blockMission(deps, mission.id, 'question-correlation-missing', null)
@@ -1897,24 +1868,12 @@ async function handleDecision(
     }
     // ---- published employee collaboration / approval saga (PR-12) ----------
     case 'invoke-child-mission': {
-      if (deps.ports.playbookSaga === undefined || deps.ports.childMissions === undefined) {
-        await blockMission(deps, mission.id, 'child-mission-port-not-wired', null)
-        return 'blocked'
-      }
       return await handleChildMissionDecision(deps, mission, selected, decisionId)
     }
     case 'submit-approval': {
-      if (deps.ports.playbookSaga === undefined || deps.ports.approvalGateway === undefined) {
-        await blockMission(deps, mission.id, 'approval-gateway-not-wired', null)
-        return 'blocked'
-      }
       return await handleApprovalSubmitDecision(deps, mission, selected, decisionId)
     }
     case 'observe-approval': {
-      if (deps.ports.playbookSaga === undefined || deps.ports.approvalGateway === undefined) {
-        await blockMission(deps, mission.id, 'approval-gateway-not-wired', null)
-        return 'blocked'
-      }
       return await handleApprovalObserveDecision(deps, mission, selected, decisionId)
     }
     // ---- MR care arm（PR-7，实现在 mrCareChain.ts）--------------------------

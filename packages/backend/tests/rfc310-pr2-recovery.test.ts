@@ -18,7 +18,8 @@ import {
   missionEpochsOf,
 } from '../src/modules/development-automation/infrastructure/reconcilerReaders'
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
-import { buildPr2Fixture, type Pr2Fixture } from './helpers/rfc310Pr2Fixture'
+import { buildPr2Fixture, JAVA_CELLS, type Pr2Fixture } from './helpers/rfc310Pr2Fixture'
+import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'
 import { describeEachProvider } from './helpers/eachProvider'
 
 function readersOf(f: Pr2Fixture) {
@@ -144,10 +145,22 @@ describeEachProvider('rfc310 pr2 recovery', (harness) => {
       now: Date.now(),
     })
 
-    const report = await recoverMissions(f.deps({}), readersOf(f))
+    // RFC-603: every port is wired, so the woken mission collects facts and drives on to its action launch (the fake
+    // launcher's pending execution is the async boundary).
+    const report = await recoverMissions(
+      f.deps({
+        repositoryFacts: {
+          async collect() {
+            return { cells: { ...JAVA_CELLS }, factsRef: 'probe-1' }
+          },
+        },
+        ...fakeAgentActionPorts({ db: f.db }),
+      }),
+      readersOf(f),
+    )
     expect(report.firedWakes).toBe(1)
     expect(await f.store.listDueWakes(Date.now())).toHaveLength(0)
-    // reconcile 正常跑过（decision 落库）——blocked（launcher/collector 缺席）也算跑过。
+    // reconcile 正常跑过（decision 落库、事实已采集）。
     const mission = (await f.store.getMission(missionId))!
     expect(mission.readinessJson).not.toBeNull()
   })

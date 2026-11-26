@@ -33,7 +33,8 @@ import type { ReconcilerPorts } from '../ports/reconcilerPorts'
 
 export interface ReopenDeps {
   readonly store: MissionPersistence
-  readonly ports: ReconcilerPorts
+  /** RFC-603: the MR is re-observed and the requirement evidence carried over. */
+  readonly ports: Pick<ReconcilerPorts, 'mergeRequestFacts' | 'requirementMaterialize'>
   readonly now: () => number
 }
 
@@ -70,11 +71,7 @@ export async function reopenClosedMission(
   const existing = await deps.store.findByIdempotencyKey(key)
   if (existing !== null) return { kind: 'already-linked', missionId: existing.id }
 
-  const collector = deps.ports.mergeRequestFacts
-  if (collector === undefined) {
-    return { kind: 'blocked', code: 'collector-not-wired:mr', detail: null }
-  }
-  const collected = await collector.collect({
+  const collected = await deps.ports.mergeRequestFacts.collect({
     missionId: mission.id,
     mrClaimId: mission.mrClaimId,
   })
@@ -159,7 +156,7 @@ export async function reopenClosedMission(
     .sort((a, b) => b.generation - a.generation)[0]
   const inheritDirect = mission.sourceKind === 'direct' && latestMaterialized !== undefined
   if (inheritDirect) {
-    await deps.ports.requirementMaterialize?.carryOverRequirementEvidence({
+    await deps.ports.requirementMaterialize.carryOverRequirementEvidence({
       fromMissionId: mission.id,
       toMissionId: successorId,
     })

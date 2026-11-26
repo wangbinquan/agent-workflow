@@ -77,9 +77,6 @@ export async function adoptActiveMr(
   },
   input: AdoptActiveMrInput,
 ): Promise<AdoptActiveMrResult> {
-  if (deps.ports.mrEffects === undefined) {
-    return { ok: false, code: 'mr-observe-unavailable', detail: 'mrEffects port not wired' }
-  }
   const observed = await deps.ports.mrEffects.observe(input.repositoryId, input.mrIid)
   if (!observed.ok) return { ok: false, code: observed.code, detail: observed.detail }
   const observation = observed.observation

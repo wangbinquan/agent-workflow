@@ -15,6 +15,7 @@
 
 import type { AutomationPolicyContent } from '../domain/automationPolicy'
 import type { NextDecision } from '../domain/decision'
+import { pipelineProviderBindingSchema } from '../domain/digitalEmployee'
 import type { FactCellValue } from '../domain/facts'
 import type { FactCell } from '../domain/factCell'
 import { judgePipelineFence, projectPipelineCells } from '../domain/pipelineFacts'
@@ -80,11 +81,11 @@ function countsOf(cells: Cells, id: string): Record<string, number> {
 
 /** cells 里的 pinned manifest（repair 闭集 / rerun 判定共用）。 */
 export async function loadPipelineManifest(
-  deps: { readonly ports: { readonly attemptContext?: AttemptContextStorePort } },
+  deps: { readonly ports: { readonly attemptContext: AttemptContextStorePort } },
   cells: Cells,
 ): Promise<PipelineEvidenceManifestV1 | null> {
   const manifestRef = knownString(cells, '__pipeline.manifestRef')
-  if (manifestRef === null || deps.ports.attemptContext === undefined) return null
+  if (manifestRef === null) return null
   const raw = await deps.ports.attemptContext.load(manifestRef)
   if (raw === null) return null
   try {
@@ -214,9 +215,14 @@ async function pipelineAdapterBindingRef(
   const content = (await lookup.getEmployeeRevisionContent(
     mission.employeeId,
     mission.employeeRevision,
-  )) as { pipelineProviders?: readonly { readonly adapterRef?: unknown }[] } | null
-  const ref = content?.pipelineProviders?.[0]?.adapterRef
-  return typeof ref === 'string' ? ref : null
+  )) as { pipelineProviders?: readonly unknown[] } | null
+  // RFC-603: published employee content pins the adapter as a versioned ref (`{ id, revision }`, RFC-310 PR-1B); the
+  // binding is its `id@revision`, as the approval gateway and the requirement source bind theirs. Reading it as a string
+  // left every pipeline arm blocked `pipeline-adapter-unbound` for schema-valid content.
+  const provider = pipelineProviderBindingSchema.safeParse(content?.pipelineProviders?.[0])
+  return provider.success
+    ? `${provider.data.adapterRef.id}@${provider.data.adapterRef.revision}`
+    : null
 }
 
 // ----------------------------------------------------------------- arm 1/3：
@@ -230,14 +236,6 @@ export async function handleCollectPipelineEvidence(
   gateKeys: readonly string[],
 ): Promise<'collected' | 'blocked'> {
   const ports = deps.ports
-  if (ports.pipelineEvidence === undefined || ports.pipelineImport === undefined) {
-    await deps.block(mission.id, 'pipeline-port-missing:evidence', null)
-    return 'blocked'
-  }
-  if (ports.mrEffects === undefined) {
-    await deps.block(mission.id, 'pipeline-port-missing:mrEffects', null)
-    return 'blocked'
-  }
   const mrRef = knownString(cells, '__mr.ref')
   if (mrRef === null) {
     await deps.block(mission.id, 'pipeline-mr-ref-missing', null)
@@ -349,10 +347,6 @@ export async function handleTriggerPipeline(
   gateKeys: readonly string[],
 ): Promise<'collected' | 'blocked'> {
   const ports = deps.ports
-  if (ports.pipelineEvidence === undefined) {
-    await deps.block(mission.id, 'pipeline-port-missing:evidence', null)
-    return 'blocked'
-  }
   const adapterBindingRef = await pipelineAdapterBindingRef(deps, lookup, mission)
   if (adapterBindingRef === null) {
     await deps.block(mission.id, 'pipeline-adapter-unbound', null)
@@ -419,10 +413,6 @@ export async function handleRerunPipeline(
   input: { readonly gateKey: string; readonly runRef: string },
 ): Promise<'collected' | 'blocked'> {
   const ports = deps.ports
-  if (ports.pipelineEvidence === undefined) {
-    await deps.block(mission.id, 'pipeline-port-missing:evidence', null)
-    return 'blocked'
-  }
   const adapterBindingRef = await pipelineAdapterBindingRef(deps, lookup, mission)
   if (adapterBindingRef === null) {
     await deps.block(mission.id, 'pipeline-adapter-unbound', null)

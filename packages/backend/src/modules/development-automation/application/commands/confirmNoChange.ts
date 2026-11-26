@@ -68,7 +68,7 @@ export async function confirmNoChange(
   // 防御复检（重派已挡，人为改库/竞态兜底）：非 already-present 上传必须进
   // 发布链，不许 no-change 收束。
   if (mission.uploadPlanRef !== null) {
-    const plan = (await deps.ports.uploadPlanReader?.read(mission.uploadPlanRef)) ?? null
+    const plan = await deps.ports.uploadPlanReader.read(mission.uploadPlanRef)
     if (plan === null || plan.entries.some((entry) => entry.disposition !== 'already-present')) {
       throw new ValidationError(
         'no-change-uploads-pending',

@@ -7,10 +7,7 @@
 // rfc310-pr4-* 专项测试与 journey。
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type {
-  ReconcilerPorts,
-  WorkspaceValidationPort,
-} from '../../src/modules/development-automation/application/ports/reconcilerPorts'
+import type { ReconcilerPorts } from '../../src/modules/development-automation/application/ports/reconcilerPorts'
 import { createActionTemplatePersistence } from '../../src/modules/development-automation/infrastructure/configResourceStore'
 
 export interface FakeAgentPortsOptions {
@@ -19,9 +16,21 @@ export interface FakeAgentPortsOptions {
   readonly overrides?: Partial<ReconcilerPorts>
 }
 
+/** RFC-603: the ports this fake gives (the fixtures complete the rest with `reconcilerPortsFor`). */
+export type FakeAgentActionPorts = Pick<
+  ReconcilerPorts,
+  | 'agentLauncher'
+  | 'actionBaseline'
+  | 'actionWorkspace'
+  | 'attemptContext'
+  | 'actionTemplates'
+  | 'workspaceValidation'
+  | 'changeCandidate'
+>
+
 export function fakeAgentActionPorts(
   options: FakeAgentPortsOptions,
-): Partial<ReconcilerPorts> & { workspaceValidation: WorkspaceValidationPort } {
+): FakeAgentActionPorts & Partial<ReconcilerPorts> {
   const templates = createActionTemplatePersistence(options.db)
   const contexts = new Map<string, string>()
   let contextSeq = 0
@@ -46,6 +55,9 @@ export function fakeAgentActionPorts(
     actionWorkspace: {
       async materialize() {
         return { workspacePath: '/fake/action-ws', businessTreeDigest: 'b'.repeat(64) }
+      },
+      adopt(): never {
+        throw new Error('actionWorkspace.adopt is not used by this test')
       },
       discard() {},
     },

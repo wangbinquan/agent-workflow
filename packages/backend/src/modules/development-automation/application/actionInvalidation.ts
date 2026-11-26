@@ -16,7 +16,8 @@ import type { ReconcilerPorts } from './ports/reconcilerPorts'
 
 export interface InvalidateActionDeps {
   readonly store: MissionPersistence
-  readonly ports?: ReconcilerPorts
+  /** RFC-603: the in-flight execution is cancelled through the agent launcher. */
+  readonly ports: Pick<ReconcilerPorts, 'agentLauncher'>
   readonly now: () => number
 }
 
@@ -31,9 +32,9 @@ export async function invalidateInFlightAction(
   const attempt = attempts[attempts.length - 1]
   const now = deps.now()
   if (attempt !== undefined && (attempt.status === 'claimed' || attempt.status === 'running')) {
-    if (attempt.executionRef !== null && deps.ports?.agentLauncher !== undefined) {
+    if (attempt.executionRef !== null) {
       try {
-        await deps.ports!.agentLauncher!.cancel(attempt.executionRef)
+        await deps.ports.agentLauncher.cancel(attempt.executionRef)
       } catch {
         // cancel 是尽力而为：进程侧由 task-execution 的孤儿收敛兜底。
       }

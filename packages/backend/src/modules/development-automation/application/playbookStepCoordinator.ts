@@ -63,7 +63,6 @@ function knownStrings(snapshot: MissionFactSnapshot, factId: string): readonly s
 /** Root-to-current lineage reconstructed from durable parent links. */
 async function missionAncestry(deps: ReconcileDeps, missionId: string): Promise<string[] | null> {
   const store = deps.ports.playbookSaga
-  if (store === undefined) return null
   const seen = new Set<string>()
   const ancestry: string[] = []
   let cursor: string | null = missionId
@@ -83,7 +82,6 @@ async function stepInput(
   input: NonNullable<DigitalEmployeeContent['steps']>[number]['input'],
 ): Promise<{ ref: string; digest: string } | null> {
   const store = deps.ports.playbookSaga
-  if (store === undefined) return null
   if (input.kind === 'mission-requirement') {
     // 身份必须**内容寻址到需求 bundle**，不能用 mission.requirementBundleRef ——
     // 那是 requirement *fact 快照*指针，每写一次 requirement cell 就换一个 id。
@@ -241,7 +239,7 @@ async function claimRun(
       ? step.producer.deadlineMs
       : step.join?.deadlineMs
   return (
-    await deps.ports.playbookSaga!.claimStepRun({
+    await deps.ports.playbookSaga.claimStepRun({
       id: ulid(),
       missionId: mission.id,
       employeeId: mission.employeeId!,
@@ -267,7 +265,7 @@ async function templateDecision(
   > = {},
   retryBudget?: { readonly sameScene: number; readonly freshScene: number },
 ): Promise<NextDecision> {
-  const raw = await deps.ports.actionTemplates?.content(
+  const raw = await deps.ports.actionTemplates.content(
     implementationRef.id,
     implementationRef.revision,
   )
@@ -337,7 +335,7 @@ async function claimNamedRun(
   attempt: number,
 ): Promise<StepRunRow> {
   return (
-    await deps.ports.playbookSaga!.claimStepRun({
+    await deps.ports.playbookSaga.claimStepRun({
       id: ulid(),
       missionId: mission.id,
       employeeId: mission.employeeId!,
@@ -432,7 +430,7 @@ async function syntheticRun(
   inputDigest: string,
 ): Promise<StepRunRow> {
   return (
-    latestRun(await deps.ports.playbookSaga!.listStepRuns(mission.id), stepId, inputDigest) ??
+    latestRun(await deps.ports.playbookSaga.listStepRuns(mission.id), stepId, inputDigest) ??
     (await claimNamedRun(deps, mission, stepId, kind, inputDigest, 0))
   )
 }
@@ -778,10 +776,10 @@ async function decisionForStep(
       }
     }
     if (repeatsEmployee) return { kind: 'block', reason: 'child-mission-cycle' }
-    const existingLink = await deps.ports.playbookSaga!.getMissionLinkByStepRun(run.id)
+    const existingLink = await deps.ports.playbookSaga.getMissionLinkByStepRun(run.id)
     if (
       existingLink === null &&
-      (await deps.ports.playbookSaga!.listMissionLinks(mission.id)).length >=
+      (await deps.ports.playbookSaga.listMissionLinks(mission.id)).length >=
         MAX_CHILDREN_PER_MISSION
     ) {
       return { kind: 'block', reason: 'child-mission-budget-exhausted' }
@@ -861,7 +859,7 @@ async function inspectStep(
   snapshot: MissionFactSnapshot,
   step: EmployeeStep,
 ): Promise<StepInspection> {
-  const store = deps.ports.playbookSaga!
+  const store = deps.ports.playbookSaga
   if (!matches(snapshot, step.when)) return { kind: 'unavailable' }
   // 声明「吃 mission 需求」的步骤，在需求真正物化成 bundle 之前不得派发：
   // 业务说明书只写「这一步吃需求」，把需求变成可挂载的 bundle 是平台的事
@@ -951,7 +949,7 @@ async function decisionAfterSucceededStep(
     )
   }
 
-  const store = deps.ports.playbookSaga!
+  const store = deps.ports.playbookSaga
   const previous = await store.listJoinMembers(mission.id, join.groupId)
   const settledResult =
     previous.find((member) => member.settledResult !== null)?.settledResult ?? null
@@ -1129,9 +1127,7 @@ export async function selectPlaybookStepDecision(
   mission: MissionRow,
   snapshot: MissionFactSnapshot,
 ): Promise<NextDecision | null> {
-  const store = deps.ports.playbookSaga
-  if (store === undefined || mission.employeeId === null || mission.employeeRevision === null)
-    return null
+  if (mission.employeeId === null || mission.employeeRevision === null) return null
   const employee = await employeeContent(deps, mission)
   const steps = employee?.steps ?? []
   if (employee === null) return null
@@ -1211,7 +1207,6 @@ export async function handleChildMissionDecision(
 ): Promise<Handled> {
   const store = deps.ports.playbookSaga
   const port = deps.ports.childMissions
-  if (store === undefined || port === undefined) return 'blocked'
   const intent = childMissionIntentSchema.parse({
     parentMissionRef: `${mission.id}@${mission.revision}`,
     parentStepRunRef: selected.stepRunRef,
@@ -1351,7 +1346,6 @@ export async function handleApprovalSubmitDecision(
 ): Promise<Handled> {
   const store = deps.ports.playbookSaga
   const gateway = deps.ports.approvalGateway
-  if (store === undefined || gateway === undefined) return 'blocked'
   const submitIntent = {
     stepRunRef: selected.stepRunRef,
     adapterRef: selected.adapterRef,
@@ -1436,13 +1430,8 @@ export async function handleApprovalObserveDecision(
 ): Promise<Handled> {
   const store = deps.ports.playbookSaga
   const gateway = deps.ports.approvalGateway
-  const saga = store === undefined ? null : await store.getApprovalSaga(selected.approvalSagaRef)
-  if (
-    store === undefined ||
-    gateway === undefined ||
-    saga === null ||
-    saga.correlationRef === null
-  ) {
+  const saga = await store.getApprovalSaga(selected.approvalSagaRef)
+  if (saga === null || saga.correlationRef === null) {
     return 'blocked'
   }
   const observed = await gateway.observe({
@@ -1528,8 +1517,7 @@ export async function settlePlaybookDecision(
   handled: Handled,
 ): Promise<void> {
   const store = deps.ports.playbookSaga
-  if (store === undefined || !('stepRunRef' in selected) || selected.stepRunRef === undefined)
-    return
+  if (!('stepRunRef' in selected) || selected.stepRunRef === undefined) return
   if (
     selected.kind === 'invoke-child-mission' ||
     selected.kind === 'submit-approval' ||
@@ -1614,8 +1602,8 @@ export async function settlePlaybookAction(
     | { readonly kind: 'action-failed'; readonly blockCode: string },
 ): Promise<void> {
   const store = deps.ports.playbookSaga
-  const step = store === undefined ? null : await store.findStepRunByAction(actionRunId)
-  if (store === undefined || step === null) return
+  const step = await store.findStepRunByAction(actionRunId)
+  if (step === null) return
   const action = await deps.store.getActionRun(actionRunId)
   const waiting = result.kind === 'action-collected' && result.disposition === 'needs-information'
   const successful =

@@ -107,9 +107,8 @@ async function setup(
         employeeRevision: number
       }) => Partial<DigitalEmployeeContent>),
   cells: Record<string, FactCell<FactCellValue>> = {},
-  extraPorts: Omit<
-    ReconcilerPorts,
-    'requirementMaterialize' | 'playbookSaga' | 'actionTemplates'
+  extraPorts: Partial<
+    Omit<ReconcilerPorts, 'requirementMaterialize' | 'playbookSaga' | 'actionTemplates'>
   > = {},
   options: { requirementMaterialized?: boolean } = {},
 ): Promise<{

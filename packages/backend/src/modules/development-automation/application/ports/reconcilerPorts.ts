@@ -5,9 +5,9 @@ type Completion<T> = T | Promise<T>
 // application 层只认这些接口；生产实现由 provider adapter 经装配点注入
 // （repository facts 采集归 PR-5 T53、MR facts 归 PR-7 T72、effect 执行与
 // Agent launch 归 PR-4/PR-5、upload placement 归 PR-3 T36a），测试注入 typed
-// fake。端口缺席不是静默跳过：对应 decision arm 会以 typed block
-// （`*-not-wired`）落库——「没接上」必须可见（dev-gotchas「缺席的接线不会红」
-// 教训的反向设计）。
+// fake。「没接上」必须可见（dev-gotchas「缺席的接线不会红」）：RFC-603 起
+// 每个端口都必填，漏接是编译错误（此前靠运行期 `*-not-wired` typed block）；
+// 命令与发布链只声明自己读的那几个（`Pick<ReconcilerPorts, …>`）。
 
 import type { FactCellValue } from '../../domain/facts'
 import type { FactCell } from '../../domain/factCell'
@@ -733,30 +733,34 @@ export interface ConflictMergePort {
   discard(input: { readonly workspacePath: string }): void | Promise<void>
 }
 
+/**
+ * RFC-603 (RFC-294 W4-E8): every member is required — the composition builds all 25, and the reconcile use case reads
+ * all of them through its chains. Commands and the publication chains take the `Pick` they read.
+ */
 export interface ReconcilerPorts {
-  readonly repositoryFacts?: RepositoryFactsCollectorPort
-  readonly mergeRequestFacts?: MergeRequestFactsCollectorPort
-  readonly agentLauncher?: AgentActionLauncherPort
-  readonly scriptLauncher?: ScriptActionLauncherPort
-  readonly playbookSaga?: PlaybookSagaPersistence
-  readonly childMissions?: ChildMissionPort
-  readonly approvalGateway?: ApprovalGatewayPort
-  readonly uploadPlacement?: UploadPlacementPort
-  readonly requirementMaterialize?: RequirementMaterializePort
-  readonly actionBaseline?: ActionBaselinePort
-  readonly actionWorkspace?: ActionWorkspacePort
-  readonly uploadPlanReader?: UploadPlanReaderPort
-  readonly changeCandidate?: ChangeCandidatePort
-  readonly attemptContext?: AttemptContextStorePort
-  readonly actionTemplates?: ActionTemplateContentPort
-  readonly workspaceValidation?: WorkspaceValidationPort
-  readonly repoRemote?: RepoRemotePort
-  readonly candidateDelivery?: CandidateDeliveryPort
-  readonly verificationProfiles?: VerificationProfileContentPort
-  readonly verificationExecution?: VerificationExecutionPort
-  readonly mrEffects?: MrEffectsPort
-  readonly uploadPublication?: UploadPublicationPort
-  readonly conflictMerge?: ConflictMergePort
-  readonly pipelineEvidence?: PipelineEvidencePort
-  readonly pipelineImport?: PipelineImportPort
+  readonly repositoryFacts: RepositoryFactsCollectorPort
+  readonly mergeRequestFacts: MergeRequestFactsCollectorPort
+  readonly agentLauncher: AgentActionLauncherPort
+  readonly scriptLauncher: ScriptActionLauncherPort
+  readonly playbookSaga: PlaybookSagaPersistence
+  readonly childMissions: ChildMissionPort
+  readonly approvalGateway: ApprovalGatewayPort
+  readonly uploadPlacement: UploadPlacementPort
+  readonly requirementMaterialize: RequirementMaterializePort
+  readonly actionBaseline: ActionBaselinePort
+  readonly actionWorkspace: ActionWorkspacePort
+  readonly uploadPlanReader: UploadPlanReaderPort
+  readonly changeCandidate: ChangeCandidatePort
+  readonly attemptContext: AttemptContextStorePort
+  readonly actionTemplates: ActionTemplateContentPort
+  readonly workspaceValidation: WorkspaceValidationPort
+  readonly repoRemote: RepoRemotePort
+  readonly candidateDelivery: CandidateDeliveryPort
+  readonly verificationProfiles: VerificationProfileContentPort
+  readonly verificationExecution: VerificationExecutionPort
+  readonly mrEffects: MrEffectsPort
+  readonly uploadPublication: UploadPublicationPort
+  readonly conflictMerge: ConflictMergePort
+  readonly pipelineEvidence: PipelineEvidencePort
+  readonly pipelineImport: PipelineImportPort
 }

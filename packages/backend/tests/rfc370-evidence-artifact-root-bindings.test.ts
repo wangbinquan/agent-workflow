@@ -87,7 +87,8 @@ test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the sam
     // both local directories and hosted volumes.
     ['application/actionWorkspace.ts', 'deps.evidence.materializeBundle', 1],
     ['infrastructure/uploadPlacement.ts', 'deps.evidence.materializeBlob', 1],
-    ['application/agentActionOrchestrator.ts', 'ports.actionWorkspace!.adopt', 1],
+    // RFC-603: the port is required, so the orchestrator adopts without a non-null assertion.
+    ['application/agentActionOrchestrator.ts', 'ports.actionWorkspace.adopt', 1],
     // RFC-495: the platform work-item use cases moved to the application layer; composition binds evidenceStore.
     ['application/employeePlatformWorkItems.ts', 'evidenceStore().materializeBundle', 1],
   ] as const) {

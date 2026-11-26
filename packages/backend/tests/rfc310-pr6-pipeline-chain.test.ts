@@ -473,7 +473,10 @@ function withPipelineProvider<
         if (content === null || typeof content !== 'object') return content
         return {
           ...content,
-          pipelineProviders: [{ providerKey: 'mock', adapterRef: 'adapter-x@1' }],
+          // RFC-603: the published schema's versioned ref (the chain binds it as `adapter-x@1`).
+          pipelineProviders: [
+            { providerKey: 'mock', adapterRef: { id: 'adapter-x', revision: 1 } },
+          ],
         }
       },
     },
@@ -520,7 +523,7 @@ describeEachProvider('rfc310 pr6 — pipeline chain through reconcile rounds', (
       },
       fx.evidence,
     )
-    const ports: Omit<ReconcilerPorts, 'requirementMaterialize'> = {
+    const ports: Partial<Omit<ReconcilerPorts, 'requirementMaterialize'>> = {
       attemptContext: createAttemptContextStore(fx.evidence),
       mrEffects: fakeObserve(),
       pipelineEvidence: pipeline,

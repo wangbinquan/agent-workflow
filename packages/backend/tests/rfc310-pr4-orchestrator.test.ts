@@ -200,12 +200,23 @@ describeEachProvider('rfc310 pr4 — attempt orchestration (launch half)', (harn
     expect(scripted.platformInputPaths[0]![0]).toMatch(/^\.agent-workflow\/inputs\/requirements\//)
   })
 
-  test('missing execution ports are typed blocks (not silent skips)', async () => {
+  test('an action the platform cannot prepare is a typed block (not a silent skip)', async () => {
     const fx = await buildPr3Fixture({ db: harness.db })
     const scripted = scriptedLauncher()
-    const ports = fakeAgentActionPorts({ db: fx.db, overrides: { agentLauncher: scripted.port } })
-    const { workspaceValidation: _drop, ...withoutValidation } = ports
-    const deps = fx.deps({ repositoryFacts: repoCollector, ...withoutValidation })
+    // RFC-603: every execution port is wired; the preparation failure left to show is a baseline that cannot be resolved
+    // (for example the repository's cached clone is gone).
+    const ports = fakeAgentActionPorts({
+      db: fx.db,
+      overrides: {
+        agentLauncher: scripted.port,
+        actionBaseline: {
+          async resolve() {
+            return null
+          },
+        },
+      },
+    })
+    const deps = fx.deps({ repositoryFacts: repoCollector, ...ports })
     const missionId = await fx.launchDirect('orc-noport-1')
     await fx.materializer.stashDirectSubmission({
       missionId,
@@ -215,7 +226,8 @@ describeEachProvider('rfc310 pr4 — attempt orchestration (launch half)', (harn
     await runMissionReconcile(deps, missionId)
     const third = await runMissionReconcile(deps, missionId)
     expect(third.kind === 'decided' && third.handled).toBe('action-launch-failed')
-    expect((await fx.store.getMission(missionId))!.blockCode).toBe('workspace-validation-not-wired')
+    expect((await fx.store.getMission(missionId))!.blockCode).toBe('action-baseline-unavailable')
+    expect(scripted.launched).toEqual([])
     // launch 失败清 currentActionRunId：mission 可经 retry 走出，不留悬挂动作。
     expect((await fx.store.getMission(missionId))!.currentActionRunId).toBeNull()
   })

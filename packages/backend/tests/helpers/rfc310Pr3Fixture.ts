@@ -44,6 +44,7 @@ import type {
 } from '../../src/modules/development-automation/application/ports/reconcilerPorts'
 import type { ReconcileDeps } from '../../src/modules/development-automation/application/missionReconciler'
 import { launchMission } from '../../src/modules/development-automation/application/commands/launchMission'
+import { reconcilerPortsFor } from './developmentAutomation'
 import {
   createDevelopmentAdapter,
   publishDevelopmentAdapter,
@@ -122,7 +123,8 @@ export interface Pr3Fixture<Database extends PersistenceDb = DbClient> {
   readonly adapterId: string | null
   readonly adapterRevision: number | null
   readonly stagingRoot: string
-  deps(extraPorts?: Omit<ReconcilerPorts, 'requirementMaterialize'>): ReconcileDeps
+  /** RFC-603: the ports the test gives, the fixture's materializer, and `reconcilerPortsFor` for the rest. */
+  deps(extraPorts?: Partial<Omit<ReconcilerPorts, 'requirementMaterialize'>>): ReconcileDeps
   launchDirect(idempotencyKey: string, body?: string): Promise<string>
   launchExternal(idempotencyKey: string, externalId: string): Promise<string>
 }
@@ -496,7 +498,7 @@ export async function buildPr3Fixture(
         store: persistence,
         lookup: admissionLookup,
         snapshots,
-        ports: { ...extraPorts, requirementMaterialize: materializer },
+        ports: reconcilerPortsFor(db, { ...extraPorts, requirementMaterialize: materializer }),
         now,
       }
     },

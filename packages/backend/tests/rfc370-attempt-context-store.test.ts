@@ -97,7 +97,6 @@ test('selected context failures propagate while missing or malformed manifests r
   for (const text of ['not-json', JSON.stringify({ schemaVersion: 2 })]) {
     expect(await loadPipelineManifest(deps, cellsFor(await selected.save(text)))).toBeNull()
   }
-  expect(await loadPipelineManifest({ ports: {} }, cellsFor('missing'))).toBeNull()
   expect(await loadPipelineManifest(deps, {})).toBeNull()
   const failure = new Error('selected-context-unavailable')
   selected.readError = failure

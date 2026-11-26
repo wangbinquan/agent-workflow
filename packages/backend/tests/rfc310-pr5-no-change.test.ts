@@ -91,6 +91,7 @@ describeEachProvider('rfc310 pr5 T55a — no-change human gate', (harness) => {
       store: fx.store,
       snapshots: fx.snapshots,
       requirement: fx.materializer,
+      ports: fx.deps().ports,
       now: () => Date.now(),
     }
     await expect(submitMissionAnswers(deps, { missionId: 'missing' })).rejects.toMatchObject({
@@ -205,6 +206,10 @@ describeEachProvider('rfc310 pr5 T55a — no-change human gate', (harness) => {
       ...deps,
       ports: {
         ...deps.ports,
+        // RFC-603: upload placement is always wired; the round seeds the planned uploads instead of blocking unwired.
+        uploadPlacement: {
+          place: async () => ({ ok: true as const, seedTreeDigest: 's'.repeat(64) }),
+        },
         uploadPlanReader: {
           read: async () => ({
             planDigest: 'p'.repeat(64),

@@ -25,7 +25,6 @@ import type {
 } from '../../src/modules/collaboration/infrastructure/workgroupClarifyAskGate'
 import type { renderWgProtocolBlock as RenderWgProtocolBlock } from '../../src/modules/task-execution/domain/workgroup/protocol'
 import type * as WorkflowRepository from '../../src/modules/resource-catalog/infrastructure/workflowRepository'
-import type * as DevelopmentAutomation from '../../src/modules/development-automation/composition'
 import type * as SkillCatalogBoot from '../../src/modules/resource-catalog/composition/skillCatalogBoot'
 import { TaskExecutionError } from '../../src/modules/task-execution/application/taskExecutionError'
 import { currentTaskExecutionContext } from '../../src/modules/task-execution/application/taskExecutionContext'
@@ -227,28 +226,6 @@ async function restoreUnboundDeferredDispatcher(): Promise<void> {
   }))
 }
 
-async function restoreMissingLegacyMissionLaunchers(): Promise<void> {
-  const target = sourcePath('modules/development-automation/composition.ts')
-  const original: typeof DevelopmentAutomation = await import(target)
-  const composeOriginal = original.composeDevelopmentAutomation
-  // 01e4b1b7b: cli/postgresqlDaemonApplication.ts:1385–1400 constructed
-  // composePostgresqlDevelopmentAutomation without either launcher. Restore
-  // that exact input omission at today's shared factory (called by the RFC-383 bundle); its actual admission,
-  // materializer and orchestrator persist the original *-launcher-not-wired
-  // block. No failure or database row is supplied by this preload.
-  mock.module(target, () => ({
-    ...original,
-    composeDevelopmentAutomation: (
-      input: Parameters<typeof original.composeDevelopmentAutomation>[0],
-    ) => {
-      const { agentLauncher: _agent, scriptLauncher: _script, ...withoutLaunchers } = input
-      // RFC-597: both launchers are required now, so the compiler rejects this omission; the assertion reproduces it
-      // at runtime, where the reconciler still reads `undefined` and blocks `*-launcher-not-wired`.
-      return composeOriginal(withoutLaunchers as Parameters<typeof composeOriginal>[0])
-    },
-  }))
-}
-
 async function restoreMissingLegacyTerminalForwarding(): Promise<void> {
   const target = sourcePath(
     'modules/development-automation/composition/executionTerminalObserver.ts',
@@ -256,10 +233,11 @@ async function restoreMissingLegacyTerminalForwarding(): Promise<void> {
   const original = await import(target)
   // 01e4b1b7b: cli/postgresqlDaemonApplication.ts has no execution terminal
   // observer construction/call. RFC-383 keeps the same composition barrel import.
-  // Factor that omitted forwarding out from the
-  // missing launchers above: the real host can finish, but no wake/collection
-  // occurs. These empty callbacks model the absent CALL, not historical function
-  // bytes. They provide no task/attempt result and manufacture no exception.
+  // The same root also omitted both launchers; RFC-603 retired that half (the
+  // composition no longer type-checks without them). Here the real host can
+  // finish, but no wake/collection occurs. These empty callbacks model the absent
+  // CALL, not historical function bytes. They provide no task/attempt result and
+  // manufacture no exception.
   mock.module(target, () => ({
     ...original,
     createDevelopmentMissionExecutionTerminalObserver: () =>
@@ -543,9 +521,6 @@ switch (mutation) {
     break
   case 'p0-7':
     await restoreUnboundDeferredDispatcher()
-    break
-  case 'p0-9-launchers':
-    await restoreMissingLegacyMissionLaunchers()
     break
   case 'p0-9-terminal-observer':
     await restoreMissingLegacyTerminalForwarding()

@@ -85,7 +85,8 @@ test('the four actual context readers and both async manifest consumers await th
     ['pipelineEvidenceChain.ts', 'deps.ports.attemptContext.load'],
     ['missionDeliveryChain.ts', 'deps.ports.attemptContext.load'],
     ['missionReconciler.ts', 'deps.ports.attemptContext.load'],
-    ['agentActionOrchestrator.ts', 'ports.attemptContext?.load'],
+    // RFC-603: the port is required, so the orchestrator reads it without an optional chain.
+    ['agentActionOrchestrator.ts', 'ports.attemptContext.load'],
   ]) {
     const source = load(`modules/development-automation/application/${path}`)
     const reads = calls(source, expression!)

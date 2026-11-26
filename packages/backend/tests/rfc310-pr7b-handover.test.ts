@@ -110,11 +110,22 @@ async function expectCode(p: Promise<unknown>, code: string): Promise<void> {
   expect(err?.code).toBe(code)
 }
 
+/** RFC-603: observing the MR fails the way the code-host binding does when it cannot reach the MR. */
+function unobservable(): MrEffectsPort {
+  return {
+    ...observing('opened', null),
+    async observe() {
+      return { ok: false, code: 'code-host-unavailable', detail: 'no code-host connection' }
+    },
+  }
+}
+
 function handoverDeps(fx: ProviderPr3Fixture, mrEffects?: MrEffectsPort) {
   return {
     store: fx.deps().store,
     snapshots: fx.snapshots,
-    ...(mrEffects === undefined ? {} : { ports: { mrEffects } }),
+    // RFC-603: the ports are required; a test that does not attach leaves MR effects to the helper's double.
+    ports: fx.deps(mrEffects === undefined ? {} : { mrEffects }).ports,
     now: () => Date.now(),
   }
 }
@@ -267,10 +278,10 @@ describe('rfc310 pr7b — attach command', () => {
         'mission-effects-unsettled',
       )
 
-      // 拒：observe 端口缺 / claim 键推不出。
+      // 拒：observe 失败 / claim 键推不出。
       const bare = await seedMission(fx.store, { automationMode: 'tracking-only' })
       await expectCode(
-        attachMergeRequest(handoverDeps(fx), { missionId: bare, mrIid: '9' }),
+        attachMergeRequest(handoverDeps(fx, unobservable()), { missionId: bare, mrIid: '9' }),
         'mr-observe-unavailable',
       )
       await expectCode(

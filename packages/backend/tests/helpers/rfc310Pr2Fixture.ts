@@ -33,6 +33,7 @@ import type {
 } from '../../src/modules/development-automation/application/ports/reconcilerPorts'
 import type { ReconcileDeps } from '../../src/modules/development-automation/application/missionReconciler'
 import { launchMission } from '../../src/modules/development-automation/application/commands/launchMission'
+import { reconcilerPortsFor } from './developmentAutomation'
 
 export interface Pr2Fixture {
   readonly db: PersistenceDb
@@ -42,7 +43,8 @@ export interface Pr2Fixture {
   readonly employeeId: string
   readonly templateId: string
   readonly policyId: string
-  deps(ports: ReconcilerPorts): ReconcileDeps
+  /** RFC-603: the ports the test gives; the rest come from `reconcilerPortsFor`. */
+  deps(ports?: Partial<ReconcilerPorts>): ReconcileDeps
   launch(idempotencyKey: string): Promise<string>
 }
 
@@ -168,8 +170,14 @@ export async function buildPr2Fixture(db: PersistenceDb): Promise<Pr2Fixture> {
     employeeId: employee.id,
     templateId: template.id,
     policyId: policy.id,
-    deps(ports: ReconcilerPorts): ReconcileDeps {
-      return { store: persistence, lookup: admissionLookup, snapshots, ports, now }
+    deps(ports: Partial<ReconcilerPorts> = {}): ReconcileDeps {
+      return {
+        store: persistence,
+        lookup: admissionLookup,
+        snapshots,
+        ports: reconcilerPortsFor(db, ports),
+        now,
+      }
     },
     async launch(idempotencyKey: string): Promise<string> {
       const result = await launchMission(

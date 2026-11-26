@@ -185,7 +185,7 @@ export interface DevelopmentAutomationModule extends DevelopmentMissionAutomatio
  * RFC-597 (RFC-294 W4-E8 first step): the providers other modules implement, all required — the daemon gives every one,
  * and a deployment that leaves one out no longer type-checks (dual-provider-parity-audit-2026-09-04 F-H2-2: the PostgreSQL
  * daemon once composed this module without either launcher, and every action was blocked `*-launcher-not-wired`).
- * `ReconcilerPorts` itself stays optional until it is split by use case.
+ * RFC-603: `ReconcilerPorts` is required too, and each command or publication chain takes only the ports it reads.
  */
 export interface DevelopmentAutomationProviders {
   /** integration 模块组装的外部需求源 runner。 */

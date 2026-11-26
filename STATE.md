@@ -1,3 +1,20 @@
+## 2026-11-25 RFC-603 development-automation 的 reconciler 端口必填（In Progress；`design/RFC-603-reconciler-ports-required/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W4-E8
+  application 一侧（RFC-601 留下的 `ReconcilerPorts` 按用例拆分与 RFC-359 P0 指纹的去留，本会话自行裁定，见 design §0）。
+- **范围**：`ReconcilerPorts` 的 25 个成员必填；答案提交 / 在途动作失效、交接、reopen、cutover 接管与四条发布链的 deps 只取自己读的端口（必填的 `Pick`）；
+  application 里端口缺席时的 typed block（`*-not-wired`、`*-port-missing:*`）、命令的失败结果与静默跳过删去（生产装配本来就给全）。测试助手新增
+  `reconcilerPortsFor`（数据库支撑的 5 个端口按装配工作，其余调用即抛错），两个 RFC-310 夹具经它补全；断言“端口没给”的用例删去或改成可表达的失败
+  （启动器拒绝、基线不可解析、observe 失败）。RFC-359 P0 的 `p0-9-launchers` 退役（阶段表、预载与判定用例同步），`p0-9-terminal-observer` 保留。
+  新增 RFC-603 用例。集中验证查出并修复一处既有缺陷：流水线发布链只认字符串形式的适配器引用（员工 schema 是版本化引用），带流水线 provider 的 mission 的采集 /
+  触发 / 重跑一律被 `pipeline-adapter-unbound` 挡下；现按 `id@revision` 绑定。
+- **集中验证**（基于 `c37b675ff`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 578 个用例文件 13 红：6 个属 RFC-602（干净的
+  `c37b675ff` 控制导出里同样红：新路由缺契约 / MCP / 错误码条目、`backup` 表数 234 → 244、`rfc395` 账外的新用例），`rfc321` 照例（主树 10 / 10），
+  本 RFC 的 6 个已修（静默依赖现形与上述缺陷），复跑 18 个文件与文档读者 148 个全绿；P0 `p0-9-terminal-observer` 与前后控制在 SQLite 判定有效；运行期 8 种
+  变异认出 7 种（未认出的 saga 摘要缺失是既有缺口）、类型检查 3 种都报错；架构报告除新增 `DeliveryChainPorts` 类型外不变，计数不变。实现门 PASS（本会话按路径
+  限定自审，只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-25 RFC-602 模块查询按需读取与完整子任务分页（实现与本地验证完成）
 
 - 用户明确要求完成四项优化及功能、性能、边界用例，验证后提交。范围、技术设计与验收见 [RFC-602](design/RFC-602-bounded-module-queries/proposal.md)。

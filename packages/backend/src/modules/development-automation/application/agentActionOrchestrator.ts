@@ -146,29 +146,17 @@ interface AttemptPreState {
 
 /** Durable scene ownership survives composition rebuilds and fresh retries. */
 async function discardOwnedAttemptWorkspace(
-  ports: ReconcilerPorts,
+  ports: Pick<ReconcilerPorts, 'actionWorkspace' | 'conflictMerge'>,
   scene: Pick<AttemptPreState, 'workspacePath' | 'capabilityId' | 'conflict'>,
 ): Promise<void> {
   if (
     scene.conflict !== undefined ||
     capabilityDefinition(scene.capabilityId as CapabilityId).workspaceMode === 'edit-conflicts'
   ) {
-    if (ports.conflictMerge === undefined) throw new Error('conflict-merge-discard-not-wired')
     await ports.conflictMerge.discard({ workspacePath: scene.workspacePath })
   } else {
-    await ports.actionWorkspace?.discard(scene.workspacePath)
+    await ports.actionWorkspace.discard(scene.workspacePath)
   }
-}
-
-function requiredPortsMissing(deps: ReconcileDeps): string | null {
-  const ports = deps.ports
-  if (ports.actionBaseline === undefined) return 'action-baseline-not-wired'
-  if (ports.actionWorkspace === undefined) return 'action-workspace-not-wired'
-  if (ports.attemptContext === undefined) return 'attempt-context-not-wired'
-  if (ports.actionTemplates === undefined) return 'action-templates-not-wired'
-  if (ports.workspaceValidation === undefined) return 'workspace-validation-not-wired'
-  if (ports.changeCandidate === undefined) return 'change-candidate-not-wired'
-  return null
 }
 
 export function publicFactsSummary(
@@ -254,8 +242,6 @@ export async function launchAgentAttempt(
   mission: MissionRow,
   input: LaunchAgentAttemptInput,
 ): Promise<LaunchAgentAttemptOutcome> {
-  const missing = requiredPortsMissing(deps)
-  if (missing !== null) return { ok: false, blockCode: missing, detail: null }
   const feedbackSnapshot = input.frozenReplay?.feedbackSnapshot ?? input.feedbackSnapshot
   if (input.capabilityId === 'mr.feedback.apply' && feedbackSnapshot === undefined) {
     return {
@@ -267,7 +253,7 @@ export async function launchAgentAttempt(
   }
   const ports = deps.ports
 
-  const rawTemplate = await ports.actionTemplates!.content(input.templateId, input.templateRevision)
+  const rawTemplate = await ports.actionTemplates.content(input.templateId, input.templateRevision)
   if (rawTemplate === null) {
     return {
       ok: false,
@@ -290,16 +276,9 @@ export async function launchAgentAttempt(
       detail: template.data.executor.kind,
     }
   }
-  if (template.data.executor.kind === 'agent' && ports.agentLauncher === undefined) {
-    return { ok: false, blockCode: 'agent-launcher-not-wired', detail: null }
-  }
-  if (template.data.executor.kind === 'script' && ports.scriptLauncher === undefined) {
-    return { ok: false, blockCode: 'script-launcher-not-wired', detail: null }
-  }
-
   const resolvedBaseline =
     input.frozenReplay === undefined
-      ? await ports.actionBaseline!.resolve(mission.repositoryId)
+      ? await ports.actionBaseline.resolve(mission.repositoryId)
       : null
   if (input.frozenReplay === undefined && resolvedBaseline === null) {
     return { ok: false, blockCode: 'action-baseline-unavailable', detail: mission.repositoryId }
@@ -326,7 +305,7 @@ export async function launchAgentAttempt(
     mission.uploadPlanRef !== null &&
     mission.uploadPlacementRef !== null
   ) {
-    uploadEntries = (await ports.uploadPlanReader?.read(mission.uploadPlanRef)) ?? null
+    uploadEntries = await ports.uploadPlanReader.read(mission.uploadPlanRef)
     if (uploadEntries === null) {
       return { ok: false, blockCode: 'upload-plan-unreadable', detail: mission.uploadPlanRef }
     }
@@ -365,10 +344,10 @@ export async function launchAgentAttempt(
   const requirementManifestMount =
     input.frozenReplay !== undefined || requirementBundle === null
       ? null
-      : ((await ports.requirementMaterialize?.getRequirementManifestMount(
+      : await ports.requirementMaterialize.getRequirementManifestMount(
           mission.id,
           requirementBundle.manifestDigest,
-        )) ?? null)
+        )
   if (
     input.frozenReplay === undefined &&
     requirementBundle !== null &&
@@ -416,9 +395,6 @@ export async function launchAgentAttempt(
   let conflictPin: { readonly sourceSha: string; readonly targetSha: string } | undefined
   let workspace: { readonly workspacePath: string; readonly businessTreeDigest: string }
   if (definition.workspaceMode === 'edit-conflicts') {
-    if (ports.conflictMerge === undefined) {
-      return { ok: false, blockCode: 'conflict-merge-not-wired', detail: null }
-    }
     const conflict = input.frozenReplay?.conflict ?? input.conflictInput
     if (conflict === undefined) {
       return {
@@ -445,7 +421,7 @@ export async function launchAgentAttempt(
     conflictPin = conflict
     seedRef = null
     try {
-      workspace = await ports.actionWorkspace!.adopt({
+      workspace = await ports.actionWorkspace.adopt({
         workspacePath: prepared.workspacePath,
         bundles,
       })
@@ -458,7 +434,7 @@ export async function launchAgentAttempt(
       throw error
     }
   } else {
-    workspace = await ports.actionWorkspace!.materialize({
+    workspace = await ports.actionWorkspace.materialize({
       baselineRepoPath: baseline.repoPath,
       baselineSha: baseline.headSha,
       seedRef,
@@ -658,7 +634,7 @@ export async function launchAgentAttempt(
     bundles,
     workspacePath: workspace.workspacePath,
     businessTreeDigest: workspace.businessTreeDigest,
-    preStateJson: await ports.workspaceValidation!.capturePreState(workspace.workspacePath),
+    preStateJson: await ports.workspaceValidation.capturePreState(workspace.workspacePath),
     manifestSansNonce: {
       ...manifest,
       protocol: { port: 'agent-result', outcomeSchemaId: manifest.protocol.outcomeSchemaId },
@@ -685,7 +661,7 @@ export async function launchAgentAttempt(
           }),
     },
   }
-  const preSnapshotRef = await ports.attemptContext!.save(JSON.stringify(preState))
+  const preSnapshotRef = await ports.attemptContext.save(JSON.stringify(preState))
 
   const launchCommon = {
     actionRunId: input.actionRunId,
@@ -698,8 +674,8 @@ export async function launchAgentAttempt(
   }
   const launched =
     preState.scriptRef === null
-      ? await ports.agentLauncher!.launch({ ...launchCommon, agentId: preState.agentId! })
-      : await ports.scriptLauncher!.launch({ ...launchCommon, scriptRef: preState.scriptRef })
+      ? await ports.agentLauncher.launch({ ...launchCommon, agentId: preState.agentId! })
+      : await ports.scriptLauncher.launch({ ...launchCommon, scriptRef: preState.scriptRef })
   if (!launched.ok) {
     await discard()
     return {
@@ -728,8 +704,8 @@ export async function launchAgentAttempt(
   if (!claim.ok) {
     // ordinal 撞行 = 并发 reconciler 已抢先 launch；本次执行成为多余进程，
     // 直接取消（launcher 幂等 cancel），不 block mission。
-    if (preState.scriptRef === null) await ports.agentLauncher!.cancel(launched.executionRef)
-    else await ports.scriptLauncher!.cancel(launched.executionRef)
+    if (preState.scriptRef === null) await ports.agentLauncher.cancel(launched.executionRef)
+    else await ports.scriptLauncher.cancel(launched.executionRef)
     await discard()
     return { ok: false, blockCode: 'attempt-ordinal-taken', detail: null }
   }
@@ -803,10 +779,7 @@ async function settleRunAndBlock(
   // would bypass the employee's onRejected/onExpired/onExhausted rule and turn
   // the Agent into an implicit scheduler. Legacy policy actions keep their
   // historical Mission-level boundary.
-  if (
-    deps.ports.playbookSaga === undefined ||
-    (await deps.ports.playbookSaga.findStepRunByAction(actionRunId)) === null
-  ) {
+  if ((await deps.ports.playbookSaga.findStepRunByAction(actionRunId)) === null) {
     await blockMissionDirect(deps, mission.id, blockCode, detail)
   }
 }
@@ -875,11 +848,8 @@ export async function collectAgentAttempt(
   if (attempt.status !== 'claimed' && attempt.status !== 'running') return { kind: 'no-op' }
   if (attempt.executionRef === null) return { kind: 'no-op' }
 
-  const preState = parsePreState(
-    (await ports.attemptContext?.load(attempt.preSnapshotRef ?? '')) ?? null,
-  )
+  const preState = parsePreState(await ports.attemptContext.load(attempt.preSnapshotRef ?? ''))
   const launcher = preState?.scriptRef === null ? ports.agentLauncher : ports.scriptLauncher
-  if (launcher === undefined) return { kind: 'no-op' }
   const snapshot = await launcher.fetchOutcome(attempt.executionRef)
   if (snapshot.kind === 'pending') return { kind: 'still-running' }
   const now = deps.now()
@@ -955,8 +925,8 @@ export async function collectAgentAttempt(
       }
       const launched =
         preState.scriptRef === null
-          ? await ports.agentLauncher!.launch({ ...launchCommon, agentId: preState.agentId! })
-          : await ports.scriptLauncher!.launch({ ...launchCommon, scriptRef: preState.scriptRef })
+          ? await ports.agentLauncher.launch({ ...launchCommon, agentId: preState.agentId! })
+          : await ports.scriptLauncher.launch({ ...launchCommon, scriptRef: preState.scriptRef })
       if (launched.ok) {
         const claim = await deps.store.claimAttempt({
           id: ulid(),
@@ -973,8 +943,8 @@ export async function collectAgentAttempt(
         if (claim.ok) {
           return { kind: 'action-retry', actionRunId, rerunSeq: plan.rerunSeq }
         }
-        if (preState.scriptRef === null) await ports.agentLauncher!.cancel(launched.executionRef)
-        else await ports.scriptLauncher!.cancel(launched.executionRef)
+        if (preState.scriptRef === null) await ports.agentLauncher.cancel(launched.executionRef)
+        else await ports.scriptLauncher.cancel(launched.executionRef)
       }
       try {
         await discardOwnedAttemptWorkspace(ports, preState)
@@ -1101,7 +1071,7 @@ export async function collectAgentAttempt(
     )
   }
 
-  if (preState === null || ports.workspaceValidation === undefined) {
+  if (preState === null) {
     return await failAttempt(
       'evidence-unavailable',
       { code: 'attempt-pre-state-unavailable' },
@@ -1257,7 +1227,7 @@ export async function collectAgentAttempt(
     }
     conflictReceipt = { pushedSha: published.pushedSha, branch: published.branch }
   } else if (envelope.outcome === 'changed') {
-    const derived = await ports.changeCandidate!.derive({
+    const derived = await ports.changeCandidate.derive({
       baselineRepoPath: preState.baselineRepoPath,
       baselineSha: preState.baselineSha,
       overlayRoot: preState.workspacePath,
@@ -1267,7 +1237,7 @@ export async function collectAgentAttempt(
       uploadsAlreadyPublished: mission.uploadPublicationRef !== null,
       uploadPlan:
         mission.uploadPlanRef !== null
-          ? ((await ports.uploadPlanReader?.read(mission.uploadPlanRef)) ?? null)
+          ? await ports.uploadPlanReader.read(mission.uploadPlanRef)
           : null,
     })
     if (!derived.ok) {
@@ -1288,7 +1258,7 @@ export async function collectAgentAttempt(
     envelope.outcome === 'completed' &&
     (envelope.result.capabilityId === 'problem.classify' ||
       envelope.result.capabilityId === 'approval.prepare')
-      ? await ports.attemptContext!.save(JSON.stringify(envelope.result))
+      ? await ports.attemptContext.save(JSON.stringify(envelope.result))
       : null
   const actionResultRef = candidateRef ?? structuredResultRef
 
@@ -1400,10 +1370,7 @@ export async function collectAgentAttempt(
   if (envelope.outcome === 'blocked') {
     // completed（read-only 分析）不 block：scopeDisposition facts 已就位，
     // 下轮规则立即据此路由 implement / no-change gate。
-    if (
-      deps.ports.playbookSaga === undefined ||
-      (await deps.ports.playbookSaga.findStepRunByAction(actionRunId)) === null
-    ) {
+    if ((await deps.ports.playbookSaga.findStepRunByAction(actionRunId)) === null) {
       await blockMissionDirect(
         deps,
         mission.id,
@@ -1418,7 +1385,7 @@ export async function collectAgentAttempt(
   } else if (envelope.outcome === 'needs-information') {
     // Agent 问题集入台账（origin 'agent'、平台渠道），下轮 reconcile 的澄清
     // 重派会 publish → awaiting-information → answers 闭环 → 重新选动作。
-    const stashed = await ports.requirementMaterialize?.stashQuestionSet({
+    const stashed = await ports.requirementMaterialize.stashQuestionSet({
       missionId: mission.id,
       origin: 'agent',
       channel: 'platform',
@@ -1429,11 +1396,7 @@ export async function collectAgentAttempt(
         choices: null,
       })),
     })
-    if (
-      (stashed === undefined || !stashed.ok) &&
-      (deps.ports.playbookSaga === undefined ||
-        (await deps.ports.playbookSaga.findStepRunByAction(actionRunId)) === null)
-    ) {
+    if (!stashed.ok && (await deps.ports.playbookSaga.findStepRunByAction(actionRunId)) === null) {
       await blockMissionDirect(deps, mission.id, 'agent-questions-stash-failed', null)
     }
   } else if (envelope.outcome === 'no-change') {
@@ -1443,10 +1406,7 @@ export async function collectAgentAttempt(
     // 落 cells，下轮 reconcile 由发布链（missionDeliveryChain redispatch）
     // 接管 verification → commit/publish → MR。completed（read-only 分析）
     // 也不 block：scopeDisposition facts 就位后规则立即续路由。
-    if (
-      deps.ports.playbookSaga === undefined ||
-      (await deps.ports.playbookSaga.findStepRunByAction(actionRunId)) === null
-    ) {
+    if ((await deps.ports.playbookSaga.findStepRunByAction(actionRunId)) === null) {
       await blockMissionDirect(deps, mission.id, 'action-stage-complete:no-change', candidateRef)
     }
   }

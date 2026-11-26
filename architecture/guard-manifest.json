@@ -4856,7 +4856,7 @@
       "corpusScanner": false,
       "file": "packages/backend/tests/rfc597-development-automation-required-providers-boundary.test.ts",
       "id": "rfc597-development-automation-required-providers-boundary",
-      "lines": 248,
+      "lines": 249,
       "mechanism": "ast",
       "minCorpusFiles": null,
       "negativeFixture": true,
@@ -4907,6 +4907,18 @@
       "lines": 151,
       "mechanism": "ast",
       "minCorpusFiles": null,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc603-reconciler-ports-required-boundary.test.ts",
+      "id": "rfc603-reconciler-ports-required-boundary",
+      "lines": 333,
+      "mechanism": "ast",
+      "minCorpusFiles": 100,
       "negativeFixture": true,
       "runner": "bun"
     }

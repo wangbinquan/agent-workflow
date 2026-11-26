@@ -199,6 +199,7 @@ describeEachProvider('rfc310 pr3 — platform clarification channel', (harness) 
       store: createMissionPersistence(fx.db),
       snapshots: fx.snapshots,
       requirement: fx.materializer,
+      ports: deps.ports,
       now: () => Date.now(),
     }
     // 未知题被拒。

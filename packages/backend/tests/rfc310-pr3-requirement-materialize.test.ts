@@ -142,7 +142,14 @@ describeEachProvider('rfc310 pr3 — direct requirement materialization', (harne
       const fx = await buildPr3Fixture({ db: harness.db })
       const missionId = await fx.launchDirect(`rfc310-pr3-materialize-occ-${peerWrites}`)
       await fx.materializer.stashDirectSubmission({ missionId, submission: SUBMISSION })
-      const base = fx.deps()
+      // RFC-603: the repository facts collector is always wired, so the round after materialization collects facts.
+      const base = fx.deps({
+        repositoryFacts: {
+          async collect() {
+            return { cells: { ...PR3_JAVA_CELLS }, factsRef: 'probe-1' }
+          },
+        },
+      })
       const peerKinds: string[] = []
       const writeResults: string[] = []
       const store: typeof base.store = {
@@ -169,7 +176,7 @@ describeEachProvider('rfc310 pr3 — direct requirement materialization', (harne
         peerKinds,
         first,
         requirementBundleRef: materialized.requirementBundleRef,
-        status: after.status,
+        status: after.status === materialized.status,
         blockCode: after.blockCode,
         unsettled: await fx.store.listUnsettledEffects(missionId),
         next,
@@ -181,13 +188,13 @@ describeEachProvider('rfc310 pr3 — direct requirement materialization', (harne
           handled: 'collected',
         },
         requirementBundleRef: expect.any(String),
-        status: 'blocked',
-        blockCode: 'collector-not-wired:repository',
+        status: true,
+        blockCode: null,
         unsettled: [],
         next: {
           kind: 'decided',
           selected: { kind: 'collect-repository-facts' },
-          handled: 'blocked',
+          handled: 'collected',
         },
       })
       expect(writeResults).toEqual(['ok'])
@@ -275,28 +282,6 @@ describeEachProvider('rfc310 pr3 — direct requirement materialization', (harne
       expect(writeResults).toEqual(['epoch-conflict'])
     },
   )
-
-  test('port absent ⇒ typed block requirement-port-not-wired (never silent)', async () => {
-    const fx = await buildPr3Fixture({ db: harness.db })
-    const missionId = await fx.launchDirect('rfc310-pr3-nowire-1')
-    const outcome = await runMissionReconcile(
-      {
-        store: createMissionPersistence(fx.db),
-        lookup: fx.lookup,
-        snapshots: fx.snapshots,
-        ports: {},
-        now: () => Date.now(),
-      },
-      missionId,
-    )
-    expect(outcome.kind === 'decided' && outcome.selected.kind).toBe(
-      'materialize-direct-requirement',
-    )
-    expect(outcome.kind === 'decided' && outcome.handled).toBe('blocked')
-    const mission = (await fx.store.getMission(missionId))!
-    expect(mission.status).toBe('blocked')
-    expect(mission.blockCode).toBe('requirement-port-not-wired')
-  })
 
   test('materialize failure blocks with attempt cells; retry-blocked genuinely re-runs the arm', async () => {
     const fx = await buildPr3Fixture({ db: harness.db })

@@ -144,28 +144,50 @@ describeEachProvider('rfc310 pr2 reconciler', (harness) => {
     })
   })
 
-  test('missing launcher is a typed block, never a silent skip', async () => {
+  test('a launcher refusal is a typed block, never a silent skip', async () => {
     const f = await buildPr2Fixture(harness.db)
     const missionId = await f.launch('idem-nolaunch-1')
-    // PR-11 起 launcher 的接线判定按模板 executor 分流（agent / script），不再是
-    // 「所有端口之前」的总闸。要证明缺 launcher 仍是 typed block，就必须把其余端口
-    // 全接好、只摘掉 agent launcher；否则先撞上 action-baseline-not-wired，这条测
-    // 试测的就不是它名字说的那件事了。
-    const { agentLauncher: _omittedLauncher, ...portsWithoutLauncher } = fakeAgentActionPorts({
-      db: f.db,
+    // RFC-603: the launcher is always wired (`ReconcilerPorts` requires it), so the failure left to show is the runner
+    // refusing the launch. It blocks the mission with the runner's code instead of silently skipping the action.
+    const notReached = (): never => {
+      throw new Error('a refused launch has no execution')
+    }
+    const deps = f.deps({
+      repositoryFacts: repoCollector,
+      ...fakeAgentActionPorts({
+        db: f.db,
+        overrides: {
+          agentLauncher: {
+            async launch() {
+              return {
+                ok: false,
+                failure: {
+                  category: 'configuration',
+                  code: 'runner-unavailable',
+                  retryability: 'after-configuration',
+                  attemptOrdinal: 0,
+                  remediation: 'configure an agent runner',
+                  evidenceRef: null,
+                },
+              }
+            },
+            fetchOutcome: notReached,
+            cancel: notReached,
+          },
+        },
+      }),
     })
-    const deps = f.deps({ repositoryFacts: repoCollector, ...portsWithoutLauncher })
 
     await runMissionReconcile(deps, missionId)
     const second = await runMissionReconcile(deps, missionId)
     expect(second).toMatchObject({ kind: 'decided', handled: 'action-launch-failed' })
     const mission = (await f.store.getMission(missionId))!
     expect(mission.status).toBe('blocked')
-    expect(mission.blockCode).toBe('agent-launcher-not-wired')
+    expect(mission.blockCode).toBe('agent-launch-failed:runner-unavailable')
     const { developmentActionRuns } = tablesOf(f.db)
     const run = (await f.db.select().from(developmentActionRuns))[0]!
     expect(run.status).toBe('failed')
-    expect(run.failureJson).toContain('agent-launcher-not-wired')
+    expect(run.failureJson).toContain('agent-launch-failed:runner-unavailable')
   })
 
   test('unsettled effect stops at the guard, arms a durable wake, and dedupes on replay', async () => {
@@ -292,8 +314,17 @@ describeEachProvider('rfc310 pr2 reconciler', (harness) => {
       repositoryFactsRef: snapshotId,
     })
 
-    // launcher 缺席会把 mission block——这里只关心 readiness 投影本身。
-    await runMissionReconcile(f.deps({}), missionId)
+    // 动作在基线不可解析处以 typed block 停下（RFC-603：端口都在，不再靠 launcher 缺席）——这里只关心 readiness 投影本身。
+    await runMissionReconcile(
+      f.deps({
+        actionBaseline: {
+          async resolve() {
+            return null
+          },
+        },
+      }),
+      missionId,
+    )
     const after = (await f.store.getMission(missionId))!
     expect(after.readinessJson).not.toBeNull()
     const readiness = JSON.parse(after.readinessJson!) as {
@@ -376,8 +407,8 @@ describe('rfc310 step-failed block detail', () => {
       { 'run-1': { failureJson: JSON.stringify({ code: 'x' }) } },
     )
     expect(await stepFailureDetail(noRemediation, 'm-1', 'step-failed:implement:x')).toBeNull()
-    // 非 step-failed 的 block（配置缺失、端口未接线等）不走这条路径。
-    expect(await stepFailureDetail(noRemediation, 'm-1', 'requirement-port-not-wired')).toBeNull()
+    // 非 step-failed 的 block（配置缺失等）不走这条路径。
+    expect(await stepFailureDetail(noRemediation, 'm-1', 'policy-content-missing')).toBeNull()
     // 台账里没有对应的失败步骤 ⇒ 不猜。
     expect(await stepFailureDetail(noRemediation, 'm-1', 'step-failed:other:x')).toBeNull()
   })

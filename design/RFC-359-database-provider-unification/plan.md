@@ -703,6 +703,8 @@ superseding run** 的绿（共享 main 上并发 push 会取消你的 run），�
   SQLite/PG 各七阶段有效，14 份日志摘要全部核对；每侧 25 pass + 7 次指定旧故障 / 316 expect，
   前后控制各 10 pass / 112 expect，源码快照未变化。这是真双库历史证明，但不是 Main 全绿。
   本批保留原七阶段，再加 P0-9 缺 launcher/observer、P0-11 缺 boot barrier/reverify 四阶段。
+  （2026-11-25 [RFC-603](../RFC-603-reconciler-ports-required/proposal.md)：`p0-9-launchers` 退役——启动器在编译期必填、`*-launcher-not-wired`
+  分支删去，理由见其 design §0；`p0-9-terminal-observer` 保留。）
   旧根 `01e4b1b7b` 的遗漏有源码锚；遗漏调用的重建不冒称空函数字节来自历史源码。
   缺 observer 通过真实已结束任务后的 claimed attempt/空 wake 精确失败，不依赖超时；非空技能
   恢复通过实际 reservation/锁/版本与本次 boot 状态验证。最终 SQLite 11 阶段均有效：

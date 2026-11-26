@@ -43,6 +43,7 @@ import type { FactCell } from '../src/modules/development-automation/domain/fact
 import { createAttemptContextStore } from '../src/modules/development-automation/infrastructure/attemptSupport'
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { buildPr3Fixture, type ProviderPr3Fixture as Pr3Fixture } from './helpers/rfc310Pr3Fixture'
+import { reconcilerPortsFor } from './helpers/developmentAutomation'
 import { describeEachProvider } from './helpers/eachProvider'
 
 setDefaultTimeout(120_000)
@@ -428,7 +429,7 @@ describeEachProvider('rfc310 pr5 — verification arm', (harness) => {
     outcome: 'collected' | 'blocked'
   }> {
     const blocks: { code: string; detail: string | null }[] = []
-    const ports: ReconcilerPorts = {
+    const ports: ReconcilerPorts = reconcilerPortsFor(fx.db, {
       requirementMaterialize: fx.materializer,
       attemptContext: createAttemptContextStore(fx.evidence),
       candidateDelivery: fakeDelivery({
@@ -471,7 +472,7 @@ describeEachProvider('rfc310 pr5 — verification arm', (harness) => {
           }
         },
       },
-    }
+    })
     const chainDeps: DeliveryChainDeps = {
       store: createMissionPersistence(fx.db),
       ports,
@@ -651,6 +652,12 @@ describeEachProvider('rfc310 pr5 — publish chain through reconcile rounds', (h
       candidateDelivery: delivery,
       repoRemote: fakeRemote,
       mrEffects: fakeMr(),
+      // RFC-603: the MR facts collector is always wired; round 4 only checks that the care chain takes over.
+      mergeRequestFacts: {
+        async collect() {
+          return { cells: {}, snapshotRef: 'mr-snapshot-1', headSha: null, targetSha: null }
+        },
+      },
     })
 
     // 轮 1：commit（effect confirmed；publishState=committed；working→publishing）。
@@ -686,14 +693,11 @@ describeEachProvider('rfc310 pr5 — publish chain through reconcile rounds', (h
     // 轮 4：发布链使命完成 → PR-7 care 链接管（MR facts 尚未采集 → 派
     // collect-mr-facts；care 自身链路由 pr7 测试锁，这里只断言交接发生）。
     const r4 = await runMissionReconcile(deps, seeded.missionId)
-    expect(r4).toMatchObject({ kind: 'decided' })
+    expect(r4).toMatchObject({ kind: 'decided', handled: 'collected' })
     expect((r4 as { selected: NextDecision }).selected).toMatchObject({
       kind: 'collect-mr-facts',
     })
-    // collector 未注入 → 诚实 typed block（接线缺席可见，不静默）。
-    expect((await fx.store.getMission(seeded.missionId))!.blockCode).toBe(
-      'collector-not-wired:merge-request',
-    )
+    expect((await fx.store.getMission(seeded.missionId))!.blockCode).toBeNull()
 
     // effect 台账：全部 confirmed（无悬挂），且只有发布链三类。
     expect(await fx.store.listUnsettledEffects(seeded.missionId)).toEqual([])
@@ -802,16 +806,5 @@ describeEachProvider('rfc310 pr5 — publish chain through reconcile rounds', (h
         (e) => e.state === 'dispatched',
       ),
     ).toEqual([])
-  })
-
-  test('missing delivery ports stay honest: typed block, no silent skip', async () => {
-    const fx = await buildPr3Fixture({ db: harness.db, rules: NEVER_MATCH_RULES })
-    const seeded = await seedDeliveredMission(fx)
-    const deps = fx.deps({ attemptContext: createAttemptContextStore(fx.evidence) })
-    const r = await runMissionReconcile(deps, seeded.missionId)
-    expect(r).toMatchObject({ kind: 'decided', handled: 'blocked' })
-    expect((await fx.store.getMission(seeded.missionId))!.blockCode).toBe(
-      'delivery-port-missing:candidateDelivery',
-    )
   })
 })
