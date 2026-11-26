@@ -74,7 +74,7 @@ async function codeOf(run: () => Promise<unknown>): Promise<string> {
   throw new Error('expected a DomainError')
 }
 
-/** 内存里的仓库组存储：只实现新建与读取用到的两个方法。 */
+/** 内存里的仓库组存储：只实现新建与读取用到的方法。 */
 function memoryStore(registered: readonly string[] = []): {
   store: RepositoryWorkspaceStore
   nodes: RepositoryGroupNodeRecord[]
@@ -85,13 +85,14 @@ function memoryStore(registered: readonly string[] = []): {
     registered.map((id) => [id, `https://example.test/${id}.git`]),
   )
   const store = {
-    readRepositoryGroupSnapshot: async () => ({
+    readRepositoryGroupGraph: async () => ({
       groups,
       nodes,
       repoUrls,
-      boundMemoryCounts: new Map<string, number>(),
-      schedules: [],
     }),
+    readRepositoryGroupIndex: async () =>
+      groups.map(({ id, name, version }) => ({ id, name, version })),
+    readRepositoryGroupMemoryCounts: async () => new Map<string, number>(),
     createRepositoryGroup: async (
       group: RepositoryGroupRecord,
       groupNodes: readonly RepositoryGroupNodeRecord[],
@@ -350,13 +351,14 @@ describe('RFC-447 —— 合同转发', () => {
       readonly: false,
     }
     const store = {
-      readRepositoryGroupSnapshot: async () => ({
+      readRepositoryGroupGraph: async () => ({
         groups: [group],
         nodes: [root, node],
         repoUrls: new Map([['cr-1', 'https://example.test/cr-1.git']]),
-        boundMemoryCounts: new Map([['g-1', 2]]),
-        schedules: [],
       }),
+      readRepositoryGroupIndex: async () => [group],
+      readRepositoryGroupMemoryCounts: async () => new Map([['g-1', 2]]),
+      readRepositoryGroupReferences: async () => ({ groups: [], schedules: [] }),
       updateRepositoryGroup: async (input: { readonly expectedVersion?: number }) => {
         calls.push(`update:${input.expectedVersion}`)
         return { status: 'missing' as const }

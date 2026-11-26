@@ -1,15 +1,14 @@
-// Module contract audit: legacy history caps its returned projection through the
-// composition entry. Fixtures are frozen history packages, not live legacy writers.
-// Counts below constrain table-reader invocations, not rows scanned: history.rows
-// still loads complete history tables, so this is NOT bounded database pagination.
-import { expect, test } from 'bun:test'
+// RFC-602 extends the existing module contract to durable indexed queries.
+// Bounds below record actual SELECTs after the explicit installation barrier.
+import { afterEach, expect, test } from 'bun:test'
 import {
   composeCodeHistoryQueries,
-  type CodeHistoryReader,
+  createCodeHistoryQueryReader,
 } from '@/modules/code-capability/composition/historyQueries'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
-  historyFixtureReader,
+  preparedHistoryFixtureReader,
+  historyFixtureSource,
   seedCodeHistoryRows,
   seedEmptyCodeHistory,
 } from './helpers/legacyCapabilitySeed'
@@ -17,18 +16,23 @@ import {
 const NOW = 1_800_000_000_000
 
 describeEachProvider('module contract: code-capability historical reads', (harness) => {
-  function compose() {
-    const history = historyFixtureReader(harness.db)
-    const reads: string[] = []
-    const counted: CodeHistoryReader = {
-      rows(table) {
-        reads.push(table)
-        return history.rows(table)
-      },
-      find: (table, id) => history.find(table, id),
-    }
+  const recordings: Array<{ stop(): void }> = []
+  afterEach(() => {
+    for (const recording of recordings.splice(0)) recording.stop()
+  })
+  async function compose() {
+    const history = await preparedHistoryFixtureReader(harness.db)
+    const recording = harness.recordStatements()
+    recordings.push(recording)
     return {
-      reads,
+      reads: () =>
+        recording.selects().flatMap(({ sql }) => {
+          const match =
+            /\bfrom\s+(?:"[^"]+"\.)?"(code_history_query_(?:work_items|rounds|stages|attempts|deliveries))"/i.exec(
+              sql,
+            )
+          return match === null ? [] : [match[1]]
+        }),
       queries: composeCodeHistoryQueries(
         harness.db,
         {
@@ -36,12 +40,12 @@ describeEachProvider('module contract: code-capability historical reads', (harne
             return []
           },
         },
-        counted,
+        history,
       ),
     }
   }
 
-  test('work-item pages cap items and rounds while loading three history tables once per request', async () => {
+  test('work-item pages cap items and rounds while reading only the selected indexed windows', async () => {
     await seedCodeHistoryRows(
       harness.db,
       'code_work_items',
@@ -95,7 +99,7 @@ describeEachProvider('module contract: code-capability historical reads', (harne
         endedAt: null,
       },
     ])
-    const { queries, reads } = compose()
+    const { queries, reads } = await compose()
     const first = await queries.workItems.page({
       stableProjectId: 'project',
       limit: 500,
@@ -109,7 +113,11 @@ describeEachProvider('module contract: code-capability historical reads', (harne
       'review',
       'publish',
     ])
-    expect(reads).toEqual(['code_work_items', 'code_work_rounds', 'code_round_stages'])
+    expect(reads()).toEqual([
+      'code_history_query_work_items',
+      'code_history_query_rounds',
+      'code_history_query_stages',
+    ])
     expect(first.nextCursor).not.toBeNull()
     const next = await queries.workItems.page({
       stableProjectId: 'project',
@@ -125,13 +133,12 @@ describeEachProvider('module contract: code-capability historical reads', (harne
     ])
     expect(next.nextCursor).toBeNull()
     expect(new Set([...first.items, ...next.items].map((item) => item.workItemId)).size).toBe(105)
-    expect(reads).toEqual([
-      'code_work_items',
-      'code_work_rounds',
-      'code_round_stages',
-      'code_work_items',
-      'code_work_rounds',
-      'code_round_stages',
+    expect(reads()).toEqual([
+      'code_history_query_work_items',
+      'code_history_query_rounds',
+      'code_history_query_stages',
+      'code_history_query_work_items',
+      'code_history_query_rounds',
     ])
   })
 
@@ -165,7 +172,7 @@ describeEachProvider('module contract: code-capability historical reads', (harne
         epoch: 1,
       })),
     )
-    const { queries } = compose()
+    const { queries } = await compose()
     const expectedPages = [
       { ids: ['newest', 'z-tied', 'm-tied'], cursor: `${NOW}:m-tied` },
       { ids: ['c-tied', 'a-tied', 'older-1'], cursor: `${NOW - 1}:older-1` },
@@ -224,7 +231,7 @@ describeEachProvider('module contract: code-capability historical reads', (harne
       startedAt: NOW - 1,
       endedAt: NOW,
     })
-    const { queries, reads } = compose()
+    const { queries, reads } = await compose()
     const attempts = await queries.attempts.forRound('wanted-round')
     expect(attempts).toHaveLength(200)
     expect(attempts[0]).toMatchObject({
@@ -234,7 +241,7 @@ describeEachProvider('module contract: code-capability historical reads', (harne
     })
     expect(attempts.at(-1)?.attemptId).toBe('attempt-199')
     expect(attempts.some((attempt) => attempt.attemptId === 'unrelated')).toBe(false)
-    expect(reads).toEqual(['code_ai_attempts'])
+    expect(reads()).toEqual(['code_history_query_attempts'])
     expect(await queries.attempts.forRound('missing-round')).toEqual([])
   })
 
@@ -274,7 +281,7 @@ describeEachProvider('module contract: code-capability historical reads', (harne
         updatedAt: NOW + 2,
       },
     ])
-    const { queries } = compose()
+    const { queries } = await compose()
     expect(
       (await queries.deliveries.forProject({ stableProjectId: 'project', limit: 1 })).map(
         (row) => row.id,
@@ -293,7 +300,18 @@ describeEachProvider('module contract: code-capability historical reads', (harne
   })
 
   test('invalid page sizes do no history IO and history-reader failure is not an empty successful page', async () => {
-    const missingArchive = compose().queries
+    const missingArchive = composeCodeHistoryQueries(
+      harness.db,
+      {
+        async existingIds() {
+          return []
+        },
+      },
+      createCodeHistoryQueryReader({
+        db: harness.db,
+        installation: { kind: 'converted', source: historyFixtureSource },
+      }),
+    )
     await expect(
       missingArchive.deliveries.forProject({ stableProjectId: 'project' }),
     ).rejects.toThrow('code-history-package-missing')
@@ -304,11 +322,11 @@ describeEachProvider('module contract: code-capability historical reads', (harne
       'code-history-package-missing',
     )
     await seedEmptyCodeHistory(harness.db)
-    const { queries, reads } = compose()
+    const { queries, reads } = await compose()
     await expect(queries.workItems.page({ limit: 1.5 })).rejects.toThrow(
       'code-history-limit-not-integer',
     )
-    expect(reads).toEqual([])
+    expect(reads()).toEqual([])
     const failure = new Error('history-package-read-failed')
     const failed = composeCodeHistoryQueries(
       harness.db,
@@ -323,6 +341,32 @@ describeEachProvider('module contract: code-capability historical reads', (harne
         },
         async find() {
           throw failure
+        },
+        workItems: {
+          async readPage() {
+            throw failure
+          },
+        },
+        attempts: {
+          async load() {
+            throw failure
+          },
+        },
+        deliveries: {
+          async recent() {
+            throw failure
+          },
+          async byCorrelation() {
+            throw failure
+          },
+          async failures() {
+            throw failure
+          },
+        },
+        metrics: {
+          async loadSince() {
+            throw failure
+          },
         },
       },
     )

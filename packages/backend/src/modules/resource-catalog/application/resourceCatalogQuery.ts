@@ -111,22 +111,7 @@ export async function getVisibleResourceSummary(
   ref: CatalogResourceRef,
   summaries: ResourceCatalogSummaryReadPort,
 ): Promise<ResourceSummary | null> {
-  let cursor: ResourceCatalogCursor | undefined
-  do {
-    const page = await listVisibleResourceSummaries(
-      actor,
-      {
-        kinds: [ref.kind],
-        limit: CATALOG_PAGE_MAX,
-        ...(cursor === undefined ? {} : { cursor }),
-      },
-      summaries,
-    )
-    const found = page.items.find((item) => item.ref.id === ref.id)
-    if (found !== undefined) return found
-    cursor = page.nextCursor ?? undefined
-  } while (cursor !== undefined)
-  return null
+  return summaries.readOne(actor, ref)
 }
 
 export interface ResourceCatalogQueryApplicationDependencies {

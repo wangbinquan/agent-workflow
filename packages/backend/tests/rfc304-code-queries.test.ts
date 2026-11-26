@@ -1,6 +1,6 @@
 import {
   seedCodeHistoryRows,
-  historyFixtureReader,
+  preparedHistoryFixtureReader,
   seedEmptyCodeHistory,
   type HistoryFixtureInsert,
 } from './helpers/legacyCapabilitySeed'
@@ -43,10 +43,14 @@ const ENDPOINT = 'ep-1'
 
 const createCodeMatrixQuery = (db: PersistenceDb) =>
   createCodeMatrixQueryFromPort(createCapabilityMatrixRead(db, createAgentExecutionQueries(db)))
-const createCodeWorkItemProjectionQuery = (db: PersistenceDb) =>
-  createCodeWorkItemProjectionQueryFromPort(createWorkItemProjectionRead(historyFixtureReader(db)))
-const createCodeRoundAttemptsQuery = (db: PersistenceDb) =>
-  createCodeRoundAttemptsQueryFromPort(createRoundAttemptsRead(historyFixtureReader(db)))
+const createCodeWorkItemProjectionQuery = async (db: PersistenceDb) =>
+  createCodeWorkItemProjectionQueryFromPort(
+    createWorkItemProjectionRead(await preparedHistoryFixtureReader(db)),
+  )
+const createCodeRoundAttemptsQuery = async (db: PersistenceDb) =>
+  createCodeRoundAttemptsQueryFromPort(
+    createRoundAttemptsRead(await preparedHistoryFixtureReader(db)),
+  )
 
 describeEachProvider('RFC-304 — the capability matrix a page renders', (harness) => {
   beforeEach(async () => {
@@ -208,7 +212,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
   test('items come back newest first', async () => {
     await seedItem('item-old', NOW)
     await seedItem('item-new', NOW + 1000)
-    const page = await createCodeWorkItemProjectionQuery(db).page({})
+    const page = await (await createCodeWorkItemProjectionQuery(db)).page({})
     expect(page.items.map((i) => i.workItemId)).toEqual(['item-new', 'item-old'])
   })
 
@@ -219,11 +223,13 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
     await seedItem('b', NOW + 1)
     await seedItem('c', NOW + 2)
 
-    const first = await createCodeWorkItemProjectionQuery(db).page({ limit: 2 })
+    const first = await (await createCodeWorkItemProjectionQuery(db)).page({ limit: 2 })
     expect(first.items).toHaveLength(2)
     expect(first.nextCursor).not.toBeNull()
 
-    const second = await createCodeWorkItemProjectionQuery(db).page({
+    const second = await (
+      await createCodeWorkItemProjectionQuery(db)
+    ).page({
       limit: 2,
       cursor: first.nextCursor,
     })
@@ -234,7 +240,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
   test('an exactly-full last page does not claim a next one', async () => {
     await seedItem('a', NOW)
     await seedItem('b', NOW + 1)
-    const page = await createCodeWorkItemProjectionQuery(db).page({ limit: 2 })
+    const page = await (await createCodeWorkItemProjectionQuery(db)).page({ limit: 2 })
     expect(page.items).toHaveLength(2)
     expect(page.nextCursor).toBeNull()
   })
@@ -242,14 +248,16 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
   test('a stale cursor starts from the top rather than erroring', async () => {
     // A bookmarked link outliving its rows should render a list, not a failure.
     await seedItem('a', NOW)
-    const page = await createCodeWorkItemProjectionQuery(db).page({ cursor: 'nonsense' })
+    const page = await (await createCodeWorkItemProjectionQuery(db)).page({ cursor: 'nonsense' })
     expect(page.items).toHaveLength(1)
   })
 
   test('the capability filter narrows the list', async () => {
     await seedItem('review', NOW, 'mr-review')
     await seedItem('monitor', NOW + 1, 'mr-monitor')
-    const page = await createCodeWorkItemProjectionQuery(db).page({ capability: 'mr-review' })
+    const page = await (
+      await createCodeWorkItemProjectionQuery(db)
+    ).page({ capability: 'mr-review' })
     expect(page.items.map((i) => i.workItemId)).toEqual(['review'])
   })
 
@@ -277,7 +285,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
       })),
     )
 
-    const page = await createCodeWorkItemProjectionQuery(db).page({})
+    const page = await (await createCodeWorkItemProjectionQuery(db)).page({})
     expect(page.items[0]?.roundsHidden).toBe(12 - ROUNDS_PER_ITEM)
   })
 
@@ -296,7 +304,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
       endedAt: NOW + 1,
     })
 
-    const page = await createCodeWorkItemProjectionQuery(db).page({})
+    const page = await (await createCodeWorkItemProjectionQuery(db)).page({})
     expect(page.items[0]?.roundsHidden).toBe(0)
   })
 
@@ -319,7 +327,9 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
       })),
     )
 
-    const page = await createCodeWorkItemProjectionQuery(db).page({ roundLimit: ROUND_WINDOW })
+    const page = await (
+      await createCodeWorkItemProjectionQuery(db)
+    ).page({ roundLimit: ROUND_WINDOW })
     expect(page.items[0]?.rounds).toHaveLength(ROUND_WINDOW)
     expect(page.items[0]?.rounds[0]?.roundSeq).toBe(30)
     expect(page.items[0]?.roundsHidden).toBe(10)
@@ -344,7 +354,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
       })),
     )
 
-    const page = await createCodeWorkItemProjectionQuery(db).page({ roundLimit: 5_000 })
+    const page = await (await createCodeWorkItemProjectionQuery(db)).page({ roundLimit: 5_000 })
     expect(page.items[0]?.rounds).toHaveLength(ROUND_WINDOW)
   })
 
@@ -374,7 +384,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
       })),
     )
 
-    const page = await createCodeWorkItemProjectionQuery(db).page({})
+    const page = await (await createCodeWorkItemProjectionQuery(db)).page({})
     const rounds = page.items[0]?.rounds ?? []
 
     expect(rounds).toHaveLength(ROUNDS_PER_ITEM)
@@ -413,7 +423,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
       },
     ])
 
-    const page = await createCodeWorkItemProjectionQuery(db).page({})
+    const page = await (await createCodeWorkItemProjectionQuery(db)).page({})
     const stages = page.items[0]?.rounds[0]?.stages ?? []
     // Ascending by sequence — the order the engine ran them, which is the
     // opposite of how rounds themselves are listed.
@@ -474,7 +484,7 @@ describeEachProvider('RFC-304 T55 — a round’s AI attempts', (harness) => {
     await attempt({ id: 'mm-second', rerunSeq: 1, startedAt: NOW + 10, status: 'failed' })
     await attempt({ id: 'aa-third', attemptSeq: 1, startedAt: NOW + 20, status: 'validated' })
 
-    const rows = await createCodeRoundAttemptsQuery(db).forRound('round-1')
+    const rows = await (await createCodeRoundAttemptsQuery(db)).forRound('round-1')
     expect(rows.map((r) => r.attemptId)).toEqual(['zz-first', 'mm-second', 'aa-third'])
   })
 
@@ -488,7 +498,7 @@ describeEachProvider('RFC-304 T55 — a round’s AI attempts', (harness) => {
       validationOutcome: 'the envelope named a port the stage does not declare',
     })
 
-    const rows = await createCodeRoundAttemptsQuery(db).forRound('round-1')
+    const rows = await (await createCodeRoundAttemptsQuery(db)).forRound('round-1')
     expect(rows[0]?.validationOutcome).toBe('the envelope named a port the stage does not declare')
   })
 
@@ -500,7 +510,7 @@ describeEachProvider('RFC-304 T55 — a round’s AI attempts', (harness) => {
     await attempt({ id: 'zz', rerunSeq: 0, attemptSeq: 2 })
     await attempt({ id: 'aa', rerunSeq: 1, attemptSeq: 0, startedAt: NOW + 5 })
 
-    const rows = await createCodeRoundAttemptsQuery(db).forRound('round-1')
+    const rows = await (await createCodeRoundAttemptsQuery(db)).forRound('round-1')
     expect(rows.map((r) => [r.rerunSeq, r.attemptSeq])).toEqual([
       [0, 2],
       [1, 0],
@@ -514,7 +524,7 @@ describeEachProvider('RFC-304 T55 — a round’s AI attempts', (harness) => {
     await attempt({ id: 'zz', shardKey: 'src/a.ts' })
     await attempt({ id: 'aa', shardKey: 'src/b.ts', startedAt: NOW + 1 })
 
-    const rows = await createCodeRoundAttemptsQuery(db).forRound('round-1')
+    const rows = await (await createCodeRoundAttemptsQuery(db)).forRound('round-1')
     expect(rows.map((r) => r.shardKey)).toEqual(['src/a.ts', 'src/b.ts'])
   })
 
@@ -522,13 +532,13 @@ describeEachProvider('RFC-304 T55 — a round’s AI attempts', (harness) => {
     await attempt({ id: 'a1' })
     await attempt({ id: 'b1', roundId: 'round-2' })
 
-    const rows = await createCodeRoundAttemptsQuery(db).forRound('round-1')
+    const rows = await (await createCodeRoundAttemptsQuery(db)).forRound('round-1')
     expect(rows.map((r) => r.attemptId)).toEqual(['a1'])
   })
 
   test('a round with no AI stages returns empty rather than failing', async () => {
     // Every capability has program-only rounds. An empty list is the answer;
     // an error here would make the third level look broken on the common case.
-    expect(await createCodeRoundAttemptsQuery(db).forRound('round-nothing')).toEqual([])
+    expect(await (await createCodeRoundAttemptsQuery(db)).forRound('round-nothing')).toEqual([])
   })
 })

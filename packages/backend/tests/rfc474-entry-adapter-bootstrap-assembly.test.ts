@@ -365,11 +365,12 @@ describe('RFC-474 —— 命令依赖由 bootstrap 组装、main.ts 注入', () 
 })
 
 describe('RFC-474 —— 首启示例：参与方类型经 public、完成标记由 bootstrap 启动步骤组装', () => {
-  test('code-capability public/types 恰好转出两个类型；RFC-453 退役的 public/participants.ts 不复活', () => {
+  test('code-capability public/types 精确转出示例参与方与 RFC-602 重建回执；RFC-453 退役入口不复活', () => {
     const path = 'modules/code-capability/public/types.ts'
     expect(reExportedNames(path, read(path))).toEqual([
       'CodeCapabilityDemoSeedParticipant',
       'CodeCapabilityDemoSeedReceipt',
+      'CodeHistoryIndexBuildReceipt',
     ])
     // RFC-453 moved the code-review artifact participant that file held to workspace-insight and locks the path absent.
     expect(existsSync(join(SRC, 'modules/code-capability/public/participants.ts'))).toBe(false)

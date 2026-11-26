@@ -1,4 +1,4 @@
-import type { CodeHistoryReader } from '@/modules/code-capability/application/ports/historyReader'
+import type { CodeHistoryQueryReader } from '@/modules/code-capability/application/ports/historyQueryIndex'
 import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
 // RFC-349 — the code-history HTTP surface consumes one provider-neutral
 // aggregate. A PostgreSQL composition must reach all four history endpoints
@@ -84,97 +84,112 @@ function postgresqlHistoryFixture() {
     providerPool: () => pool,
     async close() {},
   }
-  const readTables: string[] = []
+  const readOperations: string[] = []
   const now = Date.now()
-  const retained: Record<string, object[]> = {
-    code_work_items: [
-      {
-        id: 'item',
-        stable_project_id: 'project-1',
-        capability: 'mr-review',
-        anchor_kind: 'mr',
-        anchor_id: '42',
-        status: 'idle',
-        epoch: 1,
-        created_at: now,
-      },
-    ],
-    code_work_rounds: [
-      {
-        id: 'round-1',
-        work_item_id: 'item',
-        round_seq: 1,
-        outcome: 'published',
-        stage_contract_ver: 1,
-        baseline_sha: 'base',
-        started_at: now,
-        ended_at: now,
-      },
-    ],
-    code_round_stages: [
-      {
-        round_id: 'round-1',
-        stage_name: 'review',
-        stage_seq: 1,
-        stage_kind: 'ai',
-        status: 'done',
-        error: null,
-        started_at: now,
-        ended_at: now,
-      },
-    ],
-    code_ai_attempts: [
-      {
-        id: 'attempt',
-        round_id: 'round-1',
-        stage_name: 'review',
-        shard_key: null,
-        rerun_seq: 0,
-        attempt_seq: 1,
-        status: 'validated',
-        validation_outcome: 'accepted',
-        session_ref: 'session',
-        node_run_id: 'run',
-        started_at: now,
-        ended_at: now,
-      },
-    ],
-    code_trigger_deliveries: [
-      {
-        id: 'delivery',
-        stable_project_id: 'project-1',
-        correlation_id: 'correlation',
-        capability: 'mr-review',
-        step: 'routed',
-        outcome: 'ok',
-        reason: null,
-        queued_at: null,
-        queue_position: null,
-        waiting_on: null,
-        round_id: 'round-1',
-        is_probe: false,
-        created_at: now,
-        updated_at: now,
-      },
-    ],
-    code_findings: [
-      {
-        id: 'finding',
-        capability: 'mr-review',
-        external_id: 'published',
-        created_at: now,
-        resolved_at: now,
-        code_changed_at: now,
-      },
-    ],
+  const unexpected = async (): Promise<never> => {
+    throw new Error('unexpected history operation')
   }
-  const reader: CodeHistoryReader = {
-    async rows(table) {
-      readTables.push(table)
-      return (retained[table] ?? []) as never
+  // This is the query port consumed by the PostgreSQL composition. The durable
+  // archive-to-SQL projection has separate dual-provider RFC-602 behavior tests.
+  const reader: CodeHistoryQueryReader = {
+    rows: unexpected,
+    find: unexpected,
+    workItems: {
+      async readPage() {
+        readOperations.push('workItems.readPage')
+        return {
+          items: [
+            {
+              workItemId: 'item',
+              capability: 'mr-review',
+              anchorKind: 'mr',
+              anchorId: '42',
+              status: 'idle',
+              epoch: 1,
+              roundsHidden: 0,
+              rounds: [
+                {
+                  roundId: 'round-1',
+                  roundSeq: 1,
+                  status: 'published',
+                  outcome: 'published',
+                  stageContractVer: 1,
+                  baselineSha: 'base',
+                  startedAt: now,
+                  endedAt: now,
+                  stages: [
+                    {
+                      stageName: 'review',
+                      stageSeq: 1,
+                      kind: 'ai',
+                      status: 'done',
+                      error: null,
+                      startedAt: now,
+                      endedAt: now,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          nextCursor: null,
+        }
+      },
     },
-    async find() {
-      throw new Error('unexpected history index lookup')
+    attempts: {
+      async load(roundId, limit) {
+        expect({ roundId, limit }).toEqual({ roundId: 'round-1', limit: 200 })
+        readOperations.push('attempts.load')
+        return [
+          {
+            attemptId: 'attempt',
+            stageName: 'review',
+            shardKey: '',
+            rerunSeq: 0,
+            attemptSeq: 1,
+            status: 'validated',
+            validationOutcome: 'accepted',
+            sessionRef: 'session',
+            nodeRunId: 'run',
+            startedAt: now,
+            endedAt: now,
+          },
+        ]
+      },
+    },
+    deliveries: {
+      async recent(input) {
+        expect(input.stableProjectId).toBe('project-1')
+        readOperations.push('deliveries.recent')
+        return [
+          {
+            id: 'delivery',
+            correlationId: 'correlation',
+            capability: 'mr-review',
+            step: 'routed',
+            outcome: 'ok',
+            reason: null,
+            queuedAt: null,
+            queuePosition: null,
+            waitingOn: null,
+            roundId: 'round-1',
+            isProbe: false,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ]
+      },
+      byCorrelation: unexpected,
+      failures: unexpected,
+    },
+    metrics: {
+      async loadSince() {
+        readOperations.push('metrics.loadSince')
+        return {
+          findings: [{ capability: 'mr-review', resolvedAt: now, codeChangedAt: now, n: 1 }],
+          rounds: [{ capability: 'mr-review', outcome: 'published', endedAt: now, n: 1 }],
+        }
+      },
     },
   }
   return {
@@ -186,7 +201,7 @@ function postgresqlHistoryFixture() {
       reader,
     ),
     executions,
-    readTables,
+    readOperations,
   }
 }
 
@@ -248,25 +263,21 @@ describe('RFC-349 code-history composition', () => {
       ],
       nextCursor: null,
     })
-    expect(fixture.readTables.splice(0)).toEqual([
-      'code_work_items',
-      'code_work_rounds',
-      'code_round_stages',
-    ])
+    expect(fixture.readOperations.splice(0)).toEqual(['workItems.readPage'])
 
     const attempts = await app.request('/api/code/rounds/round-1/attempts')
     expect(attempts.status).toBe(200)
     expect(await attempts.json()).toMatchObject({
       attempts: [{ attemptId: 'attempt', nodeRunId: 'run', validationOutcome: 'accepted' }],
     })
-    expect(fixture.readTables.splice(0)).toEqual(['code_ai_attempts'])
+    expect(fixture.readOperations.splice(0)).toEqual(['attempts.load'])
 
     const deliveries = await app.request('/api/code/deliveries?projectId=project-1')
     expect(deliveries.status).toBe(200)
     expect(await deliveries.json()).toMatchObject({
       deliveries: [{ id: 'delivery', roundId: 'round-1', outcome: 'ok' }],
     })
-    expect(fixture.readTables.splice(0)).toEqual(['code_trigger_deliveries'])
+    expect(fixture.readOperations.splice(0)).toEqual(['deliveries.recent'])
 
     const metrics = await app.request('/api/code/metrics?windowMs=60000')
     expect(metrics.status).toBe(200)
@@ -275,11 +286,7 @@ describe('RFC-349 code-history composition', () => {
       adoption: [{ capability: 'mr-review', published: 1, adopted: 1 }],
       runs: [{ capability: 'mr-review', rounds: 1, published: 1 }],
     })
-    expect(fixture.readTables.splice(0)).toEqual([
-      'code_findings',
-      'code_work_items',
-      'code_work_rounds',
-    ])
+    expect(fixture.readOperations.splice(0)).toEqual(['metrics.loadSince'])
 
     expect(fixture.executions).toEqual([])
   })

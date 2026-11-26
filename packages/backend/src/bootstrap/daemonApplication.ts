@@ -4,7 +4,10 @@ import {
   readActiveEpochInstallation,
   createActiveHistoryRestrictionProvider,
 } from '@/modules/system-operations/composition/epochInstallation'
-import { createCodeHistoryPackageReader } from '@/modules/code-capability/composition/historyQueries'
+import {
+  createCodeHistoryIndexCommands,
+  createCodeHistoryQueryReader,
+} from '@/modules/code-capability/composition/historyQueries'
 import {
   composeSourceControlTaskPorts,
   createTaskTriggerQueries,
@@ -309,9 +312,13 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   })
   const skillContent = input.skillContent(session)
   const reviewArtifacts = input.reviewArtifacts({ ...session, content })
-  const codeHistory = createCodeHistoryPackageReader({
+  await createCodeHistoryIndexCommands({
     db: input.db,
     content,
+    installation: installation.history,
+  }).initialize()
+  const codeHistory = createCodeHistoryQueryReader({
+    db: input.db,
     installation: installation.history,
   })
   // RFC-431: the deployment states every selection below; nothing here substitutes a default.

@@ -235,7 +235,7 @@ describeEachProvider('RFC-359 W8-T29 —— 两个用户同时建同名仓库组
       // 裸 23505 冒上去就是 500。
       expect(settledShapes(settled, (value) => value).sort()).toEqual(['created', 'name-conflict'])
       // 库面同样只多一个组。
-      const snapshot = await store.readRepositoryGroupSnapshot()
+      const snapshot = await store.readRepositoryGroupGraph({ scope: { kind: 'all' } })
       expect(snapshot.groups.filter((group) => group.name === name)).toHaveLength(1)
     }
   }, 60_000)

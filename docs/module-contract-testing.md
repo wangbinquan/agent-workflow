@@ -3,8 +3,8 @@
 本轮基于 2026-11-25 的主树，对 RFC-294 划分的 18 个正式后端模块、仍保留的
 `code-capability` 兼容模块，以及前端的数据消费与公共集合组件进行功能用例审视。
 新增文件采用 `module-contract-*` 命名，沿用现有 Bun / Vitest 自动发现入口。
-不新增模块注册表、不复制公开 API 清单。唯一生产修正是旧工作项历史分页的续页条件：按已有的
-`createdAt + id` 游标规格处理相同时间戳，避免漏行；没有更改游标编码、DTO、页大小或历史归档格式。
+不新增模块注册表、不复制公开 API 清单。首次补测的生产修正是旧工作项历史分页的续页条件：按已有的
+`createdAt + id` 游标规格处理相同时间戳，避免漏行；没有更改游标编码、DTO、页大小或历史归档格式。后续 RFC-602 的四项查询优化与新增证据单列如下。
 
 ## 判定口径
 
@@ -35,13 +35,13 @@
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | task-execution：启动、恢复/重试、取消、生命周期参与者、历史/输出、修复 | `task-start-pre-worktree.test.ts` 验证预建工作区与启动输入；`resume-task-idempotent.test.ts` 验证恢复状态、重复恢复及真实 stash；`review-cancel-concurrency.test.ts` 验证父子取消；`rfc359-w16-task-lifecycle-write-sequence.test.ts` 验证 CAS、事件与同行写入共同回滚；`api-tasks-repair.test.ts` 验证修复 HTTP / 持久化 / 事件；`process-node-concurrency.test.ts` 与 `scheduler-boundary-fanout-concurrency.test.ts` 验证准入上限 | [历史与 frame 合同](../packages/backend/tests/module-contract-task-execution.test.ts)：组合筛选、seq 边界、顺序不变；128 层环每祖先只读一次；缺祖先停止，读取失败原样传播                                           |
 | collaboration：review、clarify、feedback、已提交事件                   | `clarify-review-combination-scenarios.test.ts` 验证批准、迭代、并行分支；`rfc326-review-decision-transaction.test.ts` 验证多处写入回滚与提交后失败；`rfc395-clarify-target-concurrency.test.ts` 验证草稿、部分/最终封存及变更版本；`rfc372-async-followup.test.ts` 验证生成、取消、重复请求与 HTTP 202/200；`task-feedback-service.test.ts` / `routes-task-feedback.test.ts` 验证留言与蒸馏关联                                      | [feedback 合同](../packages/backend/tests/module-contract-collaboration.test.ts)：入队抛错仍保留已写留言且不隐式重试；25 条数据下 limit 3 只查询并返回 3 条，默认 20、零上限与未知任务                              |
-| source-control：仓库目录/镜像、组、工作区命令、版本内容、维护          | `rfc248-repo-group-service.test.ts` 验证组嵌套、冲突、OCC 与级联删除；`rfc359-w20-repository-search-conformance.test.ts` 验证实际数据库搜索；`rfc370-v3-volume-repository-mirrors.test.ts` 验证真实 Git 冷/热复用；`rfc370-m1-workspace-commands.test.ts` 验证重放、取消和失败；`rfc370-v16-hosted-revision-content.test.ts` 验证批量内容与旧版本错误                                                                                | [组装配合同](../packages/backend/tests/module-contract-source-control.test.ts)：嵌套组与待导入 URL 的预览不产生导入/写入；图读取恰好 5 次 SELECT；过期替换保留胜出版本的元数据和布局                                |
+| source-control：仓库目录/镜像、组、工作区命令、版本内容、维护          | `rfc248-repo-group-service.test.ts` 验证组嵌套、冲突、OCC 与级联删除；`rfc359-w20-repository-search-conformance.test.ts` 验证实际数据库搜索；`rfc370-v3-volume-repository-mirrors.test.ts` 验证真实 Git 冷/热复用；`rfc370-m1-workspace-commands.test.ts` 验证重放、取消和失败；`rfc370-v16-hosted-revision-content.test.ts` 验证批量内容与旧版本错误                                                                                | [组装配合同](../packages/backend/tests/module-contract-source-control.test.ts)：嵌套组与待导入 URL 的预览不产生导入/写入；RFC-602 后预览恰好 3 次可达图 SELECT；过期替换保留胜出版本的元数据和布局                  |
 | runtime-management：profile、默认选择、状态/模型、探测、执行快照       | `runtime-registry.test.ts` 验证 CRUD、禁用/启用、数值范围与重启不复活禁用项；`rfc360-runtime-management-application.test.ts` 验证异步配置、失败回滚、探测结果与 disabled 过滤；`rfc370-task-runtime-bindings.test.ts` 验证冻结的运行时选择跨恢复保留                                                                                                                                                                                 | [状态查询合同](../packages/backend/tests/module-contract-runtime-management.test.ts)：普通列表不启动探测；一份配置、每启用 profile 一次并行探测、明确 timeout；倒序完成仍按登记顺序返回                             |
 | run-observability：调用生命周期、计价、聚合、分页、HTTP 参数           | `rfc371-v2-observation-store.test.ts` 验证 accept/usage/finish/repair 与定价版本；`rfc371-v2-observation-queries.test.ts` 验证批次 500 与结果上限；`rfc371-v2-observation-http.test.ts` 验证时间窗、游标与缺失对象；`rfc371-v2-observation-domain.test.ts` 验证整数计价和连续时间桶                                                                                                                                                  | [观测合同](../packages/backend/tests/module-contract-run-observability.test.ts)：左闭右开时间窗、筛选与汇总口径；同时提交的结束/迟到更新不覆盖首个终态；63 条调用的页面最多 3 次 SELECT、50 条返回、51 行 lookahead |
 | workspace-insight：结构 diff、文件、symbols、索引、调用图、叙述        | `rfc370-v16-code-review-services.test.ts` 验证批读与终态缓存；`task-file-content.test.ts` 验证真实文件/Git、重命名与多仓；`rfc258-file-symbols.test.ts` / `rfc258-code-intel.test.ts` 验证 parser、单次索引与 LRU；`call-graph-worktree.test.ts` 验证磁盘跨文件调用；`change-narrative.test.ts` 验证单次生成、失败与删除中的结果处理                                                                                                 | [内容装配合同](../packages/backend/tests/module-contract-workspace-insight.test.ts)：工作区移动后重新定位；每请求一次读取、传递字节预算和仓库自己的 base；missing / binary / oversized 保持约定结果与错误码         |
 
-这里的性能边界有两项需要保留：仓库组的 5 次 SELECT 只限制数据库往返，整组图快照仍可能很大；
-观测页的返回行数预算也不证明 SQL 执行计划或扫描行数的复杂度。两者不能据此宣称大型数据集已经过容量验证。
+首次补测时，仓库组的 5 次 SELECT 只限制数据库往返，整组图快照仍可能很大；该读取范围由后续 RFC-602 收窄，见下方。
+观测页的返回行数预算仍不证明 SQL 执行计划或扫描行数的复杂度，不能据此宣称大型数据集已经过容量验证。
 
 Task 启动和恢复还核对了 `rfc294-task-execution-compat-oracles.test.ts` 的实际 `runTask`、DB、Git 与受控子进程断言：
 一次派发、resume/retry 同拍仅一次胜出、daemon shutdown → interrupted → 新 generation 恢复 → done。
@@ -59,7 +59,7 @@ Task 启动和恢复还核对了 `rfc294-task-execution-compat-oracles.test.ts` 
 | execution-contract：注册/guide、输入输出 envelope、Agent/Program 校验            | `execution-contract-platform.test.ts` 验证各 guide、矛盾注册、输入投影、缺项/额外项和跨 round；`rfc361-execution-contract-providers.test.ts` 验证 pairing、validator receipt、机制失败、参数、清理、nonzero exit 与超时                                                                                                                                                                                          | [执行规格合同](../packages/backend/tests/module-contract-execution-contract.test.ts)：150 个候选按精确修订去重至 3 次 inspect，各失败回执独立；空批零 IO；缺/矛盾注册、依赖错误和下一请求恢复；失败程序回执仅执行一次并保留原 check  |
 | code-capability：旧 matrix/metrics/template upstream、只读历史投影               | `rfc359-w8-code-capability-read-conformance.test.ts` 验证 matrix 批读及 metrics 四桶/窗口；`rfc304-template-upstream.test.ts` 验证 current/快进/冲突/删除/digest；`rfc349-code-template-upstream-postgresql-adapter.test.ts` 验证真实 PG 同事务决定与写入                                                                                                                                                        | [历史读取合同](../packages/backend/tests/module-contract-code-capability.test.ts)：105 项按 100+5 翻页、25 轮仅返 20 并报告隐藏数、205 attempts 限 200、stage 顺序、项目/关联链/失败诊断；非法 limit 预先拒绝，reader 异常不伪装空页 |
 
-`code-capability` 的 `history.rows(table)` 仍可能加载全表；每表每请求调用一次和输出上限不等于底层扫描有界。
+首次补测时，`code-capability` 的 `history.rows(table)` 仍可能加载全表；后续 RFC-602 将正常查询迁至持久派生索引，见下方。
 自动化 retention 的单次命令/计数断言也不证明其内部已经按数据库行数分片；事件消费的批量返回上限不证明索引执行计划。
 这些既有实现限制与新测试的实际证明范围分开记录。
 
@@ -79,7 +79,7 @@ Task 启动和恢复还核对了 `rfc294-task-execution-compat-oracles.test.ts` 
 | identity-access：本轮审视的用户资料与目录功能                        | `rfc349-identity-access-promise-contract.test.ts` 验证 Promise 与资料写入；`users-service.test.ts` 验证用户名冲突和目录；`auth-routes.test.ts` 验证用户编辑自身 profile/Git identity；`rfc359-w7-catalog-composition-roots.test.ts` 验证双库装配                                                                                                                                                                                                                                    | [资料合同](../packages/backend/tests/module-contract-identity-access.test.ts)：Unicode 名称和 Git identity 投影一致；同值保存零写入；40 用户的重复/缺失 ID 查找一次批读、按首次出现排序；空查找零查询；email 冲突保留原资料                           |
 | system-operations：配置、备份/恢复、资产、迁移、daemon 状态          | `rfc370-application-configuration-binding.test.ts` 验证持久化 receiver、listener ACK 与错误；`rfc359-w8-system-operations-recovery-conformance.test.ts` 验证恢复暂存/取消/失败重试；`rfc359-w9-system-operations-application-assets-conformance.test.ts` 验证规范导出与字节上限；`rfc370-backup-scheduler-drain.test.ts` 验证停止等待；`rfc349-migration-long-transaction-faults.test.ts` 验证迁移中断、数量不符和超时；`rfc370-daemon-runtime-query-bindings.test.ts` 验证状态读取 | [配置装配合同](../packages/backend/tests/module-contract-system-operations.test.ts)：listener 失败隔离；相同描述 key 的实例不串通知；load/preview/apply 各一次；已提交后 reconcile 失败保留配置、停止后续热应用；retention 相等可保存，大于在写前拒绝 |
 
-资源目录的 `getVisibleSummary` 仍可能逐页寻找目标，本轮验证它返回正确摘要，没有把它标成一次直接查询的性能保证。
+首次补测时，资源目录的 `getVisibleSummary` 仍逐页寻找目标；RFC-602 已改为一次精确查询，并补命中/缺失时最多一行的真实 SQL 预算。
 资源包、融合、蒸馏、备份与迁移已有独立完整流程套件；新增的摘要/参与者/配置测试不能替代这些流程的执行结果。
 
 ### task-catalog
@@ -125,7 +125,7 @@ near-end 与短列表续页；`empty-state.test.tsx`、`loading-state.test.tsx` 
 现有 `task-operations-sync.test.tsx` 和 `rfc152-use-ws-invalidation.test.tsx` 已覆盖 WS 合并、重连、缓存保留和 socket 释放。
 业务页的实际消费还由 `code-missions-page.test.tsx`、`code-mission-detail-ux.test.tsx`、前端
 `rfc261-webhook-delivery-pagination.test.tsx`、`execution-contract-guide-panel.test.tsx` 等承担。
-子任务读取目前是固定 500 条窗口，本轮锁定其共享请求语义，不能据此保证超过该窗口时完整消费任意规模的 fan-out。
+首次补测锁定的是固定 500 条窗口下的共享请求语义；后续 RFC-602 改为完整分页链，见下方。
 
 ### 前端事件中心
 
@@ -145,6 +145,24 @@ near-end 与短列表续页；`empty-state.test.tsx`、`loading-state.test.tsx` 
 `rfc379-passive-composition.test.ts` 的显式初始化与单次加载、`rfc370-daemon-host-lifecycle.test.ts` 的真实 listener
 及 shutdown ACK 顺序、`rfc370-backup-scheduler-drain.test.ts` 与 `rfc370-maintenance-worker-real-effects.test.ts` 的排空和停止准入。
 这些是实际生命周期测试，不只是目录或源码形状锁；本轮没有据此增加第二套装配框架。
+
+## RFC-602：四项查询优化
+
+本次优化保留已有业务输出口径，分别约束读取范围与必要的完整输出成本。全部实现、升级资产和用例完成后集中执行，修复后只复验受影响范围。后端相关 55 文件合并有效结果为 706 条通过（RFC-294 仅计选定的两项合同检查），前端 5 文件 96 条通过；并发 RFC-603 用例不计入本任务结果。完整类型检查、任务范围静态质量、schema-history、依赖边界及独立功能复核均通过。详细执行和修复记录见 [RFC-602 实施计划](../design/RFC-602-bounded-module-queries/plan.md)。
+
+| 范围     | 当前合同与新防护                                                                                                                                                                            |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 历史查询 | 初始化时一次构建持久派生索引；正常请求只读元数据和所需投影。覆盖冷 reader、分页/筛选/排序、metrics 精确时间界限、错误诊断、失败重建和升级保值。原历史包及旧 ID 索引保持原样。               |
+| 资源摘要 | 六种资源均按 kind/ID 精确点读，保留各自 revision 和目录条件；大量背景行下，命中或缺失均一次 SELECT、最多一行；坏目标与无关坏行分别测试。                                                    |
+| 仓库组   | layout/launch/get/preview 读取相关闭包；update 包括祖先的兄弟分支；delete 只取相关引用；保留全局版本集合与 OCC。验证结果、零预览副作用、循环/深度/展开边界和实际读取行数。                  |
+| 子任务   | 新窄接口默认 100、最大 200，使用既有 parent/startedAt/id 索引；前端消费到末页且共用完整链。覆盖 0/1/100/500/501/1201 条、相同时间戳、取消、跨父切换、失败恢复、重复游标和刷新期的导航判定。 |
+
+主要新增用例位于后端 `rfc602-*.test.ts` 和前端 `rfc602-child-pagination.test.tsx`；资源和真实消费者扩展已有 `module-contract-*`、`task-detail-child-task-link` 与 `call-node-click-nav` 用例。
+
+性能断言约束实际 SQL 次数、返回行数、绑定参数和索引计划，前端约束 HTTP 页数与发布时机，不把一次本地耗时当作 SLA。
+完整仓库组列表、全局 OCC 轻索引、完整 delivery correlation 和全部子任务的总成本仍随必要输出增长。
+历史原包每次 GET 不再全量验字节；只改原包字节而不改声明元数据的外部损坏，由显式 `db rebuild-code-history-index` 检出。
+子任务分页是实时读取，跨页不承诺数据库快照；后续变化通过既有 WS 和轮询刷新。
 
 ## 验证方式与边界
 

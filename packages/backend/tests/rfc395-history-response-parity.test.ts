@@ -17,6 +17,7 @@ import {
   seedEmptyCodeHistory,
   seedCodeHistoryRows,
   historyFixtureReader,
+  preparedHistoryFixtureReader,
   historyFixtureSource,
   historyFixtureContent,
   createEpoch1HistoryQueries,
@@ -97,14 +98,18 @@ function historyApp(history: CodeHistoryQueries) {
 }
 
 describeEachProvider('RFC-395 history response parity', (h) => {
-  const queries = () =>
-    composeCodeHistoryQueries(h.db, createAgentExecutionQueries(h.db), historyFixtureReader(h.db))
+  const queries = async () =>
+    composeCodeHistoryQueries(
+      h.db,
+      createAgentExecutionQueries(h.db),
+      await preparedHistoryFixtureReader(h.db),
+    )
   beforeEach(async () => {
     resetRouteMetaRegistry()
     await seedEmptyCodeHistory(h.db)
   }, 5_000)
   afterEach(() => resetRouteMetaRegistry(), 5_000)
-  const app = () => historyApp(queries())
+  const app = async () => historyApp(await queries())
   test('work-item DTO preserves every field, null and stage/round order, including hidden rounds', async () => {
     await seedCodeHistoryRows(h.db, 'code_work_items', item('item'))
     await seedCodeHistoryRows(h.db, 'code_work_rounds', [
@@ -151,9 +156,9 @@ describeEachProvider('RFC-395 history response parity', (h) => {
         endedAt: null,
       },
     ])
-    const response = await app().request(
-      '/api/code/work-items?endpointId=ep&projectId=project&capability=mr-review&rounds=1',
-    )
+    const response = await (
+      await app()
+    ).request('/api/code/work-items?endpointId=ep&projectId=project&capability=mr-review&rounds=1')
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({
       items: [
@@ -206,7 +211,10 @@ describeEachProvider('RFC-395 history response parity', (h) => {
       '/api/code/work-items?projectId=other',
       '/api/code/work-items?capability=other',
     ])
-      expect(await (await app().request(path)).json()).toEqual({ items: [], nextCursor: null })
+      expect(await (await (await app()).request(path)).json()).toEqual({
+        items: [],
+        nextCursor: null,
+      })
   })
   test('archive cursors include timestamp ties and stale cursors still restart from the top', async () => {
     await seedCodeHistoryRows(h.db, 'code_work_items', [
@@ -214,17 +222,19 @@ describeEachProvider('RFC-395 history response parity', (h) => {
       item('z'),
       item('older', NOW - 1),
     ])
-    const first = await queries().workItems.page({ limit: 1 })
+    const first = await (await queries()).workItems.page({ limit: 1 })
     expect(first.items.map((row) => row.workItemId)).toEqual(['z'])
     expect(first.nextCursor).toBe(`${NOW}:z`)
-    const second = await queries().workItems.page({ limit: 1, cursor: first.nextCursor })
+    const second = await (await queries()).workItems.page({ limit: 1, cursor: first.nextCursor })
     expect(second.items.map((row) => row.workItemId)).toEqual(['a'])
     expect(second.nextCursor).toBe(`${NOW}:a`)
-    const third = await queries().workItems.page({ limit: 1, cursor: second.nextCursor })
+    const third = await (await queries()).workItems.page({ limit: 1, cursor: second.nextCursor })
     expect(third.items.map((row) => row.workItemId)).toEqual(['older'])
     expect(third.nextCursor).toBeNull()
     expect(
-      (await queries().workItems.page({ cursor: 'invalid' })).items.map((row) => row.workItemId),
+      (await (await queries()).workItems.page({ cursor: 'invalid' })).items.map(
+        (row) => row.workItemId,
+      ),
     ).toEqual(['z', 'a', 'older'])
   })
   test('page and round limits retain the 1..100 and 1..20 clamps', async () => {
@@ -243,12 +253,12 @@ describeEachProvider('RFC-395 history response parity', (h) => {
         startedAt: NOW + i,
       })),
     )
-    const page = await queries().workItems.page({ limit: 999, roundLimit: 999 })
+    const page = await (await queries()).workItems.page({ limit: 999, roundLimit: 999 })
     expect(page.items).toHaveLength(100)
     expect(page.items[0]?.rounds).toHaveLength(20)
     expect(page.items[0]?.roundsHidden).toBe(5)
     expect(
-      (await queries().workItems.page({ limit: 0, roundLimit: 0 })).items[0]?.rounds,
+      (await (await queries()).workItems.page({ limit: 0, roundLimit: 0 })).items[0]?.rounds,
     ).toHaveLength(1)
   })
   test('fractional SQL limits still fail while delivery default, zero and negative limits retain their behavior', async () => {
@@ -266,22 +276,24 @@ describeEachProvider('RFC-395 history response parity', (h) => {
         updatedAt: NOW + i,
       })),
     )
-    expect(await queries().deliveries.forProject({ stableProjectId: 'project' })).toHaveLength(50)
-    expect(await queries().deliveries.forProject({ stableProjectId: 'project', limit: 0 })).toEqual(
-      [],
-    )
-    expect(await queries().deliveries.failures({ limit: -1 })).toHaveLength(51)
-    expect(await queries().deliveries.failures({ limit: Number.NaN })).toHaveLength(51)
+    expect(
+      await (await queries()).deliveries.forProject({ stableProjectId: 'project' }),
+    ).toHaveLength(50)
+    expect(
+      await (await queries()).deliveries.forProject({ stableProjectId: 'project', limit: 0 }),
+    ).toEqual([])
+    expect(await (await queries()).deliveries.failures({ limit: -1 })).toHaveLength(51)
+    expect(await (await queries()).deliveries.failures({ limit: Number.NaN })).toHaveLength(51)
     for (const path of [
       '/api/code/work-items?limit=1.5',
       '/api/code/work-items?rounds=1.5',
       '/api/code/deliveries?projectId=project&limit=1.5',
     ]) {
-      const response = await app().request(path)
+      const response = await (await app()).request(path)
       expect(response.status).toBe(500)
       expect(await response.json()).toMatchObject({ code: 'internal-error' })
     }
-    const invalid = await app().request('/api/code/deliveries?projectId=project&limit=NaN')
+    const invalid = await (await app()).request('/api/code/deliveries?projectId=project&limit=NaN')
     expect(invalid.status).toBe(422)
     expect(await invalid.json()).toMatchObject({ code: 'code-limit-invalid' })
   })
@@ -313,7 +325,7 @@ describeEachProvider('RFC-395 history response parity', (h) => {
         endedAt: NOW + 1,
       },
     ])
-    expect(await (await app().request('/api/code/rounds/round/attempts')).json()).toEqual({
+    expect(await (await (await app()).request('/api/code/rounds/round/attempts')).json()).toEqual({
       attempts: [
         {
           attemptId: 'z',
@@ -343,9 +355,11 @@ describeEachProvider('RFC-395 history response parity', (h) => {
         },
       ],
     })
-    expect(await (await app().request('/api/code/rounds/missing/attempts')).json()).toEqual({
-      attempts: [],
-    })
+    expect(await (await (await app()).request('/api/code/rounds/missing/attempts')).json()).toEqual(
+      {
+        attempts: [],
+      },
+    )
     await seedCodeHistoryRows(
       h.db,
       'code_ai_attempts',
@@ -356,7 +370,7 @@ describeEachProvider('RFC-395 history response parity', (h) => {
         startedAt: NOW + i,
       })),
     )
-    const bounded = await queries().attempts.forRound('bounded')
+    const bounded = await (await queries()).attempts.forRound('bounded')
     expect(bounded).toHaveLength(200)
     expect(bounded[0]?.attemptId).toBe('bounded-201')
     expect(bounded.at(-1)?.attemptId).toBe('bounded-2')
@@ -400,9 +414,9 @@ describeEachProvider('RFC-395 history response parity', (h) => {
       },
     ])
     const body = (await (
-      await app().request(
-        '/api/code/deliveries?correlationId=corr&failedOnly=true&projectId=missing&limit=1',
-      )
+      await (
+        await app()
+      ).request('/api/code/deliveries?correlationId=corr&failedOnly=true&projectId=missing&limit=1')
     ).json()) as { deliveries: unknown[] }
     expect(body.deliveries).toHaveLength(2)
     expect(body.deliveries[1]).toEqual({
@@ -421,16 +435,80 @@ describeEachProvider('RFC-395 history response parity', (h) => {
       updatedAt: NOW + 1,
     })
     expect(
-      await (await app().request('/api/code/deliveries?failedOnly=true&projectId=project')).json(),
+      await (
+        await (await app()).request('/api/code/deliveries?failedOnly=true&projectId=project')
+      ).json(),
     ).toEqual({ deliveries: [] })
     expect(
-      (await queries().deliveries.forProject({ stableProjectId: 'project', limit: 1 })).map(
+      (await (await queries()).deliveries.forProject({ stableProjectId: 'project', limit: 1 })).map(
         (row) => row.id,
       ),
     ).toEqual(['dropped'])
-    const missing = await app().request('/api/code/deliveries')
+    const missing = await (await app()).request('/api/code/deliveries')
     expect(missing.status).toBe(422)
     expect(await missing.json()).toMatchObject({ code: 'code-delivery-filter-required' })
+  })
+  test('HTTP metrics retain fractional and arbitrarily large finite positive windows', async () => {
+    await seedCodeHistoryRows(h.db, 'code_work_items', item('metric-item'))
+    const times = [NOW - 2, NOW - 1, NOW, NOW + 1]
+    await seedCodeHistoryRows(
+      h.db,
+      'code_findings',
+      times.map((createdAt, index) => ({
+        id: `fractional-finding-${index}`,
+        capability: 'mr-review',
+        externalId: `thread-${index}`,
+        createdAt,
+        resolvedAt: null,
+        codeChangedAt: null,
+      })),
+    )
+    await seedCodeHistoryRows(
+      h.db,
+      'code_work_rounds',
+      times.map((startedAt, index) => ({
+        id: `fractional-round-${index}`,
+        workItemId: 'metric-item',
+        roundSeq: index,
+        outcome: 'published',
+        startedAt,
+        endedAt: startedAt,
+      })),
+    )
+    const server = await app()
+    for (const { windowMs, count } of [
+      { windowMs: 0.5, count: 2 },
+      { windowMs: 1.5, count: 3 },
+      { windowMs: Number.MAX_VALUE, count: 4 },
+    ]) {
+      const response = await server.request(
+        `/api/code/metrics?windowMs=${encodeURIComponent(String(windowMs))}`,
+      )
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual({
+        windowMs,
+        adoption: [
+          {
+            capability: 'mr-review',
+            published: count,
+            adopted: 0,
+            quietFix: 0,
+            disagreed: 0,
+            outstanding: count,
+          },
+        ],
+        runs: [
+          {
+            capability: 'mr-review',
+            rounds: count,
+            published: count,
+            failed: 0,
+            awaiting: 0,
+            incomplete: 0,
+          },
+        ],
+      })
+    }
   })
   test('metrics keep the inclusive window, inner join, all outcome priorities and adoption buckets', async () => {
     await seedCodeHistoryRows(h.db, 'code_work_items', item('item'))
@@ -485,7 +563,7 @@ describeEachProvider('RFC-395 history response parity', (h) => {
         endedAt: NOW,
       },
     ])
-    expect(await (await app().request('/api/code/metrics?windowMs=100')).json()).toEqual({
+    expect(await (await (await app()).request('/api/code/metrics?windowMs=100')).json()).toEqual({
       windowMs: 100,
       adoption: [
         {
@@ -502,7 +580,7 @@ describeEachProvider('RFC-395 history response parity', (h) => {
       ],
     })
     for (const value of ['0', '-1', 'NaN', 'Infinity']) {
-      const response = await app().request(`/api/code/metrics?windowMs=${value}`)
+      const response = await (await app()).request(`/api/code/metrics?windowMs=${value}`)
       expect(response.status).toBe(422)
       expect(await response.json()).toMatchObject({ code: 'code-window-invalid' })
     }
@@ -520,9 +598,9 @@ describeEachProvider('RFC-395 history response parity', (h) => {
       { ...item('same-id'), capability: 'ci-fix' },
       other,
     )
-    expect((await queries().workItems.page({})).items.map((row) => row.capability)).toEqual([
-      'mr-review',
-    ])
+    expect((await (await queries()).workItems.page({})).items.map((row) => row.capability)).toEqual(
+      ['mr-review'],
+    )
     expect(
       (await historyFixtureReader(h.db, other).find('code_work_items', 'same-id'))?.row.capability,
     ).toBe('ci-fix')
@@ -804,8 +882,20 @@ describeEachProvider('RFC-395 converter to HTTP epoch-1 parity', (target) => {
             for (const row of fixtures[table])
               expect((await packages.find(table, String(row.id)))?.row.id).toBe(row.id)
           resetRouteMetaRegistry()
+          // This converter fixture intentionally exercises six mapped tables. The
+          // installation barrier also requires the seven explicit empty archives.
+          const convertedSource = {
+            sourceGeneration: preflight.sourceGenerationId,
+            contract: preflight.contract!,
+          }
+          await seedEmptyCodeHistory(target.db, convertedSource)
+          const queryReader = await preparedHistoryFixtureReader(target.db, convertedSource)
           const converted = historyApp(
-            composeCodeHistoryQueries(target.db, createAgentExecutionQueries(target.db), packages),
+            composeCodeHistoryQueries(
+              target.db,
+              createAgentExecutionQueries(target.db),
+              queryReader,
+            ),
           )
           for (const [i, path] of paths.entries()) {
             const response = await converted.request(path)

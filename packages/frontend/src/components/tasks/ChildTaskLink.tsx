@@ -3,7 +3,7 @@
 // A call-workflow / call-workgroup node_run carries `childTaskId` (the child
 // execution it launched). This renders the「子任务」jump link plus the child's
 // live status chip, resolved through the shared useTaskChildren query (one
-// fetch per parent task, regardless of how many call rows the table shows).
+// cursor chain per parent task, regardless of how many call rows the table shows).
 //
 // Degrade path (design §8): the children list is ACL-filtered server-side, so
 // a child the viewer cannot see — or one that was deleted — is simply absent
@@ -25,7 +25,14 @@ export function ChildTaskLink({ taskId, childTaskId }: { taskId: string; childTa
   // A refetch error may coexist with the last successful `data`. Treat that as
   // absence-of-proof (optimistic link), not proof that the child is unavailable;
   // this is the same RFC-245 D5 contract the task-canvas affordance follows.
-  if (!children.isError && children.data !== undefined && child === undefined) {
+  // During a multi-page refresh the old complete list may not contain a newly
+  // launched child. Only a completed refresh can establish its absence.
+  if (
+    !children.isError &&
+    !children.isFetching &&
+    children.data !== undefined &&
+    child === undefined
+  ) {
     return (
       <span className="muted" data-testid={`child-task-unavailable-${childTaskId}`}>
         {t('tasks.childTaskUnavailable')}

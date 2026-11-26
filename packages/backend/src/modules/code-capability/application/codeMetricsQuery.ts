@@ -62,13 +62,14 @@ export function projectCodeMetricsSummary(input: {
       disagreed: 0,
       outstanding: 0,
     }
-    bucket.published += 1
+    const count = row.n ?? 1
+    bucket.published += count
     const resolved = row.resolvedAt !== null
     const changed = row.codeChangedAt !== null
-    if (changed && resolved) bucket.adopted += 1
-    else if (changed) bucket.quietFix += 1
-    else if (resolved) bucket.disagreed += 1
-    else bucket.outstanding += 1
+    if (changed && resolved) bucket.adopted += count
+    else if (changed) bucket.quietFix += count
+    else if (resolved) bucket.disagreed += count
+    else bucket.outstanding += count
     adoptionBy.set(row.capability, bucket)
   }
 

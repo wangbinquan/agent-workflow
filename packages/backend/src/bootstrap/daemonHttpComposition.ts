@@ -1,7 +1,7 @@
 import type { TaskExecutionPermitRegistry } from '@/modules/task-execution/composition'
 import { composeTaskExecutionParticipantBindings } from './crossContextClosure'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
-import type { CodeHistoryReader as ImportedCodeHistoryReader } from '@/modules/code-capability/composition/historyQueries'
+import type { CodeHistoryQueryReader as ImportedCodeHistoryReader } from '@/modules/code-capability/composition/historyQueries'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 import { createTaskWorktreeLocator } from '@/modules/task-execution/composition'
 // RFC-392: passive HTTP composition from the application graph's session bundles.
@@ -268,6 +268,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
   const taskRoutes = Object.freeze({
     configuration,
     operations: taskExecutionProvider.routes.tasks,
+    children: taskExecutionProvider.routes.children,
     workspaceQueries: composeTaskWorkspaceQueries({
       load: taskExecutionProvider.routes.tasks.get,
       contentScope: (workspaceRef) =>

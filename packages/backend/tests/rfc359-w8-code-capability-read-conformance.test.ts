@@ -1,6 +1,7 @@
+import { createUnboundCodeHistoryReader } from './helpers/codeHistory'
 import {
   seedCodeHistoryRows,
-  historyFixtureReader,
+  preparedHistoryFixtureReader,
   seedEmptyCodeHistory,
 } from './helpers/legacyCapabilitySeed'
 import { createAgentExecutionQueries } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
@@ -39,7 +40,7 @@ async function renderMatrix(
   return composeCodeHistoryQueries(
     harness.db,
     createAgentExecutionQueries(harness.db),
-    historyFixtureReader(harness.db),
+    createUnboundCodeHistoryReader(),
   ).matrix.forRepo(repoId)
 }
 
@@ -47,7 +48,7 @@ async function renderMetrics(harness: ProviderHarness): Promise<CodeMetricsSumma
   return composeCodeHistoryQueries(
     harness.db,
     createAgentExecutionQueries(harness.db),
-    historyFixtureReader(harness.db),
+    await preparedHistoryFixtureReader(harness.db),
   ).metrics.summary({ now: NOW })
 }
 

@@ -4,7 +4,8 @@ import { historyProjectionParity } from './helpers/model/historyOracle'
 // troubleshooting questions as the SQLite adapter.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
+import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -23,7 +24,10 @@ function rows(values: readonly (readonly unknown[])[]): SqlRows {
   })
 }
 
-function fixture(responses: Array<readonly (readonly unknown[])[]>) {
+function fixture(
+  harness: ProviderDatabaseHarness,
+  responses: Array<readonly (readonly unknown[])[]>,
+) {
   const reads: string[] = []
   const sourceRows = [...responses]
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
@@ -63,15 +67,16 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
       'deliveries',
       sourceRows,
       createEpoch1HistoryQueries(db).deliveries,
+      harness,
       reads,
     ),
     reads,
   }
 }
 
-describe('RFC-349 PostgreSQL code delivery adapter', () => {
+describeEachProvider('RFC-349 durable code delivery adapter parity', (harness) => {
   test('answers project, correlation, and failure reads through the closed port', async () => {
-    const fake = fixture([
+    const fake = fixture(harness, [
       [
         [
           'delivery-project',
@@ -152,9 +157,9 @@ describe('RFC-349 PostgreSQL code delivery adapter', () => {
     ).resolves.toMatchObject([{ id: 'delivery-failed', outcome: 'failed' }])
 
     expect(fake.reads).toEqual([
-      'code_trigger_deliveries',
-      'code_trigger_deliveries',
-      'code_trigger_deliveries',
+      'code_history_query_deliveries',
+      'code_history_query_deliveries',
+      'code_history_query_deliveries',
     ])
   })
 })

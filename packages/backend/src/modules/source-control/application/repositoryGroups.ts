@@ -27,6 +27,7 @@ import type {
   RepositoryGroupNodeRecord,
   RepositoryGroupRecord,
   RepositoryGroupSnapshot,
+  RepositoryGroupIndexEntry,
   RepositoryWorkspaceStore,
 } from '../ports/repositoryWorkspaceStore'
 import type {
@@ -127,7 +128,11 @@ export async function resolveRepoGroupLayout(
   maxDepth: number
   groupName: string
 }> {
-  const all = loadAllGroups(await store.readRepositoryGroupSnapshot())
+  const all = loadAllGroups(
+    await store.readRepositoryGroupGraph({
+      scope: { kind: 'reachable', rootIds: [groupId] },
+    }),
+  )
   const root = all.get(groupId)
   if (root === undefined) {
     throw new NotFoundError('repo-group-not-found', `repo group ${groupId} not found`)
@@ -144,7 +149,11 @@ export async function previewRepoGroupLayout(
   store: RepositoryWorkspaceStore,
   input: RepoGroupPreviewWrite,
 ): Promise<RepositoryGroupPreview> {
-  const snapshot = await store.readRepositoryGroupSnapshot()
+  const references = draftReferences(input.nodes)
+  const snapshot = await store.readRepositoryGroupGraph({
+    scope: { kind: 'reachable', rootIds: references.groupIds },
+    additionalCachedRepoIds: references.repoIds,
+  })
   const all = loadAllGroups(snapshot)
   const urlById = snapshot.repoUrls
 
@@ -234,7 +243,7 @@ export async function getRepoGroupLayoutResponse(
 }
 
 function toDto(
-  snapshot: RepositoryGroupSnapshot,
+  boundMemoryCounts: ReadonlyMap<string, number>,
   row: RawGroupRow,
   all: Map<string, FlattenableGroup>,
 ): RepoGroup {
@@ -283,28 +292,60 @@ function toDto(
     nodes,
     directNodeCount: nodes.length,
     flatRepoCount,
-    boundMemories: snapshot.boundMemoryCounts.get(row.id) ?? 0,
+    boundMemories: boundMemoryCounts.get(row.id) ?? 0,
   }
 }
 
 export async function listRepoGroups(store: RepositoryWorkspaceStore): Promise<RepoGroup[]> {
-  const snapshot = await store.readRepositoryGroupSnapshot()
+  const [snapshot, counts] = await Promise.all([
+    store.readRepositoryGroupGraph({ scope: { kind: 'all' } }),
+    store.readRepositoryGroupMemoryCounts('all'),
+  ])
   const all = loadAllGroups(snapshot)
   return [...snapshot.groups]
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((row) => toDto(snapshot, row, all))
+    .map((row) => toDto(counts, row, all))
 }
 
 export async function getRepoGroup(
   store: RepositoryWorkspaceStore,
   id: string,
 ): Promise<RepoGroup> {
-  const snapshot = await store.readRepositoryGroupSnapshot()
+  const snapshot = await store.readRepositoryGroupGraph({
+    scope: { kind: 'reachable', rootIds: [id] },
+  })
   const row = snapshot.groups.find((candidate) => candidate.id === id)
   if (row === undefined) {
     throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
   }
-  return toDto(snapshot, row, loadAllGroups(snapshot))
+  return toDto(await store.readRepositoryGroupMemoryCounts([id]), row, loadAllGroups(snapshot))
+}
+
+function draftReferences(nodes: readonly RepoGroupNodeInput[]) {
+  // Keep invalid/oversized drafts in the domain error path before allocating SQL parameters.
+  try {
+    validateRepoGroupNodes(nodes)
+  } catch (error) {
+    asValidation(error)
+  }
+  return {
+    groupIds: [
+      ...new Set(
+        nodes.flatMap((node) =>
+          node.attachment?.kind === 'group' ? [node.attachment.childGroupId] : [],
+        ),
+      ),
+    ],
+    repoIds: [
+      ...new Set(
+        nodes.flatMap((node) =>
+          node.attachment?.kind === 'repo' && node.attachment.cachedRepoId !== undefined
+            ? [node.attachment.cachedRepoId]
+            : [],
+        ),
+      ),
+    ],
+  }
 }
 
 async function materializeNodes(
@@ -453,11 +494,13 @@ function assertAncestorsStillFlattenable(snapshot: RepositoryGroupSnapshot, grou
   }
 }
 
-function assertNameFree(snapshot: RepositoryGroupSnapshot, name: string, excludeId?: string): void {
+function assertNameFree(
+  index: readonly RepositoryGroupIndexEntry[],
+  name: string,
+  excludeId?: string,
+): void {
   const folded = name.toLocaleLowerCase()
-  if (
-    snapshot.groups.some((row) => row.id !== excludeId && row.name.toLocaleLowerCase() === folded)
-  ) {
+  if (index.some((row) => row.id !== excludeId && row.name.toLocaleLowerCase() === folded)) {
     throw new ConflictError(
       'repo-group-name-conflict',
       `a repo group named '${name}' already exists`,
@@ -470,8 +513,13 @@ export async function createRepoGroup(
   input: RepoGroupWrite,
   actorUserId: string | null,
 ): Promise<RepoGroup> {
-  const snapshot = await deps.store.readRepositoryGroupSnapshot()
-  assertNameFree(snapshot, input.name)
+  const index = await deps.store.readRepositoryGroupIndex()
+  assertNameFree(index, input.name)
+  const references = draftReferences(input.nodes)
+  const snapshot = await deps.store.readRepositoryGroupGraph({
+    scope: { kind: 'reachable', rootIds: references.groupIds },
+    additionalCachedRepoIds: references.repoIds,
+  })
   const nodes = await materializeNodes(deps, snapshot, input)
   const id = ulid()
   const now = (deps.now ?? Date.now)()
@@ -510,12 +558,20 @@ export async function updateRepoGroup(
   input: RepoGroupWrite,
   expectedVersion?: number,
 ): Promise<RepoGroup> {
-  const snapshot = await deps.store.readRepositoryGroupSnapshot()
-  const existing = snapshot.groups.find((group) => group.id === id)
+  const index = await deps.store.readRepositoryGroupIndex()
+  const existing = index.find((group) => group.id === id)
   if (existing === undefined) {
     throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
   }
-  assertNameFree(snapshot, input.name, id)
+  assertNameFree(index, input.name, id)
+  const references = draftReferences(input.nodes)
+  const snapshot = await deps.store.readRepositoryGroupGraph({
+    scope: { kind: 'reachable', rootIds: [id, ...references.groupIds], ancestorsOf: id },
+    additionalCachedRepoIds: references.repoIds,
+  })
+  if (!snapshot.groups.some((group) => group.id === id)) {
+    throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
+  }
   const nodes = await materializeNodes(deps, snapshot, input)
   const selfReference = nodes.find((node) => node.childGroupId === id)
   if (selfReference !== undefined) {
@@ -548,7 +604,7 @@ export async function updateRepoGroup(
     name: input.name,
     description: input.description,
     ...(expectedVersion === undefined ? {} : { expectedVersion }),
-    expectedGraphVersions: snapshot.groups.map((group) => ({
+    expectedGraphVersions: index.map((group) => ({
       id: group.id,
       version: group.version,
     })),
@@ -599,18 +655,13 @@ export async function deleteRepoGroup(
   id: string,
   options: { force?: boolean } = {},
 ): Promise<DeleteRepoGroupResult> {
-  const snapshot = await store.readRepositoryGroupSnapshot()
-  if (!snapshot.groups.some((group) => group.id === id)) {
+  const index = await store.readRepositoryGroupIndex()
+  if (!index.some((group) => group.id === id)) {
     throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
   }
-  const groupById = new Map(snapshot.groups.map((group) => [group.id, group]))
-  const referencing = snapshot.nodes.flatMap((node) => {
-    if (node.childGroupId !== id) return []
-    const group = groupById.get(node.groupId)
-    return group === undefined ? [] : [{ id: group.id, name: group.name }]
-  })
-  const uniqueRefs = [...new Map(referencing.map((row) => [row.id, row])).values()]
-  const refSchedules = snapshot.schedules
+  const references = await store.readRepositoryGroupReferences(id)
+  const uniqueRefs = [...new Map(references.groups.map((row) => [row.id, row])).values()]
+  const refSchedules = references.schedules
     .filter((row) => row.enabled && row.launchPayload.includes(`"repoGroupId":"${id}"`))
     .filter((row) => {
       try {
@@ -627,7 +678,7 @@ export async function deleteRepoGroup(
   const deleted = await store.deleteRepositoryGroup({
     id,
     scheduleIds: refSchedules.map((row) => row.id),
-    expectedGraphVersions: snapshot.groups.map((group) => ({
+    expectedGraphVersions: index.map((group) => ({
       id: group.id,
       version: group.version,
     })),

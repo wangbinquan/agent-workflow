@@ -132,7 +132,28 @@ export interface RepositoryGroupSnapshot {
   readonly groups: readonly RepositoryGroupRecord[]
   readonly nodes: readonly RepositoryGroupNodeRecord[]
   readonly repoUrls: ReadonlyMap<string, string | null>
-  readonly boundMemoryCounts: ReadonlyMap<string, number>
+}
+
+/** A layout reads descendants; replacing a group also validates every ancestor's other branches. */
+export type RepositoryGroupGraphScope =
+  | { readonly kind: 'all' }
+  | {
+      readonly kind: 'reachable'
+      readonly rootIds: readonly string[]
+      readonly ancestorsOf?: string
+    }
+
+export interface RepositoryGroupGraphQuery {
+  readonly scope: RepositoryGroupGraphScope
+  /** Direct repository attachments in an unsaved draft. */
+  readonly additionalCachedRepoIds?: readonly string[]
+}
+
+export type RepositoryGroupIndexEntry = Pick<RepositoryGroupRecord, 'id' | 'name' | 'version'>
+
+export interface RepositoryGroupReferences {
+  readonly groups: readonly Pick<RepositoryGroupRecord, 'id' | 'name'>[]
+  /** Enabled candidates only; the application retains the exact launch-payload interpretation. */
   readonly schedules: readonly RepositoryScheduleRecord[]
 }
 
@@ -191,7 +212,13 @@ export interface RepositoryWorkspaceStore {
   applyCredentialSealingMutation(mutation: RepositoryCredentialSealingMutation): Promise<void>
   compactAfterCredentialScrub(): Promise<void>
 
-  readRepositoryGroupSnapshot(): Promise<RepositoryGroupSnapshot>
+  readRepositoryGroupGraph(query: RepositoryGroupGraphQuery): Promise<RepositoryGroupSnapshot>
+  findRepositoryGroup(id: string): Promise<Pick<RepositoryGroupRecord, 'id' | 'version'> | null>
+  readRepositoryGroupIndex(): Promise<readonly RepositoryGroupIndexEntry[]>
+  readRepositoryGroupMemoryCounts(
+    groupIds: readonly string[] | 'all',
+  ): Promise<ReadonlyMap<string, number>>
+  readRepositoryGroupReferences(id: string): Promise<RepositoryGroupReferences>
   createRepositoryGroup(
     group: RepositoryGroupRecord,
     nodes: readonly RepositoryGroupNodeRecord[],

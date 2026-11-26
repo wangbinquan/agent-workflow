@@ -1,7 +1,7 @@
 import type { RepositoryWorkspaceTaskPorts } from '../composition/required-ports'
 import { databaseStateKey, databaseStateOf, tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { and, sql, type SQLWrapper } from 'drizzle-orm'
+import { and, inArray, sql, type SQLWrapper } from 'drizzle-orm'
 
 import type { RawRowCodecs } from '@/platform/persistence/queryHelpers'
 import type { EngineCapabilities } from '@/platform/persistence/capabilities'
@@ -12,6 +12,11 @@ import type {
   CachedRepositoryRecord,
   RepositoryCredentialSealingSnapshot,
   RepositoryGroupSnapshot,
+  RepositoryGroupGraphQuery,
+  RepositoryGroupGraphScope,
+  RepositoryGroupIndexEntry,
+  RepositoryGroupRecord,
+  RepositoryGroupReferences,
   RepositoryScheduleRecord,
 } from '../ports/repositoryWorkspaceStore'
 import { createInFlightCoalescer, type InFlightCoalescer } from '@/platform/contracts/inFlight'
@@ -60,6 +65,57 @@ interface RawRepositoryGroupNodeRow {
   readonly subdir: string
   readonly child_group_id: string | null
   readonly readonly: boolean
+}
+
+const repositoryGroupSelect = (db: object) => {
+  const { repoGroups } = tablesOf(db)
+  return sql`
+    ${repoGroups.id} AS id, ${repoGroups.name} AS name,
+    ${repoGroups.description} AS description, ${repoGroups.version} AS version,
+    ${repoGroups.createdByUserId} AS created_by_user_id,
+    ${repoGroups.createdAt} AS created_at, ${repoGroups.updatedAt} AS updated_at,
+    ${repoGroups.schemaVersion} AS schema_version
+  `
+}
+
+function repositoryGroupOf(row: RawRepositoryGroupRow): RepositoryGroupRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    version: Number(row.version),
+    createdByUserId: row.created_by_user_id,
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+    schemaVersion: Number(row.schema_version),
+  }
+}
+
+/** UNION over IDs terminates corrupt cycles; layout validation still owns cycle/depth errors. */
+function repositoryGroupScope(db: object, scope: RepositoryGroupGraphScope): SQLWrapper {
+  const { repoGroups, repoGroupNodes } = tablesOf(db)
+  if (scope.kind === 'all')
+    return sql`WITH aw_group_scope(id) AS (SELECT ${repoGroups.id} FROM ${repoGroups})`
+  const ancestors =
+    scope.ancestorsOf === undefined
+      ? sql`SELECT ${repoGroups.id} FROM ${repoGroups} WHERE 1 = 0`
+      : sql`SELECT ${repoGroups.id} FROM ${repoGroups} WHERE ${repoGroups.id} = ${scope.ancestorsOf}`
+  return sql`WITH RECURSIVE aw_group_ancestors(id) AS (
+    ${ancestors}
+    UNION
+    SELECT ${repoGroupNodes.groupId} FROM ${repoGroupNodes}
+    JOIN aw_group_ancestors ON ${repoGroupNodes.childGroupId} = aw_group_ancestors.id
+    WHERE ${repoGroupNodes.attachmentKind} = 'group'
+  ), aw_group_scope(id) AS (
+    SELECT ${repoGroups.id} FROM ${repoGroups}
+    WHERE ${inArray(repoGroups.id, [...scope.rootIds])}
+      OR ${repoGroups.id} IN (SELECT id FROM aw_group_ancestors)
+    UNION
+    SELECT ${repoGroupNodes.childGroupId} FROM ${repoGroupNodes}
+    JOIN aw_group_scope ON ${repoGroupNodes.groupId} = aw_group_scope.id
+    WHERE ${repoGroupNodes.attachmentKind} = 'group'
+      AND ${repoGroupNodes.childGroupId} IS NOT NULL
+  )`
 }
 
 const cachedRepoSelect = (db: object) => {
@@ -692,26 +748,35 @@ export class RepositoryWorkspaceSqlStore {
     }
   }
 
-  async readRepositoryGroupSnapshot(): Promise<RepositoryGroupSnapshot> {
+  async readRepositoryGroupGraph(
+    query: RepositoryGroupGraphQuery,
+  ): Promise<RepositoryGroupSnapshot> {
     const persistenceDb = this.database
-
-    const { repoGroups, repoGroupNodes, cachedRepos, memories, scheduledTasks } =
-      tablesOf(persistenceDb)
-    const [groupRows, nodeRows, repoRows, memoryRows, scheduleRows] = await Promise.all([
-      this.executor.all<RawRepositoryGroupRow & Record<string, unknown>>(
-        sql`
-        SELECT ${repoGroups.id} AS id, ${repoGroups.name} AS name,
-          ${repoGroups.description} AS description, ${repoGroups.version} AS version,
-          ${repoGroups.createdByUserId} AS created_by_user_id,
-          ${repoGroups.createdAt} AS created_at, ${repoGroups.updatedAt} AS updated_at,
-          ${repoGroups.schemaVersion} AS schema_version
+    const { repoGroups, repoGroupNodes, cachedRepos } = tablesOf(persistenceDb)
+    const scope = repositoryGroupScope(persistenceDb, query.scope)
+    const empty =
+      query.scope.kind === 'reachable' &&
+      query.scope.rootIds.length === 0 &&
+      query.scope.ancestorsOf === undefined
+    const extraRepos = query.additionalCachedRepoIds ?? []
+    const [groupRows, nodeRows, repoRows] = await Promise.all([
+      empty
+        ? []
+        : this.executor.all<RawRepositoryGroupRow & Record<string, unknown>>(
+            sql`
+        ${scope}
+        SELECT ${repositoryGroupSelect(persistenceDb)}
         FROM ${repoGroups}
+        WHERE ${repoGroups.id} IN (SELECT id FROM aw_group_scope)
         ORDER BY ${repoGroups.name}, ${repoGroups.id}
       `,
-        { version: 'int', created_at: 'int', updated_at: 'int', schema_version: 'int' },
-      ),
-      this.executor.all<RawRepositoryGroupNodeRow & Record<string, unknown>>(
-        sql`
+            { version: 'int', created_at: 'int', updated_at: 'int', schema_version: 'int' },
+          ),
+      empty
+        ? []
+        : this.executor.all<RawRepositoryGroupNodeRow & Record<string, unknown>>(
+            sql`
+        ${scope}
         SELECT ${repoGroupNodes.groupId} AS group_id, ${repoGroupNodes.path} AS path,
           ${repoGroupNodes.attachmentKind} AS attachment_kind,
           ${repoGroupNodes.cachedRepoId} AS cached_repo_id,
@@ -719,51 +784,27 @@ export class RepositoryWorkspaceSqlStore {
           ${repoGroupNodes.childGroupId} AS child_group_id,
           ${repoGroupNodes.readonly} AS readonly
         FROM ${repoGroupNodes}
+        WHERE ${repoGroupNodes.groupId} IN (SELECT id FROM aw_group_scope)
         ORDER BY ${repoGroupNodes.groupId}, ${repoGroupNodes.path}
       `,
-        { readonly: 'bool' },
-      ),
-      this.executor.all<{ id: string; url_redacted: string | null }>(sql`
+            { readonly: 'bool' },
+          ),
+      empty && extraRepos.length === 0
+        ? []
+        : this.executor.all<{ id: string; url_redacted: string | null }>(sql`
+        ${scope}
         SELECT ${cachedRepos.id} AS id, ${cachedRepos.urlRedacted} AS url_redacted
         FROM ${cachedRepos}
+        WHERE ${inArray(cachedRepos.id, [...extraRepos])}
+          OR ${cachedRepos.id} IN (
+            SELECT ${repoGroupNodes.cachedRepoId} FROM ${repoGroupNodes}
+            WHERE ${repoGroupNodes.groupId} IN (SELECT id FROM aw_group_scope)
+              AND ${repoGroupNodes.attachmentKind} = 'repo'
+          )
       `),
-      this.executor.all<{ scope_id: string; count: number }>(
-        sql`
-        SELECT ${memories.scopeId} AS scope_id, count(*) AS count
-        FROM ${memories}
-        WHERE ${memories.scopeType} = 'repo_group'
-          AND ${memories.status} IN ('candidate', 'approved', 'superseded', 'rejected')
-          AND ${memories.scopeId} IS NOT NULL
-        GROUP BY ${memories.scopeId}
-      `,
-        { count: 'int' },
-      ),
-      this.executor.all<{
-        id: string
-        name: string
-        launch_payload: string
-        enabled: boolean
-      }>(
-        sql`
-        SELECT ${scheduledTasks.id} AS id, ${scheduledTasks.name} AS name,
-          ${scheduledTasks.launchPayload} AS launch_payload,
-          ${scheduledTasks.enabled} AS enabled
-        FROM ${scheduledTasks}
-      `,
-        { enabled: 'bool' },
-      ),
     ])
     return {
-      groups: groupRows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        description: row.description,
-        version: Number(row.version),
-        createdByUserId: row.created_by_user_id,
-        createdAt: Number(row.created_at),
-        updatedAt: Number(row.updated_at),
-        schemaVersion: Number(row.schema_version),
-      })),
+      groups: groupRows.map(repositoryGroupOf),
       nodes: nodeRows.map((row) => ({
         groupId: row.group_id,
         path: row.path,
@@ -775,8 +816,86 @@ export class RepositoryWorkspaceSqlStore {
         readonly: row.readonly,
       })),
       repoUrls: new Map(repoRows.map((row) => [row.id, row.url_redacted])),
-      boundMemoryCounts: new Map(memoryRows.map((row) => [row.scope_id, Number(row.count)])),
-      schedules: scheduleRows.map(scheduleOf),
+    }
+  }
+
+  async findRepositoryGroup(
+    id: string,
+  ): Promise<Pick<RepositoryGroupRecord, 'id' | 'version'> | null> {
+    const { repoGroups } = tablesOf(this.database)
+    const rows = await this.executor.all<{ id: string; version: number }>(
+      sql`SELECT ${repoGroups.id} AS id, ${repoGroups.version} AS version FROM ${repoGroups}
+        WHERE ${repoGroups.id} = ${id} LIMIT 1`,
+      { version: 'int' },
+    )
+    return rows[0] ?? null
+  }
+
+  async readRepositoryGroupIndex(): Promise<readonly RepositoryGroupIndexEntry[]> {
+    const { repoGroups } = tablesOf(this.database)
+    return await this.executor.all<RepositoryGroupIndexEntry & Record<string, unknown>>(
+      sql`SELECT ${repoGroups.id} AS id, ${repoGroups.name} AS name,
+        ${repoGroups.version} AS version FROM ${repoGroups}
+        ORDER BY ${repoGroups.name}, ${repoGroups.id}`,
+      { version: 'int' },
+    )
+  }
+
+  async readRepositoryGroupMemoryCounts(
+    groupIds: readonly string[] | 'all',
+  ): Promise<ReadonlyMap<string, number>> {
+    if (groupIds !== 'all' && groupIds.length === 0) return new Map()
+    const { memories, repoGroups } = tablesOf(this.database)
+    const selected =
+      groupIds === 'all'
+        ? sql`${memories.scopeId} IN (SELECT ${repoGroups.id} FROM ${repoGroups})`
+        : inArray(memories.scopeId, [...groupIds])
+    const rows = await this.executor.all<{ scope_id: string; count: number }>(
+      sql`
+        SELECT ${memories.scopeId} AS scope_id, count(*) AS count
+        FROM ${memories}
+        WHERE ${memories.scopeType} = 'repo_group'
+          AND ${memories.status} IN ('candidate', 'approved', 'superseded', 'rejected')
+          AND ${memories.scopeId} IS NOT NULL
+          AND ${selected}
+        GROUP BY ${memories.scopeId}
+      `,
+      { count: 'int' },
+    )
+    return new Map(rows.map((row) => [row.scope_id, Number(row.count)]))
+  }
+
+  async readRepositoryGroupReferences(id: string): Promise<RepositoryGroupReferences> {
+    const { repoGroups, repoGroupNodes, scheduledTasks } = tablesOf(this.database)
+    // This is a candidate filter; the application retains the original exact JSON interpretation.
+    const { pattern, escape } = this.engine.likeEscape(`"repoGroupId":"${id}"`)
+    const [groups, schedules] = await Promise.all([
+      this.executor.all<{ id: string; name: string }>(sql`
+        SELECT DISTINCT ${repoGroups.id} AS id, ${repoGroups.name} AS name
+        FROM ${repoGroups} JOIN ${repoGroupNodes} ON ${repoGroupNodes.groupId} = ${repoGroups.id}
+        WHERE ${repoGroupNodes.childGroupId} = ${id}
+        ORDER BY ${repoGroups.id}
+      `),
+      this.executor.all<{
+        id: string
+        name: string
+        launch_payload: string
+        enabled: boolean
+      }>(
+        sql`
+        SELECT ${scheduledTasks.id} AS id, ${scheduledTasks.name} AS name,
+          ${scheduledTasks.launchPayload} AS launch_payload,
+          ${scheduledTasks.enabled} AS enabled
+        FROM ${scheduledTasks}
+        WHERE ${scheduledTasks.enabled} = ${true}
+          AND ${this.engine.likeCaseInsensitive(scheduledTasks.launchPayload, pattern, escape)}
+      `,
+        { enabled: 'bool' },
+      ),
+    ])
+    return {
+      groups,
+      schedules: schedules.map(scheduleOf),
     }
   }
 }

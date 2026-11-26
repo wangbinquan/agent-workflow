@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import {
   RouterProvider,
   createMemoryHistory,
@@ -71,10 +71,15 @@ function installFetch(children: TaskListItem[]): { urls: string[] } {
     const url = req.toString()
     rec.urls.push(url)
     const parsed = new URL(url)
-    const payload =
-      parsed.pathname === '/api/tasks' && parsed.searchParams.get('parent_id') === 't_parent'
-        ? children
-        : []
+    const payload = {
+      schemaVersion: 1,
+      parentTaskId: 't_parent',
+      items:
+        parsed.pathname === '/api/tasks/t_parent/children'
+          ? children.map(({ id, status }) => ({ id, status }))
+          : [],
+      nextCursor: null,
+    }
     return new Response(JSON.stringify(payload), {
       status: 200,
       headers: { 'content-type': 'application/json' },
@@ -122,7 +127,7 @@ describe('ChildTaskLink (RFC-243 PR-5)', () => {
     // Chip resolves from the shared parent_id children query.
     await waitFor(() => expect(wrapper.textContent).toContain(enUS.tasks.status.running))
     expect(wrapper.querySelector('.status-chip')).not.toBeNull()
-    expect(rec.urls.some((u) => u.includes('parent_id=t_parent'))).toBe(true)
+    expect(rec.urls.some((u) => u.includes('/api/tasks/t_parent/children'))).toBe(true)
   })
 
   test('degrades to a neutral non-link placeholder when the child is absent (deleted/invisible)', async () => {
@@ -144,10 +149,13 @@ describe('ChildTaskLink (RFC-243 PR-5)', () => {
           headers: { 'content-type': 'application/json' },
         })
       }
-      return new Response('[]', {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({ schemaVersion: 1, parentTaskId: 't_parent', items: [], nextCursor: null }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      )
     })
     const { qc } = await renderLink('t_child')
     await screen.findByTestId('child-task-unavailable-t_child')
@@ -159,6 +167,87 @@ describe('ChildTaskLink (RFC-243 PR-5)', () => {
       expect(screen.getByTestId('child-task-link-t_child').querySelector('a')).not.toBeNull()
       expect(screen.queryByTestId('child-task-unavailable-t_child')).toBeNull()
     })
+  })
+
+  test.each([true, false])(
+    'RFC-602: a pending refresh tail keeps the link until complete (child present=%s)',
+    async (present) => {
+      let refresh = false
+      let calls = 0
+      let resolveTail!: (value: Response) => void
+      const tail = new Promise<Response>((resolve) => {
+        resolveTail = resolve
+      })
+      const result = (items: { id: string; status: 'done' }[], nextCursor: string | null = null) =>
+        new Response(
+          JSON.stringify({ schemaVersion: 1, parentTaskId: 't_parent', items, nextCursor }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        )
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+        calls++
+        if (!refresh) return result([])
+        if (new URL(input.toString()).searchParams.has('cursor')) return tail
+        return result([{ id: 'different', status: 'done' }], 'tail')
+      })
+      const { qc } = await renderLink('new-child')
+      await screen.findByTestId('child-task-unavailable-new-child')
+      refresh = true
+      let completed!: Promise<void>
+      act(() => {
+        completed = qc.refetchQueries({ queryKey: ['tasks', 'children', 't_parent'] })
+      })
+      await waitFor(() => expect(calls).toBe(3))
+      expect(screen.getByTestId('child-task-link-new-child').querySelector('a')).not.toBeNull()
+      expect(screen.queryByTestId('child-task-unavailable-new-child')).toBeNull()
+      await act(async () => {
+        resolveTail(result(present ? [{ id: 'new-child', status: 'done' }] : []))
+        await completed
+      })
+      if (present) {
+        await waitFor(() =>
+          expect(
+            screen.getByTestId('child-task-link-new-child').querySelector('.status-chip'),
+          ).not.toBeNull(),
+        )
+        expect(screen.queryByTestId('child-task-unavailable-new-child')).toBeNull()
+      } else {
+        await screen.findByTestId('child-task-unavailable-new-child')
+        expect(screen.queryByTestId('child-task-link-new-child')).toBeNull()
+      }
+      expect(calls).toBe(3)
+    },
+  )
+
+  test('RFC-602: a child beyond the former 500-row window retains its real navigation and status', async () => {
+    const ids = Array.from({ length: 601 }, (_, i) => `child-${i}`)
+    let calls = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      calls++
+      const offset = Number(new URL(input.toString()).searchParams.get('cursor') ?? 0)
+      return new Response(
+        JSON.stringify({
+          schemaVersion: 1,
+          parentTaskId: 't_parent',
+          items: ids.slice(offset, offset + 100).map((id) => ({ id, status: 'running' })),
+          nextCursor: offset + 100 < ids.length ? String(offset + 100) : null,
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    })
+    await renderLink('child-600')
+    await waitFor(() =>
+      expect(screen.getByTestId('child-task-link-child-600').textContent).toContain(
+        enUS.tasks.status.running,
+      ),
+    )
+    const target = screen.getByTestId('child-task-link-child-600')
+    expect(target.querySelector('a')?.getAttribute('href')).toBe('/tasks/child-600')
+    expect(target.textContent).toContain(enUS.tasks.status.running)
+    expect(screen.queryByTestId('child-task-unavailable-child-600')).toBeNull()
+    expect(calls).toBe(7)
   })
 })
 

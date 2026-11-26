@@ -1,0 +1,40 @@
+{
+  "formatVersion": 1,
+  "epoch": 2,
+  "after": "0006_rfc602_code_history_query_work_items",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-602-bounded-module-queries/design.md",
+      "packages/backend/src/platform/persistence/migration/epoch1/definitions.ts",
+      "packages/backend/tests/fixtures/release-upgrade/rfc602-code-history-query-oracle.json"
+    ],
+    "note": "RFC-602 independently authored archive/query fixture. The source has one item, published round, stage, attempt, delivery, four finding outcomes and seven explicit empty packages. Retained build attempts cover ready/building/failed/superseded. Seed rows represent a native installation at this history point; ordinary upgrades add an empty table and initialize from their own unchanged original archives at daemon bootstrap. No production converter, builder or query was used to author values."
+  },
+  "rows": [
+    {
+      "table": "code_history_query_work_items",
+      "values": {
+        "build_id": "rfc602-build-ready",
+        "id": "rfc602-item",
+        "code_host_endpoint_id": "rfc602-endpoint",
+        "stable_project_id": "rfc602-project",
+        "capability": "review",
+        "anchor_kind": "mr",
+        "anchor_id": "42",
+        "status": "closed",
+        "epoch": 2,
+        "created_at": 1778459500000,
+        "round_count": 1,
+        "id_order_key": "007200660063003600300032002d006900740065006d"
+      }
+    }
+  ],
+  "historyExpectations": [
+    {
+      "table": "code_history_query_work_items",
+      "rows": []
+    }
+  ],
+  "content": []
+}

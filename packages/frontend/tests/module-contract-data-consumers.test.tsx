@@ -277,8 +277,14 @@ describe('module contract: frontend data consumers', () => {
   test('list and detail child consumers share a parent request and its invalidation while other parents remain independent', async () => {
     const requests: URL[] = []
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-      requests.push(new URL(input.toString()))
-      return response([])
+      const url = new URL(input.toString())
+      requests.push(url)
+      return response({
+        schemaVersion: 1,
+        parentTaskId: url.pathname.split('/')[3],
+        items: [],
+        nextCursor: null,
+      })
     })
     const consumers = renderHook(
       () => ({
@@ -297,14 +303,17 @@ describe('module contract: frontend data consumers', () => {
     )
     expect(requests).toHaveLength(2)
     expect(requests.map((url) => Object.fromEntries(url.searchParams))).toEqual([
-      { parent_id: 'parent-1', include_owner: 'true', limit: '500' },
-      { parent_id: 'parent-2', include_owner: 'true', limit: '500' },
+      { limit: '100' },
+      { limit: '100' },
     ])
-    expect(requests.every((url) => url.pathname === '/api/tasks')).toBe(true)
+    expect(requests.map((url) => url.pathname)).toEqual([
+      '/api/tasks/parent-1/children',
+      '/api/tasks/parent-2/children',
+    ])
     await act(async () => {
       await client.invalidateQueries({ queryKey: taskChildrenQueryKey('parent-1') })
     })
-    expect(requests.map((url) => url.searchParams.get('parent_id'))).toEqual([
+    expect(requests.map((url) => url.pathname.split('/')[3])).toEqual([
       'parent-1',
       'parent-2',
       'parent-1',

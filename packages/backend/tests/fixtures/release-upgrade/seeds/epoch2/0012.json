@@ -1,0 +1,95 @@
+{
+  "formatVersion": 1,
+  "epoch": 2,
+  "after": "0012_rfc602_code_history_metric_prefixes",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-602-bounded-module-queries/design.md",
+      "packages/backend/src/platform/persistence/migration/epoch1/definitions.ts",
+      "packages/backend/tests/fixtures/release-upgrade/rfc602-code-history-query-oracle.json"
+    ],
+    "note": "RFC-602 independently authored archive/query fixture. The source has one item, published round, stage, attempt, delivery, four finding outcomes and seven explicit empty packages. Retained build attempts cover ready/building/failed/superseded. Seed rows represent a native installation at this history point; ordinary upgrades add an empty table and initialize from their own unchanged original archives at daemon bootstrap. No production converter, builder or query was used to author values."
+  },
+  "rows": [
+    {
+      "table": "code_history_metric_prefixes",
+      "values": {
+        "build_id": "rfc602-build-ready",
+        "capability": "review",
+        "occurred_at": 1778459500000,
+        "published": 1,
+        "adopted": 1,
+        "quiet_fix": 0,
+        "disagreed": 0,
+        "outstanding": 0,
+        "rounds": 1,
+        "run_published": 1,
+        "run_failed": 0,
+        "run_awaiting": 0,
+        "incomplete": 0
+      }
+    },
+    {
+      "table": "code_history_metric_prefixes",
+      "values": {
+        "build_id": "rfc602-build-ready",
+        "capability": "review",
+        "occurred_at": 1778459500001,
+        "published": 2,
+        "adopted": 1,
+        "quiet_fix": 1,
+        "disagreed": 0,
+        "outstanding": 0,
+        "rounds": 1,
+        "run_published": 1,
+        "run_failed": 0,
+        "run_awaiting": 0,
+        "incomplete": 0
+      }
+    },
+    {
+      "table": "code_history_metric_prefixes",
+      "values": {
+        "build_id": "rfc602-build-ready",
+        "capability": "review",
+        "occurred_at": 1778459500002,
+        "published": 3,
+        "adopted": 1,
+        "quiet_fix": 1,
+        "disagreed": 1,
+        "outstanding": 0,
+        "rounds": 1,
+        "run_published": 1,
+        "run_failed": 0,
+        "run_awaiting": 0,
+        "incomplete": 0
+      }
+    },
+    {
+      "table": "code_history_metric_prefixes",
+      "values": {
+        "build_id": "rfc602-build-ready",
+        "capability": "review",
+        "occurred_at": 1778459500003,
+        "published": 4,
+        "adopted": 1,
+        "quiet_fix": 1,
+        "disagreed": 1,
+        "outstanding": 1,
+        "rounds": 1,
+        "run_published": 1,
+        "run_failed": 0,
+        "run_awaiting": 0,
+        "incomplete": 0
+      }
+    }
+  ],
+  "historyExpectations": [
+    {
+      "table": "code_history_metric_prefixes",
+      "rows": []
+    }
+  ],
+  "content": []
+}

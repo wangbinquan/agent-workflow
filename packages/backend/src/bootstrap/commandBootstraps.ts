@@ -5,6 +5,9 @@
 import { join } from 'node:path'
 import { composeRepositoryBackupPreparation } from './repositoryBackupPreparation'
 import { createLocalDoctorDiagnosticsFactory } from './doctorDiagnostics'
+import { createLocalRuntimeContent } from './contentRuntime'
+import { readActiveEpochInstallation } from '@/modules/system-operations/composition/epochInstallation'
+import { createCodeHistoryIndexCommands } from '@/modules/code-capability/composition/historyQueries'
 import { logicalSchemaContract, persistenceSchemaBinding } from './persistenceSchema'
 import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { resolveDatabaseProviderRuntimeForRestore } from '@/platform/persistence/databaseProviderRuntime'
@@ -36,6 +39,7 @@ import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/compos
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { createResourcePackagePluginInstaller } from '@/modules/resource-catalog/composition/resourcePackagePluginInstaller'
 import { Paths } from '@/platform/configuration/installationPaths'
+import type { Lock } from '@/platform/execution/local/daemonLock'
 
 export async function composeUserCommandBootstrap() {
   const provider = await resolveCommandProvider()
@@ -75,7 +79,7 @@ export async function composeUserCommandBootstrap() {
   }
 }
 
-async function resolveCommandProvider() {
+async function resolveCommandProvider(lock?: Lock) {
   const config = loadConfig(Paths.config)
   const contract = logicalSchemaContract
   const prepared = await prepareDatabaseProviderForBoot({
@@ -87,6 +91,7 @@ async function resolveCommandProvider() {
     liveSchema: persistenceSchemaBinding,
     configPath: Paths.config,
     lockPath: Paths.lock,
+    ...(lock === undefined ? {} : { lock }),
     sqliteOptions: {},
   })
   const runtime = prepared.runtime
@@ -232,10 +237,26 @@ export async function runDoctorCommand() {
 
 /** `db …`: the local database migration operations. */
 export function composeLocalDatabaseMigrationCommandOperations() {
-  return composeLocalDatabaseMigrationOperations(
+  const migration = composeLocalDatabaseMigrationOperations(
     logicalSchemaContract,
     persistenceSchemaBinding.history,
   )
+  return {
+    ...migration,
+    async codeHistoryRebuild(lock: Lock) {
+      const provider = await resolveCommandProvider(lock)
+      try {
+        const installation = await readActiveEpochInstallation(provider.db)
+        return await createCodeHistoryIndexCommands({
+          db: provider.db,
+          content: createLocalRuntimeContent(provider.db, Paths.root),
+          installation: installation.history,
+        }).rebuild()
+      } finally {
+        await provider.runtime.close()
+      }
+    },
+  }
 }
 
 /** `config get|set` (RFC-474): the installation's configuration file; the daemon need not run. */

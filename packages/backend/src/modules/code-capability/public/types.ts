@@ -5,3 +5,4 @@ export type {
   CodeCapabilityDemoSeedParticipant,
   CodeCapabilityDemoSeedReceipt,
 } from '../application/demoSeed'
+export type { CodeHistoryIndexBuildReceipt } from '../application/ports/historyQueryIndex'

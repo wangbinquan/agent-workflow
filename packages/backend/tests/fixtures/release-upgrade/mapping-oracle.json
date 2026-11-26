@@ -13745,6 +13745,473 @@
         ],
         "rule": "Keep original source evidence, not target baseline authority; target sentinel/history is newly installed. sqlite_sequence high water must dominate retained and pruned allocations."
       }
+    },
+    {
+      "table": "code_history_query_builds",
+      "sourcePhase": "current",
+      "source": "rfc602",
+      "references": [
+        "design/RFC-602-bounded-module-queries/design.md"
+      ],
+      "disposition": "preserved",
+      "sourceKey": [
+        "id"
+      ],
+      "destinations": [
+        {
+          "table": "code_history_query_builds",
+          "key": {
+            "id": {
+              "sourceColumn": "id"
+            }
+          },
+          "preserveColumns": [
+            "id",
+            "source_generation",
+            "source_contract",
+            "projection_version",
+            "manifest_digest",
+            "archive_manifest_json",
+            "state",
+            "counts_json",
+            "error_code",
+            "error_detail",
+            "created_at",
+            "completed_at"
+          ],
+          "targetKeyColumns": [
+            "id"
+          ]
+        }
+      ],
+      "projections": [],
+      "rebuildMeaning": "Native schema upgrade preserves every stored value. Explicit rebuild may replace build identities and their derived rows; compare source generation/contract/table/original identity plus the independently authored projection values, while original archive bytes and old ID indexes remain byte-for-byte unchanged."
+    },
+    {
+      "table": "code_history_query_states",
+      "sourcePhase": "current",
+      "source": "rfc602",
+      "references": [
+        "design/RFC-602-bounded-module-queries/design.md"
+      ],
+      "disposition": "preserved",
+      "sourceKey": [
+        "source_generation",
+        "source_contract",
+        "projection_version"
+      ],
+      "destinations": [
+        {
+          "table": "code_history_query_states",
+          "key": {
+            "source_generation": {
+              "sourceColumn": "source_generation"
+            },
+            "source_contract": {
+              "sourceColumn": "source_contract"
+            },
+            "projection_version": {
+              "sourceColumn": "projection_version"
+            }
+          },
+          "preserveColumns": [
+            "source_generation",
+            "source_contract",
+            "projection_version",
+            "active_build_id",
+            "last_attempt_id",
+            "state",
+            "failure_code",
+            "failure_detail",
+            "updated_at"
+          ],
+          "targetKeyColumns": [
+            "source_generation",
+            "source_contract",
+            "projection_version"
+          ]
+        }
+      ],
+      "projections": [],
+      "rebuildMeaning": "Native schema upgrade preserves every stored value. Explicit rebuild may replace build identities and their derived rows; compare source generation/contract/table/original identity plus the independently authored projection values, while original archive bytes and old ID indexes remain byte-for-byte unchanged."
+    },
+    {
+      "table": "code_history_query_records",
+      "sourcePhase": "current",
+      "source": "rfc602",
+      "references": [
+        "design/RFC-602-bounded-module-queries/design.md"
+      ],
+      "disposition": "preserved",
+      "sourceKey": [
+        "build_id",
+        "source_table",
+        "original_id"
+      ],
+      "destinations": [
+        {
+          "table": "code_history_query_records",
+          "key": {
+            "build_id": {
+              "sourceColumn": "build_id"
+            },
+            "source_table": {
+              "sourceColumn": "source_table"
+            },
+            "original_id": {
+              "sourceColumn": "original_id"
+            }
+          },
+          "preserveColumns": [
+            "build_id",
+            "source_table",
+            "original_id",
+            "archive_id",
+            "record_ordinal",
+            "original_key_json",
+            "record_payload_json"
+          ],
+          "targetKeyColumns": [
+            "build_id",
+            "source_table",
+            "original_id"
+          ]
+        }
+      ],
+      "projections": [],
+      "rebuildMeaning": "Native schema upgrade preserves every stored value. Explicit rebuild may replace build identities and their derived rows; compare source generation/contract/table/original identity plus the independently authored projection values, while original archive bytes and old ID indexes remain byte-for-byte unchanged."
+    },
+    {
+      "table": "code_history_query_work_items",
+      "sourcePhase": "current",
+      "source": "rfc602",
+      "references": [
+        "design/RFC-602-bounded-module-queries/design.md"
+      ],
+      "disposition": "preserved",
+      "sourceKey": [
+        "build_id",
+        "id"
+      ],
+      "destinations": [
+        {
+          "table": "code_history_query_work_items",
+          "key": {
+            "build_id": {
+              "sourceColumn": "build_id"
+            },
+            "id": {
+              "sourceColumn": "id"
+            }
+          },
+          "preserveColumns": [
+            "build_id",
+            "id",
+            "code_host_endpoint_id",
+            "stable_project_id",
+            "capability",
+            "anchor_kind",
+            "anchor_id",
+            "status",
+            "epoch",
+            "created_at",
+            "round_count",
+            "id_order_key"
+          ],
+          "targetKeyColumns": [
+            "build_id",
+            "id"
+          ]
+        }
+      ],
+      "projections": [],
+      "rebuildMeaning": "Native schema upgrade preserves every stored value. Explicit rebuild may replace build identities and their derived rows; compare source generation/contract/table/original identity plus the independently authored projection values, while original archive bytes and old ID indexes remain byte-for-byte unchanged."
+    },
+    {
+      "table": "code_history_query_rounds",
+      "sourcePhase": "current",
+      "source": "rfc602",
+      "references": [
+        "design/RFC-602-bounded-module-queries/design.md"
+      ],
+      "disposition": "preserved",
+      "sourceKey": [
+        "build_id",
+        "id"
+      ],
+      "destinations": [
+        {
+          "table": "code_history_query_rounds",
+          "key": {
+            "build_id": {
+              "sourceColumn": "build_id"
+            },
+            "id": {
+              "sourceColumn": "id"
+            }
+          },
+          "preserveColumns": [
+            "build_id",
+            "id",
+            "work_item_id",
+            "round_seq",
+            "outcome",
+            "stage_contract_ver",
+            "baseline_sha",
+            "started_at",
+            "ended_at",
+            "rank",
+            "source_ordinal"
+          ],
+          "targetKeyColumns": [
+            "build_id",
+            "id"
+          ]
+        }
+      ],
+      "projections": [],
+      "rebuildMeaning": "Native schema upgrade preserves every stored value. Explicit rebuild may replace build identities and their derived rows; compare source generation/contract/table/original identity plus the independently authored projection values, while original archive bytes and old ID indexes remain byte-for-byte unchanged."
+    },
+    {
+      "table": "code_history_query_stages",
+      "sourcePhase": "current",
+      "source": "rfc602",
+      "references": [
+        "design/RFC-602-bounded-module-queries/design.md"
+      ],
+      "disposition": "preserved",
+      "sourceKey": [
+        "build_id",
+        "id"
+      ],
+      "destinations": [
+        {
+          "table": "code_history_query_stages",
+          "key": {
+            "build_id": {
+              "sourceColumn": "build_id"
+            },
+            "id": {
+              "sourceColumn": "id"
+            }
+          },
+          "preserveColumns": [
+            "build_id",
+            "id",
+            "round_id",
+            "stage_name",
+            "stage_seq",
+            "stage_kind",
+            "status",
+            "error",
+            "started_at",
+            "ended_at",
+            "source_ordinal"
+          ],
+          "targetKeyColumns": [
+            "build_id",
+            "id"
+          ]
+        }
+      ],
+      "projections": [],
+      "rebuildMeaning": "Native schema upgrade preserves every stored value. Explicit rebuild may replace build identities and their derived rows; compare source generation/contract/table/original identity plus the independently authored projection values, while original archive bytes and old ID indexes remain byte-for-byte unchanged."
+    },
+    {
+      "table": "code_history_query_attempts",
+      "sourcePhase": "current",
+      "source": "rfc602",
+      "references": [
+        "design/RFC-602-bounded-module-queries/design.md"
+      ],
+      "disposition": "preserved",
+      "sourceKey": [
+        "build_id",
+        "id"
+      ],
+      "destinations": [
+        {
+          "table": "code_history_query_attempts",
+          "key": {
+            "build_id": {
+              "sourceColumn": "build_id"
+            },
+            "id": {
+              "sourceColumn": "id"
+            }
+          },
+          "preserveColumns": [
+            "build_id",
+            "id",
+            "round_id",
+            "stage_name",
+            "shard_key",
+            "rerun_seq",
+            "attempt_seq",
+            "status",
+            "validation_outcome",
+            "session_ref",
+            "node_run_id",
+            "started_at",
+            "ended_at",
+            "source_ordinal"
+          ],
+          "targetKeyColumns": [
+            "build_id",
+            "id"
+          ]
+        }
+      ],
+      "projections": [],
+      "rebuildMeaning": "Native schema upgrade preserves every stored value. Explicit rebuild may replace build identities and their derived rows; compare source generation/contract/table/original identity plus the independently authored projection values, while original archive bytes and old ID indexes remain byte-for-byte unchanged."
+    },
+    {
+      "table": "code_history_query_deliveries",
+      "sourcePhase": "current",
+      "source": "rfc602",
+      "references": [
+        "design/RFC-602-bounded-module-queries/design.md"
+      ],
+      "disposition": "preserved",
+      "sourceKey": [
+        "build_id",
+        "id"
+      ],
+      "destinations": [
+        {
+          "table": "code_history_query_deliveries",
+          "key": {
+            "build_id": {
+              "sourceColumn": "build_id"
+            },
+            "id": {
+              "sourceColumn": "id"
+            }
+          },
+          "preserveColumns": [
+            "build_id",
+            "id",
+            "correlation_id",
+            "stable_project_id",
+            "capability",
+            "step",
+            "outcome",
+            "reason",
+            "queued_at",
+            "queue_position",
+            "waiting_on",
+            "round_id",
+            "is_probe",
+            "created_at",
+            "updated_at",
+            "source_ordinal"
+          ],
+          "targetKeyColumns": [
+            "build_id",
+            "id"
+          ]
+        }
+      ],
+      "projections": [],
+      "rebuildMeaning": "Native schema upgrade preserves every stored value. Explicit rebuild may replace build identities and their derived rows; compare source generation/contract/table/original identity plus the independently authored projection values, while original archive bytes and old ID indexes remain byte-for-byte unchanged."
+    },
+    {
+      "table": "code_history_metric_totals",
+      "sourcePhase": "current",
+      "source": "rfc602",
+      "references": [
+        "design/RFC-602-bounded-module-queries/design.md"
+      ],
+      "disposition": "preserved",
+      "sourceKey": [
+        "build_id",
+        "capability"
+      ],
+      "destinations": [
+        {
+          "table": "code_history_metric_totals",
+          "key": {
+            "build_id": {
+              "sourceColumn": "build_id"
+            },
+            "capability": {
+              "sourceColumn": "capability"
+            }
+          },
+          "preserveColumns": [
+            "build_id",
+            "capability",
+            "published",
+            "adopted",
+            "quiet_fix",
+            "disagreed",
+            "outstanding",
+            "rounds",
+            "run_published",
+            "run_failed",
+            "run_awaiting",
+            "incomplete"
+          ],
+          "targetKeyColumns": [
+            "build_id",
+            "capability"
+          ]
+        }
+      ],
+      "projections": [],
+      "rebuildMeaning": "Native schema upgrade preserves every stored value. Explicit rebuild may replace build identities and their derived rows; compare source generation/contract/table/original identity plus the independently authored projection values, while original archive bytes and old ID indexes remain byte-for-byte unchanged."
+    },
+    {
+      "table": "code_history_metric_prefixes",
+      "sourcePhase": "current",
+      "source": "rfc602",
+      "references": [
+        "design/RFC-602-bounded-module-queries/design.md"
+      ],
+      "disposition": "preserved",
+      "sourceKey": [
+        "build_id",
+        "capability",
+        "occurred_at"
+      ],
+      "destinations": [
+        {
+          "table": "code_history_metric_prefixes",
+          "key": {
+            "build_id": {
+              "sourceColumn": "build_id"
+            },
+            "capability": {
+              "sourceColumn": "capability"
+            },
+            "occurred_at": {
+              "sourceColumn": "occurred_at"
+            }
+          },
+          "preserveColumns": [
+            "build_id",
+            "capability",
+            "occurred_at",
+            "published",
+            "adopted",
+            "quiet_fix",
+            "disagreed",
+            "outstanding",
+            "rounds",
+            "run_published",
+            "run_failed",
+            "run_awaiting",
+            "incomplete"
+          ],
+          "targetKeyColumns": [
+            "build_id",
+            "capability",
+            "occurred_at"
+          ]
+        }
+      ],
+      "projections": [],
+      "rebuildMeaning": "Native schema upgrade preserves every stored value. Explicit rebuild may replace build identities and their derived rows; compare source generation/contract/table/original identity plus the independently authored projection values, while original archive bytes and old ID indexes remain byte-for-byte unchanged."
     }
   ]
 }

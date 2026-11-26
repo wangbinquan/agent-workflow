@@ -1,6 +1,7 @@
 // GET    /api/tasks                       list (filters via query)
 // POST   /api/tasks                       start task; scheduler kicks off in background
 // GET    /api/tasks/:id                    full task incl. workflowSnapshot + inputs
+// GET    /api/tasks/:id/children           bounded direct child identity/status page
 // POST   /api/tasks/:id/cancel             abort in-flight task
 // GET    /api/tasks/:id/node-runs          per-node run rows + captured outputs
 // GET    /api/tasks/:id/diff               cumulative git diff in the worktree
@@ -40,6 +41,7 @@ import type {
   TaskRouteLifecycleAlertNotice,
 } from '@/modules/task-execution/public/types'
 import type { TaskDiagnostics } from '../../application/ports/taskDiagnostics'
+import type { TaskChildrenQuery } from '../../application/ports/taskChildren'
 import type { TaskRouteOperations } from '@/modules/task-execution/public/commands'
 
 function broadcastLifecycleAlert(
@@ -70,6 +72,7 @@ const LIFECYCLE_ALERT_NOTICES: TaskLifecycleAlertNotices = Object.freeze({
 
 export interface TaskRouteDependencies {
   readonly workspaceQueries: TaskWorkspaceQueries
+  readonly children: TaskChildrenQuery
   readonly operations: TaskRouteOperations
   /** RFC-452: alerts, recovery audit, diagnose and the node-run session / inventory / startup reads. */
   readonly diagnostics: TaskDiagnostics
@@ -87,6 +90,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
   if (deps.diagnostics === undefined) {
     throw new Error('task-diagnostics-not-composed')
   }
+  if (deps.children === undefined) throw new Error('task-children-query-not-composed')
   const { operations, diagnostics } = deps
   registerRoute(
     app,
@@ -185,6 +189,30 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     await operations.assertVisible(actorOf(c), c.req.param('id'))
     await next()
   })
+
+  registerRoute(
+    app,
+    {
+      method: 'GET',
+      path: '/api/tasks/:id/children',
+      permissions: ['tasks:read'],
+      tokenAccess: 'allow',
+      summary: 'Page direct child task identities and statuses',
+    },
+    async (c) => {
+      const actor = actorOf(c)
+      return c.json(
+        await deps.children.list(
+          { userId: actor.user.id, canReadAllTasks: actor.permissions.has('tasks:read:all') },
+          {
+            parentTaskId: c.req.param('id'),
+            limit: c.req.query('limit'),
+            cursor: c.req.query('cursor'),
+          },
+        ),
+      )
+    },
+  )
 
   registerRoute(
     app,

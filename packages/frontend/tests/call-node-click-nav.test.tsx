@@ -178,6 +178,12 @@ describe('callNavIsReachable (proof of absence, not absence of proof)', () => {
     // D5 treats query failure as absence-of-proof, so stale [] must not demote.
     expect(callNavIsReachable('kid-a', [], true)).toBe(true)
   })
+
+  test('RFC-602: an unfinished refresh cannot use the previous complete array as absence evidence', () => {
+    expect(callNavIsReachable('new-child', [], false, true)).toBe(true)
+    expect(callNavIsReachable('new-child', [], false, false)).toBe(false)
+    expect(callNavIsReachable('new-child', [{ id: 'new-child' }], false, false)).toBe(true)
+  })
 })
 
 // --- group 3: node render -------------------------------------------------
@@ -416,7 +422,9 @@ describe('tasks.detail call-node wiring', () => {
 
   test('reachability gate is applied when building callNavByNode', async () => {
     const src = await read('src/routes/tasks.detail.tsx')
-    expect(src).toMatch(/callNavIsReachable\(nav\.childTaskId, children\.data, children\.isError\)/)
+    expect(src).toMatch(
+      /callNavIsReachable\(\s*nav\.childTaskId,\s*children\.data,\s*children\.isError,\s*children\.isFetching,?\s*\)/,
+    )
   })
 })
 

@@ -7,6 +7,7 @@ import type {
 import type { Actor } from '@/auth/actor'
 import type { AclRow } from '../../domain/resourceAccess'
 import type { CatalogSelectorKind } from '../../domain/resourceKinds'
+import type { CatalogResourceRef } from '../../domain/resourceRef'
 import type { ResourceSummary } from '../../public/types'
 
 /** ACL identity tables whose aggregate writer belongs to resource-catalog. */
@@ -135,8 +136,10 @@ export interface ResourceCatalogSummaryReadQuery {
   readonly limit: number
 }
 
-/** One provider-owned classic-six page; cross-kind merge/cursor stays application-owned. */
+/** Provider-owned classic-six projections; cross-kind merge/cursor stays application-owned. */
 export interface ResourceCatalogSummaryReadPort {
+  /** Exact kind/id lookup with the same projection as listKind; no page traversal. */
+  readOne(actor: Actor, ref: CatalogResourceRef): Promise<ResourceSummary | null>
   listKind(
     actor: Actor,
     kind: CatalogSelectorKind,

@@ -98,6 +98,8 @@ import type { SourceRow, TargetRow } from '@/platform/persistence/migration/conv
 import { contentRefColumns } from '@/platform/content/contentStore'
 import { sha256Hex } from '@/platform/contracts/hash'
 import { createCodeHistoryPackageReader } from '@/modules/code-capability/infrastructure/history/packageReader'
+import { createCodeHistoryIndexCommands } from '@/modules/code-capability/infrastructure/history/queryIndexBuilder'
+import { createCodeHistoryQueryReader } from '@/modules/code-capability/infrastructure/history/queryIndexRead'
 import {
   CODE_HISTORY_TABLES,
   codeHistoryOriginalId,
@@ -134,6 +136,19 @@ export function historyFixtureReader(db: PersistenceDb, source = historyFixtureS
     content: historyFixtureContent,
     installation: { kind: 'converted', source },
   })
+}
+/** Test setup mirrors the daemon's explicit initialization barrier, before reads. */
+export async function preparedHistoryFixtureReader(
+  db: PersistenceDb,
+  source = historyFixtureSource,
+) {
+  const installation = { kind: 'converted' as const, source }
+  await createCodeHistoryIndexCommands({
+    db,
+    content: historyFixtureContent,
+    installation,
+  }).initialize()
+  return createCodeHistoryQueryReader({ db, installation })
 }
 export function historyFixtureArchive(
   table: CodeHistoryTable,

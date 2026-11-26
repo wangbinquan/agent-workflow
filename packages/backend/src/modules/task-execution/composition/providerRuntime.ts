@@ -37,6 +37,9 @@ import type {
 } from '../application/ports/subjectTaskLaunch'
 import type { TaskCancellationCommand } from '../application/ports/taskCancellationCommand'
 import type { TaskOverviewQuery } from '../application/ports/taskOverviewQuery'
+import type { TaskChildrenQuery } from '../application/ports/taskChildren'
+import { createTaskChildrenQuery } from '../application/taskChildren'
+import { createTaskChildrenRead } from '../infrastructure/taskChildrenRead'
 import type { TaskClarifyDirectiveRouteOperations, TaskExecutionReadModels } from '../public/types'
 import {
   createTaskExecutionRuntimeParticipants,
@@ -128,6 +131,7 @@ export interface SelectedTaskExecutionProviderRuntime {
   }>
   readonly routes: Readonly<{
     readonly tasks: TaskRouteOperations
+    readonly children: TaskChildrenQuery
     readonly clarifyDirective: TaskClarifyDirectiveRouteOperations
   }>
   readonly background: TaskExecutionBackgroundControl
@@ -433,6 +437,7 @@ export function composeTaskExecutionProviderRuntime(
     }),
     routes: Object.freeze({
       tasks: taskRoutes,
+      children: createTaskChildrenQuery(createTaskChildrenRead(db)),
       clarifyDirective: routeDependencies.clarifyDirective,
     }),
     workgroupTaskRoom: composeWorkgroupTaskRoomTaskParticipantFactory({

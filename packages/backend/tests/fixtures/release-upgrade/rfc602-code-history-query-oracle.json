@@ -1,0 +1,619 @@
+{
+  "formatVersion": 1,
+  "authority": "independent-rfc602-specification",
+  "sourceGeneration": "rfc602-curated-history",
+  "sourceContract": "sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c",
+  "buildId": "rfc602-build-ready",
+  "sourceRows": {
+    "code_work_items": [
+      {
+        "id": "rfc602-item",
+        "code_host_endpoint_id": "rfc602-endpoint",
+        "stable_project_id": "rfc602-project",
+        "capability": "review",
+        "anchor_kind": "mr",
+        "anchor_id": "42",
+        "status": "closed",
+        "epoch": 2,
+        "current_round_id": "rfc602-round",
+        "initiator_user_id": null,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500020,
+        "closed_at": 1778459500020,
+        "pending_generation": null,
+        "handed_off_fingerprint": null,
+        "publishing_epoch": null,
+        "pending_revision": null,
+        "anchor_meta": null
+      }
+    ],
+    "code_work_rounds": [
+      {
+        "id": "rfc602-round",
+        "work_item_id": "rfc602-item",
+        "round_seq": 2,
+        "epoch": 2,
+        "baseline_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "stage_contract_ver": 1,
+        "outcome": "published",
+        "started_at": 1778459500000,
+        "ended_at": 1778459500020,
+        "task_id": null,
+        "work_package": null,
+        "template_snapshot": null
+      }
+    ],
+    "code_round_stages": [
+      {
+        "id": "rfc602-stage",
+        "round_id": "rfc602-round",
+        "stage_seq": 1,
+        "stage_name": "review",
+        "stage_kind": "ai",
+        "status": "done",
+        "started_at": 1778459500000,
+        "ended_at": 1778459500020,
+        "counts_json": null,
+        "error": null
+      }
+    ],
+    "code_ai_attempts": [
+      {
+        "id": "rfc602-attempt",
+        "round_id": "rfc602-round",
+        "stage_name": "review",
+        "shard_key": "",
+        "rerun_seq": 0,
+        "attempt_seq": 1,
+        "status": "validated",
+        "validation_outcome": "valid",
+        "session_ref": null,
+        "node_run_id": null,
+        "started_at": 1778459500000,
+        "ended_at": 1778459500010
+      }
+    ],
+    "code_trigger_deliveries": [
+      {
+        "id": "rfc602-delivery",
+        "correlation_id": "rfc602-correlation",
+        "code_host_endpoint_id": "rfc602-endpoint",
+        "stable_project_id": "rfc602-project",
+        "anchor_kind": "mr",
+        "anchor_id": "42",
+        "capability": "review",
+        "step": "published",
+        "outcome": "ok",
+        "round_id": "rfc602-round",
+        "is_probe": false,
+        "created_at": 1778459500020,
+        "updated_at": 1778459500021,
+        "reason": null,
+        "queued_at": null,
+        "queue_position": null,
+        "waiting_on": null
+      }
+    ],
+    "code_findings": [
+      {
+        "id": "rfc602-finding-0",
+        "code_host_endpoint_id": "rfc602-endpoint",
+        "stable_project_id": "rfc602-project",
+        "anchor_kind": "mr",
+        "anchor_id": "42",
+        "capability": "review",
+        "fingerprint": "rfc602-fingerprint-0",
+        "generation": 1,
+        "lifecycle": "active",
+        "external_id": "101",
+        "resolved_at": 1778459500030,
+        "code_changed_at": 1778459500031,
+        "created_at": 1778459500000,
+        "last_seen_at": 1778459500040,
+        "severity": null,
+        "title": null,
+        "file_path": null,
+        "anchor_line": null,
+        "published_round_id": null,
+        "disappeared_round_id": null,
+        "resolved_round_id": null,
+        "code_changed_round_id": null,
+        "closed_at": null
+      },
+      {
+        "id": "rfc602-finding-1",
+        "code_host_endpoint_id": "rfc602-endpoint",
+        "stable_project_id": "rfc602-project",
+        "anchor_kind": "mr",
+        "anchor_id": "42",
+        "capability": "review",
+        "fingerprint": "rfc602-fingerprint-1",
+        "generation": 1,
+        "lifecycle": "active",
+        "external_id": "102",
+        "resolved_at": null,
+        "code_changed_at": 1778459500031,
+        "created_at": 1778459500001,
+        "last_seen_at": 1778459500040,
+        "severity": null,
+        "title": null,
+        "file_path": null,
+        "anchor_line": null,
+        "published_round_id": null,
+        "disappeared_round_id": null,
+        "resolved_round_id": null,
+        "code_changed_round_id": null,
+        "closed_at": null
+      },
+      {
+        "id": "rfc602-finding-2",
+        "code_host_endpoint_id": "rfc602-endpoint",
+        "stable_project_id": "rfc602-project",
+        "anchor_kind": "mr",
+        "anchor_id": "42",
+        "capability": "review",
+        "fingerprint": "rfc602-fingerprint-2",
+        "generation": 1,
+        "lifecycle": "active",
+        "external_id": "103",
+        "resolved_at": 1778459500030,
+        "code_changed_at": null,
+        "created_at": 1778459500002,
+        "last_seen_at": 1778459500040,
+        "severity": null,
+        "title": null,
+        "file_path": null,
+        "anchor_line": null,
+        "published_round_id": null,
+        "disappeared_round_id": null,
+        "resolved_round_id": null,
+        "code_changed_round_id": null,
+        "closed_at": null
+      },
+      {
+        "id": "rfc602-finding-3",
+        "code_host_endpoint_id": "rfc602-endpoint",
+        "stable_project_id": "rfc602-project",
+        "anchor_kind": "mr",
+        "anchor_id": "42",
+        "capability": "review",
+        "fingerprint": "rfc602-fingerprint-3",
+        "generation": 1,
+        "lifecycle": "active",
+        "external_id": "104",
+        "resolved_at": null,
+        "code_changed_at": null,
+        "created_at": 1778459500003,
+        "last_seen_at": 1778459500040,
+        "severity": null,
+        "title": null,
+        "file_path": null,
+        "anchor_line": null,
+        "published_round_id": null,
+        "disappeared_round_id": null,
+        "resolved_round_id": null,
+        "code_changed_round_id": null,
+        "closed_at": null
+      }
+    ]
+  },
+  "expectedProjectionRows": {
+    "code_history_query_records": [
+      {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_ai_attempts",
+        "original_id": "rfc602-attempt",
+        "archive_id": "rfc602-archive-code_ai_attempts",
+        "record_ordinal": 0,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-attempt\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-attempt\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-attempt\"}],[\"round_id\",{\"type\":\"text\",\"value\":\"rfc602-round\"}],[\"stage_name\",{\"type\":\"text\",\"value\":\"review\"}],[\"shard_key\",{\"type\":\"text\",\"value\":\"\"}],[\"rerun_seq\",{\"type\":\"integer\",\"value\":\"0\"}],[\"attempt_seq\",{\"type\":\"integer\",\"value\":\"1\"}],[\"status\",{\"type\":\"text\",\"value\":\"validated\"}],[\"validation_outcome\",{\"type\":\"text\",\"value\":\"valid\"}],[\"session_ref\",{\"type\":\"null\"}],[\"node_run_id\",{\"type\":\"null\"}],[\"started_at\",{\"type\":\"integer\",\"value\":\"1778459500000\"}],[\"ended_at\",{\"type\":\"integer\",\"value\":\"1778459500010\"}]],\"raw\":{\"id\":\"rfc602-attempt\",\"round_id\":\"rfc602-round\",\"stage_name\":\"review\",\"shard_key\":\"\",\"rerun_seq\":0,\"attempt_seq\":1,\"status\":\"validated\",\"validation_outcome\":\"valid\",\"session_ref\":null,\"node_run_id\":null,\"started_at\":1778459500000,\"ended_at\":1778459500010}}"
+      },
+      {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_findings",
+        "original_id": "rfc602-finding-0",
+        "archive_id": "rfc602-archive-code_findings",
+        "record_ordinal": 0,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-finding-0\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-finding-0\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-finding-0\"}],[\"code_host_endpoint_id\",{\"type\":\"text\",\"value\":\"rfc602-endpoint\"}],[\"stable_project_id\",{\"type\":\"text\",\"value\":\"rfc602-project\"}],[\"anchor_kind\",{\"type\":\"text\",\"value\":\"mr\"}],[\"anchor_id\",{\"type\":\"text\",\"value\":\"42\"}],[\"capability\",{\"type\":\"text\",\"value\":\"review\"}],[\"fingerprint\",{\"type\":\"text\",\"value\":\"rfc602-fingerprint-0\"}],[\"generation\",{\"type\":\"integer\",\"value\":\"1\"}],[\"lifecycle\",{\"type\":\"text\",\"value\":\"active\"}],[\"severity\",{\"type\":\"null\"}],[\"title\",{\"type\":\"null\"}],[\"file_path\",{\"type\":\"null\"}],[\"anchor_line\",{\"type\":\"null\"}],[\"external_id\",{\"type\":\"text\",\"value\":\"101\"}],[\"published_round_id\",{\"type\":\"null\"}],[\"disappeared_round_id\",{\"type\":\"null\"}],[\"resolved_at\",{\"type\":\"integer\",\"value\":\"1778459500030\"}],[\"resolved_round_id\",{\"type\":\"null\"}],[\"code_changed_at\",{\"type\":\"integer\",\"value\":\"1778459500031\"}],[\"code_changed_round_id\",{\"type\":\"null\"}],[\"created_at\",{\"type\":\"integer\",\"value\":\"1778459500000\"}],[\"last_seen_at\",{\"type\":\"integer\",\"value\":\"1778459500040\"}],[\"closed_at\",{\"type\":\"null\"}]],\"raw\":{\"id\":\"rfc602-finding-0\",\"code_host_endpoint_id\":\"rfc602-endpoint\",\"stable_project_id\":\"rfc602-project\",\"anchor_kind\":\"mr\",\"anchor_id\":\"42\",\"capability\":\"review\",\"fingerprint\":\"rfc602-fingerprint-0\",\"generation\":1,\"lifecycle\":\"active\",\"external_id\":\"101\",\"resolved_at\":1778459500030,\"code_changed_at\":1778459500031,\"created_at\":1778459500000,\"last_seen_at\":1778459500040,\"severity\":null,\"title\":null,\"file_path\":null,\"anchor_line\":null,\"published_round_id\":null,\"disappeared_round_id\":null,\"resolved_round_id\":null,\"code_changed_round_id\":null,\"closed_at\":null}}"
+      },
+      {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_findings",
+        "original_id": "rfc602-finding-1",
+        "archive_id": "rfc602-archive-code_findings",
+        "record_ordinal": 1,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-finding-1\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-finding-1\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-finding-1\"}],[\"code_host_endpoint_id\",{\"type\":\"text\",\"value\":\"rfc602-endpoint\"}],[\"stable_project_id\",{\"type\":\"text\",\"value\":\"rfc602-project\"}],[\"anchor_kind\",{\"type\":\"text\",\"value\":\"mr\"}],[\"anchor_id\",{\"type\":\"text\",\"value\":\"42\"}],[\"capability\",{\"type\":\"text\",\"value\":\"review\"}],[\"fingerprint\",{\"type\":\"text\",\"value\":\"rfc602-fingerprint-1\"}],[\"generation\",{\"type\":\"integer\",\"value\":\"1\"}],[\"lifecycle\",{\"type\":\"text\",\"value\":\"active\"}],[\"severity\",{\"type\":\"null\"}],[\"title\",{\"type\":\"null\"}],[\"file_path\",{\"type\":\"null\"}],[\"anchor_line\",{\"type\":\"null\"}],[\"external_id\",{\"type\":\"text\",\"value\":\"102\"}],[\"published_round_id\",{\"type\":\"null\"}],[\"disappeared_round_id\",{\"type\":\"null\"}],[\"resolved_at\",{\"type\":\"null\"}],[\"resolved_round_id\",{\"type\":\"null\"}],[\"code_changed_at\",{\"type\":\"integer\",\"value\":\"1778459500031\"}],[\"code_changed_round_id\",{\"type\":\"null\"}],[\"created_at\",{\"type\":\"integer\",\"value\":\"1778459500001\"}],[\"last_seen_at\",{\"type\":\"integer\",\"value\":\"1778459500040\"}],[\"closed_at\",{\"type\":\"null\"}]],\"raw\":{\"id\":\"rfc602-finding-1\",\"code_host_endpoint_id\":\"rfc602-endpoint\",\"stable_project_id\":\"rfc602-project\",\"anchor_kind\":\"mr\",\"anchor_id\":\"42\",\"capability\":\"review\",\"fingerprint\":\"rfc602-fingerprint-1\",\"generation\":1,\"lifecycle\":\"active\",\"external_id\":\"102\",\"resolved_at\":null,\"code_changed_at\":1778459500031,\"created_at\":1778459500001,\"last_seen_at\":1778459500040,\"severity\":null,\"title\":null,\"file_path\":null,\"anchor_line\":null,\"published_round_id\":null,\"disappeared_round_id\":null,\"resolved_round_id\":null,\"code_changed_round_id\":null,\"closed_at\":null}}"
+      },
+      {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_findings",
+        "original_id": "rfc602-finding-2",
+        "archive_id": "rfc602-archive-code_findings",
+        "record_ordinal": 2,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-finding-2\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-finding-2\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-finding-2\"}],[\"code_host_endpoint_id\",{\"type\":\"text\",\"value\":\"rfc602-endpoint\"}],[\"stable_project_id\",{\"type\":\"text\",\"value\":\"rfc602-project\"}],[\"anchor_kind\",{\"type\":\"text\",\"value\":\"mr\"}],[\"anchor_id\",{\"type\":\"text\",\"value\":\"42\"}],[\"capability\",{\"type\":\"text\",\"value\":\"review\"}],[\"fingerprint\",{\"type\":\"text\",\"value\":\"rfc602-fingerprint-2\"}],[\"generation\",{\"type\":\"integer\",\"value\":\"1\"}],[\"lifecycle\",{\"type\":\"text\",\"value\":\"active\"}],[\"severity\",{\"type\":\"null\"}],[\"title\",{\"type\":\"null\"}],[\"file_path\",{\"type\":\"null\"}],[\"anchor_line\",{\"type\":\"null\"}],[\"external_id\",{\"type\":\"text\",\"value\":\"103\"}],[\"published_round_id\",{\"type\":\"null\"}],[\"disappeared_round_id\",{\"type\":\"null\"}],[\"resolved_at\",{\"type\":\"integer\",\"value\":\"1778459500030\"}],[\"resolved_round_id\",{\"type\":\"null\"}],[\"code_changed_at\",{\"type\":\"null\"}],[\"code_changed_round_id\",{\"type\":\"null\"}],[\"created_at\",{\"type\":\"integer\",\"value\":\"1778459500002\"}],[\"last_seen_at\",{\"type\":\"integer\",\"value\":\"1778459500040\"}],[\"closed_at\",{\"type\":\"null\"}]],\"raw\":{\"id\":\"rfc602-finding-2\",\"code_host_endpoint_id\":\"rfc602-endpoint\",\"stable_project_id\":\"rfc602-project\",\"anchor_kind\":\"mr\",\"anchor_id\":\"42\",\"capability\":\"review\",\"fingerprint\":\"rfc602-fingerprint-2\",\"generation\":1,\"lifecycle\":\"active\",\"external_id\":\"103\",\"resolved_at\":1778459500030,\"code_changed_at\":null,\"created_at\":1778459500002,\"last_seen_at\":1778459500040,\"severity\":null,\"title\":null,\"file_path\":null,\"anchor_line\":null,\"published_round_id\":null,\"disappeared_round_id\":null,\"resolved_round_id\":null,\"code_changed_round_id\":null,\"closed_at\":null}}"
+      },
+      {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_findings",
+        "original_id": "rfc602-finding-3",
+        "archive_id": "rfc602-archive-code_findings",
+        "record_ordinal": 3,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-finding-3\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-finding-3\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-finding-3\"}],[\"code_host_endpoint_id\",{\"type\":\"text\",\"value\":\"rfc602-endpoint\"}],[\"stable_project_id\",{\"type\":\"text\",\"value\":\"rfc602-project\"}],[\"anchor_kind\",{\"type\":\"text\",\"value\":\"mr\"}],[\"anchor_id\",{\"type\":\"text\",\"value\":\"42\"}],[\"capability\",{\"type\":\"text\",\"value\":\"review\"}],[\"fingerprint\",{\"type\":\"text\",\"value\":\"rfc602-fingerprint-3\"}],[\"generation\",{\"type\":\"integer\",\"value\":\"1\"}],[\"lifecycle\",{\"type\":\"text\",\"value\":\"active\"}],[\"severity\",{\"type\":\"null\"}],[\"title\",{\"type\":\"null\"}],[\"file_path\",{\"type\":\"null\"}],[\"anchor_line\",{\"type\":\"null\"}],[\"external_id\",{\"type\":\"text\",\"value\":\"104\"}],[\"published_round_id\",{\"type\":\"null\"}],[\"disappeared_round_id\",{\"type\":\"null\"}],[\"resolved_at\",{\"type\":\"null\"}],[\"resolved_round_id\",{\"type\":\"null\"}],[\"code_changed_at\",{\"type\":\"null\"}],[\"code_changed_round_id\",{\"type\":\"null\"}],[\"created_at\",{\"type\":\"integer\",\"value\":\"1778459500003\"}],[\"last_seen_at\",{\"type\":\"integer\",\"value\":\"1778459500040\"}],[\"closed_at\",{\"type\":\"null\"}]],\"raw\":{\"id\":\"rfc602-finding-3\",\"code_host_endpoint_id\":\"rfc602-endpoint\",\"stable_project_id\":\"rfc602-project\",\"anchor_kind\":\"mr\",\"anchor_id\":\"42\",\"capability\":\"review\",\"fingerprint\":\"rfc602-fingerprint-3\",\"generation\":1,\"lifecycle\":\"active\",\"external_id\":\"104\",\"resolved_at\":null,\"code_changed_at\":null,\"created_at\":1778459500003,\"last_seen_at\":1778459500040,\"severity\":null,\"title\":null,\"file_path\":null,\"anchor_line\":null,\"published_round_id\":null,\"disappeared_round_id\":null,\"resolved_round_id\":null,\"code_changed_round_id\":null,\"closed_at\":null}}"
+      },
+      {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_round_stages",
+        "original_id": "rfc602-stage",
+        "archive_id": "rfc602-archive-code_round_stages",
+        "record_ordinal": 0,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-stage\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-stage\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-stage\"}],[\"round_id\",{\"type\":\"text\",\"value\":\"rfc602-round\"}],[\"stage_seq\",{\"type\":\"integer\",\"value\":\"1\"}],[\"stage_name\",{\"type\":\"text\",\"value\":\"review\"}],[\"stage_kind\",{\"type\":\"text\",\"value\":\"ai\"}],[\"status\",{\"type\":\"text\",\"value\":\"done\"}],[\"counts_json\",{\"type\":\"null\"}],[\"error\",{\"type\":\"null\"}],[\"started_at\",{\"type\":\"integer\",\"value\":\"1778459500000\"}],[\"ended_at\",{\"type\":\"integer\",\"value\":\"1778459500020\"}]],\"raw\":{\"id\":\"rfc602-stage\",\"round_id\":\"rfc602-round\",\"stage_seq\":1,\"stage_name\":\"review\",\"stage_kind\":\"ai\",\"status\":\"done\",\"started_at\":1778459500000,\"ended_at\":1778459500020,\"counts_json\":null,\"error\":null}}"
+      },
+      {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_trigger_deliveries",
+        "original_id": "rfc602-delivery",
+        "archive_id": "rfc602-archive-code_trigger_deliveries",
+        "record_ordinal": 0,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-delivery\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-delivery\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-delivery\"}],[\"correlation_id\",{\"type\":\"text\",\"value\":\"rfc602-correlation\"}],[\"code_host_endpoint_id\",{\"type\":\"text\",\"value\":\"rfc602-endpoint\"}],[\"stable_project_id\",{\"type\":\"text\",\"value\":\"rfc602-project\"}],[\"anchor_kind\",{\"type\":\"text\",\"value\":\"mr\"}],[\"anchor_id\",{\"type\":\"text\",\"value\":\"42\"}],[\"capability\",{\"type\":\"text\",\"value\":\"review\"}],[\"step\",{\"type\":\"text\",\"value\":\"published\"}],[\"outcome\",{\"type\":\"text\",\"value\":\"ok\"}],[\"reason\",{\"type\":\"null\"}],[\"queued_at\",{\"type\":\"null\"}],[\"queue_position\",{\"type\":\"null\"}],[\"waiting_on\",{\"type\":\"null\"}],[\"round_id\",{\"type\":\"text\",\"value\":\"rfc602-round\"}],[\"is_probe\",{\"type\":\"boolean\",\"value\":false}],[\"created_at\",{\"type\":\"integer\",\"value\":\"1778459500020\"}],[\"updated_at\",{\"type\":\"integer\",\"value\":\"1778459500021\"}]],\"raw\":{\"id\":\"rfc602-delivery\",\"correlation_id\":\"rfc602-correlation\",\"code_host_endpoint_id\":\"rfc602-endpoint\",\"stable_project_id\":\"rfc602-project\",\"anchor_kind\":\"mr\",\"anchor_id\":\"42\",\"capability\":\"review\",\"step\":\"published\",\"outcome\":\"ok\",\"round_id\":\"rfc602-round\",\"is_probe\":false,\"created_at\":1778459500020,\"updated_at\":1778459500021,\"reason\":null,\"queued_at\":null,\"queue_position\":null,\"waiting_on\":null}}"
+      },
+      {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_work_items",
+        "original_id": "rfc602-item",
+        "archive_id": "rfc602-archive-code_work_items",
+        "record_ordinal": 0,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-item\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-item\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-item\"}],[\"code_host_endpoint_id\",{\"type\":\"text\",\"value\":\"rfc602-endpoint\"}],[\"stable_project_id\",{\"type\":\"text\",\"value\":\"rfc602-project\"}],[\"capability\",{\"type\":\"text\",\"value\":\"review\"}],[\"anchor_kind\",{\"type\":\"text\",\"value\":\"mr\"}],[\"anchor_id\",{\"type\":\"text\",\"value\":\"42\"}],[\"status\",{\"type\":\"text\",\"value\":\"closed\"}],[\"epoch\",{\"type\":\"integer\",\"value\":\"2\"}],[\"current_round_id\",{\"type\":\"text\",\"value\":\"rfc602-round\"}],[\"pending_generation\",{\"type\":\"null\"}],[\"handed_off_fingerprint\",{\"type\":\"null\"}],[\"publishing_epoch\",{\"type\":\"null\"}],[\"pending_revision\",{\"type\":\"null\"}],[\"anchor_meta\",{\"type\":\"null\"}],[\"initiator_user_id\",{\"type\":\"null\"}],[\"created_at\",{\"type\":\"integer\",\"value\":\"1778459500000\"}],[\"updated_at\",{\"type\":\"integer\",\"value\":\"1778459500020\"}],[\"closed_at\",{\"type\":\"integer\",\"value\":\"1778459500020\"}]],\"raw\":{\"id\":\"rfc602-item\",\"code_host_endpoint_id\":\"rfc602-endpoint\",\"stable_project_id\":\"rfc602-project\",\"capability\":\"review\",\"anchor_kind\":\"mr\",\"anchor_id\":\"42\",\"status\":\"closed\",\"epoch\":2,\"current_round_id\":\"rfc602-round\",\"initiator_user_id\":null,\"created_at\":1778459500000,\"updated_at\":1778459500020,\"closed_at\":1778459500020,\"pending_generation\":null,\"handed_off_fingerprint\":null,\"publishing_epoch\":null,\"pending_revision\":null,\"anchor_meta\":null}}"
+      },
+      {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_work_rounds",
+        "original_id": "rfc602-round",
+        "archive_id": "rfc602-archive-code_work_rounds",
+        "record_ordinal": 0,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-round\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-round\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-round\"}],[\"work_item_id\",{\"type\":\"text\",\"value\":\"rfc602-item\"}],[\"round_seq\",{\"type\":\"integer\",\"value\":\"2\"}],[\"epoch\",{\"type\":\"integer\",\"value\":\"2\"}],[\"task_id\",{\"type\":\"null\"}],[\"baseline_sha\",{\"type\":\"text\",\"value\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}],[\"work_package\",{\"type\":\"null\"}],[\"template_snapshot\",{\"type\":\"null\"}],[\"stage_contract_ver\",{\"type\":\"integer\",\"value\":\"1\"}],[\"outcome\",{\"type\":\"text\",\"value\":\"published\"}],[\"started_at\",{\"type\":\"integer\",\"value\":\"1778459500000\"}],[\"ended_at\",{\"type\":\"integer\",\"value\":\"1778459500020\"}]],\"raw\":{\"id\":\"rfc602-round\",\"work_item_id\":\"rfc602-item\",\"round_seq\":2,\"epoch\":2,\"baseline_sha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"stage_contract_ver\":1,\"outcome\":\"published\",\"started_at\":1778459500000,\"ended_at\":1778459500020,\"task_id\":null,\"work_package\":null,\"template_snapshot\":null}}"
+      }
+    ],
+    "code_history_query_work_items": [
+      {
+        "build_id": "rfc602-build-ready",
+        "id": "rfc602-item",
+        "code_host_endpoint_id": "rfc602-endpoint",
+        "stable_project_id": "rfc602-project",
+        "capability": "review",
+        "anchor_kind": "mr",
+        "anchor_id": "42",
+        "status": "closed",
+        "epoch": 2,
+        "created_at": 1778459500000,
+        "round_count": 1,
+        "id_order_key": "007200660063003600300032002d006900740065006d"
+      }
+    ],
+    "code_history_query_rounds": [
+      {
+        "build_id": "rfc602-build-ready",
+        "id": "rfc602-round",
+        "work_item_id": "rfc602-item",
+        "round_seq": 2,
+        "outcome": "published",
+        "stage_contract_ver": 1,
+        "baseline_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "started_at": 1778459500000,
+        "ended_at": 1778459500020,
+        "rank": 0,
+        "source_ordinal": 0
+      }
+    ],
+    "code_history_query_stages": [
+      {
+        "build_id": "rfc602-build-ready",
+        "id": "rfc602-stage",
+        "round_id": "rfc602-round",
+        "stage_name": "review",
+        "stage_seq": 1,
+        "stage_kind": "ai",
+        "status": "done",
+        "error": null,
+        "started_at": 1778459500000,
+        "ended_at": 1778459500020,
+        "source_ordinal": 0
+      }
+    ],
+    "code_history_query_attempts": [
+      {
+        "build_id": "rfc602-build-ready",
+        "id": "rfc602-attempt",
+        "round_id": "rfc602-round",
+        "stage_name": "review",
+        "shard_key": "",
+        "rerun_seq": 0,
+        "attempt_seq": 1,
+        "status": "validated",
+        "validation_outcome": "valid",
+        "session_ref": null,
+        "node_run_id": null,
+        "started_at": 1778459500000,
+        "ended_at": 1778459500010,
+        "source_ordinal": 0
+      }
+    ],
+    "code_history_query_deliveries": [
+      {
+        "build_id": "rfc602-build-ready",
+        "id": "rfc602-delivery",
+        "correlation_id": "rfc602-correlation",
+        "stable_project_id": "rfc602-project",
+        "capability": "review",
+        "step": "published",
+        "outcome": "ok",
+        "reason": null,
+        "queued_at": null,
+        "queue_position": null,
+        "waiting_on": null,
+        "round_id": "rfc602-round",
+        "is_probe": false,
+        "created_at": 1778459500020,
+        "updated_at": 1778459500021,
+        "source_ordinal": 0
+      }
+    ],
+    "code_history_metric_totals": [
+      {
+        "build_id": "rfc602-build-ready",
+        "capability": "review",
+        "published": 4,
+        "adopted": 1,
+        "quiet_fix": 1,
+        "disagreed": 1,
+        "outstanding": 1,
+        "rounds": 1,
+        "run_published": 1,
+        "run_failed": 0,
+        "run_awaiting": 0,
+        "incomplete": 0
+      }
+    ],
+    "code_history_metric_prefixes": [
+      {
+        "build_id": "rfc602-build-ready",
+        "capability": "review",
+        "occurred_at": 1778459500000,
+        "published": 1,
+        "adopted": 1,
+        "quiet_fix": 0,
+        "disagreed": 0,
+        "outstanding": 0,
+        "rounds": 1,
+        "run_published": 1,
+        "run_failed": 0,
+        "run_awaiting": 0,
+        "incomplete": 0
+      },
+      {
+        "build_id": "rfc602-build-ready",
+        "capability": "review",
+        "occurred_at": 1778459500001,
+        "published": 2,
+        "adopted": 1,
+        "quiet_fix": 1,
+        "disagreed": 0,
+        "outstanding": 0,
+        "rounds": 1,
+        "run_published": 1,
+        "run_failed": 0,
+        "run_awaiting": 0,
+        "incomplete": 0
+      },
+      {
+        "build_id": "rfc602-build-ready",
+        "capability": "review",
+        "occurred_at": 1778459500002,
+        "published": 3,
+        "adopted": 1,
+        "quiet_fix": 1,
+        "disagreed": 1,
+        "outstanding": 0,
+        "rounds": 1,
+        "run_published": 1,
+        "run_failed": 0,
+        "run_awaiting": 0,
+        "incomplete": 0
+      },
+      {
+        "build_id": "rfc602-build-ready",
+        "capability": "review",
+        "occurred_at": 1778459500003,
+        "published": 4,
+        "adopted": 1,
+        "quiet_fix": 1,
+        "disagreed": 1,
+        "outstanding": 1,
+        "rounds": 1,
+        "run_published": 1,
+        "run_failed": 0,
+        "run_awaiting": 0,
+        "incomplete": 0
+      }
+    ],
+    "code_history_query_builds": [
+      {
+        "id": "rfc602-build-ready",
+        "source_generation": "rfc602-curated-history",
+        "source_contract": "sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c",
+        "projection_version": 1,
+        "manifest_digest": "7e6db0a12b44a6d8ae59bc8e01dfc6e1c67ecda142d65effe32bf5b60636c657",
+        "archive_manifest_json": "[\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_ai_attempts\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"2841ff11d4cbc44f8c47cd29b2bbfe55281c87c63afd89d48490852736937fb5\\\",\\\"size\\\":1879,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_ai_attempts\",\n    \"rootDigest\": \"sha256:2841ff11d4cbc44f8c47cd29b2bbfe55281c87c63afd89d48490852736937fb5\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_ai_attempts\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_artifacts\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"31248ac338dedfb4a40de296aa1eceacd0148577a2c0586f920b47654199398a\\\",\\\"size\\\":222,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_artifacts\",\n    \"rootDigest\": \"sha256:31248ac338dedfb4a40de296aa1eceacd0148577a2c0586f920b47654199398a\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_artifacts\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_findings\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"a623169560556f0140565e246bf8019f471ebb9333eea22dad4e34327d24bd45\\\",\\\"size\\\":11263,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_findings\",\n    \"rootDigest\": \"sha256:a623169560556f0140565e246bf8019f471ebb9333eea22dad4e34327d24bd45\",\n    \"rowCount\": 4,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_findings\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_fix_attempts\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"188952fa727a11374271d553418950b423b84b28d03c0ed02b021a0cfe710caa\\\",\\\"size\\\":225,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_fix_attempts\",\n    \"rootDigest\": \"sha256:188952fa727a11374271d553418950b423b84b28d03c0ed02b021a0cfe710caa\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_fix_attempts\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_mr_leases\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"3845e9055b489cf3189051db3122d6ad25f2e2f6bbd6da095bfac729209c5c36\\\",\\\"size\\\":222,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_mr_leases\",\n    \"rootDigest\": \"sha256:3845e9055b489cf3189051db3122d6ad25f2e2f6bbd6da095bfac729209c5c36\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_mr_leases\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_produced_mrs\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"ac0485f6b6bf663fd0fddd281583f121e648b7fb0be100f452ca67905e07b2c2\\\",\\\"size\\\":225,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_produced_mrs\",\n    \"rootDigest\": \"sha256:ac0485f6b6bf663fd0fddd281583f121e648b7fb0be100f452ca67905e07b2c2\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_produced_mrs\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_publish_intents\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"17ae1bb28445ecc571ab4f7d9b9c99d6db3ee1735d4c2bbdb5cb87f99d878896\\\",\\\"size\\\":228,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_publish_intents\",\n    \"rootDigest\": \"sha256:17ae1bb28445ecc571ab4f7d9b9c99d6db3ee1735d4c2bbdb5cb87f99d878896\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_publish_intents\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_round_stages\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"9928a77b691135c66c20af0bd5b6ae4805ac407be32bfe5e4955f0ab74869c74\\\",\\\"size\\\":1633,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_round_stages\",\n    \"rootDigest\": \"sha256:9928a77b691135c66c20af0bd5b6ae4805ac407be32bfe5e4955f0ab74869c74\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_round_stages\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_trigger_deliveries\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"7c4cbc7f7be6ff118434e3e4f5ca7944c7a97f6135e173a2f7fdeb3f5bc26ca3\\\",\\\"size\\\":2465,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_trigger_deliveries\",\n    \"rootDigest\": \"sha256:7c4cbc7f7be6ff118434e3e4f5ca7944c7a97f6135e173a2f7fdeb3f5bc26ca3\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_trigger_deliveries\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_work_items\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"7d43150a53a4c34303373f6f83e925406170eef238fdd11da17ed7a20f335bf7\\\",\\\"size\\\":2519,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_work_items\",\n    \"rootDigest\": \"sha256:7d43150a53a4c34303373f6f83e925406170eef238fdd11da17ed7a20f335bf7\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_work_items\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_work_observations\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"9d924eb134281e99889c50d9c4092f035435284fa7d9248d56426d19cfa1d73c\\\",\\\"size\\\":230,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_work_observations\",\n    \"rootDigest\": \"sha256:9d924eb134281e99889c50d9c4092f035435284fa7d9248d56426d19cfa1d73c\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_work_observations\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_work_rounds\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"4bcde81a4c1c94c9171b6faba30d7536fba4e18a75bed7c0112b7cfdc663e27c\\\",\\\"size\\\":1913,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_work_rounds\",\n    \"rootDigest\": \"sha256:4bcde81a4c1c94c9171b6faba30d7536fba4e18a75bed7c0112b7cfdc663e27c\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_work_rounds\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"legacy_code_work_item_links\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"5299aa1f0df835036f1d092617f03d37cfe6499426644f7d220ae99d0c201e88\\\",\\\"size\\\":235,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-legacy_code_work_item_links\",\n    \"rootDigest\": \"sha256:5299aa1f0df835036f1d092617f03d37cfe6499426644f7d220ae99d0c201e88\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"legacy_code_work_item_links\"\n  }\n]\n",
+        "state": "ready",
+        "counts_json": "[9,1,1,1,1,1,1,4]",
+        "error_code": null,
+        "error_detail": null,
+        "created_at": 1778459500050,
+        "completed_at": 1778459500060
+      },
+      {
+        "id": "rfc602-build-building",
+        "source_generation": "rfc602-curated-history",
+        "source_contract": "sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c",
+        "projection_version": 1,
+        "manifest_digest": "7e6db0a12b44a6d8ae59bc8e01dfc6e1c67ecda142d65effe32bf5b60636c657",
+        "archive_manifest_json": "[\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_ai_attempts\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"2841ff11d4cbc44f8c47cd29b2bbfe55281c87c63afd89d48490852736937fb5\\\",\\\"size\\\":1879,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_ai_attempts\",\n    \"rootDigest\": \"sha256:2841ff11d4cbc44f8c47cd29b2bbfe55281c87c63afd89d48490852736937fb5\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_ai_attempts\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_artifacts\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"31248ac338dedfb4a40de296aa1eceacd0148577a2c0586f920b47654199398a\\\",\\\"size\\\":222,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_artifacts\",\n    \"rootDigest\": \"sha256:31248ac338dedfb4a40de296aa1eceacd0148577a2c0586f920b47654199398a\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_artifacts\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_findings\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"a623169560556f0140565e246bf8019f471ebb9333eea22dad4e34327d24bd45\\\",\\\"size\\\":11263,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_findings\",\n    \"rootDigest\": \"sha256:a623169560556f0140565e246bf8019f471ebb9333eea22dad4e34327d24bd45\",\n    \"rowCount\": 4,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_findings\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_fix_attempts\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"188952fa727a11374271d553418950b423b84b28d03c0ed02b021a0cfe710caa\\\",\\\"size\\\":225,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_fix_attempts\",\n    \"rootDigest\": \"sha256:188952fa727a11374271d553418950b423b84b28d03c0ed02b021a0cfe710caa\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_fix_attempts\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_mr_leases\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"3845e9055b489cf3189051db3122d6ad25f2e2f6bbd6da095bfac729209c5c36\\\",\\\"size\\\":222,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_mr_leases\",\n    \"rootDigest\": \"sha256:3845e9055b489cf3189051db3122d6ad25f2e2f6bbd6da095bfac729209c5c36\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_mr_leases\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_produced_mrs\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"ac0485f6b6bf663fd0fddd281583f121e648b7fb0be100f452ca67905e07b2c2\\\",\\\"size\\\":225,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_produced_mrs\",\n    \"rootDigest\": \"sha256:ac0485f6b6bf663fd0fddd281583f121e648b7fb0be100f452ca67905e07b2c2\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_produced_mrs\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_publish_intents\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"17ae1bb28445ecc571ab4f7d9b9c99d6db3ee1735d4c2bbdb5cb87f99d878896\\\",\\\"size\\\":228,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_publish_intents\",\n    \"rootDigest\": \"sha256:17ae1bb28445ecc571ab4f7d9b9c99d6db3ee1735d4c2bbdb5cb87f99d878896\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_publish_intents\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_round_stages\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"9928a77b691135c66c20af0bd5b6ae4805ac407be32bfe5e4955f0ab74869c74\\\",\\\"size\\\":1633,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_round_stages\",\n    \"rootDigest\": \"sha256:9928a77b691135c66c20af0bd5b6ae4805ac407be32bfe5e4955f0ab74869c74\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_round_stages\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_trigger_deliveries\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"7c4cbc7f7be6ff118434e3e4f5ca7944c7a97f6135e173a2f7fdeb3f5bc26ca3\\\",\\\"size\\\":2465,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_trigger_deliveries\",\n    \"rootDigest\": \"sha256:7c4cbc7f7be6ff118434e3e4f5ca7944c7a97f6135e173a2f7fdeb3f5bc26ca3\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_trigger_deliveries\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_work_items\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"7d43150a53a4c34303373f6f83e925406170eef238fdd11da17ed7a20f335bf7\\\",\\\"size\\\":2519,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_work_items\",\n    \"rootDigest\": \"sha256:7d43150a53a4c34303373f6f83e925406170eef238fdd11da17ed7a20f335bf7\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_work_items\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_work_observations\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"9d924eb134281e99889c50d9c4092f035435284fa7d9248d56426d19cfa1d73c\\\",\\\"size\\\":230,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_work_observations\",\n    \"rootDigest\": \"sha256:9d924eb134281e99889c50d9c4092f035435284fa7d9248d56426d19cfa1d73c\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_work_observations\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_work_rounds\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"4bcde81a4c1c94c9171b6faba30d7536fba4e18a75bed7c0112b7cfdc663e27c\\\",\\\"size\\\":1913,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_work_rounds\",\n    \"rootDigest\": \"sha256:4bcde81a4c1c94c9171b6faba30d7536fba4e18a75bed7c0112b7cfdc663e27c\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_work_rounds\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"legacy_code_work_item_links\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"5299aa1f0df835036f1d092617f03d37cfe6499426644f7d220ae99d0c201e88\\\",\\\"size\\\":235,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-legacy_code_work_item_links\",\n    \"rootDigest\": \"sha256:5299aa1f0df835036f1d092617f03d37cfe6499426644f7d220ae99d0c201e88\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"legacy_code_work_item_links\"\n  }\n]\n",
+        "state": "building",
+        "counts_json": "{}",
+        "error_code": null,
+        "error_detail": null,
+        "created_at": 1778459500051,
+        "completed_at": null
+      },
+      {
+        "id": "rfc602-build-failed",
+        "source_generation": "rfc602-curated-history",
+        "source_contract": "sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c",
+        "projection_version": 1,
+        "manifest_digest": "7e6db0a12b44a6d8ae59bc8e01dfc6e1c67ecda142d65effe32bf5b60636c657",
+        "archive_manifest_json": "[\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_ai_attempts\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"2841ff11d4cbc44f8c47cd29b2bbfe55281c87c63afd89d48490852736937fb5\\\",\\\"size\\\":1879,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_ai_attempts\",\n    \"rootDigest\": \"sha256:2841ff11d4cbc44f8c47cd29b2bbfe55281c87c63afd89d48490852736937fb5\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_ai_attempts\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_artifacts\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"31248ac338dedfb4a40de296aa1eceacd0148577a2c0586f920b47654199398a\\\",\\\"size\\\":222,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_artifacts\",\n    \"rootDigest\": \"sha256:31248ac338dedfb4a40de296aa1eceacd0148577a2c0586f920b47654199398a\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_artifacts\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_findings\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"a623169560556f0140565e246bf8019f471ebb9333eea22dad4e34327d24bd45\\\",\\\"size\\\":11263,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_findings\",\n    \"rootDigest\": \"sha256:a623169560556f0140565e246bf8019f471ebb9333eea22dad4e34327d24bd45\",\n    \"rowCount\": 4,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_findings\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_fix_attempts\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"188952fa727a11374271d553418950b423b84b28d03c0ed02b021a0cfe710caa\\\",\\\"size\\\":225,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_fix_attempts\",\n    \"rootDigest\": \"sha256:188952fa727a11374271d553418950b423b84b28d03c0ed02b021a0cfe710caa\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_fix_attempts\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_mr_leases\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"3845e9055b489cf3189051db3122d6ad25f2e2f6bbd6da095bfac729209c5c36\\\",\\\"size\\\":222,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_mr_leases\",\n    \"rootDigest\": \"sha256:3845e9055b489cf3189051db3122d6ad25f2e2f6bbd6da095bfac729209c5c36\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_mr_leases\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_produced_mrs\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"ac0485f6b6bf663fd0fddd281583f121e648b7fb0be100f452ca67905e07b2c2\\\",\\\"size\\\":225,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_produced_mrs\",\n    \"rootDigest\": \"sha256:ac0485f6b6bf663fd0fddd281583f121e648b7fb0be100f452ca67905e07b2c2\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_produced_mrs\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_publish_intents\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"17ae1bb28445ecc571ab4f7d9b9c99d6db3ee1735d4c2bbdb5cb87f99d878896\\\",\\\"size\\\":228,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_publish_intents\",\n    \"rootDigest\": \"sha256:17ae1bb28445ecc571ab4f7d9b9c99d6db3ee1735d4c2bbdb5cb87f99d878896\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_publish_intents\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_round_stages\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"9928a77b691135c66c20af0bd5b6ae4805ac407be32bfe5e4955f0ab74869c74\\\",\\\"size\\\":1633,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_round_stages\",\n    \"rootDigest\": \"sha256:9928a77b691135c66c20af0bd5b6ae4805ac407be32bfe5e4955f0ab74869c74\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_round_stages\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_trigger_deliveries\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"7c4cbc7f7be6ff118434e3e4f5ca7944c7a97f6135e173a2f7fdeb3f5bc26ca3\\\",\\\"size\\\":2465,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_trigger_deliveries\",\n    \"rootDigest\": \"sha256:7c4cbc7f7be6ff118434e3e4f5ca7944c7a97f6135e173a2f7fdeb3f5bc26ca3\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_trigger_deliveries\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_work_items\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"7d43150a53a4c34303373f6f83e925406170eef238fdd11da17ed7a20f335bf7\\\",\\\"size\\\":2519,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_work_items\",\n    \"rootDigest\": \"sha256:7d43150a53a4c34303373f6f83e925406170eef238fdd11da17ed7a20f335bf7\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_work_items\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_work_observations\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"9d924eb134281e99889c50d9c4092f035435284fa7d9248d56426d19cfa1d73c\\\",\\\"size\\\":230,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_work_observations\",\n    \"rootDigest\": \"sha256:9d924eb134281e99889c50d9c4092f035435284fa7d9248d56426d19cfa1d73c\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_work_observations\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_work_rounds\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"4bcde81a4c1c94c9171b6faba30d7536fba4e18a75bed7c0112b7cfdc663e27c\\\",\\\"size\\\":1913,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_work_rounds\",\n    \"rootDigest\": \"sha256:4bcde81a4c1c94c9171b6faba30d7536fba4e18a75bed7c0112b7cfdc663e27c\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_work_rounds\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"legacy_code_work_item_links\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"5299aa1f0df835036f1d092617f03d37cfe6499426644f7d220ae99d0c201e88\\\",\\\"size\\\":235,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-legacy_code_work_item_links\",\n    \"rootDigest\": \"sha256:5299aa1f0df835036f1d092617f03d37cfe6499426644f7d220ae99d0c201e88\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"legacy_code_work_item_links\"\n  }\n]\n",
+        "state": "failed",
+        "counts_json": "{}",
+        "error_code": "code-history-content-invalid",
+        "error_detail": "curated failed attempt; retained diagnostics",
+        "created_at": 1778459500052,
+        "completed_at": 1778459500062
+      },
+      {
+        "id": "rfc602-build-superseded",
+        "source_generation": "rfc602-curated-history",
+        "source_contract": "sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c",
+        "projection_version": 1,
+        "manifest_digest": "7e6db0a12b44a6d8ae59bc8e01dfc6e1c67ecda142d65effe32bf5b60636c657",
+        "archive_manifest_json": "[\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_ai_attempts\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"2841ff11d4cbc44f8c47cd29b2bbfe55281c87c63afd89d48490852736937fb5\\\",\\\"size\\\":1879,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_ai_attempts\",\n    \"rootDigest\": \"sha256:2841ff11d4cbc44f8c47cd29b2bbfe55281c87c63afd89d48490852736937fb5\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_ai_attempts\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_artifacts\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"31248ac338dedfb4a40de296aa1eceacd0148577a2c0586f920b47654199398a\\\",\\\"size\\\":222,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_artifacts\",\n    \"rootDigest\": \"sha256:31248ac338dedfb4a40de296aa1eceacd0148577a2c0586f920b47654199398a\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_artifacts\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_findings\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"a623169560556f0140565e246bf8019f471ebb9333eea22dad4e34327d24bd45\\\",\\\"size\\\":11263,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_findings\",\n    \"rootDigest\": \"sha256:a623169560556f0140565e246bf8019f471ebb9333eea22dad4e34327d24bd45\",\n    \"rowCount\": 4,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_findings\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_fix_attempts\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"188952fa727a11374271d553418950b423b84b28d03c0ed02b021a0cfe710caa\\\",\\\"size\\\":225,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_fix_attempts\",\n    \"rootDigest\": \"sha256:188952fa727a11374271d553418950b423b84b28d03c0ed02b021a0cfe710caa\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_fix_attempts\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_mr_leases\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"3845e9055b489cf3189051db3122d6ad25f2e2f6bbd6da095bfac729209c5c36\\\",\\\"size\\\":222,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_mr_leases\",\n    \"rootDigest\": \"sha256:3845e9055b489cf3189051db3122d6ad25f2e2f6bbd6da095bfac729209c5c36\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_mr_leases\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_produced_mrs\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"ac0485f6b6bf663fd0fddd281583f121e648b7fb0be100f452ca67905e07b2c2\\\",\\\"size\\\":225,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_produced_mrs\",\n    \"rootDigest\": \"sha256:ac0485f6b6bf663fd0fddd281583f121e648b7fb0be100f452ca67905e07b2c2\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_produced_mrs\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_publish_intents\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"17ae1bb28445ecc571ab4f7d9b9c99d6db3ee1735d4c2bbdb5cb87f99d878896\\\",\\\"size\\\":228,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_publish_intents\",\n    \"rootDigest\": \"sha256:17ae1bb28445ecc571ab4f7d9b9c99d6db3ee1735d4c2bbdb5cb87f99d878896\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_publish_intents\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_round_stages\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"9928a77b691135c66c20af0bd5b6ae4805ac407be32bfe5e4955f0ab74869c74\\\",\\\"size\\\":1633,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_round_stages\",\n    \"rootDigest\": \"sha256:9928a77b691135c66c20af0bd5b6ae4805ac407be32bfe5e4955f0ab74869c74\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_round_stages\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_trigger_deliveries\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"7c4cbc7f7be6ff118434e3e4f5ca7944c7a97f6135e173a2f7fdeb3f5bc26ca3\\\",\\\"size\\\":2465,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_trigger_deliveries\",\n    \"rootDigest\": \"sha256:7c4cbc7f7be6ff118434e3e4f5ca7944c7a97f6135e173a2f7fdeb3f5bc26ca3\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_trigger_deliveries\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_work_items\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"7d43150a53a4c34303373f6f83e925406170eef238fdd11da17ed7a20f335bf7\\\",\\\"size\\\":2519,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_work_items\",\n    \"rootDigest\": \"sha256:7d43150a53a4c34303373f6f83e925406170eef238fdd11da17ed7a20f335bf7\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_work_items\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_work_observations\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"9d924eb134281e99889c50d9c4092f035435284fa7d9248d56426d19cfa1d73c\\\",\\\"size\\\":230,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_work_observations\",\n    \"rootDigest\": \"sha256:9d924eb134281e99889c50d9c4092f035435284fa7d9248d56426d19cfa1d73c\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_work_observations\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"code_work_rounds\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"4bcde81a4c1c94c9171b6faba30d7536fba4e18a75bed7c0112b7cfdc663e27c\\\",\\\"size\\\":1913,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-code_work_rounds\",\n    \"rootDigest\": \"sha256:4bcde81a4c1c94c9171b6faba30d7536fba4e18a75bed7c0112b7cfdc663e27c\",\n    \"rowCount\": 1,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"code_work_rounds\"\n  },\n  {\n    \"contentRefJson\": \"{\\\"version\\\":1,\\\"kind\\\":\\\"inline\\\",\\\"location\\\":{\\\"codec\\\":\\\"code-history@1\\\",\\\"value\\\":{\\\"table\\\":\\\"legacy_code_work_item_links\\\"}},\\\"contentId\\\":null,\\\"contentVersion\\\":null,\\\"sha256\\\":\\\"5299aa1f0df835036f1d092617f03d37cfe6499426644f7d220ae99d0c201e88\\\",\\\"size\\\":235,\\\"mediaType\\\":null}\",\n    \"formatVersion\": 1,\n    \"id\": \"rfc602-archive-legacy_code_work_item_links\",\n    \"rootDigest\": \"sha256:5299aa1f0df835036f1d092617f03d37cfe6499426644f7d220ae99d0c201e88\",\n    \"rowCount\": 0,\n    \"sourceContract\": \"sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c\",\n    \"sourceGeneration\": \"rfc602-curated-history\",\n    \"sourceTable\": \"legacy_code_work_item_links\"\n  }\n]\n",
+        "state": "superseded",
+        "counts_json": "{}",
+        "error_code": null,
+        "error_detail": null,
+        "created_at": 1778459500053,
+        "completed_at": 1778459500063
+      }
+    ],
+    "code_history_query_states": [
+      {
+        "source_generation": "rfc602-curated-history",
+        "source_contract": "sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c",
+        "projection_version": 1,
+        "active_build_id": "rfc602-build-ready",
+        "last_attempt_id": "rfc602-build-ready",
+        "state": "ready",
+        "failure_code": null,
+        "failure_detail": null,
+        "updated_at": 1778459500060
+      }
+    ]
+  },
+  "historyEdges": [
+    {
+      "version": 3,
+      "slug": "rfc602_code_history_query_builds",
+      "table": "code_history_query_builds"
+    },
+    {
+      "version": 4,
+      "slug": "rfc602_code_history_query_states",
+      "table": "code_history_query_states"
+    },
+    {
+      "version": 5,
+      "slug": "rfc602_code_history_query_records",
+      "table": "code_history_query_records"
+    },
+    {
+      "version": 6,
+      "slug": "rfc602_code_history_query_work_items",
+      "table": "code_history_query_work_items"
+    },
+    {
+      "version": 7,
+      "slug": "rfc602_code_history_query_rounds",
+      "table": "code_history_query_rounds"
+    },
+    {
+      "version": 8,
+      "slug": "rfc602_code_history_query_stages",
+      "table": "code_history_query_stages"
+    },
+    {
+      "version": 9,
+      "slug": "rfc602_code_history_query_attempts",
+      "table": "code_history_query_attempts"
+    },
+    {
+      "version": 10,
+      "slug": "rfc602_code_history_query_deliveries",
+      "table": "code_history_query_deliveries"
+    },
+    {
+      "version": 11,
+      "slug": "rfc602_code_history_metric_totals",
+      "table": "code_history_metric_totals"
+    },
+    {
+      "version": 12,
+      "slug": "rfc602_code_history_metric_prefixes",
+      "table": "code_history_metric_prefixes"
+    }
+  ],
+  "originalArchiveCount": 13,
+  "originalRecordCount": 9,
+  "metricsSince": [
+    {
+      "since": 1778459500000,
+      "counts": {
+        "published": 4,
+        "adopted": 1,
+        "quiet_fix": 1,
+        "disagreed": 1,
+        "outstanding": 1,
+        "rounds": 1,
+        "run_published": 1,
+        "run_failed": 0,
+        "run_awaiting": 0,
+        "incomplete": 0
+      }
+    },
+    {
+      "since": 1778459500001,
+      "counts": {
+        "published": 3,
+        "adopted": 0,
+        "quiet_fix": 1,
+        "disagreed": 1,
+        "outstanding": 1,
+        "rounds": 0,
+        "run_published": 0,
+        "run_failed": 0,
+        "run_awaiting": 0,
+        "incomplete": 0
+      }
+    },
+    {
+      "since": 1778459500004,
+      "counts": {
+        "published": 0,
+        "adopted": 0,
+        "quiet_fix": 0,
+        "disagreed": 0,
+        "outstanding": 0,
+        "rounds": 0,
+        "run_published": 0,
+        "run_failed": 0,
+        "run_awaiting": 0,
+        "incomplete": 0
+      }
+    }
+  ]
+}

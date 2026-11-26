@@ -7,6 +7,7 @@ import {
   index,
 } from '@/platform/persistence/schema/dsl'
 import { materializeDrizzle } from '@/platform/persistence/schema/drizzle'
+import { historyQuerySchemaContribution } from './historyQuerySchema'
 
 const owner = defineContribution('code-capability')
 
@@ -194,5 +195,9 @@ export const codeHistoryIdIndex = materializeDrizzle(codeHistoryIdIndexDefinitio
 export const historySchemaContribution = {
   owner: 'code-capability/history',
   version: 1,
-  tables: [codeHistoryArchivesDefinition, codeHistoryIdIndexDefinition],
+  tables: [
+    codeHistoryArchivesDefinition,
+    codeHistoryIdIndexDefinition,
+    ...historyQuerySchemaContribution.tables,
+  ],
 } as const

@@ -1,5 +1,15 @@
 import { expect } from 'bun:test'
-import type { CodeHistoryReader } from '@/modules/code-capability/application/ports/historyReader'
+import type {
+  CodeHistoryQueryTable,
+  CodeHistoryValue,
+} from '@/modules/code-capability/domain/codeHistoryPackage'
+import type { ProviderDatabaseHarness } from '../eachProvider'
+import {
+  historyFixtureSource,
+  seedEmptyCodeHistory,
+  seedCodeHistoryRows,
+  preparedHistoryFixtureReader,
+} from '../legacyCapabilitySeed'
 import {
   createCodeWorkItemProjectionQuery,
   createCodeRoundAttemptsQuery,
@@ -14,6 +24,7 @@ export function historyProjectionParity<T extends object>(
   kind: 'workItems' | 'attempts' | 'deliveries' | 'metrics',
   source: readonly (readonly (readonly unknown[])[])[],
   oracle: T,
+  harness: ProviderDatabaseHarness,
   reads: string[] = [],
 ): T {
   const project = (columns: string[], row: readonly unknown[]) =>
@@ -138,16 +149,24 @@ export function historyProjectionParity<T extends object>(
               })
           }
         }
-        // This is the explicit read port seam; physical archive/index coverage lives in the H provider tests.
-        const reader: CodeHistoryReader = {
-          async rows(table) {
-            reads.push(table)
-            return (tables[table] ?? []) as never
-          },
-          async find() {
-            throw new Error('unexpected index lookup')
-          },
+        // The frozen SQL result remains the independent compatibility oracle.
+        // Actual reads use real immutable packages and the production durable
+        // builder on each provider; fixture setup finishes before query recording.
+        const fixtureSource = {
+          ...historyFixtureSource,
+          sourceGeneration: `dbg_history_parity_${kind}_${call}`,
         }
+        await seedEmptyCodeHistory(harness.db, fixtureSource)
+        for (const [table, records] of Object.entries(tables)) {
+          if (records.length > 0)
+            await seedCodeHistoryRows(
+              harness.db,
+              table as CodeHistoryQueryTable,
+              records as Record<string, CodeHistoryValue>[],
+              fixtureSource,
+            )
+        }
+        const reader = await preparedHistoryFixtureReader(harness.db, fixtureSource)
         const query =
           kind === 'workItems'
             ? createCodeWorkItemProjectionQuery(createWorkItemProjectionRead(reader))
@@ -158,7 +177,21 @@ export function historyProjectionParity<T extends object>(
                 : createCodeMetricsQuery(createCodeMetricsRead(reader))
         const method = Reflect.get(query, property) as (...values: unknown[]) => Promise<unknown>
         const expected = await Reflect.apply(original, target, args)
-        const actual = await method(...args)
+        const recording = harness.recordStatements()
+        let actual: unknown
+        try {
+          actual = await method(...args)
+        } finally {
+          recording.stop()
+        }
+        for (const statement of recording.selects()) {
+          expect(statement.sql).not.toMatch(/content_inline_bytes/)
+          const table =
+            /\bfrom\s+(?:"[^"]+"\.)?"?(code_history_(?:query_(?:work_items|rounds|stages|attempts|deliveries)|metric_(?:totals|prefixes)))"?/i.exec(
+              statement.sql,
+            )?.[1]
+          if (table !== undefined) reads.push(table)
+        }
         expect(actual).toEqual(expected)
         call++
         return actual

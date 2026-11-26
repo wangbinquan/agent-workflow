@@ -205,6 +205,103 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
     expect(current.groups.find((group) => group.id === child)?.version).toBe(2)
   })
 
+  test('RFC-602 currentGroup reads one row and launch freezes only its reachable graph as unrelated data grows', async () => {
+    const f = await fixture()
+    const { repoGroups, repoGroupNodes, cachedRepos } = tablesOf(harness.db)
+    await harness.db.insert(repoGroups).values([
+      { id: 'root', name: 'root', version: 1, createdAt: 1, updatedAt: 1 },
+      { id: 'empty', name: 'empty', version: 1, createdAt: 1, updatedAt: 1 },
+    ])
+    await harness.db.insert(repoGroupNodes).values([
+      { groupId: 'root', path: '', attachmentKind: 'repo', cachedRepoId: f.repository.id },
+      { groupId: 'root', path: 'docs', attachmentKind: 'group', childGroupId: 'empty' },
+      { groupId: 'empty', path: '', attachmentKind: null },
+      { groupId: 'empty', path: 'notes', attachmentKind: null },
+    ])
+    const frozen = await f.scope((owner) =>
+      owner.participant.resolveAuthorized(f.identity.authority, {
+        kind: 'repository-group',
+        group: { id: 'root', version: 1 },
+      }),
+    )
+    const original = await readRepositoryPreparationFacts(harness.db, frozen)
+    const noise = Array.from({ length: 100 }, (_, i) => `unrelated-${i}`)
+    await harness.db
+      .insert(repoGroups)
+      .values(noise.map((id) => ({ id, name: id, version: 1, createdAt: 1, updatedAt: 1 })))
+    await harness.db.insert(cachedRepos).values(
+      noise.map((id) => ({
+        id,
+        urlHash: id,
+        localPath: `/unused/${id}`,
+        lastFetchedAt: 1,
+        createdAt: 1,
+      })),
+    )
+    await harness.db.insert(repoGroupNodes).values(
+      noise.map((id) => ({
+        groupId: id,
+        path: '',
+        attachmentKind: 'repo' as const,
+        cachedRepoId: id,
+      })),
+    )
+
+    await f.scope(async (owner) => {
+      const recording = harness.recordStatements()
+      try {
+        expect(await owner.currentGroup('root')).toEqual({ id: 'root', version: 1 })
+        const reads = recording.statements.filter(({ sql }) =>
+          /^[\s(]*(?:select|with)\b/i.test(sql),
+        )
+        expect(reads).toHaveLength(1)
+        expect(reads[0]?.rows).toBe(1)
+        expect(reads[0]?.sql).not.toMatch(/repo_group_nodes|cached_repos|memories|scheduled_tasks/i)
+      } finally {
+        recording.stop()
+      }
+    })
+    const next = await f.scope(async (owner) => {
+      const recording = harness.recordStatements()
+      try {
+        const reference = await owner.participant.resolveAuthorized(f.identity.authority, {
+          kind: 'repository-group',
+          group: { id: 'root', version: 1 },
+        })
+        const reads = recording.statements.filter(({ sql }) =>
+          /^[\s(]*(?:select|with)\b/i.test(sql),
+        )
+        const graph = reads.filter(({ sql }) => /^\s*with\b/i.test(sql))
+        expect(graph).toHaveLength(3)
+        expect(graph.map((read) => read.rows).sort((a, b) => a - b)).toEqual([1, 2, 4])
+        expect(reads.some(({ sql }) => /memories|scheduled_tasks/i.test(sql))).toBe(false)
+        // The extra point read captures immutable repository configuration, not other URLs.
+        const configuration = reads.filter(
+          ({ sql }) => /cached_repos/i.test(sql) && !/^\s*with\b/i.test(sql),
+        )
+        expect(configuration).toHaveLength(1)
+        expect(configuration[0]?.rows).toBe(1)
+        return reference
+      } finally {
+        recording.stop()
+      }
+    })
+    expect(await readRepositoryPreparationFacts(harness.db, next)).toEqual(original)
+    expect(original.groups.map((group) => group.id)).toEqual(['empty', 'root'])
+    expect(original.layout.nodes.map((node) => node.path)).toContain('docs/notes')
+    await expect(f.scope((owner) => owner.currentGroup('missing'))).rejects.toMatchObject({
+      code: 'repo-group-not-found',
+    })
+    await expect(
+      f.scope((owner) =>
+        owner.participant.resolveAuthorized(f.identity.authority, {
+          kind: 'repository-group',
+          group: { id: 'root', version: 2 },
+        }),
+      ),
+    ).rejects.toMatchObject({ code: 'repository-version-changed' })
+  })
+
   test('new seal factory replays the same durable source without creating a mirror or Task', async () => {
     const f = await fixture()
     const input = { db: harness.db, appHome: join(f.root, 'home') }

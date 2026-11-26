@@ -1594,7 +1594,7 @@ function TaskStatusCanvas({
   // canvas so the card paints the hint + pointer cursor.
   // The ACL-filtered direct-children list decides whether a stamped childTaskId
   // is actually reachable (design D5) — same query key, and therefore the same
-  // single fetch, as the drawer/table ChildTaskLink. Enabled only for
+  // shared cursor chain, as the drawer/table ChildTaskLink. Enabled only for
   // definitions that HAVE call nodes, so the overwhelming majority of tasks
   // issue no extra request at all (D6); `parentActive` keeps it polling while
   // this task can still spawn a child (D9).
@@ -1604,11 +1604,14 @@ function TaskStatusCanvas({
     for (const nodeId of callNodeIds) {
       const nav = deriveCallNodeNav(runs, nodeId)
       if (nav === null) continue
-      if (!callNavIsReachable(nav.childTaskId, children.data, children.isError)) continue
+      if (
+        !callNavIsReachable(nav.childTaskId, children.data, children.isError, children.isFetching)
+      )
+        continue
       m.set(nodeId, nav.childTaskId)
     }
     return m
-  }, [callNodeIds, runs, children.data, children.isError])
+  }, [callNodeIds, runs, children.data, children.isError, children.isFetching])
   const callNavs = useMemo(() => {
     const out: Record<string, CallNodeNavKind> = {}
     for (const nodeId of callNavByNode.keys()) out[nodeId] = 'child'

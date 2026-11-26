@@ -1,4 +1,5 @@
 import type { EpochSwitchApplication } from '@/modules/system-operations/public/commands'
+import type { CodeHistoryIndexBuildReceipt } from '@/modules/code-capability/public/types'
 // RFC-349 — `agent-workflow db ...` adapter. It calls the same
 // system-operations application as Settings; only human/JSON projection and
 // the offline daemon-lock boundary live here.
@@ -27,6 +28,7 @@ import type {
 } from '@/modules/system-operations/public/types'
 
 export interface LocalDatabaseMigrationOperations {
+  readonly codeHistoryRebuild: (lock: Lock) => Promise<CodeHistoryIndexBuildReceipt>
   readonly epochSwitch?: EpochSwitchApplication
   readonly context: LocalSystemOperationContext
   readonly application: Readonly<{
@@ -43,6 +45,7 @@ export interface DatabaseCliResult {
 const USAGE =
   'usage:\n' +
   '  agent-workflow db compact\n' +
+  '  agent-workflow db rebuild-code-history-index [--json]\n' +
   '  agent-workflow db status [--json]\n' +
   '  agent-workflow db preflight --to postgresql --url-env NAME [pool/timeout flags] [--json]\n' +
   '  agent-workflow db migrate --to postgresql --url-env NAME --auto [pool/timeout flags] [--json]\n' +
@@ -192,7 +195,7 @@ export function formatLegacyTableInspection(table: DatabaseMigrationLegacyTableV
 }
 
 async function withOfflineLock<T>(
-  operation: () => Promise<T>,
+  operation: (lock: Lock) => Promise<T>,
   lockFactory: (path: string) => Lock,
 ): Promise<T> {
   let lock: Lock
@@ -201,13 +204,13 @@ async function withOfflineLock<T>(
   } catch (error) {
     if (error instanceof DaemonLockHeldError) {
       throw new Error(
-        `daemon is running (pid ${error.pid}); stop it before an offline database migration`,
+        `daemon is running (pid ${error.pid}); stop it before an offline database command`,
       )
     }
     throw error
   }
   try {
-    return await operation()
+    return await operation(lock)
   } finally {
     lock.release()
   }
@@ -236,6 +239,19 @@ export async function databaseCommand(
     output: json ? `${JSON.stringify(status)}\n` : `${formatDatabaseMigrationStatus(status)}\n`,
   })
   try {
+    if (argv[0] === 'rebuild-code-history-index') {
+      if (argv.slice(1).some((argument) => argument !== '--json'))
+        return { status: 'usage-error', output: USAGE }
+      const receipt = await withOfflineLock(operations.codeHistoryRebuild, lockFactory)
+      return {
+        status: 'ok',
+        output: json
+          ? `${JSON.stringify(receipt)}\n`
+          : receipt.kind === 'fresh-install'
+            ? 'No converted code history is installed.\n'
+            : `Rebuilt code history index ${receipt.buildId}: ${receipt.records} records.\n`,
+      }
+    }
     if (argv[0] === 'status') {
       const overview = await operations.application.queries.overview.execute(operations.context)
       return {
@@ -349,6 +365,19 @@ export async function databaseCommand(
     }
     return { status: 'usage-error', output: USAGE }
   } catch (error) {
+    if (argv[0] === 'rebuild-code-history-index' && json) {
+      const code =
+        error !== null &&
+        typeof error === 'object' &&
+        'code' in error &&
+        typeof error.code === 'string'
+          ? error.code
+          : 'code-history-query-build-failed'
+      return {
+        status: 'error',
+        output: `${JSON.stringify({ code, message: error instanceof Error ? error.message : String(error) })}\n`,
+      }
+    }
     return {
       status: 'error',
       output: `database command failed: ${error instanceof Error ? error.message : String(error)}\n`,

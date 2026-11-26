@@ -68,7 +68,7 @@ describeEachProvider('source-control composed repository group contract', (harne
     ],
   })
 
-  test('nested draft preview keeps URL imports pending and uses one fixed database snapshot', async () => {
+  test('nested draft preview keeps URL imports pending and reads only its reachable graph', async () => {
     const { groups } = await setup()
     const child = await groups.create(draft('child'), null)
     const before = await groups.list()
@@ -104,8 +104,10 @@ describeEachProvider('source-control composed repository group contract', (harne
         mountPath: 'existing',
         cachedRepoId: 'contract-repository',
       })
-      // One graph snapshot: groups, nodes, repositories, bound-memory counts and schedules.
-      expect(recording.selects()).toHaveLength(5)
+      // Preview needs groups, nodes and referenced repository URLs only.
+      const reads = recording.statements.filter(({ sql }) => /^[\s(]*(?:select|with)\b/i.test(sql))
+      expect(reads).toHaveLength(3)
+      expect(reads.some(({ sql }) => /memories|scheduled_tasks/i.test(sql))).toBe(false)
     } finally {
       recording.stop()
     }

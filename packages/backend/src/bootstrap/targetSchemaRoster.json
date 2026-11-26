@@ -148,6 +148,66 @@
     "definition": "target"
   },
   {
+    "table": "code_history_metric_prefixes",
+    "owner": "code-capability/history",
+    "sources": [],
+    "definition": "target"
+  },
+  {
+    "table": "code_history_metric_totals",
+    "owner": "code-capability/history",
+    "sources": [],
+    "definition": "target"
+  },
+  {
+    "table": "code_history_query_attempts",
+    "owner": "code-capability/history",
+    "sources": [],
+    "definition": "target"
+  },
+  {
+    "table": "code_history_query_builds",
+    "owner": "code-capability/history",
+    "sources": [],
+    "definition": "target"
+  },
+  {
+    "table": "code_history_query_deliveries",
+    "owner": "code-capability/history",
+    "sources": [],
+    "definition": "target"
+  },
+  {
+    "table": "code_history_query_records",
+    "owner": "code-capability/history",
+    "sources": [],
+    "definition": "target"
+  },
+  {
+    "table": "code_history_query_rounds",
+    "owner": "code-capability/history",
+    "sources": [],
+    "definition": "target"
+  },
+  {
+    "table": "code_history_query_stages",
+    "owner": "code-capability/history",
+    "sources": [],
+    "definition": "target"
+  },
+  {
+    "table": "code_history_query_states",
+    "owner": "code-capability/history",
+    "sources": [],
+    "definition": "target"
+  },
+  {
+    "table": "code_history_query_work_items",
+    "owner": "code-capability/history",
+    "sources": [],
+    "definition": "target"
+  },
+  {
     "table": "code_host_connections",
     "owner": "integration",
     "sources": ["code_host_connections"],

@@ -100,7 +100,9 @@ export function createRepositoryLaunchSnapshot(input: {
   }
   async function factsFor(source: RepositoryLaunchSource): Promise<RepositoryPreparationFacts> {
     if (source.kind === 'repository-group') {
-      const snapshot = await store.readRepositoryGroupSnapshot()
+      const snapshot = await store.readRepositoryGroupGraph({
+        scope: { kind: 'reachable', rootIds: [source.group.id] },
+      })
       const root = snapshot.groups.find((group) => group.id === source.group.id)
       if (root === undefined)
         throw new NotFoundError('repo-group-not-found', `repo group ${source.group.id} not found`)
@@ -273,11 +275,9 @@ export function createRepositoryLaunchSnapshot(input: {
     },
     async currentGroup(id: string) {
       assertLive()
-      const current = (await store.readRepositoryGroupSnapshot()).groups.find(
-        (group) => group.id === id,
-      )
+      const current = await store.findRepositoryGroup(id)
       assertLive()
-      if (current === undefined)
+      if (current === null)
         throw new NotFoundError('repo-group-not-found', `repo group ${id} not found`)
       return { id: current.id, version: current.version }
     },

@@ -157,6 +157,9 @@ function fixture() {
   }
   const application = createDatabaseMigrationApplication(coordinator)
   const operations: LocalDatabaseMigrationOperations = {
+    async codeHistoryRebuild() {
+      throw new Error('unexpected code history rebuild')
+    },
     context: {} as LocalSystemOperationContext,
     application,
   }

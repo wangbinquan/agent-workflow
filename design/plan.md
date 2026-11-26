@@ -632,6 +632,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-599](./RFC-599-employee-compositions-stated-effects/proposal.md) | 员工工作区与平台工作项装配的效果选择必填（RFC-294 S12 余项）：development-automation 的 `composeDevelopmentEmployeeWorkspace` 与 `composeDevelopmentEmployeePlatformWorkItems` 的自动化工作区效果（与平台工作项的仓库基线效果）改为必填，装配不再走 infrastructure `select*` 的本机回落；daemon 本来就给全，用例显式给本机实现。继承来的可选 provider 另立。无用户可见变化。 | Done |
 | [RFC-600](./RFC-600-development-automation-infrastructure-stated-effects/proposal.md) | development-automation 的 infrastructure 不再替调用方造本机效果（RFC-294 S12 余项：单机默认值只留在 standalone profile）：三个选择核对函数只核对、不再在没给时造本机文件实现，收效果工厂的包装与基线解析 / 读取的工厂参数、任务操作装配的基线效果都改为必填；唯一靠回落的生产调用方——托管任务镜像里的执行器——显式给本机实现。生产代码里调用本机效果构造的只剩 standalone profile、本机一族与镜像里的执行器。无用户可见变化。 | Done |
 | [RFC-601](./RFC-601-employee-compositions-required-providers/proposal.md) | 员工工作区与平台工作项装配的 provider 必填（RFC-294 W4-E8：可选 provider 的装配边界，员工一侧）：两个装配入参把从 application 继承的可选 provider（`graphDelivery`、`approvalGateway`、`pipelineEvidence`、`mrFacts`）换成必填，漏给即编译错误；use case 自己的可选成员与“未接入”分支不变（RFC-396 的缺图验证绑定照旧有用例覆盖）。用例给“没有图设计”的图交付替身（与真实图照看的回答相同）与调用即抛错的审批 / 流水线 / MR 事实替身。无用户可见变化。 | Done |
+| [RFC-602](./RFC-602-bounded-module-queries/proposal.md) | 模块查询按需读取与完整子任务分页：历史持久查询投影、精确资源摘要、仓库组可达图、移除子任务 500 窗口 | Done；实现、用例与集中本地验证完成，发布后跟踪 exact-SHA CI |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

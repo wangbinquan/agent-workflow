@@ -1,6 +1,9 @@
 import { createFileSnapshotTracker } from '@/platform/persistence/fileSnapshots'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
-import { createCodeHistoryPackageReader } from '@/modules/code-capability/composition/historyQueries'
+import {
+  createCodeHistoryIndexCommands,
+  createCodeHistoryQueryReader,
+} from '@/modules/code-capability/composition/historyQueries'
 import { readActiveEpochInstallation } from '@/modules/system-operations/composition/epochInstallation'
 // RFC-392: exercise the passive HTTP injection boundary with complete session modules on both engines.
 import { logicalSchemaContract, persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
@@ -58,9 +61,13 @@ export async function createProviderHttpCompositionFixture(
     executionMode: 'inline',
   })
   const installation = await readActiveEpochInstallation(harness.db)
-  const codeHistory = createCodeHistoryPackageReader({
+  await createCodeHistoryIndexCommands({
     db: harness.db,
     content: epoch2RuntimeTestPorts(harness.db).content,
+    installation: installation.history,
+  }).initialize()
+  const codeHistory = createCodeHistoryQueryReader({
+    db: harness.db,
     installation: installation.history,
   })
   return {

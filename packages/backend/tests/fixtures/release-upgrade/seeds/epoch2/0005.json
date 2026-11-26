@@ -1,0 +1,131 @@
+{
+  "formatVersion": 1,
+  "epoch": 2,
+  "after": "0005_rfc602_code_history_query_records",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-602-bounded-module-queries/design.md",
+      "packages/backend/src/platform/persistence/migration/epoch1/definitions.ts",
+      "packages/backend/tests/fixtures/release-upgrade/rfc602-code-history-query-oracle.json"
+    ],
+    "note": "RFC-602 independently authored archive/query fixture. The source has one item, published round, stage, attempt, delivery, four finding outcomes and seven explicit empty packages. Retained build attempts cover ready/building/failed/superseded. Seed rows represent a native installation at this history point; ordinary upgrades add an empty table and initialize from their own unchanged original archives at daemon bootstrap. No production converter, builder or query was used to author values."
+  },
+  "rows": [
+    {
+      "table": "code_history_query_records",
+      "values": {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_ai_attempts",
+        "original_id": "rfc602-attempt",
+        "archive_id": "rfc602-archive-code_ai_attempts",
+        "record_ordinal": 0,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-attempt\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-attempt\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-attempt\"}],[\"round_id\",{\"type\":\"text\",\"value\":\"rfc602-round\"}],[\"stage_name\",{\"type\":\"text\",\"value\":\"review\"}],[\"shard_key\",{\"type\":\"text\",\"value\":\"\"}],[\"rerun_seq\",{\"type\":\"integer\",\"value\":\"0\"}],[\"attempt_seq\",{\"type\":\"integer\",\"value\":\"1\"}],[\"status\",{\"type\":\"text\",\"value\":\"validated\"}],[\"validation_outcome\",{\"type\":\"text\",\"value\":\"valid\"}],[\"session_ref\",{\"type\":\"null\"}],[\"node_run_id\",{\"type\":\"null\"}],[\"started_at\",{\"type\":\"integer\",\"value\":\"1778459500000\"}],[\"ended_at\",{\"type\":\"integer\",\"value\":\"1778459500010\"}]],\"raw\":{\"id\":\"rfc602-attempt\",\"round_id\":\"rfc602-round\",\"stage_name\":\"review\",\"shard_key\":\"\",\"rerun_seq\":0,\"attempt_seq\":1,\"status\":\"validated\",\"validation_outcome\":\"valid\",\"session_ref\":null,\"node_run_id\":null,\"started_at\":1778459500000,\"ended_at\":1778459500010}}"
+      }
+    },
+    {
+      "table": "code_history_query_records",
+      "values": {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_findings",
+        "original_id": "rfc602-finding-0",
+        "archive_id": "rfc602-archive-code_findings",
+        "record_ordinal": 0,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-finding-0\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-finding-0\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-finding-0\"}],[\"code_host_endpoint_id\",{\"type\":\"text\",\"value\":\"rfc602-endpoint\"}],[\"stable_project_id\",{\"type\":\"text\",\"value\":\"rfc602-project\"}],[\"anchor_kind\",{\"type\":\"text\",\"value\":\"mr\"}],[\"anchor_id\",{\"type\":\"text\",\"value\":\"42\"}],[\"capability\",{\"type\":\"text\",\"value\":\"review\"}],[\"fingerprint\",{\"type\":\"text\",\"value\":\"rfc602-fingerprint-0\"}],[\"generation\",{\"type\":\"integer\",\"value\":\"1\"}],[\"lifecycle\",{\"type\":\"text\",\"value\":\"active\"}],[\"severity\",{\"type\":\"null\"}],[\"title\",{\"type\":\"null\"}],[\"file_path\",{\"type\":\"null\"}],[\"anchor_line\",{\"type\":\"null\"}],[\"external_id\",{\"type\":\"text\",\"value\":\"101\"}],[\"published_round_id\",{\"type\":\"null\"}],[\"disappeared_round_id\",{\"type\":\"null\"}],[\"resolved_at\",{\"type\":\"integer\",\"value\":\"1778459500030\"}],[\"resolved_round_id\",{\"type\":\"null\"}],[\"code_changed_at\",{\"type\":\"integer\",\"value\":\"1778459500031\"}],[\"code_changed_round_id\",{\"type\":\"null\"}],[\"created_at\",{\"type\":\"integer\",\"value\":\"1778459500000\"}],[\"last_seen_at\",{\"type\":\"integer\",\"value\":\"1778459500040\"}],[\"closed_at\",{\"type\":\"null\"}]],\"raw\":{\"id\":\"rfc602-finding-0\",\"code_host_endpoint_id\":\"rfc602-endpoint\",\"stable_project_id\":\"rfc602-project\",\"anchor_kind\":\"mr\",\"anchor_id\":\"42\",\"capability\":\"review\",\"fingerprint\":\"rfc602-fingerprint-0\",\"generation\":1,\"lifecycle\":\"active\",\"external_id\":\"101\",\"resolved_at\":1778459500030,\"code_changed_at\":1778459500031,\"created_at\":1778459500000,\"last_seen_at\":1778459500040,\"severity\":null,\"title\":null,\"file_path\":null,\"anchor_line\":null,\"published_round_id\":null,\"disappeared_round_id\":null,\"resolved_round_id\":null,\"code_changed_round_id\":null,\"closed_at\":null}}"
+      }
+    },
+    {
+      "table": "code_history_query_records",
+      "values": {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_findings",
+        "original_id": "rfc602-finding-1",
+        "archive_id": "rfc602-archive-code_findings",
+        "record_ordinal": 1,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-finding-1\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-finding-1\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-finding-1\"}],[\"code_host_endpoint_id\",{\"type\":\"text\",\"value\":\"rfc602-endpoint\"}],[\"stable_project_id\",{\"type\":\"text\",\"value\":\"rfc602-project\"}],[\"anchor_kind\",{\"type\":\"text\",\"value\":\"mr\"}],[\"anchor_id\",{\"type\":\"text\",\"value\":\"42\"}],[\"capability\",{\"type\":\"text\",\"value\":\"review\"}],[\"fingerprint\",{\"type\":\"text\",\"value\":\"rfc602-fingerprint-1\"}],[\"generation\",{\"type\":\"integer\",\"value\":\"1\"}],[\"lifecycle\",{\"type\":\"text\",\"value\":\"active\"}],[\"severity\",{\"type\":\"null\"}],[\"title\",{\"type\":\"null\"}],[\"file_path\",{\"type\":\"null\"}],[\"anchor_line\",{\"type\":\"null\"}],[\"external_id\",{\"type\":\"text\",\"value\":\"102\"}],[\"published_round_id\",{\"type\":\"null\"}],[\"disappeared_round_id\",{\"type\":\"null\"}],[\"resolved_at\",{\"type\":\"null\"}],[\"resolved_round_id\",{\"type\":\"null\"}],[\"code_changed_at\",{\"type\":\"integer\",\"value\":\"1778459500031\"}],[\"code_changed_round_id\",{\"type\":\"null\"}],[\"created_at\",{\"type\":\"integer\",\"value\":\"1778459500001\"}],[\"last_seen_at\",{\"type\":\"integer\",\"value\":\"1778459500040\"}],[\"closed_at\",{\"type\":\"null\"}]],\"raw\":{\"id\":\"rfc602-finding-1\",\"code_host_endpoint_id\":\"rfc602-endpoint\",\"stable_project_id\":\"rfc602-project\",\"anchor_kind\":\"mr\",\"anchor_id\":\"42\",\"capability\":\"review\",\"fingerprint\":\"rfc602-fingerprint-1\",\"generation\":1,\"lifecycle\":\"active\",\"external_id\":\"102\",\"resolved_at\":null,\"code_changed_at\":1778459500031,\"created_at\":1778459500001,\"last_seen_at\":1778459500040,\"severity\":null,\"title\":null,\"file_path\":null,\"anchor_line\":null,\"published_round_id\":null,\"disappeared_round_id\":null,\"resolved_round_id\":null,\"code_changed_round_id\":null,\"closed_at\":null}}"
+      }
+    },
+    {
+      "table": "code_history_query_records",
+      "values": {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_findings",
+        "original_id": "rfc602-finding-2",
+        "archive_id": "rfc602-archive-code_findings",
+        "record_ordinal": 2,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-finding-2\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-finding-2\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-finding-2\"}],[\"code_host_endpoint_id\",{\"type\":\"text\",\"value\":\"rfc602-endpoint\"}],[\"stable_project_id\",{\"type\":\"text\",\"value\":\"rfc602-project\"}],[\"anchor_kind\",{\"type\":\"text\",\"value\":\"mr\"}],[\"anchor_id\",{\"type\":\"text\",\"value\":\"42\"}],[\"capability\",{\"type\":\"text\",\"value\":\"review\"}],[\"fingerprint\",{\"type\":\"text\",\"value\":\"rfc602-fingerprint-2\"}],[\"generation\",{\"type\":\"integer\",\"value\":\"1\"}],[\"lifecycle\",{\"type\":\"text\",\"value\":\"active\"}],[\"severity\",{\"type\":\"null\"}],[\"title\",{\"type\":\"null\"}],[\"file_path\",{\"type\":\"null\"}],[\"anchor_line\",{\"type\":\"null\"}],[\"external_id\",{\"type\":\"text\",\"value\":\"103\"}],[\"published_round_id\",{\"type\":\"null\"}],[\"disappeared_round_id\",{\"type\":\"null\"}],[\"resolved_at\",{\"type\":\"integer\",\"value\":\"1778459500030\"}],[\"resolved_round_id\",{\"type\":\"null\"}],[\"code_changed_at\",{\"type\":\"null\"}],[\"code_changed_round_id\",{\"type\":\"null\"}],[\"created_at\",{\"type\":\"integer\",\"value\":\"1778459500002\"}],[\"last_seen_at\",{\"type\":\"integer\",\"value\":\"1778459500040\"}],[\"closed_at\",{\"type\":\"null\"}]],\"raw\":{\"id\":\"rfc602-finding-2\",\"code_host_endpoint_id\":\"rfc602-endpoint\",\"stable_project_id\":\"rfc602-project\",\"anchor_kind\":\"mr\",\"anchor_id\":\"42\",\"capability\":\"review\",\"fingerprint\":\"rfc602-fingerprint-2\",\"generation\":1,\"lifecycle\":\"active\",\"external_id\":\"103\",\"resolved_at\":1778459500030,\"code_changed_at\":null,\"created_at\":1778459500002,\"last_seen_at\":1778459500040,\"severity\":null,\"title\":null,\"file_path\":null,\"anchor_line\":null,\"published_round_id\":null,\"disappeared_round_id\":null,\"resolved_round_id\":null,\"code_changed_round_id\":null,\"closed_at\":null}}"
+      }
+    },
+    {
+      "table": "code_history_query_records",
+      "values": {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_findings",
+        "original_id": "rfc602-finding-3",
+        "archive_id": "rfc602-archive-code_findings",
+        "record_ordinal": 3,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-finding-3\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-finding-3\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-finding-3\"}],[\"code_host_endpoint_id\",{\"type\":\"text\",\"value\":\"rfc602-endpoint\"}],[\"stable_project_id\",{\"type\":\"text\",\"value\":\"rfc602-project\"}],[\"anchor_kind\",{\"type\":\"text\",\"value\":\"mr\"}],[\"anchor_id\",{\"type\":\"text\",\"value\":\"42\"}],[\"capability\",{\"type\":\"text\",\"value\":\"review\"}],[\"fingerprint\",{\"type\":\"text\",\"value\":\"rfc602-fingerprint-3\"}],[\"generation\",{\"type\":\"integer\",\"value\":\"1\"}],[\"lifecycle\",{\"type\":\"text\",\"value\":\"active\"}],[\"severity\",{\"type\":\"null\"}],[\"title\",{\"type\":\"null\"}],[\"file_path\",{\"type\":\"null\"}],[\"anchor_line\",{\"type\":\"null\"}],[\"external_id\",{\"type\":\"text\",\"value\":\"104\"}],[\"published_round_id\",{\"type\":\"null\"}],[\"disappeared_round_id\",{\"type\":\"null\"}],[\"resolved_at\",{\"type\":\"null\"}],[\"resolved_round_id\",{\"type\":\"null\"}],[\"code_changed_at\",{\"type\":\"null\"}],[\"code_changed_round_id\",{\"type\":\"null\"}],[\"created_at\",{\"type\":\"integer\",\"value\":\"1778459500003\"}],[\"last_seen_at\",{\"type\":\"integer\",\"value\":\"1778459500040\"}],[\"closed_at\",{\"type\":\"null\"}]],\"raw\":{\"id\":\"rfc602-finding-3\",\"code_host_endpoint_id\":\"rfc602-endpoint\",\"stable_project_id\":\"rfc602-project\",\"anchor_kind\":\"mr\",\"anchor_id\":\"42\",\"capability\":\"review\",\"fingerprint\":\"rfc602-fingerprint-3\",\"generation\":1,\"lifecycle\":\"active\",\"external_id\":\"104\",\"resolved_at\":null,\"code_changed_at\":null,\"created_at\":1778459500003,\"last_seen_at\":1778459500040,\"severity\":null,\"title\":null,\"file_path\":null,\"anchor_line\":null,\"published_round_id\":null,\"disappeared_round_id\":null,\"resolved_round_id\":null,\"code_changed_round_id\":null,\"closed_at\":null}}"
+      }
+    },
+    {
+      "table": "code_history_query_records",
+      "values": {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_round_stages",
+        "original_id": "rfc602-stage",
+        "archive_id": "rfc602-archive-code_round_stages",
+        "record_ordinal": 0,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-stage\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-stage\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-stage\"}],[\"round_id\",{\"type\":\"text\",\"value\":\"rfc602-round\"}],[\"stage_seq\",{\"type\":\"integer\",\"value\":\"1\"}],[\"stage_name\",{\"type\":\"text\",\"value\":\"review\"}],[\"stage_kind\",{\"type\":\"text\",\"value\":\"ai\"}],[\"status\",{\"type\":\"text\",\"value\":\"done\"}],[\"counts_json\",{\"type\":\"null\"}],[\"error\",{\"type\":\"null\"}],[\"started_at\",{\"type\":\"integer\",\"value\":\"1778459500000\"}],[\"ended_at\",{\"type\":\"integer\",\"value\":\"1778459500020\"}]],\"raw\":{\"id\":\"rfc602-stage\",\"round_id\":\"rfc602-round\",\"stage_seq\":1,\"stage_name\":\"review\",\"stage_kind\":\"ai\",\"status\":\"done\",\"started_at\":1778459500000,\"ended_at\":1778459500020,\"counts_json\":null,\"error\":null}}"
+      }
+    },
+    {
+      "table": "code_history_query_records",
+      "values": {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_trigger_deliveries",
+        "original_id": "rfc602-delivery",
+        "archive_id": "rfc602-archive-code_trigger_deliveries",
+        "record_ordinal": 0,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-delivery\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-delivery\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-delivery\"}],[\"correlation_id\",{\"type\":\"text\",\"value\":\"rfc602-correlation\"}],[\"code_host_endpoint_id\",{\"type\":\"text\",\"value\":\"rfc602-endpoint\"}],[\"stable_project_id\",{\"type\":\"text\",\"value\":\"rfc602-project\"}],[\"anchor_kind\",{\"type\":\"text\",\"value\":\"mr\"}],[\"anchor_id\",{\"type\":\"text\",\"value\":\"42\"}],[\"capability\",{\"type\":\"text\",\"value\":\"review\"}],[\"step\",{\"type\":\"text\",\"value\":\"published\"}],[\"outcome\",{\"type\":\"text\",\"value\":\"ok\"}],[\"reason\",{\"type\":\"null\"}],[\"queued_at\",{\"type\":\"null\"}],[\"queue_position\",{\"type\":\"null\"}],[\"waiting_on\",{\"type\":\"null\"}],[\"round_id\",{\"type\":\"text\",\"value\":\"rfc602-round\"}],[\"is_probe\",{\"type\":\"boolean\",\"value\":false}],[\"created_at\",{\"type\":\"integer\",\"value\":\"1778459500020\"}],[\"updated_at\",{\"type\":\"integer\",\"value\":\"1778459500021\"}]],\"raw\":{\"id\":\"rfc602-delivery\",\"correlation_id\":\"rfc602-correlation\",\"code_host_endpoint_id\":\"rfc602-endpoint\",\"stable_project_id\":\"rfc602-project\",\"anchor_kind\":\"mr\",\"anchor_id\":\"42\",\"capability\":\"review\",\"step\":\"published\",\"outcome\":\"ok\",\"round_id\":\"rfc602-round\",\"is_probe\":false,\"created_at\":1778459500020,\"updated_at\":1778459500021,\"reason\":null,\"queued_at\":null,\"queue_position\":null,\"waiting_on\":null}}"
+      }
+    },
+    {
+      "table": "code_history_query_records",
+      "values": {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_work_items",
+        "original_id": "rfc602-item",
+        "archive_id": "rfc602-archive-code_work_items",
+        "record_ordinal": 0,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-item\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-item\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-item\"}],[\"code_host_endpoint_id\",{\"type\":\"text\",\"value\":\"rfc602-endpoint\"}],[\"stable_project_id\",{\"type\":\"text\",\"value\":\"rfc602-project\"}],[\"capability\",{\"type\":\"text\",\"value\":\"review\"}],[\"anchor_kind\",{\"type\":\"text\",\"value\":\"mr\"}],[\"anchor_id\",{\"type\":\"text\",\"value\":\"42\"}],[\"status\",{\"type\":\"text\",\"value\":\"closed\"}],[\"epoch\",{\"type\":\"integer\",\"value\":\"2\"}],[\"current_round_id\",{\"type\":\"text\",\"value\":\"rfc602-round\"}],[\"pending_generation\",{\"type\":\"null\"}],[\"handed_off_fingerprint\",{\"type\":\"null\"}],[\"publishing_epoch\",{\"type\":\"null\"}],[\"pending_revision\",{\"type\":\"null\"}],[\"anchor_meta\",{\"type\":\"null\"}],[\"initiator_user_id\",{\"type\":\"null\"}],[\"created_at\",{\"type\":\"integer\",\"value\":\"1778459500000\"}],[\"updated_at\",{\"type\":\"integer\",\"value\":\"1778459500020\"}],[\"closed_at\",{\"type\":\"integer\",\"value\":\"1778459500020\"}]],\"raw\":{\"id\":\"rfc602-item\",\"code_host_endpoint_id\":\"rfc602-endpoint\",\"stable_project_id\":\"rfc602-project\",\"capability\":\"review\",\"anchor_kind\":\"mr\",\"anchor_id\":\"42\",\"status\":\"closed\",\"epoch\":2,\"current_round_id\":\"rfc602-round\",\"initiator_user_id\":null,\"created_at\":1778459500000,\"updated_at\":1778459500020,\"closed_at\":1778459500020,\"pending_generation\":null,\"handed_off_fingerprint\":null,\"publishing_epoch\":null,\"pending_revision\":null,\"anchor_meta\":null}}"
+      }
+    },
+    {
+      "table": "code_history_query_records",
+      "values": {
+        "build_id": "rfc602-build-ready",
+        "source_table": "code_work_rounds",
+        "original_id": "rfc602-round",
+        "archive_id": "rfc602-archive-code_work_rounds",
+        "record_ordinal": 0,
+        "original_key_json": "[\n  {\n    \"type\": \"text\",\n    \"value\": \"rfc602-round\"\n  }\n]\n",
+        "record_payload_json": "{\"version\":1,\"key\":[{\"type\":\"text\",\"value\":\"rfc602-round\"}],\"values\":[[\"id\",{\"type\":\"text\",\"value\":\"rfc602-round\"}],[\"work_item_id\",{\"type\":\"text\",\"value\":\"rfc602-item\"}],[\"round_seq\",{\"type\":\"integer\",\"value\":\"2\"}],[\"epoch\",{\"type\":\"integer\",\"value\":\"2\"}],[\"task_id\",{\"type\":\"null\"}],[\"baseline_sha\",{\"type\":\"text\",\"value\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}],[\"work_package\",{\"type\":\"null\"}],[\"template_snapshot\",{\"type\":\"null\"}],[\"stage_contract_ver\",{\"type\":\"integer\",\"value\":\"1\"}],[\"outcome\",{\"type\":\"text\",\"value\":\"published\"}],[\"started_at\",{\"type\":\"integer\",\"value\":\"1778459500000\"}],[\"ended_at\",{\"type\":\"integer\",\"value\":\"1778459500020\"}]],\"raw\":{\"id\":\"rfc602-round\",\"work_item_id\":\"rfc602-item\",\"round_seq\":2,\"epoch\":2,\"baseline_sha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"stage_contract_ver\":1,\"outcome\":\"published\",\"started_at\":1778459500000,\"ended_at\":1778459500020,\"task_id\":null,\"work_package\":null,\"template_snapshot\":null}}"
+      }
+    }
+  ],
+  "historyExpectations": [
+    {
+      "table": "code_history_query_records",
+      "rows": []
+    }
+  ],
+  "content": []
+}

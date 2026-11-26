@@ -29,6 +29,12 @@ interface CatalogColumns {
   readonly visibility: SQLWrapper
 }
 
+/** One SQL/projection implementation for pages and exact reads. The exact-id
+ * selector stays private to this adapter; public list cursors do not carry it. */
+interface SummaryReadSelection extends ResourceCatalogSummaryReadQuery {
+  readonly exactId?: string
+}
+
 function afterCondition(
   columns: Pick<CatalogColumns, 'id' | 'name'>,
   after: ResourceCatalogSummaryReadQuery['after'],
@@ -45,7 +51,7 @@ function catalogWhere(
   actor: Actor,
   kind: CatalogSelectorKind,
   columns: CatalogColumns,
-  query: ResourceCatalogSummaryReadQuery,
+  query: SummaryReadSelection,
 ): SQL<unknown> | undefined {
   const visibility = visibleRowsCondition(db, actor, kind, columns)
   const normalizedSearch = query.search?.trim()
@@ -57,14 +63,19 @@ function catalogWhere(
           sql`${engine.instr(sql`lower(${columns.name})`, sql`lower(${normalizedSearch})`)} > 0`,
           sql`${engine.instr(sql`lower(COALESCE(${columns.description}, ''))`, sql`lower(${normalizedSearch})`)} > 0`,
         )
-  return and(visibility, matching, afterCondition(columns, query.after))
+  return and(
+    visibility,
+    query.exactId === undefined ? undefined : eq(columns.id, query.exactId),
+    matching,
+    afterCondition(columns, query.after),
+  )
 }
 
-async function listKind(
+async function readKind(
   db: PersistenceDb,
   actor: Actor,
   kind: CatalogSelectorKind,
-  query: ResourceCatalogSummaryReadQuery,
+  query: SummaryReadSelection,
 ): Promise<ResourceSummary[]> {
   switch (kind) {
     case 'agent': {
@@ -227,7 +238,11 @@ export function createResourceCatalogSummaryReadPort(
   db: PersistenceDb,
 ): ResourceCatalogSummaryReadPort {
   const port: ResourceCatalogSummaryReadPort = {
-    listKind: (actor, kind, query) => listKind(db, actor, kind, query),
+    async readOne(actor, ref) {
+      const rows = await readKind(db, actor, ref.kind, { exactId: ref.id, limit: 1 })
+      return rows[0] ?? null
+    },
+    listKind: (actor, kind, query) => readKind(db, actor, kind, query),
   }
   return Object.freeze(port)
 }

@@ -269,14 +269,18 @@ describeEachProvider('RFC-349 repository workspace provider boundary', (harness)
         ],
       }),
     ).toEqual({ status: 'ok', version: 2 })
-    expect((await store.readRepositoryGroupSnapshot()).groups[0]).toMatchObject({
+    expect(
+      (await store.readRepositoryGroupGraph({ scope: { kind: 'all' } })).groups[0],
+    ).toMatchObject({
       name: 'Platform Sources',
       version: 2,
     })
 
     await store.deleteCachedRepoAndDetachGroups('repo-1')
     expect(await store.findCachedRepoById('repo-1')).toBeNull()
-    expect((await store.readRepositoryGroupSnapshot()).nodes[0]).toMatchObject({
+    expect(
+      (await store.readRepositoryGroupGraph({ scope: { kind: 'all' } })).nodes[0],
+    ).toMatchObject({
       attachmentKind: null,
       cachedRepoId: null,
     })

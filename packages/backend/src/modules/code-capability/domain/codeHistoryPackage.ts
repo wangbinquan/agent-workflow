@@ -108,6 +108,72 @@ function decodeCell(cell: Cell): CodeHistoryValue {
   }
 }
 
+const storedRecordSchema = z.strictObject({
+  version: z.literal(1),
+  key: keySchema,
+  values: z.array(z.tuple([z.string(), cellSchema])),
+  raw: z.json(),
+})
+
+/** A single derived record preserves canonical value types without reopening its source package. */
+export function encodeStoredCodeHistoryRecord(record: CodeHistoryRecord): string {
+  const cell = (value: CodeHistoryValue): Cell => {
+    if (value === null) return { type: 'null' }
+    if (typeof value === 'string') return { type: 'text', value }
+    if (typeof value === 'boolean') return { type: 'boolean', value }
+    if (typeof value === 'bigint') return { type: 'integer', value: value.toString() }
+    if (typeof value === 'number')
+      return {
+        type: Number.isSafeInteger(value) && !Object.is(value, -0) ? 'integer' : 'real',
+        value: Object.is(value, -0) ? '-0' : String(value),
+      }
+    return { type: 'bytes', value: Buffer.from(value).toString('base64') }
+  }
+  return JSON.stringify({
+    version: 1,
+    key: record.key,
+    values: Object.entries(record.row).map(([name, value]) => [name, cell(value)]),
+    raw: record.raw,
+  })
+}
+
+export function decodeStoredCodeHistoryRecord(
+  payload: string,
+  table: CodeHistoryTable,
+  source: CodeHistorySource,
+): CodeHistoryRecord {
+  try {
+    const record = storedRecordSchema.parse(JSON.parse(payload))
+    const definitions = source.contract.tables.filter((definition) => definition.id === table)
+    if (definitions.length !== 1) throw new Error('source table definition is unavailable')
+    const definition = definitions[0]!
+    const columns = definition.columns.map((column) => column.name)
+    if (
+      new Set(columns).size !== columns.length ||
+      definition.migrationKey.length === 0 ||
+      definition.migrationKey.some((name) => !columns.includes(name))
+    )
+      throw new Error('source table definition is invalid')
+    const byName = new Map(record.values)
+    if (
+      byName.size !== record.values.length ||
+      record.values.length !== columns.length ||
+      columns.some((name) => !byName.has(name))
+    )
+      throw new Error('canonical columns do not match the source table')
+    const actualKey = definition.migrationKey.map((name) => byName.get(name)!)
+    if (canonicalSchemaJson(actualKey) !== canonicalSchemaJson(record.key))
+      throw new Error('canonical values do not match the record key')
+    return {
+      key: record.key,
+      row: Object.fromEntries(record.values.map(([name, value]) => [name, decodeCell(value)])),
+      raw: record.raw,
+    }
+  } catch (error) {
+    throw new CodeHistoryReadError('code-history-query-index-invalid', String(error))
+  }
+}
+
 export function codeHistoryOriginalId(table: string, key: readonly Cell[]): string {
   return key.length === 1 && key[0]!.type === 'text'
     ? key[0]!.value

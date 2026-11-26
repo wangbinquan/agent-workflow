@@ -9,13 +9,16 @@ import type {
   RepoGroupLayoutResponse,
   RepoGroupNodeInput,
 } from '@agent-workflow/shared'
-import type { RepositoryGroupSnapshot } from '../../ports/repositoryWorkspaceStore'
+import type {
+  RepositoryGroupGraphQuery,
+  RepositoryGroupSnapshot,
+} from '../../ports/repositoryWorkspaceStore'
 
 /** The one read a group's flattening needs; every repository workspace store
  * provides it. Kept this narrow so the public layout query does not expose the
  * whole store. */
 export interface RepositoryGroupSnapshotReader {
-  readRepositoryGroupSnapshot(): Promise<RepositoryGroupSnapshot>
+  readRepositoryGroupGraph(query: RepositoryGroupGraphQuery): Promise<RepositoryGroupSnapshot>
 }
 
 /** What deleting a group detached, archived and disabled. */

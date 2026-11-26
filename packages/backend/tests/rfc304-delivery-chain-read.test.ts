@@ -1,4 +1,4 @@
-import { historyFixtureReader } from './helpers/legacyCapabilitySeed'
+import { preparedHistoryFixtureReader } from './helpers/legacyCapabilitySeed'
 // RFC-304 T61 — the delivery chain, readable.
 //
 // The table has been WRITTEN since T61 (`openDelivery` and `advanceDelivery` are
@@ -27,8 +27,10 @@ import { createCodeDeliveryChainQuery as createCodeDeliveryChainQueryFromPort } 
 import { createDeliveryChainRead } from '../src/modules/code-capability/infrastructure/deliveryChainRead'
 import { seedDelivery } from './helpers/legacyCapabilitySeed'
 
-const createCodeDeliveryChainQuery = (db: PersistenceDb) =>
-  createCodeDeliveryChainQueryFromPort(createDeliveryChainRead(historyFixtureReader(db)))
+const createCodeDeliveryChainQuery = async (db: PersistenceDb) =>
+  createCodeDeliveryChainQueryFromPort(
+    createDeliveryChainRead(await preparedHistoryFixtureReader(db)),
+  )
 
 describeEachProvider('RFC-304 T61 — reading the delivery chain', (harness) => {
   let db: PersistenceDb
@@ -60,7 +62,9 @@ describeEachProvider('RFC-304 T61 — reading the delivery chain', (harness) => 
     await seed({ correlationId: 'c2', project: 'proj-1', now: 2_000 })
     await seed({ correlationId: 'other', project: 'proj-2', now: 3_000 })
 
-    const rows = await createCodeDeliveryChainQuery(db).forProject({ stableProjectId: 'proj-1' })
+    const rows = await (
+      await createCodeDeliveryChainQuery(db)
+    ).forProject({ stableProjectId: 'proj-1' })
 
     // Only this project's — an operator looking at one repository is not helped
     // by another's traffic.
@@ -74,7 +78,7 @@ describeEachProvider('RFC-304 T61 — reading the delivery chain', (harness) => 
     await seed({ correlationId: 'c1', project: 'proj-1', now: 1_000 })
     await seed({ correlationId: 'c2', project: 'proj-1', now: 2_000 })
 
-    const rows = await createCodeDeliveryChainQuery(db).forCorrelation('c2')
+    const rows = await (await createCodeDeliveryChainQuery(db)).forCorrelation('c2')
     expect(rows.map((r) => r.correlationId)).toEqual(['c2'])
   })
 
@@ -96,7 +100,9 @@ describeEachProvider('RFC-304 T61 — reading the delivery chain', (harness) => 
       now: 3_000,
     })
 
-    const failures = await createCodeDeliveryChainQuery(db).failures({
+    const failures = await (
+      await createCodeDeliveryChainQuery(db)
+    ).failures({
       stableProjectId: 'proj-1',
     })
     // FAILED only — `dropped` is deliberately not a failure. A repository with
@@ -110,7 +116,9 @@ describeEachProvider('RFC-304 T61 — reading the delivery chain', (harness) => 
 
     // The drop is not lost — it is in the project's own chain, with its reason,
     // which is where an operator asking "why did nothing happen here" looks.
-    const chain = await createCodeDeliveryChainQuery(db).forProject({
+    const chain = await (
+      await createCodeDeliveryChainQuery(db)
+    ).forProject({
       stableProjectId: 'proj-1',
     })
     const dropped = chain.find((r) => r.correlationId === 'dropped-1')
@@ -132,7 +140,7 @@ describeEachProvider('RFC-304 T61 — reading the delivery chain', (harness) => 
       now: 2_000,
     })
 
-    const rows = await createCodeDeliveryChainQuery(db).failures({})
+    const rows = await (await createCodeDeliveryChainQuery(db)).failures({})
     expect(rows.map((r) => r.correlationId).sort()).toEqual(['a', 'b'])
   })
 
@@ -140,7 +148,9 @@ describeEachProvider('RFC-304 T61 — reading the delivery chain', (harness) => 
     for (let i = 0; i < 5; i++) {
       await seed({ correlationId: `c${String(i)}`, project: 'proj-1', now: 1_000 + i })
     }
-    const rows = await createCodeDeliveryChainQuery(db).forProject({
+    const rows = await (
+      await createCodeDeliveryChainQuery(db)
+    ).forProject({
       stableProjectId: 'proj-1',
       limit: 2,
     })

@@ -4,6 +4,8 @@ export interface CodeMetricFindingRow {
   readonly capability: string
   readonly resolvedAt: number | null
   readonly codeChangedAt: number | null
+  /** Persisted history prefixes return counted buckets; live/frozen readers return one row. */
+  readonly n?: number
 }
 
 export interface CodeMetricRoundRow {

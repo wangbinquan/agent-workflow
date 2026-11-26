@@ -20,6 +20,7 @@ import {
   seedCodeHistoryRows,
   historyFixtureSource,
   historyFixtureReader,
+  preparedHistoryFixtureReader,
   historyFixtureContent,
   historyFixtureArchive,
 } from './helpers/legacyCapabilitySeed'
@@ -65,9 +66,9 @@ describeEachProvider('RFC-395 read-only history packages', (h) => {
   }
   test('all projections and id lookups issue SELECT only and never address retired tables', async () => {
     await seedCodeHistoryRows(h.db, TABLE, item)
+    const reader = await preparedHistoryFixtureReader(h.db)
     const recording = h.recordStatements()
     try {
-      const reader = historyFixtureReader(h.db)
       expect((await reader.find(TABLE, 'old-id'))?.row.id).toBe('old-id')
       expect(await reader.find(TABLE, 'missing')).toBeNull()
       await createWorkItemProjectionRead(reader).readPage({})

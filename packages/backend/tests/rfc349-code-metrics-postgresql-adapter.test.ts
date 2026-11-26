@@ -4,7 +4,8 @@ import { historyProjectionParity } from './helpers/model/historyOracle'
 // adoption/run projection without leaking a provider handle into public APIs.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
+import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 
 import { DEFAULT_METRICS_WINDOW_MS } from '@/modules/code-capability/application/codeMetricsQuery'
 
@@ -27,7 +28,10 @@ function rows(values: readonly (readonly unknown[])[]): SqlRows {
   })
 }
 
-function fixture(responses: Array<readonly (readonly unknown[])[]>) {
+function fixture(
+  harness: ProviderDatabaseHarness,
+  responses: Array<readonly (readonly unknown[])[]>,
+) {
   const reads: string[] = []
   const sourceRows = [...responses]
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
@@ -68,15 +72,16 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
       createEpoch1HistoryQueries(
         createPostgresqlDatabaseClient(runtime, { liveSchema: persistenceSchemaBinding }),
       ).metrics,
+      harness,
       reads,
     ),
     reads,
   }
 }
 
-describe('RFC-349 PostgreSQL code metrics adapter', () => {
+describeEachProvider('RFC-349 durable code metrics adapter parity', (harness) => {
   test('preserves adoption disagreements and run outcomes through PostgreSQL rows', async () => {
-    const fake = fixture([
+    const fake = fixture(harness, [
       [
         ['mr-review', NOW, NOW],
         ['mr-review', null, NOW],
@@ -131,17 +136,21 @@ describe('RFC-349 PostgreSQL code metrics adapter', () => {
       ],
     })
 
-    expect(fake.reads).toEqual(['code_findings', 'code_work_items', 'code_work_rounds'])
+    expect(fake.reads).toEqual([
+      'code_history_metric_totals',
+      'code_history_metric_prefixes',
+      'code_history_metric_prefixes',
+    ])
   })
 
   test('keeps an explicit window and empty result shape', async () => {
-    const fake = fixture([[], []])
+    const fake = fixture(harness, [[], []])
 
     await expect(fake.query.summary({ now: NOW, windowMs: 60_000 })).resolves.toEqual({
       windowMs: 60_000,
       adoption: [],
       runs: [],
     })
-    expect(fake.reads).toEqual(['code_findings', 'code_work_items', 'code_work_rounds'])
+    expect(fake.reads).toEqual(['code_history_metric_totals'])
   })
 })

@@ -237,6 +237,7 @@ for (const action of ['preflight', 'migrate'] as const)
     const result = await databaseCommand(
       [action, '--to', 'postgresql', '--auto', '--json'],
       {
+        codeHistoryRebuild: unused,
         context: {} as LocalSystemOperationContext,
         application,
       },

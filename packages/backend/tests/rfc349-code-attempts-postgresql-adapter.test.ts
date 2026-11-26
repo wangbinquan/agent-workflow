@@ -4,7 +4,8 @@ import { historyProjectionParity } from './helpers/model/historyOracle'
 // and retry ordering used by the SQLite behavior oracle.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
+import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -23,7 +24,7 @@ function rows(values: readonly (readonly unknown[])[]): SqlRows {
   })
 }
 
-function fixture(response: readonly (readonly unknown[])[]) {
+function fixture(harness: ProviderDatabaseHarness, response: readonly (readonly unknown[])[]) {
   const reads: string[] = []
   const sourceRows = [response]
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
@@ -63,15 +64,16 @@ function fixture(response: readonly (readonly unknown[])[]) {
       'attempts',
       sourceRows,
       createEpoch1HistoryQueries(db).attempts,
+      harness,
       reads,
     ),
     reads,
   }
 }
 
-describe('RFC-349 PostgreSQL code attempts adapter', () => {
+describeEachProvider('RFC-349 durable code attempts adapter parity', (harness) => {
   test('projects attempt identity, retry counters, verdict, and runtime references', async () => {
-    const fake = fixture([
+    const fake = fixture(harness, [
       [
         'attempt-1',
         'review',
@@ -103,6 +105,6 @@ describe('RFC-349 PostgreSQL code attempts adapter', () => {
       },
     ])
 
-    expect(fake.reads).toEqual(['code_ai_attempts'])
+    expect(fake.reads).toEqual(['code_history_query_attempts'])
   })
 })

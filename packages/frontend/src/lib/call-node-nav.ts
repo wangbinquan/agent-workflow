@@ -86,18 +86,19 @@ export function deriveCallNodeNav(runs: NodeRun[], nodeId: string): CallNodeNav 
  * strip the entry point off every call node on the canvas.
  *
  * `children` is `undefined` while loading and an array once loaded;
- * `queryErrored` must be passed separately because TanStack Query may retain an
- * old array alongside a refetch error.
+ * `queryErrored` and `queryFetching` must be passed separately because TanStack
+ * Query retains the previous complete array during a refresh or refetch error.
  */
 export function callNavIsReachable(
   childTaskId: string,
   children: readonly { id: string }[] | undefined,
   queryErrored: boolean = false,
+  queryFetching: boolean = false,
 ): boolean {
   // TanStack Query can retain the last successful `data` alongside a refetch
   // error. D5 says an errored query is absence-of-proof, not proof-of-absence,
   // so stale data must not demote the node in that state.
-  if (queryErrored) return true
+  if (queryErrored || queryFetching) return true
   if (children === undefined) return true
   return children.some((child) => child.id === childTaskId)
 }

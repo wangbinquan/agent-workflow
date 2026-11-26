@@ -4,7 +4,8 @@ import { historyProjectionParity } from './helpers/model/historyOracle'
 // round, and stage projection used by the SQLite behavior oracle.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
+import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -23,7 +24,10 @@ function rows(values: readonly (readonly unknown[])[]): SqlRows {
   })
 }
 
-function fixture(responses: Array<readonly (readonly unknown[])[]>) {
+function fixture(
+  harness: ProviderDatabaseHarness,
+  responses: Array<readonly (readonly unknown[])[]>,
+) {
   const reads: string[] = []
   const sourceRows = [...responses]
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
@@ -63,15 +67,16 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
       'workItems',
       sourceRows,
       createEpoch1HistoryQueries(db).workItems,
+      harness,
       reads,
     ),
     reads,
   }
 }
 
-describe('RFC-349 PostgreSQL code work-item adapter', () => {
+describeEachProvider('RFC-349 durable code work-item adapter parity', (harness) => {
   test('projects a bounded page with round and stage history', async () => {
-    const fake = fixture([
+    const fake = fixture(harness, [
       [
         ['item-new', 'mr-review', 'mr', '42', 'idle', 3, 2_000],
         ['item-old', 'mr-review', 'mr', '41', 'idle', 2, 1_000],
@@ -126,6 +131,10 @@ describe('RFC-349 PostgreSQL code work-item adapter', () => {
       nextCursor: '2000:item-new',
     })
 
-    expect(fake.reads).toEqual(['code_work_items', 'code_work_rounds', 'code_round_stages'])
+    expect(fake.reads).toEqual([
+      'code_history_query_work_items',
+      'code_history_query_rounds',
+      'code_history_query_stages',
+    ])
   })
 })

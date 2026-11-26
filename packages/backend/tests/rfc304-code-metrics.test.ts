@@ -1,6 +1,6 @@
 import {
   seedCodeHistoryRows,
-  historyFixtureReader,
+  preparedHistoryFixtureReader,
   seedEmptyCodeHistory,
   type HistoryFixtureInsert,
 } from './helpers/legacyCapabilitySeed'
@@ -38,8 +38,8 @@ import { errorHandler } from '../src/platform/errors/domainErrors'
 
 const NOW = 1_700_000_000_000
 
-const createCodeMetricsQuery = (db: PersistenceDb) =>
-  createCodeMetricsQueryFromPort(createCodeMetricsRead(historyFixtureReader(db)))
+const createCodeMetricsQuery = async (db: PersistenceDb) =>
+  createCodeMetricsQueryFromPort(createCodeMetricsRead(await preparedHistoryFixtureReader(db)))
 
 describeEachProvider('RFC-304 T58 — adoption buckets', (harness) => {
   beforeEach(async () => {
@@ -72,7 +72,7 @@ describeEachProvider('RFC-304 T58 — adoption buckets', (harness) => {
     })
   }
 
-  const summary = async () => await createCodeMetricsQuery(db).summary({ now: NOW })
+  const summary = async () => await (await createCodeMetricsQuery(db)).summary({ now: NOW })
 
   test('the four buckets are four, and they add up to what was published', async () => {
     await finding({ resolvedAt: NOW, codeChangedAt: NOW }) // agreed
@@ -173,7 +173,7 @@ describeEachProvider('RFC-304 T58 — run counts', (harness) => {
     })
   }
 
-  const summary = async () => await createCodeMetricsQuery(db).summary({ now: NOW })
+  const summary = async () => await (await createCodeMetricsQuery(db)).summary({ now: NOW })
 
   test('outcomes are counted by kind', async () => {
     await round({ outcome: 'published', endedAt: NOW + 1 })
@@ -240,7 +240,7 @@ describeEachProvider('RFC-304 T58 — the metrics route', (harness) => {
   beforeEach(async () => {
     await seedEmptyCodeHistory(harness.db)
   })
-  const appWith = (db: PersistenceDb) => {
+  const appWith = async (db: PersistenceDb) => {
     const app = new Hono()
     const actor = buildActor({
       user: {
@@ -260,12 +260,16 @@ describeEachProvider('RFC-304 T58 — the metrics route', (harness) => {
     app.onError(errorHandler)
     mountCodeRoutes(
       app,
-      composeCodeHistoryQueries(db, createAgentExecutionQueries(db), historyFixtureReader(db)),
+      composeCodeHistoryQueries(
+        db,
+        createAgentExecutionQueries(db),
+        await preparedHistoryFixtureReader(db),
+      ),
     )
     return app
   }
 
-  const get = async (db: PersistenceDb, path: string) => await appWith(db).request(path)
+  const get = async (db: PersistenceDb, path: string) => await (await appWith(db)).request(path)
 
   let db: PersistenceDb
   beforeEach(() => {

@@ -206,7 +206,7 @@ describeEachProvider('RFC-359 W4-B6a —— 工作区维护与仓库工作区存
         expectedGraphVersions: graph(),
       }),
     ).toEqual({ status: 'ok', version: 2 })
-    const snapshot = await store.readRepositoryGroupSnapshot()
+    const snapshot = await store.readRepositoryGroupGraph({ scope: { kind: 'all' } })
     expect(snapshot.groups.find((row) => row.id === a.id)).toMatchObject({
       description: 'renamed',
       version: 2,
@@ -294,7 +294,7 @@ describeEachProvider('RFC-359 W4-B6a —— 工作区维护与仓库工作区存
     expect(
       (await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, scheduleId)))[0],
     ).toMatchObject({ enabled: false, nextRunAt: null })
-    const after = await store.readRepositoryGroupSnapshot()
+    const after = await store.readRepositoryGroupGraph({ scope: { kind: 'all' } })
     expect(after.groups.some((row) => row.id === a.id)).toBe(false)
     expect(after.nodes.find((row) => row.groupId === b.id && row.path === 'child')).toMatchObject({
       attachmentKind: null,
