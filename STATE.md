@@ -1,4 +1,4 @@
-## 2026-11-25 RFC-601 员工工作区与平台工作项装配的 provider 必填（In Progress；`design/RFC-601-employee-compositions-required-providers/`）
+## 2026-11-25 RFC-601 员工工作区与平台工作项装配的 provider 必填（Done；`design/RFC-601-employee-compositions-required-providers/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；与 RFC-597 同一做法，落在 RFC-599 §3 留下的员工两个装配上。
 - **范围**：`DevelopmentEmployeeWorkspaceCompositionInput` 的 `graphDelivery` 与 `DevelopmentEmployeePlatformWorkItemsCompositionInput` 的 `approvalGateway`、
@@ -8,7 +8,7 @@
 - **集中验证**（基于 `18ddbc87e`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 508 个
   用例文件只有 `rfc321` 照例红（主树 10 / 10），没有用例走到调用即抛错的替身；五种变异都被认出（含 application 的缺绑定阻塞去掉时 `rfc396` 照旧红）；
   架构报告除来源外完全相同。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-601 的提交 `ed283f335`：exact SHA 主 CI run 45737396629 70 / 70 全绿；2026-11-25 转 Done。
 
 ## 2026-11-25 RFC-600 development-automation 的 infrastructure 不再替调用方造本机效果（Done；`design/RFC-600-development-automation-infrastructure-stated-effects/`）
 

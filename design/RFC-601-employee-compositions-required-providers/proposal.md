@@ -1,6 +1,6 @@
 # RFC-601 员工工作区与平台工作项装配的 provider 必填（RFC-294 W4-E8：可选 provider 的装配边界，员工一侧）
 
-- **状态**：In Progress（2026-11-25）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话自行裁定落位（见
+- **状态**：Done（2026-11-25，落地 `ed283f335`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话自行裁定落位（见
   design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) design §3 的 development-automation 一行（按用例的必填端口）；与
   [RFC-597](../RFC-597-development-automation-required-providers/proposal.md) 同一做法，落在 [RFC-599](../RFC-599-employee-compositions-stated-effects/proposal.md)
