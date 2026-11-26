@@ -468,7 +468,7 @@ export const RFC349_T10_REGRESSION_COVERAGE_OWNERS = Object.freeze([
   {
     lane: 'backend',
     evidenceRole: 'provider-neutral-full-regression',
-    ownerWorkflow: 'ci.yml',
+    ownerWorkflow: 'ci-work.yml',
     command: '--shard=${{ matrix.shard }}/${{ matrix.shards }}',
     // Main CI 每轮换种子，比这里删掉的写死 349001 强。
     strongerBecause: 'seed=$(( (GITHUB_RUN_NUMBER * 10 + MATRIX_SHARD) % 2147483647 ))',
@@ -476,7 +476,7 @@ export const RFC349_T10_REGRESSION_COVERAGE_OWNERS = Object.freeze([
   {
     lane: 'frontend',
     evidenceRole: 'ui-only-full-regression',
-    ownerWorkflow: 'ci.yml',
+    ownerWorkflow: 'ci-work.yml',
     command: 'bun run --filter @agent-workflow/frontend test',
     // 删掉的那条只跑 ubuntu；Main CI 跑 ubuntu + Windows 两个 OS。
     strongerBecause: 'os: [ubuntu-latest, windows-latest]',

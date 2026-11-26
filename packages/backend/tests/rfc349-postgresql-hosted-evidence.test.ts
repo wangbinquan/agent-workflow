@@ -136,7 +136,7 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
   // an OS, the nightly re-adding a `--grep-invert`) is caught as well.
   test('every deleted regression lane still has its coverage owner, and the owner is the stronger leg', () => {
     const owners = {
-      'ci.yml': readFileSync(resolve(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8'),
+      'ci-work.yml': readFileSync(resolve(ROOT, '.github', 'workflows', 'ci-work.yml'), 'utf8'),
       'e2e-full-nightly.yml': readFileSync(
         resolve(ROOT, '.github', 'workflows', 'e2e-full-nightly.yml'),
         'utf8',
@@ -177,7 +177,7 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     // `backend-macos-nightly.yml`，片数与预算原样。
     // Parse the owning job: the shard text must not accept an unrelated matrix elsewhere
     // in this workflow or reject the stronger expanded leg.
-    const matrix = parse(owners['ci.yml']).jobs['test-backend'].strategy.matrix
+    const matrix = parse(owners['ci-work.yml']).jobs['test-backend'].strategy.matrix
     expect(matrix.os).toEqual(['ubuntu-latest'])
     // 2026-10-26 RFC-395 激活使后端测试量约翻倍：用户裁决 Ubuntu 24 → 36 片。
     // 2026-11-01 RFC-398 加入约 105 runner-分钟，照加 runner 的规矩扩到 44 片。
@@ -216,7 +216,7 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     }
     const workflow = (name: string) =>
       parse(readFileSync(resolve(ROOT, '.github', 'workflows', name), 'utf8'))
-    const ubuntu: BackendJob = workflow('ci.yml').jobs['test-backend']
+    const ubuntu: BackendJob = workflow('ci-work.yml').jobs['test-backend']
     const macos: BackendJob = workflow('backend-macos-nightly.yml').jobs['test-backend-macos']
     expect(ubuntu.strategy.matrix.os).toEqual(['ubuntu-latest'])
     expect(macos['runs-on']).toBe('macos-latest')

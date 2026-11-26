@@ -3,7 +3,7 @@
 // T1 locks (G1 family): the module-init-cycle guard is only real if
 //   (a) the dependency-cruiser rule exists,
 //   (b) CI actually RUNS depcheck (design-gate finding: the script existed
-//       for months while neither `lint` nor ci.yml ever invoked it), and
+//       for months while neither `lint` nor ci-work.yml ever invoked it), and
 //   (c) the workgroup host sentinels stay in a ZERO-IMPORT leaf — they were
 //       extracted precisely to cut `launch → task → scheduler → runner →
 //       rounds → launch` (RFC-079 class: top-level const evaluates to
@@ -48,7 +48,7 @@ describe('rfc217 G1 — no-circular guard is real', () => {
   })
 
   test('CI wires depcheck (a rule nobody runs is not a lock)', () => {
-    const ci = read('.github/workflows/ci.yml')
+    const ci = read('.github/workflows/ci-work.yml')
     expect(ci).toContain('bun run depcheck')
   })
 

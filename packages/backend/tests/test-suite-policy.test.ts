@@ -182,8 +182,8 @@ interface GateActivationCheck {
 // activation path. This prevents a locally green, permanently skipped suite:
 // adding a new switch makes the exact-name assertion fail until CI owns it.
 const REQUIRED_GATE_ACTIVATIONS: Record<string, GateActivationCheck[]> = {
-  RUN_CHAOS: [{ file: '.github/workflows/ci.yml', marker: "RUN_CHAOS: '1'" }],
-  RUN_GIT_NETWORK: [{ file: '.github/workflows/ci.yml', marker: "RUN_GIT_NETWORK: '1'" }],
+  RUN_CHAOS: [{ file: '.github/workflows/ci-work.yml', marker: "RUN_CHAOS: '1'" }],
+  RUN_GIT_NETWORK: [{ file: '.github/workflows/ci-work.yml', marker: "RUN_GIT_NETWORK: '1'" }],
   // RFC-310 T71：GB 级证据落盘 soak。默认关是成本决定（2GB 下载 + 2GB 临时磁盘），
   // 不是可靠性存疑——所以它必须有一条真在跑的自动化路径，否则就是个永远不执行的
   // 断言。nightly 那格就是它的执行者。

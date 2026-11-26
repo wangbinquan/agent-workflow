@@ -68,7 +68,7 @@ describeEachProviderHttpApplication(
     afterEach(resetRouteMetaRegistry)
 
     // **谁后跑谁负责比对**——不能把比对放进一个单独的、注册在后面的 `describe`。
-    // CI 跑的是 `bun test --isolate --randomize`（`.github/workflows/ci.yml:228`，
+    // CI 跑的是 `bun test --isolate --randomize`（`.github/workflows/ci-work.yml`，
     // 那个 flag 存在的理由就写在旁边：把「文件内的顺序依赖」暴露出来）。
     // 第一版正是这么写的：比对写成尾部的 `describe`，本地顺序跑绿、CI 随机序下比对先于记录执行，
     // 读到空 map 当场红。**跨用例的先后顺序不是可以依赖的东西。**

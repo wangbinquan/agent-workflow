@@ -274,7 +274,7 @@ describe('complete E2E timing refresh', () => {
   })
   test('the source-workflow contract keeps Linux 3, macOS 4 and Windows 4 shards', () => {
     const workflow = readFileSync(
-      new URL('../../../.github/workflows/ci.yml', import.meta.url),
+      new URL('../../../.github/workflows/ci-work.yml', import.meta.url),
       'utf8',
     )
     expect(() => assertE2EShardTopology(workflow)).not.toThrow()
@@ -283,7 +283,7 @@ describe('complete E2E timing refresh', () => {
       assertE2EShardTopology(workflow.replace('shard: [1, 2, 3, 4]', 'shard: [1, 2, 4]')),
     ).toThrow()
     expect(() =>
-      assertE2EShardTopology(workflow.replace('  e2e-windows:', '  e2e-missing:')),
+      assertE2EShardTopology(workflow.replace('\n  e2e-windows:\n', '\n  e2e-missing:\n')),
     ).toThrow()
   })
 })

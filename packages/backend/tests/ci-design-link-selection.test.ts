@@ -202,7 +202,7 @@ describe('design link scope', () => {
 describe('design link workflow wiring', () => {
   test('main always checks local links, then changed external links; nightly retains the complete sweep', () => {
     const root = resolve(import.meta.dir, '../../..')
-    const main = parse(readFileSync(resolve(root, '.github/workflows/ci.yml'), 'utf8'))
+    const main = parse(readFileSync(resolve(root, '.github/workflows/ci-work.yml'), 'utf8'))
     const nightly = parse(
       readFileSync(resolve(root, '.github/workflows/design-links-nightly.yml'), 'utf8'),
     )

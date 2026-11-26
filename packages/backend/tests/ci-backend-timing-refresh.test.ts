@@ -28,7 +28,7 @@ describe('measured backend timing refresh', () => {
       expect(() => assertSafeBackendTimingUploads(safe, attempt)).toThrow('run attempt')
     expect(() => assertSafeBackendTimingUploads('', 2)).toThrow('failed samples')
     const workflow = readFileSync(
-      resolve(import.meta.dir, '../../../.github/workflows/ci.yml'),
+      resolve(import.meta.dir, '../../../.github/workflows/ci-work.yml'),
       'utf8',
     )
     expect(() => assertSafeBackendTimingUploads(workflow, 2)).not.toThrow()

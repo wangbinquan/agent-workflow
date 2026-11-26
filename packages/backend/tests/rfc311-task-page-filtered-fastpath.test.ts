@@ -184,11 +184,12 @@ async function collectPages(
   query: Record<string, string>,
   limit: number,
   pipeline: 'auto' | 'exhaustive',
-): Promise<{ items: TaskOperationsListItem[]; facets: unknown; pages: number }> {
+): Promise<{ items: TaskOperationsListItem[]; facets: unknown; pages: number; cursors: string[] }> {
   const items: TaskOperationsListItem[] = []
   let cursor: string | undefined
   let facets: unknown
   let pages = 0
+  const cursors: string[] = []
   for (; pages < 40; pages += 1) {
     const result = await listTaskOperationsPage(
       db as never,
@@ -199,9 +200,10 @@ async function collectPages(
     items.push(...result.items)
     if (result.kind === 'root' && facets === undefined) facets = result.facets
     if (result.nextCursor === null) break
+    cursors.push(result.nextCursor)
     cursor = result.nextCursor
   }
-  return { items, facets, pages }
+  return { items, facets, pages, cursors }
 }
 
 /** 过滤组合矩阵。刻意包含「命中零行」与「命中全部」两个极端。 */
@@ -236,6 +238,89 @@ const FILTER_MATRIX: Array<Record<string, string>> = [
 ]
 
 describeEachProvider('RFC-311 G1 — filtered fast path === exhaustive pipeline', (harness) => {
+  test.each(['dense-prefix', 'sparse-fallback', 'tied-boundary', 'one-root-prefix'] as const)(
+    'RFC-615 prefix/fallback preserves every page and cursor: %s',
+    async (shape) => {
+      const db = harness.db
+      await seedBase(db)
+      const rows: SeedTask[] = Array.from({ length: 36 }, (_, index) => ({
+        id: `r615-${String(index).padStart(2, '0')}`,
+        owner: index % 2 === 0 ? 'alice' : 'bob',
+        status: shape === 'sparse-fallback' && index < 20 ? 'done' : 'running',
+        startedAt: shape === 'tied-boundary' ? 1_000 : 10_000 - index,
+        origin: 'manual',
+        repoPath: '/srv/repos/rfc615',
+        ...(shape === 'one-root-prefix' && index > 0 && index <= 20 ? { parent: 'r615-00' } : {}),
+      }))
+      await insertForest(db, rows)
+      // limit=3 gives a 16-row physical prefix: dense can finish from it,
+      // sparse/ties/concentrated descendants require the complete fallback.
+      const fast = await collectPages(
+        db,
+        actor('admin', 'admin'),
+        { statuses: 'running' },
+        3,
+        'auto',
+      )
+      const oracle = await collectPages(
+        db,
+        actor('admin', 'admin'),
+        { statuses: 'running' },
+        3,
+        'exhaustive',
+      )
+      expect(fast.items).toEqual(oracle.items)
+      expect(fast.facets).toEqual(oracle.facets)
+      expect(fast.cursors).toEqual(oracle.cursors)
+      expect(new Set(fast.items.map((item) => item.id)).size).toBe(fast.items.length)
+      expect(fast.items.length).toBe(
+        shape === 'sparse-fallback' || shape === 'one-root-prefix' ? 16 : 36,
+      )
+      expect(fast.cursors.length).toBeGreaterThan(1)
+    },
+  )
+
+  test('RFC-615 duplicate open alerts cannot multiply prefix matches or facet counts', async () => {
+    const db = harness.db
+    await seedBase(db)
+    await insertForest(
+      db,
+      Array.from(
+        { length: 8 },
+        (_, index): SeedTask => ({
+          id: `r615-alert-${index}`,
+          owner: 'admin',
+          status: 'done',
+          startedAt: 1_000 + index,
+          origin: 'manual',
+          repoPath: '/srv/repos/rfc615',
+          alert: index < 2,
+        }),
+      ),
+    )
+    await insertOne(db, tablesOf(db).lifecycleAlerts, {
+      id: 'r615-second-alert',
+      taskId: 'r615-alert-0',
+      rule: 'another-rule',
+      severity: 'warn',
+      detail: 'same task, another unresolved alert',
+      detectedAt: 1_001,
+      resolvedAt: null,
+    })
+    const fast = await collectPages(db, actor('admin', 'admin'), { view: 'attention' }, 1, 'auto')
+    const oracle = await collectPages(
+      db,
+      actor('admin', 'admin'),
+      { view: 'attention' },
+      1,
+      'exhaustive',
+    )
+    expect(fast.items).toEqual(oracle.items)
+    expect(fast.facets).toEqual(oracle.facets)
+    expect(fast.cursors).toEqual(oracle.cursors)
+    expect(fast.items.map((item) => item.id)).toEqual(['r615-alert-1', 'r615-alert-0'])
+  })
+
   describe('every filter combination matches page-for-page, for every actor', () => {
     // Keep the complete 70-row forest and every page comparison. Give each
     // actor/filter group its own default test budget instead of timing the

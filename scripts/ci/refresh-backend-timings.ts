@@ -2,6 +2,7 @@
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { resolveCiWorkSource } from './workflow-source'
 
 export interface BackendTimings {
   version: 1
@@ -153,7 +154,10 @@ if (import.meta.main) {
   const sourceRun = JSON.parse(command('gh', ['api', `repos/${repository}/actions/runs/${runId}`]))
   const sourceSha = assertSuccessfulTimingSource(sourceRun, repository, runId)
   // The checked-out source workflow is authoritative for the expected matrix size.
-  const sourceWorkflow = command('git', ['show', `${sourceSha}:.github/workflows/ci.yml`])
+  const sourceDefinition = resolveCiWorkSource((path) =>
+    command('git', ['show', `${sourceSha}:${path}`]),
+  )
+  const sourceWorkflow = sourceDefinition.workflow
   assertSafeBackendTimingUploads(sourceWorkflow, sourceRun.run_attempt)
   const backendJob = sourceWorkflow
     .split('\n  test-backend:')[1]
@@ -177,6 +181,7 @@ if (import.meta.main) {
     sourceRun: runId,
     sourceSha,
     sourceRepository: repository,
+    sourceWorkflowPath: sourceDefinition.path,
     finalRunAttempt: sourceRun.run_attempt,
     sourceShards: Number(countText),
     sourceFiles: Object.keys(merged.files).length,

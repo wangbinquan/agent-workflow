@@ -20,7 +20,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
-const CI_YML = readFileSync(resolve(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')
+const CI_YML = readFileSync(resolve(REPO_ROOT, '.github', 'workflows', 'ci-work.yml'), 'utf8')
 const NIGHTLY_YML = readFileSync(
   resolve(REPO_ROOT, '.github', 'workflows', 'e2e-full-nightly.yml'),
   'utf8',
@@ -73,7 +73,7 @@ describe('RFC-319 —— 语料非空（文件被挪走 / 改名时必须红，�
     expect(NIGHTLY_YML.length).toBeGreaterThan(1_000)
   })
 
-  test('ci.yml 里确实有那个 e2e job（找不到就不该有下面的断言）', () => {
+  test('ci-work.yml 里确实有那个 e2e job（找不到就不该有下面的断言）', () => {
     expect(CI_YML).toContain('Playwright e2e (${{ matrix.os }} shard')
     expect(CI_CODE).toContain('bun run e2e --')
   })

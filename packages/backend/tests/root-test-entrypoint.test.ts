@@ -36,7 +36,8 @@ const frontendPkg = JSON.parse(
   readFileSync(resolve(root, 'packages', 'frontend', 'package.json'), 'utf8'),
 ) as RootPackageJson
 const backendBunfig = readFileSync(resolve(root, 'packages', 'backend', 'bunfig.toml'), 'utf8')
-const ciWorkflow = readFileSync(resolve(root, '.github', 'workflows', 'ci.yml'), 'utf8')
+const ciEntryWorkflow = readFileSync(resolve(root, '.github', 'workflows', 'ci.yml'), 'utf8')
+const ciWorkflow = readFileSync(resolve(root, '.github', 'workflows', 'ci-work.yml'), 'utf8')
 const ciFeedbackWorkflow = readFileSync(
   resolve(root, '.github', 'workflows', 'ci-feedback.yml'),
   'utf8',
@@ -160,7 +161,7 @@ function occurrenceCount(source: string, marker: string): number {
 }
 
 // RFC-611: different source SHAs must wait without replacing pending runs. Two
-// stable run-number lanes bound fanout while the original required job finishes.
+// stable run-number lanes bound calculation fanout; the required job waits outside them.
 const fullCiAdmissionGroup =
   "${{ github.workflow }}-${{ github.ref }}-${{ (endsWith(format('{0}', github.run_number), '0') || " +
   "endsWith(format('{0}', github.run_number), '2') || " +
@@ -202,10 +203,16 @@ describe('repository test entrypoint', () => {
   })
 
   test('complete CI retains every pending SHA in two stable admission lanes', () => {
-    const workflow = parse(ciWorkflow)
-    expect(isQueuedFullCiAdmission(workflow.concurrency)).toBe(true)
-    for (const job of Object.values(workflow.jobs) as { concurrency?: { queue?: unknown } }[])
-      expect(job.concurrency?.queue).toBeUndefined()
+    const workflow = parse(ciEntryWorkflow)
+    expect(workflow.concurrency).toBeUndefined()
+    expect(isQueuedFullCiAdmission(workflow.jobs['full-ci'].concurrency)).toBe(true)
+    expect(workflow.jobs['full-ci'].uses).toBe('./.github/workflows/ci-work.yml')
+    expect(workflow.jobs['ci-required'].concurrency).toBeUndefined()
+    const calculation = parse(ciWorkflow)
+    expect(calculation.concurrency).toBeUndefined()
+    expect(Object.keys(calculation.on)).toEqual(['workflow_call'])
+    for (const job of Object.values(calculation.jobs) as { concurrency?: unknown }[])
+      expect(job.concurrency).toBeUndefined()
     expect(workflow.on.push).toEqual({ branches: ['main'] })
     expect(workflow.on.pull_request).toEqual({ branches: ['main'] })
     expect(workflow.on).toHaveProperty('workflow_dispatch')
@@ -225,7 +232,10 @@ describe('repository test entrypoint', () => {
   })
 
   test('full CI admission rejects replacement queues and per-attempt or per-SHA fanout', () => {
-    const concurrency = parse(ciWorkflow).concurrency as Record<string, unknown>
+    const concurrency = parse(ciEntryWorkflow).jobs['full-ci'].concurrency as Record<
+      string,
+      unknown
+    >
     for (const invalid of [
       { ...concurrency, queue: undefined },
       { ...concurrency, queue: 'single' },
@@ -264,7 +274,7 @@ describe('repository test entrypoint', () => {
       'bun run lint',
       'bun run typecheck',
     ])
-    expect(workflowJob(ciWorkflow, 'ci-required')).not.toContain('static-feedback')
+    expect(workflowJob(ciEntryWorkflow, 'ci-required')).not.toContain('static-feedback')
     expect(workflowJob(ciWorkflow, 'lint')).toContain('run: bun run format:check')
     expect(workflowJob(ciWorkflow, 'lint')).toContain('run: bun run lint')
     expect(workflowJob(ciWorkflow, 'lint')).toContain('run: bun run typecheck')
@@ -546,9 +556,11 @@ describe('repository test entrypoint', () => {
     expect(coverageStep).toContain('files: ./coverage/lcov.info')
     expect(coverageStep).toContain('flags: backend-shard-${{ matrix.shard }}')
     expect(coverageStep).toContain('name: backend-coverage-shard-${{ matrix.shard }}')
-    const required = workflowJob(ciWorkflow, 'ci-required')
-    expect(required).toContain('      - test-backend\n')
-    expect(required).toContain("TEST_BACKEND_RESULT: ${{ needs['test-backend'].result }}")
+    const required = workflowJob(ciEntryWorkflow, 'ci-required')
+    expect(required).toContain('needs: [full-ci]')
+    expect(required).toContain(
+      "TEST_BACKEND_RESULT: ${{ needs['full-ci'].outputs['test-backend'] }}",
+    )
 
     expect(frontendJob).toContain('fail-fast: false')
     // RFC-254 T31: the frontend leg is the first test matrix to gain Windows.
@@ -859,9 +871,12 @@ describe('repository test entrypoint', () => {
       ['e2e-windows', 20],
       ['ci-required', 5],
     ])
-    expect(workflowJobNames(ciWorkflow)).toEqual([...expectedCiDeadlines.keys()])
+    expect(workflowJobNames(ciWorkflow)).toEqual(
+      [...expectedCiDeadlines.keys()].filter((name) => name !== 'ci-required'),
+    )
+    expect(workflowJobNames(ciEntryWorkflow)).toEqual(['full-ci', 'ci-required'])
     for (const [name, minutes] of expectedCiDeadlines) {
-      const job = workflowJob(ciWorkflow, name)
+      const job = workflowJob(name === 'ci-required' ? ciEntryWorkflow : ciWorkflow, name)
       expect(occurrenceCount(job, 'timeout-minutes:')).toBe(1)
       expect(job).toContain(`timeout-minutes: ${minutes}`)
     }
@@ -947,18 +962,26 @@ describe('repository test entrypoint', () => {
   })
 
   test('the stable required context waits for and fails closed on every CI job', () => {
-    const requiredJob = workflowJob(ciWorkflow, 'ci-required')
-    const expectedNeeds = workflowJobNames(ciWorkflow).filter((job) => job !== 'ci-required')
-    const needsBlock = requiredJob.match(/^ {4}needs:\n((?: {6}- [\w-]+\n)+)/m)?.[1] ?? ''
-    const actualNeeds = [...needsBlock.matchAll(/^ {6}- ([\w-]+)$/gm)].map((match) => match[1]!)
+    const requiredJob = workflowJob(ciEntryWorkflow, 'ci-required')
+    const expectedNeeds = workflowJobNames(ciWorkflow)
+    const entry = parse(ciEntryWorkflow)
+    const outputs = parse(ciWorkflow).on.workflow_call.outputs
 
     expect(requiredJob).toContain('name: CI required')
     expect(requiredJob).toContain('if: ${{ always() }}')
-    expect(actualNeeds).toEqual(expectedNeeds)
+    expect(entry.jobs['ci-required'].needs).toEqual(['full-ci'])
+    expect(Object.keys(outputs)).toEqual(expectedNeeds)
+    expect(requiredJob).toContain("FULL_CI_RESULT: ${{ needs['full-ci'].result }}")
+    expect(requiredJob).toContain('check full-ci "$FULL_CI_RESULT"')
 
     for (const dependency of expectedNeeds) {
       const resultEnv = `${dependency.replaceAll('-', '_').toUpperCase()}_RESULT`
-      expect(requiredJob).toContain(`${resultEnv}: \${{ needs['${dependency}'].result }}`)
+      expect(outputs[dependency].value).toBe(
+        `\${{ fromJSON(toJSON(jobs['${dependency}'])).result }}`,
+      )
+      expect(requiredJob).toContain(
+        `${resultEnv}: \${{ needs['full-ci'].outputs['${dependency}'] }}`,
+      )
       expect(requiredJob).toContain(`check ${dependency} "$${resultEnv}"`)
     }
     expect(requiredJob).toContain('if [ "$result" != "success" ]; then')

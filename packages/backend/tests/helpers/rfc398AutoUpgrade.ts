@@ -14,16 +14,12 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { loadFrozenEpoch1History } from '@/platform/persistence/migration/epoch1/bundle'
-import {
-  createFrozenSqliteJournal,
-  applyFrozenSqliteMigrations,
-} from '@/platform/persistence/migration/epoch1/sqliteChain'
 import { parseEpochSwitchJournal } from '@/modules/system-operations/domain/epochSwitch/model'
 import { readAutoUpgradeSessions } from '@/modules/system-operations/infrastructure/local/autoUpgradeState'
 import { readDaemonInfoFile } from '@/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries'
 import { isProcessAlive } from '@/platform/execution/local/process'
 import { frozenValues } from './rfc395V2/contentFixtures'
+import { materializeFrozenEpoch1Sqlite } from './rfc398FrozenSqliteFixture'
 
 /** A reader may already have opened the old file when the next checkpoint is published. */
 export function publishAutoUpgradeBarriers(hooks: string, points: readonly string[]): void {
@@ -121,11 +117,9 @@ export async function autoUpgradeFixture(
   const hooks = join(home, 'test-hooks')
   mkdirSync(hooks, { recursive: true })
   if (!options.home) {
+    await materializeFrozenEpoch1Sqlite(join(home, 'db.sqlite'))
     const db = new Database(join(home, 'db.sqlite'))
     try {
-      db.exec('PRAGMA journal_mode = WAL')
-      createFrozenSqliteJournal(db)
-      applyFrozenSqliteMigrations(db, (await loadFrozenEpoch1History()).sqlite)
       if (options.blocked) {
         const row = frozenValues('code_work_items', {
           id: 'rfc398-stranded-work',

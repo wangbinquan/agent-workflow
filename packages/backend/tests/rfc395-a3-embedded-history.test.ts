@@ -167,7 +167,7 @@ describe('RFC-395 A-3 activated schema artifacts', () => {
       'scripts/rfc349-schema-contract.ts',
     ])
       expect(existsSync(join(backend, path))).toBe(false)
-    const ci = readFileSync(join(root, '.github/workflows/ci.yml'), 'utf8')
+    const ci = readFileSync(join(root, '.github/workflows/ci-work.yml'), 'utf8')
     expect(ci).toContain('bun run scripts/schema-history.ts --check')
     expect(ci).not.toContain('drizzle-kit check')
     for (const name of ['rfc349-schema-contract.ts', 'rfc349-postgresql-schema.ts']) {

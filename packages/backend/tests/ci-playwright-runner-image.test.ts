@@ -114,7 +114,7 @@ describe('CI Playwright runner images', () => {
         .map(([id]) => `${file}#${id}`),
     )
     for (const job of [
-      'ci.yml#e2e',
+      'ci-work.yml#e2e',
       'e2e-full-nightly.yml#e2e-full',
       'git-protocols-e2e.yml#git-protocols',
       'e2e-webkit-nightly.yml#e2e-webkit',

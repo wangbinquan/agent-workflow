@@ -121,6 +121,7 @@ describe('RFC-276 runtime hardening deprecation', () => {
   test('automation and current docs cannot reactivate the retired path', () => {
     const currentFiles = [
       '.github/workflows/ci.yml',
+      '.github/workflows/ci-work.yml',
       '.github/workflows/integration-opencode.yml',
       '.github/workflows/windows-platform.yml',
       'README.md',

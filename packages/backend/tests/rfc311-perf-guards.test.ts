@@ -95,6 +95,7 @@ import {
 import { runProductionOverview } from './helpers/productionOverview'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 import type { RecordedStatement } from './helpers/statementRecorder'
+import { collectG1PerformanceDiagnostics } from './helpers/rfc615G1Diagnostics'
 
 // Slowest case took 4.28 s on CI run 40433510287 including hooks (3.48 s before RFC-395 II-b); allow 20 s.
 setDefaultTimeout(20_000)
@@ -661,6 +662,7 @@ describeEachProvider('RFC-311 性能防护 —— 每条受防护读路径的结
   test.each(GUARDED.map((p) => [p.name, p] as const))(
     '%s',
     async (name, path) => {
+      const caseStartedAt = performance.now()
       const small = await capture(harness, SMALL, path)
       const large = await capture(harness, LARGE, path)
 
@@ -747,6 +749,23 @@ describeEachProvider('RFC-311 性能防护 —— 每条受防护读路径的结
         samples.push(performance.now() - startedAt)
       }
       const engine = harness.capabilities.provider
+      if (name === 'task-operations catalog — 过滤视图（G1 快路径）') {
+        console.info(
+          `[rfc311-perf G1 samples] ${JSON.stringify({ provider: engine, samplesMs: samples })}`,
+        )
+        const binding = harness.applicationBinding
+        // PG may run before SQLite. Capture while this fixture still exists,
+        // whenever a later 50x/250ms comparison could possibly reject it.
+        if (binding.provider === 'postgresql' && Math.max(...samples) > CATASTROPHE_FLOOR_MS) {
+          const evidence = await collectG1PerformanceDiagnostics({
+            database: binding.databaseConfig,
+            statements: large,
+            samplesMs: samples,
+            deadline: caseStartedAt + 180_000,
+          })
+          console.warn(`[rfc615-g1-diagnostic] ${JSON.stringify(evidence)}`)
+        }
+      }
       const measurement: Measurement = {
         statements: large.length,
         rows: rowsOf(large),

@@ -22,7 +22,7 @@ const ROOT = resolve(import.meta.dir, '..', '..', '..')
 const E2E_DIR = join(ROOT, 'e2e')
 
 function excludedTitles(): string[] {
-  const ci = readFileSync(join(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')
+  const ci = readFileSync(join(ROOT, '.github', 'workflows', 'ci-work.yml'), 'utf8')
   const line = /AW_E2E_WINDOWS_EXCLUDE: '([^']*)'/.exec(ci)
   expect(line, 'the windows exclusion env var must exist while the leg is gated').not.toBeNull()
   return (line![1] ?? '').split('|').filter((part) => part.length > 0)

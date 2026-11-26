@@ -170,7 +170,7 @@ describe('audit-gate — 忽略列表的书面理由（策略强制）', () => {
 })
 
 describe('audit-gate — CI 接线', () => {
-  const ci = read('.github/workflows/ci.yml')
+  const ci = read('.github/workflows/ci-work.yml')
   // 只看**可执行面**：注释里引用那条失效命令是有意为之（解释为什么不能用它），
   // 不能因此触发回归锁。
   const ciExecutable = ci

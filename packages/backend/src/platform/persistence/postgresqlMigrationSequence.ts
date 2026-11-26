@@ -533,18 +533,45 @@ function planPayload(plan: PostgresqlSchemaPlan) {
   return payload
 }
 
-function contractPayload(contract: LogicalSchemaContract) {
+type LogicalSchemaPayload = Omit<LogicalSchemaContract, 'digest'>
+
+function contractPayload(contract: LogicalSchemaPayload & { readonly digest?: string }) {
   const { digest: _digest, ...payload } = contract
   return payload
+}
+
+function rowTableContract(table: LogicalTableContract) {
+  const { indexes: _indexes, ...row } = table
+  return row
 }
 
 function rowContract(contract: LogicalSchemaContract) {
   return {
     ...contractPayload(contract),
-    tables: contract.tables.map((table) => {
-      const { indexes: _indexes, ...row } = table
-      return row
-    }),
+    tables: contract.tables.map(rowTableContract),
+  }
+}
+
+/** RFC-615: a bridge owns these projections for one synchronous call only. */
+function createRowContractProjection() {
+  const contracts = new WeakMap<LogicalSchemaPayload, ReturnType<typeof rowContract>>()
+  const tables = new WeakMap<LogicalTableContract, ReturnType<typeof rowTableContract>>()
+  return (contract: LogicalSchemaPayload): ReturnType<typeof rowContract> => {
+    const known = contracts.get(contract)
+    if (known !== undefined) return known
+    const projected = {
+      ...contractPayload(contract),
+      tables: contract.tables.map((table) => {
+        let row = tables.get(table)
+        if (row === undefined) {
+          row = rowTableContract(table)
+          tables.set(table, row)
+        }
+        return row
+      }),
+    }
+    contracts.set(contract, projected)
+    return projected
   }
 }
 
@@ -1093,6 +1120,15 @@ function appendLogicalTables(
   contract: LogicalSchemaContract,
   additions: readonly LogicalTableAddition[],
 ): LogicalSchemaContract {
+  const payload = appendLogicalTablesPayload(contract, additions)
+  return { ...payload, digest: digestSchemaContract(payload) }
+}
+
+/** The row bridge compares this payload; only artifact-producing callers need its digest. */
+function appendLogicalTablesPayload(
+  contract: LogicalSchemaContract,
+  additions: readonly LogicalTableAddition[],
+): LogicalSchemaPayload {
   const names = new Set(contract.tables.map((table) => table.id))
   for (const { table } of additions) {
     requireSequence(!names.has(table.id), 'table addition duplicates an existing table')
@@ -1103,13 +1139,12 @@ function appendLogicalTables(
     contract.tables,
     additions.map(({ position, table }) => ({ position, value: table })),
   )
-  const payload = {
+  return {
     ...contractPayload(contract),
     sourceTableCount: contract.sourceTableCount + additions.length,
     activeTableCount: contract.activeTableCount + additions.length,
     tables,
   }
-  return { ...payload, digest: digestSchemaContract(payload) }
 }
 
 function retireLogicalTables(
@@ -2026,6 +2061,24 @@ function resolvePostgresqlRowBridge(
   history: PostgresqlMigrationHistory,
   input: HistoricalRowBridgeInput,
   allowNewTables: boolean,
+) {
+  // Inputs can be mutated between calls, including by a caller with an outer canonical cache.
+  // A fresh scope rechecks their current contents and restores the caller's scope on every exit.
+  return withCanonicalFragmentCache(createCanonicalFragmentCache(), () =>
+    resolvePostgresqlRowBridgeInScope(
+      history,
+      input,
+      allowNewTables,
+      createRowContractProjection(),
+    ),
+  )
+}
+
+function resolvePostgresqlRowBridgeInScope(
+  history: PostgresqlMigrationHistory,
+  input: HistoricalRowBridgeInput,
+  allowNewTables: boolean,
+  projectRows: ReturnType<typeof createRowContractProjection>,
 ): {
   readonly source: LogicalSchemaContract
   readonly target: LogicalSchemaContract
@@ -2043,13 +2096,13 @@ function resolvePostgresqlRowBridge(
   const edges = history.versions.slice(from + 1, to + 1)
   if (edges.some((version) => version.schemaEdge !== undefined)) {
     exact(
-      rowContract(
+      projectRows(
         edges.reduce(
-          (contract, version) => foldEpoch2RowEdge(contract, version, allowNewTables),
+          (contract, version) => foldEpoch2RowEdge(contract, version, allowNewTables, projectRows),
           source,
         ),
       ),
-      rowContract(target),
+      projectRows(target),
       'historical row, codec, key or disposition changed',
     )
     exact(
@@ -2066,7 +2119,7 @@ function resolvePostgresqlRowBridge(
   // about the rows moved", and a widened domain is a change to the rows' shape
   // even when no row has to be rewritten.
   exact(
-    rowContract(
+    projectRows(
       allowNewTables
         ? history.steps
             .slice(from, to)
@@ -2118,7 +2171,7 @@ function resolvePostgresqlRowBridge(
               source,
             ),
     ),
-    rowContract(target),
+    projectRows(target),
     'historical row, codec, key or disposition changed',
   )
   exact(
@@ -2140,18 +2193,19 @@ function foldEpoch2RowEdge(
   contract: LogicalSchemaContract,
   version: PostgresqlMigrationVersion,
   allowNewTables: boolean,
+  projectRows: ReturnType<typeof createRowContractProjection>,
 ): LogicalSchemaContract {
   const edge = version.schemaEdge
   const next = version.contract
-  let folded: LogicalSchemaContract | null = null
+  let folded: LogicalSchemaPayload | null = null
   if (edge?.kind === 'add-index') folded = contract
   if (edge?.kind === 'add-table' && allowNewTables) {
     const position = next.tables.findIndex((table) => table.id === edge.tableId)
     requireSequence(position >= 0, 'historical row, codec, key or disposition changed')
-    folded = appendLogicalTables(contract, [{ position, table: next.tables[position]! }])
+    folded = appendLogicalTablesPayload(contract, [{ position, table: next.tables[position]! }])
   }
   requireSequence(folded !== null, 'historical row, codec, key or disposition changed')
-  exact(rowContract(folded), rowContract(next), 'historical row, codec, key or disposition changed')
+  exact(projectRows(folded), projectRows(next), 'historical row, codec, key or disposition changed')
   return next
 }
 

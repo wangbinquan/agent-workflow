@@ -1,3 +1,9 @@
+## 2026-11-26 RFC-615 CI 第二轮：重复计算、查询成本与计算队列（In Progress）
+
+- 用户明确授权解决历史行桥/PG G1两项CI失败、压缩后端长尾和排队，并保持覆盖与门禁标准；设计见 [RFC-615](design/RFC-615-ci-critical-path-and-query-cost/design.md)。
+- 范围：行桥调用内复用与无用hash消除、G1单次prefix匹配及诊断、job内测试准备缓存、计算完成即释放lane而required仍逐项全成功。现有预算和性能阈值保持。
+- 完整实现与集中验证已完成：保留的395个不同用例有通过证据，backend tsc / ESLint / Prettier / actionlint通过。原13版本/78fold行桥用例1150.72ms（仍5s），原双provider+coverage性能门25项全过，G1 PG P95 13.12ms/SQLite18.36ms；原cold阈值与预算未改。SQLite缓存真实进程/冷热/跨文件/SQLite与PG发布样本通过；compiled缓存因完整成本未显示净收益而撤回，保持原每case编译。原13组/70实际作业及GitHub唯一必需context `CI required`保留；准备精确路径发布，exact-SHA CI和实际队列/长尾仍待托管取证。RFC611核心候选`92222f0c3`曾70/70成功，后续`523725652`两项实际失败在本轮授权范围内修复。
+
 ## 2026-11-26 注记：RFC-294 的独立对账已到期；`03008a73a` 之后的主 CI 每轮都有与改动无关的超时红格
 
 - **对账到期**：RFC-294 plan §0 第 10 条——距上一次 dated review（2026-11-09）满 14 天或其后关闭 20 个后继即须做一次独立对账（design §13.5），最迟

@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { assertSuccessfulTimingSource } from './refresh-backend-timings'
+import { resolveCiWorkSource } from './workflow-source'
 import {
   e2ePlatform,
   parseE2EShardPlan,
@@ -295,7 +296,10 @@ if (import.meta.main) {
     command('gh', ['api', `repos/${repository}/actions/runs/${runId}`]),
   )
   const sourceSha = assertSuccessfulTimingSource(run, repository, runId)
-  assertE2EShardTopology(command('git', ['show', `${sourceSha}:.github/workflows/ci.yml`]))
+  const sourceDefinition = resolveCiWorkSource((path) =>
+    command('git', ['show', `${sourceSha}:${path}`]),
+  )
+  assertE2EShardTopology(sourceDefinition.workflow)
   const artifacts = readdirSync(directory, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name.startsWith('e2e-test-timings-'))
     .map((entry) => ({

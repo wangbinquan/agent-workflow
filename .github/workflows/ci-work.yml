@@ -1,0 +1,1099 @@
+name: CI work
+
+# RFC-615: same-commit reusable calculation stage; the parent owns CI required.
+on:
+  workflow_call:
+    # Preserve every result via a JSON round trip: direct jobs.<id>.result has
+    # an upstream empty-output bug (actions/runner#2495), and actionlint#343
+    # omits that documented field. Exact expressions are locked by topology tests.
+    outputs:
+      lint:
+        description: Result of the complete lint job or matrix
+        value: ${{ fromJSON(toJSON(jobs['lint'])).result }}
+      test-backend:
+        description: Result of the complete test-backend job or matrix
+        value: ${{ fromJSON(toJSON(jobs['test-backend'])).result }}
+      test-backend-postgresql:
+        description: Result of the complete test-backend-postgresql job or matrix
+        value: ${{ fromJSON(toJSON(jobs['test-backend-postgresql'])).result }}
+      test-frontend:
+        description: Result of the complete test-frontend job or matrix
+        value: ${{ fromJSON(toJSON(jobs['test-frontend'])).result }}
+      scans:
+        description: Result of the complete scans job or matrix
+        value: ${{ fromJSON(toJSON(jobs['scans'])).result }}
+      perf:
+        description: Result of the complete perf job or matrix
+        value: ${{ fromJSON(toJSON(jobs['perf'])).result }}
+      docs:
+        description: Result of the complete docs job or matrix
+        value: ${{ fromJSON(toJSON(jobs['docs'])).result }}
+      build-binary:
+        description: Result of the complete build-binary job or matrix
+        value: ${{ fromJSON(toJSON(jobs['build-binary'])).result }}
+      build-binary-macos:
+        description: Result of the complete build-binary-macos job or matrix
+        value: ${{ fromJSON(toJSON(jobs['build-binary-macos'])).result }}
+      build-binary-windows:
+        description: Result of the complete build-binary-windows job or matrix
+        value: ${{ fromJSON(toJSON(jobs['build-binary-windows'])).result }}
+      e2e:
+        description: Result of the complete e2e job or matrix
+        value: ${{ fromJSON(toJSON(jobs['e2e'])).result }}
+      e2e-macos:
+        description: Result of the complete e2e-macos job or matrix
+        value: ${{ fromJSON(toJSON(jobs['e2e-macos'])).result }}
+      e2e-windows:
+        description: Result of the complete e2e-windows job or matrix
+        value: ${{ fromJSON(toJSON(jobs['e2e-windows'])).result }}
+
+jobs:
+  lint:
+    # OS-independent gates (prettier / eslint / tsc) plus the tiny shared unit
+    # suite. These are deterministic across platforms, so running them once on
+    # ubuntu — instead of on every OS as the old monolithic `check` job did —
+    # removes ~120s of duplicated work from the critical path with zero loss of
+    # signal. No opencode needed: none of these spawn the daemon.
+    name: Lint + Typecheck + Format + Shared + system mock tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          # Keep CI byte-for-byte aligned with packageManager. Patch releases
+          # can change test-runner isolation/coverage semantics; bump together.
+          bun-version: '1.4.3'
+
+      - name: Cache bun package downloads
+        # setup-bun caches only the bun binary, not the dependency tree, so
+        # `bun install` cold-hits npm every run. Cache bun's global package
+        # store keyed on the lockfile hash. --frozen-lockfile still re-validates
+        # the lockfile, so a stale cache cannot silently change resolved versions.
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Cache Prettier results
+        # Restore content-validated formatting only, within the tool/config key.
+        uses: actions/cache@v6
+        with:
+          path: node_modules/.cache/prettier
+          key: prettier-v1-${{ runner.os }}-bun-1.4.3-${{ hashFiles('bun.lock', 'package.json', 'packages/*/package.json', '**/.prettier*', '**/prettier.config.*', '!**/node_modules/**') }}-${{ github.sha }}
+          restore-keys: prettier-v1-${{ runner.os }}-bun-1.4.3-${{ hashFiles('bun.lock', 'package.json', 'packages/*/package.json', '**/.prettier*', '**/prettier.config.*', '!**/node_modules/**') }}-
+
+      - name: Format check
+        run: bun run format:check
+
+      - name: Lint
+        env:
+          # RFC-395 II-a grew the typed `lint:promises` program over
+          # packages/backend/src; run 40012778786 hit the default V8 heap and
+          # aborted with code 134. Same allowance as the Typecheck step below.
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: bun run lint
+
+      - name: Dependency rules (import seams + no-circular)
+        run: bun run depcheck
+
+      - name: Typecheck
+        env:
+          # 16ba8f366's backend tsc reached the default 4 GB V8 heap and
+          # aborted with code 134. Match the complete Windows typecheck step.
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: bun run typecheck
+
+      - name: Test (shared, bun:test)
+        shell: bash
+        run: bun run --filter @agent-workflow/shared test
+
+      - name: Test (system mocks, bun:test)
+        shell: bash
+        run: bun run test:system-mocks
+
+  test-backend:
+    # W20 run 34229654417 exhausted the 15-minute budget on three Ubuntu
+    # shards; the fourth finished in 14m34s. Ubuntu now runs both providers,
+    # so split it eight ways.
+    #
+    # RFC-359 W5（2026-09-13）：Ubuntu 从八片加到**十二片**，与下面 macOS 那条同因同治。
+    # 连续两次 run 的 `ubuntu shard 1/8` 都被超时杀掉——`bed6680c8` 的那次测试体本身跑完了
+    # （3049 pass / 0 fail，851s），是**整个 job**（装依赖 + 跑测 + 收尾）越过 15 分钟；
+    # `1a3ff5ebd` 那次 14:27:52 → 14:43:07 正好 15:15。两次都只有这一片挂，其余 38 个作业全 success，
+    # 而 GitHub 把超时报成 `cancelled`，聚合 job `CI required` 随之判红。
+    # run 34762730963 实测八片耗时 15.25 / 10.7 / 10.05 / 10.5 / 13.9 / 11.3 / 10.07 / 12.5 分钟
+    # ——合计 ~94 分钟、均值 11.8、最长片是均值的 1.29 倍、已贴到预算的 101%（次长 93%）。
+    # 十片只能把最长片压到 ~12.2 分钟（81%），而 macOS 那次的教训正是 88% 也不够；
+    # 十二片压到 ~10.1 分钟（67%），与 macOS 定的「~10 分钟量级」同一目标。
+    # **本轮 AC-6 正在把大批用例迁成双引擎，Ubuntu 侧每迁一个就多跑一遍**——就是下面那条注释
+    # 说的「provider workload grows」，处置照旧：加 runner，不动预算、不改单条用例的超时。
+    #
+    # 2026-09-28 run 36404992960: Ubuntu 5/12 kept completing tests until
+    # the 15-minute job limit (13m56s test step plus setup). Split Ubuntu into
+    # 16 runners, keeping every test and the existing job/test timeout budgets.
+    # Separate RFC-370 barrier hangs are repaired in their test, not by sharding.
+    #
+    # 2026-10-14 CI 提速：整次 run 的墙钟由并发配额决定（公开仓免费账号同时 20 个 job、
+    # 其中 macOS 5 个），72 个 job 大半时间在排队。Ubuntu 32 片 → 24 片（实测单片 5~7 分钟，
+    # 合并后 ~8~10 分钟，仍在 15 分钟预算 ~67% 以内），省下每片 ~1.5 分钟的固定开销；
+    # macOS 后端 12 片整体移到 `backend-macos-nightly.yml`，原先 19 个 macOS job 挤 5 个槽
+    # 是整次 run 的关键路径。
+    #
+    # 2026-10-26 RFC-395 激活：后端测试量约翻倍（run 40298205725：15 片失败、10 片撞 15 分钟预算
+    # 被取消）。重型用例提速、拆文件之后全套仍约 243 runner-分钟，24 片的最长片估计 14.6~17.2 分钟。
+    # 用户裁决 Ubuntu 24 → 36 片：最长片约 10 分钟（预算 ~68%）；job 预算与单条用例超时不变。
+    #
+    # 2026-11-01 RFC-398 再加约 105 runner-分钟：按文件实测墙钟（模块加载 + 钩子 + 用例）全套
+    # 约 360 分钟，36 片即使均衡也是均值 10 分钟、最长约 11.5 分钟，两次 run 间同一片的速度差
+    # 达 0.73～1.29 倍。照同一规矩加 runner：36 → 44 片，均值约 8.2 分钟、最长约 9.5 分钟，
+    # 回到上面「最长片约 10 分钟」的目标（run 41293473768 / 41301089649 的分片日志实测）。
+    #
+    # 以下 macOS 分片历史留档（现由 nightly 承接，片数与预算原样）：
+    # RFC-359 W57：macOS 从四片加到**六片**。实测三轮 exact SHA 的四片耗时分别是
+    # 11.7 / 7.0 / 11.5 / 13.3、12.4 / 12.8 / 6.0 / 11.6、15.3 / 6.5 / 7.1 / 11.2 分钟
+    # ——预算 15 分钟，最长的一片已经贴到 88~102%，第三轮的 shard 1/4 直接被超时杀掉
+    # （GitHub 把超时报成 `cancelled`，聚合 job 随之判红，而 38 个作业全是 success）。
+    # 处置照本文件下面那条注释自己立的规矩：**加 runner，不动预算、不改单条用例的超时**。
+    # 六片把最长的一片压回 ~10 分钟量级，留出方差空间。
+    # 2026-10-06 run 37439571232: macOS 6/6 twice exhausted the same
+    # 15-minute job limit while tests were still completing, at different files.
+    # Split macOS into 12 independent runners; discovery, commands and budgets stay unchanged.
+    # Bun `--parallel` DEADLOCKS this suite — several files spawn a real
+    # daemon that takes a single-instance flock, so running them concurrently in
+    # one VM contends forever. Sharding across runners keeps each shard serial
+    # and isolated (a separate VM = a separate flock/home/port namespace, so no
+    # parallel-safety change at all). Bun assigns
+    # files to shards deterministically by path, so every env-gated test still
+    # runs in exactly one shard.
+    name: Backend tests (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        shard:
+          [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+          ]
+        shards: [44]
+    runs-on: ${{ matrix.os }}
+    # A sync child-process stall once left a backend shard silent for 17+ minutes.
+    # Keep that same job budget as the provider workload grows; add runners
+    # instead of extending it or changing individual test timeouts.
+    timeout-minutes: 15
+    # RFC-359 §11.1 —— 双引擎是缺省：`describeEachProvider` 写的用例在 ubuntu 分片上对着真
+    # PostgreSQL 各跑一遍，缺库即红（不是 skip）。macOS（nightly）显式 `AW_TEST_PROVIDERS=sqlite`。
+    # Start PostgreSQL after checkout so the daemon cache and registry fallback
+    # run before pulling; declarative services are pulled before user steps.
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Start PostgreSQL (ubuntu shards)
+        id: postgres
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: bash .github/scripts/ci-postgresql-service.sh start awtest
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Cache bun package downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install current opencode (diagnostic compatibility coverage)
+        # OpenCode is optional and daemon startup never probes it. Some doctor
+        # and runtime-diagnostic tests intentionally exercise a real PATH
+        # binary, so CI follows the current npm channel without defining an
+        # application version floor or ceiling.
+        # Explicit bash keeps the install command portable if this matrix gains
+        # a Windows runner whose default shell is PowerShell.
+        shell: bash
+        run: |
+          bun install -g opencode-ai@latest
+          export PATH="$HOME/.bun/bin:$PATH"
+          opencode --version
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Prepare job-local immutable test fixture cache
+        shell: bash
+        run: echo "AW_TEST_FIXTURE_CACHE_DIR=$RUNNER_TEMP/aw-test-fixtures" >> "$GITHUB_ENV"
+
+      # Keep random order coverage while making a wedged run reproducible. Bun
+      # normally prints its generated seed only in the final summary, which is
+      # unavailable when the job-level timeout kills a frozen test process.
+      # A rerun of the same Actions run keeps the same run number and therefore
+      # the same per-shard seed.
+      - name: Derive reproducible backend test seed
+        shell: bash
+        run: |
+          seed=$(( (GITHUB_RUN_NUMBER * 10 + MATRIX_SHARD) % 2147483647 ))
+          if (( seed == 0 )); then seed=1; fi
+          echo "BUN_TEST_SEED=$seed" >> "$GITHUB_ENV"
+          echo "Backend test seed: $seed"
+        env:
+          MATRIX_SHARD: ${{ matrix.shard }}
+
+      # --isolate prevents coverage-mode module singletons from leaking across
+      # files; --randomize exposes any remaining within-file order dependency and
+      # prints a seed that reproduces the failure; --shard=N/M selects this
+      # runner's portion of the files. Coverage is instrumented only on ubuntu.
+      # 先证分片真的连上了库：URL 拼错会让 harness 的 PostgreSQL 半边整体红，但红得要可归因。
+      - name: Assert the PostgreSQL service is reachable (ubuntu shards)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          cat > pg-probe.mjs <<'PROBE'
+          import { SQL } from 'bun'
+          const sql = new SQL(process.env.AW_TEST_POSTGRESQL_URL)
+          const rows = await sql`select 1 as ok`
+          if (rows[0]?.ok !== 1) {
+            console.error('postgres did not answer', rows)
+            process.exit(1)
+          }
+          console.log('postgres reachable')
+          await sql.close()
+          PROBE
+          bun pg-probe.mjs
+          rm -f pg-probe.mjs
+        env:
+          AW_TEST_POSTGRESQL_URL: postgresql://postgres:postgres@127.0.0.1:5432/awtest
+
+      - name: Test backend (ubuntu shard — with coverage)
+        if: matrix.os == 'ubuntu-latest'
+        # Codecov consumes lcov. The redundant text table is large enough to
+        # make Bun's stdout writer fail with WriteFailed on otherwise-green
+        # shards, so keep the machine-readable report only.
+        # Bun keeps the files in path order and gives each shard a contiguous
+        # run of roughly equal total time from the --timings files; without them
+        # the long RFC-395/398 suites cluster and shards hit the 15-minute budget
+        # (runs 41293473768, 41301089649). The committed file must hold whole-file
+        # wall-clock durations; summed per-test times omit module load and hooks
+        # and caused 41301089649's three cancelled shards. --update-timings writes
+        # this shard's measured durations to the first --timings file (a fresh
+        # one under runner.temp), uploaded below; refresh the committed file from
+        # a green run's artifacts as described in docs/dev-gotchas.md (RFC-398).
+        shell: bash
+        run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/${{ matrix.shards }} --coverage --coverage-reporter=lcov --timings="$RUNNER_TEMP/backend-test-timings.json" --timings=.github/backend-test-timings.json --update-timings
+        env:
+          # RFC-359 §11.1：双引擎用例的 PostgreSQL 半边。每个测试文件自己 drop + 迁移 schema，
+          # 分片内文件串行（--isolate），一个库够用。
+          AW_TEST_POSTGRESQL_URL: postgresql://postgres:postgres@127.0.0.1:5432/awtest
+          # Real-git-clone (file:// + recursive submodules) and external MCP-spawn
+          # integration suites are gated behind RUN_GIT_NETWORK so local `bun test`
+          # stays deterministic. CI has the environment to run them.
+          RUN_GIT_NETWORK: '1'
+          # Chaos scenarios mutate only isolated temporary directories and inject
+          # deterministic filesystem faults. Keep them opt-in locally, but execute
+          # them in the ubuntu gate so they cannot remain permanently skipped.
+          RUN_CHAOS: '1'
+
+      - name: Upload backend coverage to Codecov (ubuntu shards)
+        # Each ubuntu shard emits an lcov covering its portion of the files;
+        # Codecov merges all per-commit shard uploads into one report, so total
+        # coverage is identical to the old single-runner run. Tokenless upload
+        # works for public repos; a per-shard flag keeps the uploads distinct.
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v6
+        with:
+          files: ./coverage/lcov.info
+          flags: backend-shard-${{ matrix.shard }}
+          name: backend-coverage-shard-${{ matrix.shard }}
+          fail_ci_if_error: false
+          disable_search: true
+
+      - name: Upload measured backend test timings (ubuntu shards)
+        # Only this shard's files, as Bun measured them. A cancelled (timed-out)
+        # or failed shard must never publish a reusable timing sample. Otherwise
+        # a later successful rerun whose optional upload fails could leave the
+        # earlier failed sample under the same artifact name.
+        # Auxiliary evidence: an upload problem must not turn a shard red, and a
+        # re-run attempt replaces the earlier attempt's artifact of the same name.
+        if: success() && matrix.os == 'ubuntu-latest'
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: backend-test-timings-${{ matrix.shard }}
+          path: ${{ runner.temp }}/backend-test-timings.json
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 14
+
+      - name: Stop PostgreSQL (ubuntu shards)
+        if: always() && matrix.os == 'ubuntu-latest' && steps.postgres.outcome != '' && steps.postgres.outcome != 'skipped'
+        shell: bash
+        run: bash .github/scripts/ci-postgresql-service.sh stop
+
+  test-backend-postgresql:
+    # RFC-357 —— 唯一一条对着**真 PostgreSQL** 跑的常规门禁。
+    #
+    # 为什么它必须存在：本仓的 PostgreSQL 适配器测试用的是假 pool（记录 SQL 文本再断言），
+    # 而 `docs/dev-gotchas.md` §「SQL 长得一样」证明不了「两个 provider 行为一样」记着
+    # RFC-349 的代价——那一层过了全部门禁，接上真库连着暴出六个只在 PostgreSQL 上成立的
+    # 缺陷（identity 列渲染成 null、LIKE 大小写、NULL 排序、count 回字符串、布尔列、
+    # SERIALIZABLE 粒度）。RFC-357 让任务列表页的**一份** SQL 同时服务两个 provider，
+    # 这条 lane 就是那一刀的执行级安全网。
+    #
+    # 刻意只跑列表页那一组用例：它要证的是「这份查询在真 PostgreSQL 上跑得动且结果与
+    # SQLite 逐条相同」，不是把 740 个文件再跑一遍。整条 lane 分钟级。
+    #
+    # 更重的规模 / 迁移 / 崩溃取证仍在 `postgresql-evidence.yml`（周跑 + 手动 dispatch），
+    # 两者分工不同：那边证「十万级数据搬得动」，这边证「这段 SQL 在真库上是对的」。
+    name: Backend tests (real PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RFC357_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/rfc357
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Start PostgreSQL
+        id: postgres
+        shell: bash
+        run: bash .github/scripts/ci-postgresql-service.sh start rfc357
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Cache bun package downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      # 先证 lane 真的连上了库。没有这一步，URL 拼错会让 realTest 静默 skip，
+      # 整条 lane 绿着却什么都没跑——本仓对「跑没跑」的要求见 rfc317 的 skipIf 账本。
+      - name: Assert the server is reachable
+        shell: bash
+        # 程序走**带引号的 heredoc**而不是 `bun --eval '…'`：后者是单引号里的一段 JS，
+        # shellcheck 会按 shell 展开去读它并报 SC2016（实撞，run 33859487150 的 scans）。
+        run: |
+          cat > pg-probe.mjs <<'PROBE'
+          import { SQL } from 'bun'
+          const sql = new SQL(process.env.RFC357_DATABASE_URL)
+          const rows = await sql`select 1 as ok`
+          if (rows[0]?.ok !== 1) {
+            console.error('postgres did not answer', rows)
+            process.exit(1)
+          }
+          console.log('postgres reachable')
+          await sql.close()
+          PROBE
+          bun pg-probe.mjs
+          rm -f pg-probe.mjs
+
+      - name: Test the task list page against real PostgreSQL
+        shell: bash
+        run: |
+          bun test --isolate \
+            packages/backend/tests/rfc357-postgresql-page.integration.test.ts \
+            packages/backend/tests/rfc357-page-parity.test.ts \
+            packages/backend/tests/rfc357-provider-portability.test.ts \
+            packages/backend/tests/rfc357-task-list-authorization.test.ts \
+            packages/backend/tests/rfc359-engine-capabilities.test.ts 2>&1 | tee rfc357-postgres.log
+          # `realTest` 在缺 URL 时会 skip；skip 也算「通过」，于是一条连不上库的 lane
+          # 会绿着骗人。这里显式要求真库那条用例**跑过**。
+          if grep -q "(skip).*real PostgreSQL" rfc357-postgres.log; then
+            echo "::error::the real-PostgreSQL case was skipped — the lane proved nothing"
+            exit 1
+          fi
+
+      - name: Verify RFC-359 original P0 mutations on both databases
+        run: >-
+          bun scripts/rfc359-p0-mutations.ts
+          --providers sqlite,postgresql
+          --output-dir test-results/rfc359-p0-mutations
+
+      - name: Upload RFC-359 P0 positive and mutation evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rfc359-p0-mutations-${{ github.run_id }}
+          path: test-results/rfc359-p0-mutations/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Stop PostgreSQL
+        if: always() && steps.postgres.outcome != '' && steps.postgres.outcome != 'skipped'
+        shell: bash
+        run: bash .github/scripts/ci-postgresql-service.sh stop
+
+  test-frontend:
+    # The vitest suite (~590 files) is the second-biggest cost center (~298s on
+    # macOS). vitest already parallelizes across cores within a runner; sharding
+    # across runners cuts wall-clock a further ~3x. Invoked through the same
+    # `bun run --filter … test` entrypoint (with `-- --shard`) the local gate
+    # uses, so the suite command is unchanged — only the file subset differs.
+    name: Frontend tests (${{ matrix.os }} shard ${{ matrix.shard }}/3)
+    strategy:
+      fail-fast: false
+      matrix:
+        # RFC-254 T31 — windows-latest joined here once the suite was measured
+        # green on a real Windows host (702 files / 5957 tests, 0 failures).
+        # Getting there took three portability fixes, all in tests rather than
+        # product code: `new URL(import.meta.url).pathname` (125 failures from
+        # one root cause — now banned by rfc254-file-url-pathname-guard),
+        # `path.relative` results compared against `/`-spelled allowlists, and
+        # a fixture that shelled out to `grep`. The backend matrix is NOT here
+        # yet — see docs/audit-backlog.md.
+        #
+        # 2026-10-14 CI 提速：去掉 macOS 腿。jsdom 下的 vitest 与平台基本无关，
+        # POSIX 由 ubuntu、Windows 路径语义由 windows 覆盖；macOS 每次 push 只有
+        # 5 个并发槽，这 3 个 job 直接排在 macOS e2e 前面。
+        os: [ubuntu-latest, windows-latest]
+        shard: [1, 2, 3]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Cache bun package downloads
+        # Same as the e2e jobs: on windows-latest restoring this archive takes
+        # 78-90s while a cold frozen install is far cheaper.
+        if: runner.os != 'Windows'
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Test (frontend, vitest shard)
+        shell: bash
+        run: bun run --filter @agent-workflow/frontend test -- --shard=${{ matrix.shard }}/3
+
+  scans:
+    # Lightweight static gates that run in parallel with the lint / test jobs.
+    # Ubuntu-only because none of these are OS-specific. Kept in a single job so
+    # the four actions share one checkout / bun install.
+    name: Static scans (audit + actionlint + shellcheck + gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # gitleaks needs full history to scan commits; the other tools are
+          # happy with shallow but the extra depth is cheap.
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Cache bun package downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: dependency audit gate (high+critical)
+        # 不能直接用 `bun audit --audit-level=high --ignore <GHSA>`：那两个 flag
+        # 在 bun 1.3.13 里是**显示层过滤器**，退出码只反映「有没有公告」，与严重度
+        # 和忽略列表无关（`bun audit --help` 原文即「只*打印*…」；实测忽略掉唯一
+        # 那条 critical 后 `--audit-level=critical` 仍 exit 1）。于是它只有两种
+        # 结局：registry 返回数据就恒红且加多少 --ignore 都修不好，返回空就恒绿 ——
+        # 2026-07-26 之前的绿全是后者（成功 run 的该步骤日志里一条公告都没有）。
+        #
+        # 门禁逻辑移进 scripts/audit-gate.ts：解析 `bun audit --json` 的真实报告、
+        # 按 GHSA 应用忽略列表、只对 high/critical 失败，并打印**可读**表格（bun 把
+        # 报告 gzip 压缩后写 stdout，直接落日志是乱码）。忽略条目连同「为什么可
+        # 接受 / 何时删除」是单一事实源，就在那个脚本里；逐条处置、禁止整体降级成
+        # continue-on-error 的策略未变。
+        run: bun run audit:gate
+
+      - name: actionlint (GitHub Actions workflow lint)
+        # Pinned via the official downloader script so the version moves only
+        # when we explicitly bump it.
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+
+      - name: shellcheck (shell script lint)
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          # Exclude vendor / artefact dirs — without this the action recurses
+          # into node_modules (playwright-core's xdg-open has SC2145 errors,
+          # cytoscape's release scripts have SC2086 etc) and we'd be linting
+          # code we don't own. Restrict to the repo's own scripts.
+          ignore_paths: node_modules dist .git
+          # Start strict on our own scripts — current ones
+          # (scripts/git-hooks/*, tests/fixtures/fake-npm.sh) are mostly
+          # `set -eu` clean. `severity: error` only fails on hard bugs (e.g.
+          # SC2145 mixed array/string); style / info / warning findings still
+          # print to the log so they're visible without blocking merge.
+          # RFC-254 T28b removed the `e2e/fixtures/*.sh` stubs — they are one
+          # compiled TypeScript program now, so shellcheck no longer sees them
+          # and their guards live in the backend suite instead.
+          # NOTE: SHELLCHECK_SEVERITY env var has no effect on this action —
+          # the documented input is `severity`.
+          severity: error
+
+      - name: gitleaks (secret scanning)
+        # gitleaks/gitleaks-action@v2 still ships `using: "node20"` and has no
+        # Node 24 release, which triggers a runner-level deprecation warning on
+        # every CI run. Install the upstream binary directly instead — same
+        # scan, no JS-action runtime involved. Pin a known version so the
+        # behavior is reproducible; bump when needed.
+        run: |
+          set -euo pipefail
+          version=8.30.1
+          tmp=$(mktemp -d)
+          curl -fsSL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_linux_x64.tar.gz" \
+            | tar -xz -C "$tmp" gitleaks
+          "$tmp/gitleaks" detect --source . --no-banner --redact --verbose
+
+      - name: Epoch-2 schema history matches the live registry
+        run: bun run scripts/schema-history.ts --check
+
+  perf:
+    # RFC-054 W3-2 — perf microbenchmark gate. Runs 5 hot-path operations
+    # vs the committed `tests/perf/baseline.json` and fails on regression
+    # (ratio ≥ 1.2 AND delta ≥ 0.1ms). Ubuntu-only — macOS runner variance
+    # is too high for a tight gate; cross-platform parity is verified
+    # manually via packages/backend/scripts/perf-sweep.ts on release.
+    name: Perf microbenchmark gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Cache bun package downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run microbenchmarks
+        run: bun run tests/perf/run.ts --out /tmp/current-perf.json
+
+      - name: Diff vs baseline (fail on regression ≥ 20% AND ≥ 0.1ms)
+        run: bun run tests/perf/diff.ts tests/perf/baseline.json /tmp/current-perf.json
+
+      - name: Upload current perf report on regression
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: perf-current
+          path: /tmp/current-perf.json
+          if-no-files-found: ignore
+
+  docs:
+    # RFC-611: all local references remain a per-commit gate. Only changed
+    # design documents query external sites here; the full historical external
+    # sweep remains visible in design-links-nightly.yml.
+    name: Markdown link check (design/)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Check every local design link and install Lychee
+        # The action installs lychee on GITHUB_PATH for the next step. Its args
+        # remain constant: dynamic filenames are passed as argv by our script.
+        uses: lycheeverse/lychee-action@v2
+        with:
+          lycheeVersion: v0.24.2
+          args: --offline --no-progress --verbose 'design/**/*.md'
+          fail: true
+          jobSummary: true
+
+      - name: Check external links in changed design documents
+        # The selector compares immutable push/PR endpoints, fetches missing
+        # shallow objects and conservatively checks all docs if comparison fails.
+        # HTTP statuses, retries, timeout and Actions-evidence exclusions retain
+        # their previous policy in scripts/ci/check-design-links.ts.
+        run: bun scripts/ci/check-design-links.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUST_LOG: warn,lychee_lib::ratelimit::host=debug
+
+  build-binary:
+    name: Build production binary + e2e artifact (smoke) (${{ matrix.os }})
+    # This job consumes only the checkout; it does not consume lint/test output.
+    # Keep it at the workflow root so compilation overlaps the unit matrices and
+    # e2e can start as soon as its artifact exists. Six successful main runs on
+    # 2026-08-07 showed the old test -> build -> e2e waterfall spending 397-458s
+    # after the unit matrix had already finished, stretching 6-7 minutes of work
+    # into 12-15 minutes without adding signal. Do not add a unit-job `needs:`
+    # edge here merely to order the Actions UI.
+    #
+    # `!cancelled()` preserves the guard-audit contract if dependencies are added
+    # for a real artifact reason later: an unrelated red shard must not silently
+    # skip binary smoke, e2e, a11y, or focus-ring geometry. A superseding push
+    # still cancels the whole run via workflow concurrency.
+    # See design/test-guard-audit-2026-07-21 §2 逃逸机制⑥.
+    if: ${{ !cancelled() }}
+    # Keep one build job per platform so each e2e platform waits only for the
+    # artifact it actually consumes. A single three-OS matrix is one logical
+    # dependency to Actions, so the old `e2e -> build-binary` edge held every
+    # browser shard until the slowest/most-queued build leg completed.
+    strategy:
+      fail-fast: false
+      matrix:
+        # Same pinned image as the Linux browser leg below, which downloads this job's
+        # `agent-workflow-e2e-${{ matrix.os }}` artifact: the binary is built and browser-tested
+        # on one image. See the e2e matrix for why it is not ubuntu-latest.
+        os: [ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps: &build-binary-steps
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Cache bun package downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install current opencode (binary doctor smoke)
+        # RFC-227 intentionally treats a truly missing executable as unhealthy
+        # while accepting any reported version. Give the compiled `doctor`
+        # smoke a real current binary on both supported CI hosts.
+        # Explicit bash keeps the install command portable if this matrix gains
+        # a Windows runner whose default shell is PowerShell.
+        shell: bash
+        run: |
+          bun install -g opencode-ai@latest
+          export PATH="$HOME/.bun/bin:$PATH"
+          opencode --version
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Build production + test-only e2e binaries
+        shell: bash
+        run: bun run build:binary:e2e
+
+      - name: Show artifact size
+        shell: bash
+        run: ls -lh dist/
+
+      - name: Smoke-run binary (version + doctor + hidden RFC-224 entrypoints)
+        # RFC-254 T31 — POSIX only. The block below drives the **bwrap**
+        # capability supervisor, a Linux concept, and hands it `/usr/bin/true`
+        # as its payload; neither exists on Windows. What the windows leg needs
+        # from this job is the ARTIFACT, and `build:binary:e2e` already runs its
+        # own `version` smoke on every platform. `windows-platform.yml`
+        # separately drives `doctor` and the compiled stub there.
+        if: runner.os != 'Windows'
+        # RFC-254 T30 — declared explicitly because the default shell on a
+        # windows runner is pwsh, and every line below is POSIX sh.
+        shell: bash
+        # `ls -lh` only checks the artifact exists; a build can succeed yet
+        # produce a binary that crashes at startup (broken bundle, missing
+        # native bindings, stripped permissions). Exec the binary to catch
+        # those before the artifact ships.
+        #
+        # `version` validates command dispatch + bundle integrity.
+        # `doctor` exercises opencode PATH resolution + git probe + the
+        # IS_EMBEDDED-aware migrations check end-to-end.
+        #
+        # NOTE: CLI uses subcommand-style (`agent-workflow version`), not
+        # POSIX flag-style (`--version`) — see packages/backend/src/main.ts
+        # `case 'version'`.
+        #
+        # `find` instead of `ls | head` to satisfy actionlint's embedded
+        # shellcheck (SC2012) — robust under names with whitespace even
+        # though the canonical asset names here never contain any.
+        run: |
+          set -euxo pipefail
+          bin=$(find dist -maxdepth 1 -type f -name 'agent-workflow-*' ! -name 'agent-workflow-e2e-*' ! -name '*.exe' | head -n 1)
+          # RFC-254 T30: on Windows the executable IS the `.exe`, and the
+          # extensionless name above does not exist.
+          if [ -z "$bin" ]; then
+            bin=$(find dist -maxdepth 1 -type f -name 'agent-workflow-*.exe' ! -name 'agent-workflow-e2e-*' | head -n 1)
+          fi
+          bin="$PWD/$bin"
+          chmod +x "$bin"
+          "$bin" version
+          "$bin" doctor
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-workflow-${{ matrix.os }}
+          path: |
+            dist/agent-workflow-*
+            !dist/agent-workflow-e2e-*
+          if-no-files-found: error
+
+      - name: Upload test-only e2e artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-workflow-e2e-${{ matrix.os }}
+          # RFC-254 T28b — the compiled e2e stub rides along. `opencodePath` has
+          # to name something the OS can execute, so the model stand-in is a
+          # binary now rather than nine shell scripts, and the e2e job resolves
+          # it from `dist/` exactly like the daemon artifact.
+          path: |
+            dist/agent-workflow-e2e-*
+            dist/stub-opencode-*
+            dist/system-mock-tool-*
+          if-no-files-found: error
+
+  build-binary-macos:
+    name: Build production binary + e2e artifact (smoke) (${{ matrix.os }})
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps: *build-binary-steps
+
+  build-binary-windows:
+    name: Build production binary + e2e artifact (smoke) (${{ matrix.os }})
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps: *build-binary-steps
+
+  e2e:
+    # Playwright runs against the compile-time-isolated e2e artifact that
+    # `build-binary` already produced and uploaded. The same job separately
+    # smoke-tests the production artifact, whose runtime trust policy remains
+    # identical to the release build. We download the e2e artifact instead of
+    # rebuilding on every shard. download/upload-artifact drops the +x bit, so
+    # a one-line
+    # `chmod +x` restores it (cheap, vs. a full vite build + --compile per
+    # shard). This keeps binary compilation at one job per OS instead of
+    # repeating it in every e2e job; e2e/harness.ts only needs the file to
+    # exist + be executable.
+    #
+    # RFC-054 W1-8 — `shard` splits the suite at file granularity. Across the
+    # seven successful main runs measured on 2026-08-15, four shards per OS
+    # created a synchronized twelve-job macOS/Windows runner wave and pushed CI
+    # as high as 12m53s. That justified the old 2/2/3 split while the PR tier was
+    # smaller, but it is not a permanent shard ceiling.
+    #
+    # By runs 32813031397 and 32814714841 the PR tier had grown to 621-627 tests:
+    # Ubuntu's two legs reached 310-314 tests / 5.1-8.0m, while Windows' three
+    # reached 192-221 tests / 5.1-8.6m. Ratchet one runner per OS to 3/3/4 so
+    # the per-runner workload returns below that measured envelope. This is ten
+    # e2e jobs, not the old twelve, and the platform-local build dependencies
+    # above stagger their release instead of making every OS enter one wave.
+    # RFC-611 discovers the same test population with Playwright, then balances
+    # whole files by measured/estimated duration. Every file is selected once
+    # per OS and file-local `test.beforeAll` semantics remain unchanged.
+    name: Playwright e2e (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
+    needs: build-binary
+    # Unrelated test failures must not skip browser coverage. This platform's
+    # build must succeed first; otherwise its failure already keeps CI required
+    # red and downloading a nonexistent artifact would add no useful evidence.
+    if: ${{ !cancelled() && needs.build-binary.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Pinned, not ubuntu-latest: Playwright 1.60.0 cannot install Chromium or its system
+        # deps on ubuntu-26.04 (ubuntu-latest since 2026-11-03), where this leg only passed while
+        # the browser cache hit. Move the pin together with a Playwright that supports the newer image.
+        os: [ubuntu-24.04]
+        shard: [1, 2, 3]
+        shards: [3]
+    runs-on: ${{ matrix.os }}
+    # Cold browser/system-dependency installation needs more headroom than the
+    # unit jobs, but must not inherit Actions' six-hour default.
+    timeout-minutes: 20
+    env:
+      # Pin Playwright's browser dir to a workspace path so the cache key/path
+      # is identical across Linux/macOS (defaults differ: ~/.cache/ms-playwright
+      # vs ~/Library/Caches/ms-playwright). Playwright honors this on all OSes.
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
+    steps: &e2e-steps
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Cache bun package downloads
+        # On windows-latest this ~313 MB archive consistently takes 41–105s
+        # to restore, while the following frozen install takes 7–11s with the
+        # cache. Skip only this download cache on Windows; dependency install,
+        # Playwright's browser cache, artifacts, and every shard stays live.
+        if: runner.os != 'Windows'
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        # Playwright (the test runner) lives in devDependencies; the binary
+        # under test comes from the downloaded artifact below, not this install.
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Download test-only e2e binary + stub from build-binary
+        # Reuse the separately compiled test artifacts. The daemon binary's
+        # compile-time-only OpenCode dependency seam is absent from the shipped
+        # binary; the stub is the compiled model stand-in (RFC-254 T28b).
+        uses: actions/download-artifact@v8
+        with:
+          name: agent-workflow-e2e-${{ matrix.os }}
+          path: dist
+
+      - name: Restore executable bit on the e2e binary and mock executables
+        # upload/download-artifact does not preserve the +x mode bit. Both are
+        # spawned — the stub by the daemon as `opencodePath` — so both need it,
+        # and a missing stub must fail HERE rather than as an unexplained
+        # "daemon closed before printing ready line" in every spec.
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x dist/agent-workflow-e2e-*
+          test -n "$(find dist -maxdepth 1 -type f -name 'stub-opencode-*')"
+          chmod +x dist/stub-opencode-*
+          test -n "$(find dist -maxdepth 1 -type f -name 'system-mock-tool-*')"
+          chmod +x dist/system-mock-tool-*
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('bun.lock') }}
+
+      - name: Install Playwright browsers (+ system deps)
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: bunx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cache hit, Linux only)
+        # On a browser-cache hit we still need the apt libraries on Linux
+        # runners (they aren't part of the cached browser dir). macOS needs no
+        # system deps, so this is Linux-gated.
+        if: steps.pw-cache.outputs.cache-hit == 'true' && runner.os == 'Linux'
+        shell: bash
+        run: bunx playwright install-deps chromium
+
+      - name: Run e2e (shard ${{ matrix.shard }}/${{ matrix.shards }})
+        env:
+          CI: 'true'
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ runner.temp }}/e2e-discovery.json
+          AW_E2E_SHARD_PLAN: ${{ runner.temp }}/e2e-shard-plan.json
+          AW_E2E_TIMINGS_OUTPUT: ${{ runner.temp }}/e2e-timings.json
+          # RFC-254 T31 — the windows leg skips two specs, and ONLY these two.
+          #
+          # Both fail on POSIX as well, and both were attributed by building at
+          # each commit in turn: `focus-ring-clip` has been red since `01d3e541`
+          # took its clipped-ring count from 4 to 108, and
+          # `rfc250-workflow-camera` since the wrapper-drag work. Neither is a
+          # Windows problem and neither is this RFC's to fix, so letting them
+          # make a NEW leg red would mean shipping a gate that is red on arrival
+          # — which is how a gate gets ignored.
+          #
+          # The two entries are deliberately DIFFERENT shapes, because the two
+          # files are:
+          #   * `focus-ring-clip` — one broken test, six healthy ones. Matched by
+          #     TITLE, so the six keep running. (Playwright's grep also matches
+          #     the file path, and a filename here would have dropped all seven.)
+          #   * `rfc250-workflow-camera` — all THREE tests are blocked by the
+          #     same canvas defect; excluding only the first just promotes the
+          #     second to the failure. Measured on POSIX: exclude `:823` and
+          #     `:831` fails in its place. So the FILE is excluded, honestly,
+          #     rather than pretending one test is the problem.
+          #
+          # This is a registered exclusion, not a silent one: it is listed in
+          # `docs/audit-backlog.md` and pinned by
+          # `rfc254-windows-e2e-exclusions.test.ts`, which fails if either title
+          # stops naming exactly one test. Delete it when those two go green.
+          AW_E2E_WINDOWS_EXCLUDE: 'focus rings are not clipped anywhere|rfc250-workflow-camera'
+          # RFC-319 —— 分档。不带 tag = PR 档（今天的 340 条一条不动）；
+          # `@nightly` = nightly 档，由 e2e-full-nightly.yml 跑全量。
+          #
+          # **Playwright 只认一个 `--grep-invert`**：写两次时后一个静默覆盖前一个，
+          # 于是 windows 腿会把整批 `@nightly` 放进 PR 门而没有任何提示。所以那条腿
+          # 必须把两个排除项**合成一条正则**。这条组合由
+          # `rfc319-ci-topology.test.ts` 钉死。
+          AW_E2E_TIER_EXCLUDE: '@nightly'
+        shell: bash
+        run: |
+          # Discover through Playwright itself with exactly the execution filters.
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            bun run e2e -- --list --reporter=json --project=chromium \
+              --grep-invert "$AW_E2E_TIER_EXCLUDE|$AW_E2E_WINDOWS_EXCLUDE"
+          else
+            bun run e2e -- --list --reporter=json --project=chromium \
+              --grep-invert "$AW_E2E_TIER_EXCLUDE"
+          fi
+          bun run scripts/ci/plan-e2e-shards.ts \
+            --report "$PLAYWRIGHT_JSON_OUTPUT_NAME" --platform "$RUNNER_OS" \
+            --shard=${{ matrix.shard }}/${{ matrix.shards }} --output "$AW_E2E_SHARD_PLAN"
+          # The child config selects complete files; applying --shard again would omit tests.
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            bun run e2e -- --config=playwright.ci.config.ts --project=chromium \
+              --grep-invert "$AW_E2E_TIER_EXCLUDE|$AW_E2E_WINDOWS_EXCLUDE"
+          else
+            bun run e2e -- --config=playwright.ci.config.ts --project=chromium \
+              --grep-invert "$AW_E2E_TIER_EXCLUDE"
+          fi
+
+      - name: Upload measured e2e file timings
+        if: success() || failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-test-timings-${{ runner.os }}-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/e2e-timings.json
+            ${{ runner.temp }}/e2e-shard-plan.json
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 14
+
+      - name: Upload Playwright trace on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          # Shard in the artifact name so all seven jobs' traces can coexist in
+          # the same workflow run when multiple fail (otherwise the later one
+          # would overwrite the earlier).
+          name: playwright-trace-${{ matrix.os }}-shard${{ matrix.shard }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+
+  e2e-macos:
+    name: Playwright e2e (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
+    needs: build-binary-macos
+    if: ${{ !cancelled() && needs.build-binary-macos.result == 'success' }}
+    # 2026-10-30: with three shards the slowest macOS leg took 14–19 of its 20
+    # minutes in eight green main runs, and run 40976668372 hit the deadline on
+    # a runner 1.5x slower across all 151 shared tests. One more runner, same
+    # deadline.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest]
+        shard: [1, 2, 3, 4]
+        shards: [4]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
+    steps: *e2e-steps
+
+  e2e-windows:
+    name: Playwright e2e (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
+    needs: build-binary-windows
+    if: ${{ !cancelled() && needs.build-binary-windows.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+        shard: [1, 2, 3, 4]
+        shards: [4]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
+    steps: *e2e-steps

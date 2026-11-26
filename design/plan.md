@@ -645,6 +645,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-612](./RFC-612-source-control-composition-implementations/proposal.md) | source-control 组合层里余下的两份实现归 infrastructure（RFC-294 S10 余项：composition 只装配）：缓存仓库操作（`CachedRepositoryOperations` 端口的实现）原样迁入 `infrastructure/cachedRepositoryOperations.ts`，仓库组写入的 URL 导入选择迁入 `infrastructure/repositoryUrlImport.ts`，组合层只绑定用例；模块根转出不变；`composition-control-flow-source-control` 6 → 4（余下的是候选与提交两个绑定的装配期选择）。无用户可见变化。 | In Progress |
 | [RFC-613](./RFC-613-task-run-binding-required/proposal.md) | provider 运行期的驱动绑定必填，旧的逐次驱动直绑只供用例（RFC-294 S12 余项）：bootstrap 一直给 `taskRunBinding`，`bindProviderTaskRunParticipantsInput` 不再为用例退回旧直绑分支；旧直绑迁为 `tests/helpers/legacyTaskRunDriveBinding.ts`，与单机选择共用导出的配置桥接；`composition-control-flow-task-execution` 10 → 9。无用户可见变化。 | In Progress |
 | [RFC-614](./RFC-614-launch-upload-admission-required/proposal.md) | 收上传的 launch 把 upload admission 当必填端口，子任务委派是不收上传的另一个用例（RFC-294 W4-E8 余项）：`LaunchDeps.uploadAdmission` 必填，只读命令收 `MissionCommandDeps`；新增 `launchMissionWithoutUploads`（带上传即拒绝、零写入），子任务委派改走它；`upload-admission-not-wired` 的阻断删去。无用户可见变化。 | In Progress |
+| [RFC-615](./RFC-615-ci-critical-path-and-query-cost/proposal.md) | CI第二轮：历史行桥重复计算、G1查询成本、job内测试准备缓存与计算/聚合队列分离；保留测试覆盖与门禁标准 | In Progress；用户明确授权实施 |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

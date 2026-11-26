@@ -11,7 +11,7 @@ import {
 } from './helpers/rfc349FunctionalEvidence'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
-const CI_WORKFLOW = readFileSync(resolve(ROOT, '.github', 'workflows', 'ci.yml'), 'utf8')
+const CI_WORKFLOW = readFileSync(resolve(ROOT, '.github', 'workflows', 'ci-work.yml'), 'utf8')
 const FULL_E2E_WORKFLOW = readFileSync(
   resolve(ROOT, '.github', 'workflows', 'e2e-full-nightly.yml'),
   'utf8',

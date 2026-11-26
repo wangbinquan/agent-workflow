@@ -253,7 +253,7 @@ describe('depcheck — 接线与反悔防护', () => {
   })
 
   test('CI 仍然跑 depcheck（没人跑的规则不是锁）', () => {
-    expect(read('.github/workflows/ci.yml')).toContain('bun run depcheck')
+    expect(read('.github/workflows/ci-work.yml')).toContain('bun run depcheck')
   })
 
   test('配置不得再把 tsConfig 指回 tsconfig.base.json', () => {

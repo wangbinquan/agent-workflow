@@ -14,7 +14,7 @@
 //   ② ubuntu 那一步确实把 `AW_TEST_POSTGRESQL_URL` 交给了 `bun test`；
 //   ③ 全部 workflow / job / step 的 env 块里，仅允许已登记的两处 SQLite 收窄；
 //   ④ macOS backend nightly 作业与 Windows platform 作业各自固定 runner 且没有 PostgreSQL 服务。
-//      （2026-10-14 CI 提速：macOS 后端从 ci.yml 的 step 级收窄移到 `backend-macos-nightly.yml`
+//      （2026-10-14 CI 提速：macOS 后端从 ci-work.yml 的 step 级收窄移到 `backend-macos-nightly.yml`
 //      的 job 级收窄；ubuntu 腿的双引擎接线不变。）
 //
 // ③④ 同时锁位置和运行条件；更改 runner 或再加一处收窄都需要更新判据。
@@ -217,12 +217,15 @@ function readWorkflows(): ReadonlyArray<readonly [string, string]> {
 
 describe('RFC-359 W8 —— CI 的双引擎接线', () => {
   const files = readWorkflows()
-  const ci = parse(readFileSync(join(WORKFLOWS, 'ci.yml'), 'utf8')) as unknown
+  const ci = parse(readFileSync(join(WORKFLOWS, 'ci-work.yml'), 'utf8')) as unknown
   const backend = jobsOf(ci).find(([name]) => name === 'test-backend')?.[1]
 
   test('语料非空：确实读到了 workflow 目录（读成 0 个文件此刻零预言力）', () => {
     expect(files.length).toBeGreaterThanOrEqual(1)
-    expect(backend, '`ci.yml` 里找不到 `test-backend` 作业——作业改名了就来更新本判据').toBeDefined()
+    expect(
+      backend,
+      '`ci-work.yml` 里找不到 `test-backend` 作业——作业改名了就来更新本判据',
+    ).toBeDefined()
   })
 
   test('① backend 分片在 ubuntu 上起了 postgres 服务容器', () => {
@@ -371,7 +374,7 @@ jobs:
     const row = rows[0]!
     expect(isMacosNightlyOverride(row)).toBe(true)
     expect(isWindowsPlatformOverride(row)).toBe(false)
-    expect(isMacosNightlyOverride({ ...row, workflow: 'ci.yml' })).toBe(false)
+    expect(isMacosNightlyOverride({ ...row, workflow: 'ci-work.yml' })).toBe(false)
     expect(isMacosNightlyOverride({ ...row, job: 'test-backend' })).toBe(false)
     expect(isMacosNightlyOverride({ ...row, scope: 'workflow' })).toBe(false)
     expect(isMacosNightlyOverride({ ...row, scope: 'step' })).toBe(false)
@@ -396,7 +399,7 @@ jobs:
     expect(rows).toHaveLength(1)
     const row = rows[0]!
     expect(isWindowsPlatformOverride(row)).toBe(true)
-    expect(isWindowsPlatformOverride({ ...row, workflow: 'ci.yml' })).toBe(false)
+    expect(isWindowsPlatformOverride({ ...row, workflow: 'ci-work.yml' })).toBe(false)
     expect(isWindowsPlatformOverride({ ...row, job: 'test-backend' })).toBe(false)
     expect(isWindowsPlatformOverride({ ...row, scope: 'workflow' })).toBe(false)
     expect(isWindowsPlatformOverride({ ...row, scope: 'step' })).toBe(false)
@@ -405,7 +408,7 @@ jobs:
   })
 
   test('显式 PostgreSQL 接线缺启动、错条件或数据库、错序和缺清理时不能通过', () => {
-    const ci = parse(readFileSync(join(WORKFLOWS, 'ci.yml'), 'utf8')) as unknown
+    const ci = parse(readFileSync(join(WORKFLOWS, 'ci-work.yml'), 'utf8')) as unknown
     const backend = jobsOf(ci).find(([name]) => name === 'test-backend')?.[1] ?? {}
     const steps = stepsOf(backend)
     const startIndex = steps.findIndex((step) => step.id === 'postgres')

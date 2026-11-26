@@ -569,6 +569,11 @@ export function fastFilteredRootQuery(
   // 合格集的两层：non_view 决定 facets 的分母，再叠 view 得到真正的匹配集。
   // 与旧管线共用 nonViewCondition / viewCondition，只是换了别名。
   const nonView = nonViewCondition(db, workflowName, viewer, parsed.filters, 't')
+  const columns = taskReadColumns(db)
+  const prefixTasks = taskReadSql(db, 't', {
+    id: columns.id,
+    startedAt: columns.startedAt,
+  })
   const boundary =
     parsed.cursor === undefined
       ? sql`1 = 1`
@@ -597,19 +602,16 @@ export function fastFilteredRootQuery(
       SELECT CAST(${parsed.limit + 1} AS INTEGER) AS page_rows
     ),
     physical_prefix AS MATERIALIZED (
-      SELECT t.id, t.started_at FROM ${taskCatalogReadSql(db, 't')}
+      SELECT t.id, t.started_at FROM ${prefixTasks}
       ORDER BY t.started_at DESC, t.id DESC
       LIMIT 4 * CAST(${parsed.limit + 1} AS INTEGER)
     ),
-    root_prefix_lookup AS MATERIALIZED (
-      SELECT p.id, p.started_at,
-        (SELECT m.id FROM matches m WHERE m.id = p.id) AS matched_id,
-        (SELECT m.rid FROM matches m WHERE m.id = p.id) AS rid
-      FROM physical_prefix p
-    ),
     root_prefix AS MATERIALIZED (
-      SELECT p.id, p.rid, p.started_at FROM root_prefix_lookup p
-      WHERE p.matched_id IS NOT NULL
+      -- tasks.id is unique and open_alerts is DISTINCT: each prefix row has
+      -- at most one match. Fetch membership and root together, without two
+      -- correlated expansions of the same NOT MATERIALIZED match query.
+      SELECT p.id, m.rid, p.started_at
+      FROM physical_prefix p JOIN matches m ON m.id = p.id
     ),
     prefix_roots AS (
       SELECT p.rid, MAX(p.started_at) AS bsa
