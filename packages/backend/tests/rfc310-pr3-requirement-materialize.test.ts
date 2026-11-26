@@ -25,7 +25,7 @@ import {
   canonicalDigest,
   canonicalStringify,
 } from '../src/modules/development-automation/domain/canonicalJson'
-import { directSubmissionDigest } from '../src/modules/development-automation/infrastructure/requirementMaterializer'
+import { directSubmissionDigest } from '../src/modules/development-automation/application/requirementMaterializer'
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
 import { fakeAgentActionPorts } from './helpers/rfc310AgentPorts'

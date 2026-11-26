@@ -848,6 +848,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   2026-11-25 [RFC-603](../RFC-603-reconciler-ports-required/proposal.md)（In Progress）：application 一侧——`ReconcilerPorts` 的 25 个成员必填，命令与四条发布链
   只取自己读的端口（`Pick`），端口缺席时的 typed block、失败结果与静默跳过删去；RFC-359 P0 的 `p0-9-launchers` 退役（漏给启动器在编译期就被挡下，理由见其
   design §0）。余下 launch / admission 的可选依赖与需求物化器的 `source`。
+  2026-11-25 [RFC-607](../RFC-607-requirement-materializer-stated-inputs/proposal.md)（In Progress）：需求物化器的 `source` 必填、删去只供用例的 `documents`
+  覆盖；只供用例的本机兼容物化器迁入 `tests/helpers/`。余下 launch 的 `uploadAdmission?`（子任务启动不收上传，是用例差异，按用例拆入参另议）。
 - **E9 digital-employee / event-center / execution-contract**（2026-11-03 路由部分由 [RFC-436](../RFC-436-module-inbound-http-bindings/proposal.md)
   Done，`3cb987341`：两个 HTTP 绑定归入各自模块 `inbound/http`，句柄合同留在 `application/ports`；XC 兼容 seam 仍开放）：在 RFC-361/365/368 已落切片之上，完成路由到 public command / query、
   Event observer 进入生命周期程序、XC 对 legacy agent / workflow / scriptRun 的兼容 seam 退役。

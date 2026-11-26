@@ -31,10 +31,8 @@ import { createMissionPersistence } from '../../src/modules/development-automati
 import { createFactSnapshotReader } from '../../src/modules/development-automation/infrastructure/reconcilerReaders'
 import { createRequirementBundleRefPersistence } from '../../src/modules/development-automation/infrastructure/requirementBundleRefPersistence'
 import { EvidenceStore } from '../../src/modules/development-automation/infrastructure/evidenceStore'
-import {
-  createRequirementMaterializer,
-  type RequirementMaterializer,
-} from '../../src/modules/development-automation/infrastructure/requirementMaterializer'
+import type { RequirementMaterializer } from '../../src/modules/development-automation/application/requirementMaterializer'
+import { createRequirementMaterializer } from './legacyRequirementMaterializer'
 import { defaultAutomationPolicyContent } from '../../src/modules/development-automation/domain/automationPolicy'
 import type { AdmissionLookup } from '../../src/modules/development-automation/application/ports/admissionLookup'
 import type { MissionPersistence } from '../../src/modules/development-automation/application/ports/missionStore'

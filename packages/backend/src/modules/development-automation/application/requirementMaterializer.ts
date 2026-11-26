@@ -16,7 +16,6 @@ import { assertEvidenceStagingFactory, assertEvidenceStagingLease } from './evid
 // 调用；stash 的 canonical digest 必须与 mission.sourceContentDigest 对上，
 // 对不上 = contract-violation，杜绝「stash 什么就物化什么」的偷换）。
 
-import type { EvidenceDocumentQueries } from '../application/evidenceDocuments'
 import type { EvidenceDocumentCommands } from '../application/evidenceDocumentCommands'
 import { ulid } from 'ulid'
 
@@ -135,11 +134,12 @@ export interface RequirementMaterializerDeps {
   readonly bundleRefs: RequirementBundleRefPersistence
   readonly store: MissionPersistence
   readonly snapshots: FactSnapshotReader
+  /** RFC-607: the only source of requirement document reads (`evidence.documents`; the override is gone). */
   readonly evidence: EvidenceArtifactPort
-  readonly documents?: EvidenceDocumentQueries
   readonly documentCommands: EvidenceDocumentCommands
   readonly staging: EvidenceStagingFactory
-  readonly source?: RequirementSourceRunnerDep
+  /** RFC-607: required — the composition always gives the external requirement source runner. */
+  readonly source: RequirementSourceRunnerDep
   readonly now: () => number
 }
 
@@ -205,7 +205,7 @@ export function createSelectedRequirementMaterializer(
   if (typeof documentCommands?.writeDocument !== 'function') {
     throw new Error('requirement-document-commands-incomplete')
   }
-  const documents = deps.documents ?? evidence.documents
+  const documents = evidence.documents
 
   const insertBundleRef = async (input: {
     missionId: string
@@ -307,14 +307,6 @@ export function createSelectedRequirementMaterializer(
       complete: boolean
     }>
   > => {
-    if (deps.source === undefined) {
-      return fail(
-        'configuration',
-        'requirement-source-not-wired',
-        'after-configuration',
-        'inject RequirementSourceRunnerDep at composition',
-      )
-    }
     const mission = await store.getMission(input.missionId)
     if (mission === null) {
       return fail('configuration', 'mission-not-found', 'never', 'mission row disappeared')
@@ -620,7 +612,8 @@ export function createSelectedRequirementMaterializer(
         // 平台渠道零外呼：correlation 就是问题集自身。
         return { ok: true, correlationRef: `platform:${input.questionSetRef}` }
       }
-      if (deps.source === undefined || input.adapterBindingRef === null) {
+      // A requirement-source question set without an adapter binding cannot be published (a missing binding, not port).
+      if (input.adapterBindingRef === null) {
         return fail(
           'configuration',
           'requirement-source-not-wired',
@@ -663,14 +656,6 @@ export function createSelectedRequirementMaterializer(
           'question-set-missing',
           'never',
           'question set stash not found',
-        )
-      }
-      if (deps.source === undefined) {
-        return fail(
-          'configuration',
-          'requirement-source-not-wired',
-          'after-configuration',
-          'inject RequirementSourceRunnerDep at composition',
         )
       }
       const mission = await store.getMission(input.missionId)

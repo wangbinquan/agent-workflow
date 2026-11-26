@@ -4,10 +4,8 @@ import { afterEach, expect, test } from 'bun:test'
 import { dirname } from 'node:path'
 import { rmSync } from 'node:fs'
 import type { EvidenceDocumentQueries } from '@/modules/development-automation/application/evidenceDocuments'
-import {
-  createRequirementMaterializer,
-  directSubmissionDigest,
-} from '@/modules/development-automation/infrastructure/requirementMaterializer'
+import { directSubmissionDigest } from '@/modules/development-automation/application/requirementMaterializer'
+import { createRequirementMaterializer } from './helpers/legacyRequirementMaterializer'
 import { createRequirementBundleRefPersistence } from '@/modules/development-automation/infrastructure/requirementBundleRefPersistence'
 import type { RequirementBundleManifestV1 } from '@/modules/development-automation/domain/requirementManifest'
 import type { QuestionSetV1 } from '@/modules/development-automation/domain/questionSet'

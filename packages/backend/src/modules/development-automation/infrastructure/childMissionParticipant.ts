@@ -7,7 +7,7 @@ import {
 } from '../domain/stepSaga'
 import { launchMission, type LaunchDeps } from '../application/commands/launchMission'
 import type { MissionPersistence } from '../application/ports/missionStore'
-import type { RequirementMaterializer } from './requirementMaterializer'
+import type { RequirementMaterializer } from '../application/requirementMaterializer'
 
 type ObservedChildStatus = ChildMissionReceipt['observedStatus']
 

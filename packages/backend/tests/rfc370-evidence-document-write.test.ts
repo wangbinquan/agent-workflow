@@ -8,10 +8,10 @@ import type { EvidenceDocumentQueries } from '@/modules/development-automation/a
 import type { EvidenceBundleRecord } from '@/modules/development-automation/domain/evidence'
 import { canonicalStringify } from '@/modules/development-automation/domain/canonicalJson'
 import {
-  createRequirementMaterializer,
   DIRECT_SUBMISSION_BUDGET,
   directSubmissionDigest,
-} from '@/modules/development-automation/infrastructure/requirementMaterializer'
+} from '@/modules/development-automation/application/requirementMaterializer'
+import { createRequirementMaterializer } from './helpers/legacyRequirementMaterializer'
 import { createRequirementBundleRefPersistence } from '@/modules/development-automation/infrastructure/requirementBundleRefPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'

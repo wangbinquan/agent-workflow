@@ -1,3 +1,15 @@
+## 2026-11-25 RFC-607 需求物化器的需求源必填，本机兼容物化器迁入用例 helper（In Progress；`design/RFC-607-requirement-materializer-stated-inputs/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-603 design §7
+  留下的需求物化器 `source`（RFC-294 W4-E8 / S12）。
+- **范围**：`RequirementMaterializerDeps.source` 必填，删去三处端口缺席分支（问题集缺适配器绑定时的 `requirement-source-not-wired` 照旧）；删去只供用例的
+  `documents` 覆盖，文档一律经 `evidence.documents` 读取。生产代码从不调用的本机兼容物化器（`infrastructure/local/legacyRequirementMaterializer.ts`）迁为
+  `tests/helpers/legacyRequirementMaterializer.ts`（没给需求源时给抛错替身，文档读取经证据端口代理注入），只做转出的 `infrastructure/requirementMaterializer.ts`
+  删去，`childMissionParticipant.ts` 改取 application 的类型。6 个用例 / helper 文件改 import。新增 RFC-607 用例。
+- **集中验证**（基于 `01306b9ce`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 535 个用例文件只有 `rfc321` 照例红；5 种变异都被认出
+  （缺席判据改为透过类型断言的 AST）；架构报告生产文件少 2 个，计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-25 RFC-606 runtime-management 合同里的开放类型：JSON 值、有限键映射与失败原因（In Progress；`design/RFC-606-runtime-contract-json-and-closed-mapped-types/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-605 之后
