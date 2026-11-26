@@ -23,7 +23,7 @@ export interface RepositoryPreparationEffects {
   materialize(input: {
     readonly planJson: string
     readonly evidenceJson: string | null
-    readonly checkpoint: (evidenceJson: string) => Promise<void>
+    checkpoint(evidenceJson: string): Promise<void>
   }): Promise<
     | { readonly kind: 'prepared'; readonly receiptJson: string }
     | { readonly kind: 'stopped'; readonly receiptJson: string }
@@ -41,7 +41,7 @@ export interface RepositoryPreparationEffectFactory {
     readonly cloneTimeoutMs?: number
     readonly gitCommitIdentity: GitCommitIdentity | null
     readonly signal: AbortSignal
-    readonly assertCurrent: () => Promise<void>
+    assertCurrent(): Promise<void>
   }):
     | (RepositoryPreparationEffects & RepositoryPreparationCleanupEffects)
     | Promise<RepositoryPreparationEffects & RepositoryPreparationCleanupEffects>

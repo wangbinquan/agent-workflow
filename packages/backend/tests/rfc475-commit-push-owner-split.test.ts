@@ -358,21 +358,22 @@ describe('RFC-475 —— source-control 的发布合同', () => {
     expect(findings.filter((line) => NEW.test(line))).toEqual([])
     // Positive control: the corpus does reach source-control's public roots (its known findings show up).
     expect(findings.some((line) => line.startsWith('modules/source-control/'))).toBe(true)
-    // Negative control: the same judgement reports a function-typed property and the daemon Logger.
+    // Negative control: the same judgement reports a function-typed property and a platform persistence handle
+    // (RFC-604: the platform logger itself is a designated contract interface, so it is no longer the probe).
     const probe = [
       sourceUnit(
         BACKEND_PREFIX + 'modules/probe/public/types.ts',
         [
-          "import type { Logger } from '@/platform/logging/logger'",
+          "import type { PersistenceTx } from '@/platform/persistence/persistenceDb'",
           'export interface WorkspaceChangeProbe {',
           '  readonly acquire: () => Promise<() => void>',
-          '  readonly log: Logger',
+          '  readonly tx: PersistenceTx',
           '}',
         ].join('\n'),
       ),
     ]
     expect(publicSurfaceViolations(probe)).toEqual([
-      'modules/probe/public/types.ts#WorkspaceChangeProbe: forbidden type import @/platform/logging/logger#Logger',
+      'modules/probe/public/types.ts#WorkspaceChangeProbe: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
       'modules/probe/public/types.ts#WorkspaceChangeProbe: unsafe/open type FunctionType',
     ])
   }, 120_000)

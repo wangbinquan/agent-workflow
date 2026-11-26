@@ -1987,7 +1987,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "id": "rfc294-architecture-preflight",
-      "lines": 534,
+      "lines": 530,
       "mechanism": "ast",
       "minCorpusFiles": 120,
       "negativeFixture": true,
@@ -4919,6 +4919,18 @@
       "lines": 333,
       "mechanism": "ast",
       "minCorpusFiles": 100,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": false,
+      "file": "packages/backend/tests/rfc604-public-contract-behaviour-types-boundary.test.ts",
+      "id": "rfc604-public-contract-behaviour-types-boundary",
+      "lines": 135,
+      "mechanism": "ast",
+      "minCorpusFiles": null,
       "negativeFixture": true,
       "runner": "bun"
     }

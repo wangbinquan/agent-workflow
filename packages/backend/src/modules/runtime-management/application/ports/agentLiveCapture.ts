@@ -12,7 +12,7 @@ export interface AgentLiveCaptureRequest {
    * the first `sessionID` event from the child process; the poller short-
    * circuits its tick while this is null (no point BFS'ing nothing).
    */
-  getRootSessionId: () => string | null
+  getRootSessionId(): string | null
   persistence: RuntimeSessionCapturePersistence
   log?: Logger
   /** Cadence between ticks. `0` disables the poller — startLive returns a no-op handle. */
@@ -27,7 +27,7 @@ export interface AgentLiveCaptureRequest {
    * `useTaskSync` invalidates `['tasks', taskId, 'node-runs']`. Tests can
    * pass a spy here.
    */
-  onInsert?: (info: { insertedRows: number; sessionIds: string[] }) => void
+  onInsert?(info: { insertedRows: number; sessionIds: string[] }): void
 }
 
 export interface AgentLiveCaptureStats {

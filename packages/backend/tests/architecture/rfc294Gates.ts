@@ -1056,6 +1056,34 @@ const FORBIDDEN_TYPE_IMPORT =
  * `public/operations` they are the contract itself, not debt; everywhere else the platform rule above still applies.
  */
 const OPERATION_CONTRACTS = '@/platform/operations/contracts'
+/**
+ * RFC-604 rule one: the platform interfaces a public contract may name. The platform logger is a pure behaviour interface
+ * (no storage, transaction, transport or process handle); every module already depends on it, and a contract carries the
+ * caller's logger so the callee logs under the caller's service and context. Only this named interface is allowed — other
+ * exports of the same file and every other platform module stay forbidden — and its declaration is not descended into.
+ */
+const PLATFORM_CONTRACT_INTERFACES: ReadonlySet<string> = new Set([
+  '@/platform/logging/logger#Logger',
+])
+
+/**
+ * RFC-604 rule two: a callback parameter is part of a method's signature (a lending parameter or a progress / predicate
+ * callback the callee invokes during the call), so a function type that is a parameter's declared type is closed; its
+ * own parameter and result types are still checked. A function type stored in a property, returned, or used anywhere
+ * else stays open (RFC-569: behaviour on a port is a method; design §3.3: a command's DTO input takes no callback).
+ */
+function isCallbackParameterType(node: ts.FunctionTypeNode): boolean {
+  const parameter = node.parent
+  if (!ts.isParameter(parameter) || parameter.type !== node) return false
+  const owner = parameter.parent
+  return (
+    ts.isMethodSignature(owner) ||
+    ts.isMethodDeclaration(owner) ||
+    ts.isCallSignatureDeclaration(owner) ||
+    ts.isConstructSignatureDeclaration(owner) ||
+    ts.isFunctionDeclaration(owner)
+  )
+}
 /** RFC-552: the OperationCatalog descriptor builders (RFC-344); a function that calls one is a descriptor factory. */
 const DESCRIPTOR_BUILDERS = new Set(['defineQueryOperation', 'defineCommandOperation'])
 const DESCRIPTOR_BUILDER_MODULE = '@/platform/operations/definitions'
@@ -1444,7 +1472,7 @@ export function publicSurfaceViolations(units: readonly SourceUnit[]): string[] 
         node.kind === ts.SyntaxKind.AnyKeyword ||
         node.kind === ts.SyntaxKind.UnknownKeyword ||
         node.kind === ts.SyntaxKind.ObjectKeyword ||
-        ts.isFunctionTypeNode(node) ||
+        (ts.isFunctionTypeNode(node) && !isCallbackParameterType(node)) ||
         ts.isConstructorTypeNode(node) ||
         ts.isTypeQueryNode(node) ||
         ts.isMappedTypeNode(node) ||
@@ -1454,8 +1482,16 @@ export function publicSurfaceViolations(units: readonly SourceUnit[]): string[] 
       }
       if (ts.isImportTypeNode(node)) {
         const specifier = literalSpecifier(node.argument)
+        const qualifierName =
+          node.qualifier === undefined
+            ? null
+            : ts.isIdentifier(node.qualifier)
+              ? node.qualifier.text
+              : node.qualifier.right.text
         if (operationsEntry && specifier === OPERATION_CONTRACTS) {
           // RFC-552: the operation contract itself — neither debt nor something to descend into.
+        } else if (PLATFORM_CONTRACT_INTERFACES.has(`${specifier}#${qualifierName}`)) {
+          // RFC-604 rule one: a designated platform contract interface — neither debt nor something to descend into.
         } else if (specifier !== null && FORBIDDEN_TYPE_IMPORT.test(specifier)) {
           violations.add(`${chain}: forbidden type import ${specifier}`)
         } else if (specifier !== null && node.qualifier !== undefined) {
@@ -1481,6 +1517,12 @@ export function publicSurfaceViolations(units: readonly SourceUnit[]): string[] 
         if (binding !== undefined) {
           if (operationsEntry && binding.specifier === OPERATION_CONTRACTS) {
             // RFC-552: the operation contract itself — neither debt nor something to descend into.
+          } else if (
+            PLATFORM_CONTRACT_INTERFACES.has(
+              `${binding.specifier}#${binding.importedName === '*' ? name : binding.importedName}`,
+            )
+          ) {
+            // RFC-604 rule one: a designated platform contract interface — neither debt nor something to descend into.
           } else if (FORBIDDEN_TYPE_IMPORT.test(binding.specifier)) {
             violations.add(
               `${chain}: forbidden type import ${binding.specifier}#${binding.importedName === '*' ? name : binding.importedName}`,

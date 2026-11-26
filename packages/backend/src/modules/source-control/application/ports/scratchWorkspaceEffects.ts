@@ -7,13 +7,13 @@ export interface ScratchWorkspaceEffects {
     readonly taskId: string
     readonly gitCommitIdentity: GitCommitIdentity | null
     readonly signal: AbortSignal
-    readonly assertCurrent: () => Promise<void>
+    assertCurrent(): Promise<void>
   }): Promise<MaterializedSpace>
   /** The owner has already validated the existing version/task/kind envelope. */
   restore(taskId: string, space: MaterializedSpace): MaterializedSpace | Promise<MaterializedSpace>
   cleanup(input: {
     readonly taskId: string
-    readonly assertCurrent: () => Promise<void>
+    assertCurrent(): Promise<void>
   }): Promise<WorkspaceCleanupReport>
   /** Releases the platform workspace a never-admitted Task's launch preparation
    * requested (scratch or repository; the hosted parent and its volume), once

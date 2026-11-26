@@ -536,6 +536,11 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 | 要补全具名 DTO 的 `unknown`                            | 8    | development-automation 两个操作面与配置身份视图 3（约四十处入参与返回）；system-operations 的配置补丁与升级回执 2；runtime-management 的探测回执视图、用量事件与材料证据 3                                                                                                                                                        | 各自立 RFC。其中“原始请求体交给应用层校验”的入参（development-automation 的操作面、system-operations 的配置补丁）先要裁决：改成传输层按 shared 的 schema 解析后交具名类型，还是认作合同的正当形态（后者要改检测规则，须用户确认）；探测回执视图收紧时要给存量回执定兼容口径 |
 | 其他                                                   | 2    | runtime-management `AgentMaterialEvidence` 的两个端口式回调（可按 RFC-569 的做法收，随同一合同上的日志器一并处理）；`AgentInvocationProtocol` 经 shared 的清单类型带入的映射类型                                                                                                                                                    | 随上面两类                                                                                               |
 
+2026-11-25 [RFC-604](../RFC-604-public-contract-behaviour-types/proposal.md)（In Progress）：“要先定检测规则”一类里的日志器与函数类型、“其他”一类里的端口式回调
+由本会话裁定（用户 2026-11-25 授权）。平台 `Logger` 是指定的平台合同接口（规则一）；方法参数里带类型的回调是方法签名的一部分（规则二）；输入对象里函数类型的
+成员改写为方法签名。`PUBLIC_SURFACE_DEBT` 27 → 19。余下：不透明身份引用 `object` 2 条、`CommittedEventRef` 1 条（结果里的事件引用是给事务属主在提交后发布
+用的，收法另议）、有限键映射类型 1 条、`unknown` DTO 4 条，以及能力 / 凭据 / 身份一族 11 条。
+
 ### S10 `composition/` 只装配：全模块收口
 
 > 后继：development-automation 第一步 [RFC-494](../RFC-494-development-employee-type-package-out-of-composition/proposal.md)（Done，2026-11-13，`e11313b6b`）：`employeeTypePackage.ts` 除登记对象外的合同与编解码、它依赖的工具合同登记与旧程序升级迁入 development-automation 的 application，composition 只留登记对象与给 bootstrap 的三个转出，`composition-control-flow-development-automation` 660 → 491。落 application 而非下面“归 domain”的字面：内容按 execution-contract 与 digital-employee 的 public 合同定型，design §3 的矩阵不许 domain 取其他模块的文件（RFC-494 design §6 取舍 1）；其中只依赖 zod 与 shared 的上下文 schema 与工作范围规则可再分进 domain（RFC-494 design §8）。S10 的其余范围由后继步骤承接。

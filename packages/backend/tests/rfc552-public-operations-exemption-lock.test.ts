@@ -209,8 +209,9 @@ describe('RFC-552 —— 判据：豁免只为操作描述工厂而设', () => {
   })
 
   test('负对照：同名的本地函数、别处来的构造器都不算描述工厂', () => {
+    // RFC-604: the callback parameter itself is part of the function's signature (rule two); the `unknown` it takes is
+    // still reported, which is what shows the declaration is checked rather than skipped.
     const expected = [
-      'modules/probe/public/operations.ts#createProbeDescriptors: unsafe/open type FunctionType',
       'modules/probe/public/operations.ts#createProbeDescriptors: unsafe/open type UnknownKeyword',
     ]
     expect(

@@ -141,11 +141,7 @@ export interface IsolationWorkspaceScope {
     conflict: IsolationConflict,
     input: {
       readonly containerRef: string
-      readonly runAgent: (
-        prompt: string,
-        workspaceRef: string,
-        manifest: MergeConflictManifest,
-      ) => Promise<void>
+      runAgent(prompt: string, workspaceRef: string, manifest: MergeConflictManifest): Promise<void>
       readonly log?: Logger
     },
   ): Effect<{
