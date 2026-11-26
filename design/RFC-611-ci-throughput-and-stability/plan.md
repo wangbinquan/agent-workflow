@@ -30,3 +30,5 @@
 代码已发布为 `6c6185496d10181d4b47e6d2d765d024eb13ba46`，29 个明确路径；发布前后 fetch 核对 `main == origin/main`。RFC-610 已先行发布为父提交 `0fdb118d8`，其候选内容正是本次集中验证时的共享内容；未重跑相同候选全量验证。共享 `STATE.md` / `design/plan.md` 当前只剩本 RFC 条目，本次文档跟进可以完整按路径提交，无需剥离并发内容。
 
 首次代码 exact-SHA 运行：[完整 CI](https://github.com/wangbinquan/agent-workflow/actions/runs/45796122638)、[CI feedback](https://github.com/wangbinquan/agent-workflow/actions/runs/45796122676)。2026-11-26 发布时已被 GitHub 接受、处于排队状态；后续状态以运行页面和本次会话验收记录为准。
+
+发布后只读复核发现旧 `root-test-entrypoint` 断言仍要求失败片也上传，未随 success-only 策略同步；补丁把断言限定到该步骤并要求仅成功上传。对应 root entrypoint + backend timing 共 36 项复验通过。原两条运行如果在旧断言处失败，属于本 RFC 遗漏；由包含此补丁的后继候选继续验收，不把重跑当修复。

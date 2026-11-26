@@ -372,15 +372,16 @@ describe('repository test entrypoint', () => {
     // RFC-398: the ubuntu shards are balanced by recorded per-file duration (round-robin by name
     // clustered the long upgrade suites and three shards hit the 15-minute budget, run 41293473768).
     // Bun reads the committed file second and writes this shard's measured durations to the
-    // fresh first file, which every finished shard uploads for the next refresh.
+    // fresh first file, which only successful shards upload for the next refresh.
     expect(ciWorkflow).toContain(
       '--coverage-reporter=lcov --timings="$RUNNER_TEMP/backend-test-timings.json" ' +
         '--timings=.github/backend-test-timings.json --update-timings',
     )
-    const uploadTimings = ciWorkflow.slice(
-      ciWorkflow.indexOf('- name: Upload measured backend test timings (ubuntu shards)'),
-    )
-    expect(uploadTimings).toContain("if: (success() || failure()) && matrix.os == 'ubuntu-latest'")
+    const uploadTimings = ciWorkflow
+      .slice(ciWorkflow.indexOf('- name: Upload measured backend test timings (ubuntu shards)'))
+      .split('\n      - name:')[0]!
+    expect(uploadTimings).toContain("if: success() && matrix.os == 'ubuntu-latest'")
+    expect(uploadTimings).not.toContain('failure()')
     expect(uploadTimings).toContain('name: backend-test-timings-${{ matrix.shard }}')
     expect(uploadTimings).toContain('path: ${{ runner.temp }}/backend-test-timings.json')
     // The file must stay Bun's v1 shape and keep weights for the heavy suites that caused it.
