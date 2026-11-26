@@ -1,3 +1,16 @@
+## 2026-11-25 RFC-605 不透明身份引用改为带品牌的句柄，任务房间结果不再带事件引用（In Progress；`design/RFC-605-opaque-identity-handles/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-604 留下的
+  不透明身份引用 `object` 与 `CommittedEventRef`（收法由本会话裁定，见 design §0）。
+- **范围**：平台新增 `S/platform/contracts/opaqueIdentity.ts`（`OpaqueIdentity<Tag>` 与 `mintOpaqueIdentity()`，冻结空对象），检测器把它与平台日志器一样认作
+  指定的平台合同类型。development-automation 的证据暂存命名空间 / 引用与 integration 的适配器配置 / 程序引用的 `reference` 改为对应 tag 的令牌，两个模块的
+  12 个铸造点与用例里的手工构造改用它（运行期仍按身份做键）。task-execution 任务房间参与方的 `continueTask` / `failTask` 结果去掉 `eventRef`（无人读取；
+  事件照旧同事务追加、持久投递送达）。`PUBLIC_SURFACE_DEBT` 去掉 3 条（19 → 16），`public-surface-deviations` 降到 16。新增 RFC-605 用例。
+- **集中验证**（基于 `be07a4e96`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 926 个用例文件 6 红：`rfc321` 照例、三个并发时序红
+  （单跑都过）、`rfc508` 的替身与 `rfc359-w26` 的源码摘要已改，复跑全绿；5 种变异都被认出（铸造点判据改为透过类型断言）；架构报告除偏差 19 → 16 与只记不门
+  的清单外不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-25 RFC-604 public 合同里的行为类型：日志器与回调的检测规则（In Progress；`design/RFC-604-public-contract-behaviour-types/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S9 余项里

@@ -1064,6 +1064,8 @@ const OPERATION_CONTRACTS = '@/platform/operations/contracts'
  */
 const PLATFORM_CONTRACT_INTERFACES: ReadonlySet<string> = new Set([
   '@/platform/logging/logger#Logger',
+  // RFC-605: the branded opaque identity token implementations mint and key their own state by (design §3.3).
+  '@/platform/contracts/opaqueIdentity#OpaqueIdentity',
 ])
 
 /**

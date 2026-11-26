@@ -7,12 +7,13 @@ import {
   PurposeEffects,
   unusedPurposeEffect,
 } from './helpers/developmentPurpose'
+import { mintOpaqueIdentity } from '@/platform/contracts/opaqueIdentity'
 
 function choices() {
   const content = new MemoryPurposeContent()
   const configuration: AdapterConfigurationReference = {
     kind: 'development-adapter-configuration',
-    reference: {},
+    reference: mintOpaqueIdentity(),
   }
   const effects = new PurposeEffects(content.namespace, { bind: unusedPurposeEffect })
   const binding = { effects, configurationFor: () => configuration }

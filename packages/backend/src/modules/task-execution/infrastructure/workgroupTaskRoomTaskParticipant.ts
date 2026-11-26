@@ -329,7 +329,9 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
         now: input.occurredAt,
         advanceOperationGeneration: false,
       })
-      const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
+      // RFC-605: the event is appended in the room's transaction and reaches consumers through durable delivery; the result
+      // no longer carries its reference (the transaction owner never nudged it).
+      await appendTaskLifecycleTransitionCommittedEvent(tx, {
         taskId: input.taskId,
         lifecycleRevision: nextRevision,
         previousStatus: input.expectedStatus,
@@ -347,7 +349,6 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
       return Object.freeze({
         intentId,
         closedHolderIds: Object.freeze(closed.map((holder) => holder.id)),
-        eventRef,
       })
     },
     async failTask(input: Parameters<WorkgroupTaskRoomTaskParticipantInTx['failTask']>[0]) {
@@ -387,7 +388,7 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
         failureCode: input.errorSummary,
         now: input.occurredAt,
       })
-      const eventRef = await appendTaskLifecycleTransitionCommittedEvent(tx, {
+      await appendTaskLifecycleTransitionCommittedEvent(tx, {
         taskId: input.taskId,
         lifecycleRevision: nextRevision,
         previousStatus: input.expectedStatus,
@@ -404,7 +405,6 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
       })
       return Object.freeze({
         closedHolderIds: Object.freeze(closed.map((holder) => holder.id)),
-        eventRef,
       })
     },
   })

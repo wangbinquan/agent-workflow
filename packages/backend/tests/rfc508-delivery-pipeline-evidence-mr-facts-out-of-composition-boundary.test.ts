@@ -35,6 +35,7 @@ import { createSelectedPipelineEvidence } from '@/modules/development-automation
 import { canonicalDigest } from '@/modules/development-automation/domain/canonicalJson'
 import { projectMrCells } from '@/modules/development-automation/domain/mrFacts'
 import { sha256Hex } from '@/platform/contracts/hash'
+import { mintOpaqueIdentity } from '@/platform/contracts/opaqueIdentity'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const REPO = resolve(BACKEND, '..', '..')
@@ -583,6 +584,9 @@ describe('RFC-508 ③ 新代码的依赖面是闭集、不用进程全局', () =
 
 type Lease = EvidenceStagingLease & { readonly name: string }
 
+/** RFC-605: staging tokens carry no data, so the fixtures name each lease's token here for the runner's log. */
+const leaseNames = new WeakMap<object, string>()
+
 function stagingFixture(
   options: {
     readonly asyncCreate?: boolean
@@ -592,29 +596,40 @@ function stagingFixture(
 ) {
   const log: string[] = []
   const factory = (name: 'collect' | 'trigger' | 'rerun'): EvidenceStagingFactory => {
-    const namespace = { kind: 'evidence-staging-namespace' as const, reference: { name } }
+    // RFC-605: distinct identities per factory (the former `{ name }` objects were never read).
+    const namespace = {
+      kind: 'evidence-staging-namespace' as const,
+      reference: mintOpaqueIdentity<'evidence-staging-namespace'>(),
+    }
     const leaseNamespace =
       options.foreign === name
-        ? { kind: 'evidence-staging-namespace' as const, reference: { name: 'other' } }
+        ? {
+            kind: 'evidence-staging-namespace' as const,
+            reference: mintOpaqueIdentity<'evidence-staging-namespace'>(),
+          }
         : namespace
-    const lease = (): Lease => ({
-      name,
-      reference: {
-        kind: 'evidence-staging',
-        namespace: leaseNamespace,
-        reference: { lease: name },
-      },
-      writeText: () => undefined,
-      importTree: () => ({}) as never,
-      putDocument: () => ({ sha256: 'a'.repeat(64), bytes: 0 }),
-      close: () => {
-        log.push(`close ${name}`)
-        if (!options.asyncClose) return undefined
-        return Promise.resolve().then(() => {
-          log.push(`closed ${name}`)
-        })
-      },
-    })
+    const lease = (): Lease => {
+      const token = mintOpaqueIdentity<'evidence-staging'>()
+      leaseNames.set(token, name)
+      return {
+        name,
+        reference: {
+          kind: 'evidence-staging',
+          namespace: leaseNamespace,
+          reference: token,
+        },
+        writeText: () => undefined,
+        importTree: () => ({}) as never,
+        putDocument: () => ({ sha256: 'a'.repeat(64), bytes: 0 }),
+        close: () => {
+          log.push(`close ${name}`)
+          if (!options.asyncClose) return undefined
+          return Promise.resolve().then(() => {
+            log.push(`closed ${name}`)
+          })
+        },
+      }
+    }
     return {
       namespace,
       create: () => {
@@ -659,7 +674,8 @@ function runnerFixture(
   outcome: 'ok' | 'failed' | 'throws',
 ): SelectedPipelineEvidenceRunnerPort {
   const answer = async <T>(name: string, input: { readonly staging: unknown }, ok: T) => {
-    log.push(`${name} ${JSON.stringify((input.staging as { reference: unknown }).reference)}`)
+    const token = (input.staging as { readonly reference: object }).reference
+    log.push(`${name} ${JSON.stringify({ lease: leaseNames.get(token) })}`)
     if (outcome === 'throws') throw new Error(`${name}-boom`)
     return outcome === 'ok' ? ok : { ok: false as const, failure: FAILURE }
   }

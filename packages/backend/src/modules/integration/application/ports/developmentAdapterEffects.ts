@@ -2,6 +2,7 @@ import type {
   EvidenceStagingNamespace,
   EvidenceStagingReference,
 } from '@/modules/development-automation/public/types'
+import type { OpaqueIdentity } from '@/platform/contracts/opaqueIdentity'
 
 export type AdapterFailureCategory =
   | 'transient'
@@ -21,14 +22,15 @@ export interface AdapterFailureReceipt {
   readonly evidenceRef: string | null
 }
 
+/** RFC-605: the references are identities minted by the adapter implementation, which keys its state by them. */
 export interface AdapterConfigurationReference {
   readonly kind: 'development-adapter-configuration'
-  readonly reference: object
+  readonly reference: OpaqueIdentity<'development-adapter-configuration'>
 }
 
 export interface AdapterProgramReference {
   readonly kind: 'development-adapter-program'
-  readonly reference: object
+  readonly reference: OpaqueIdentity<'development-adapter-program'>
 }
 
 /** Preparation can return the original closed failure before any execution. */

@@ -5,6 +5,7 @@ import {
   createLocalDevelopmentAdapterEffects,
   type NativeAdapterRunInput,
 } from './local/developmentAdapterProgram'
+import { mintOpaqueIdentity } from '@/platform/contracts/opaqueIdentity'
 export type {
   AdapterFailureCategory,
   AdapterFailureReceipt,
@@ -28,8 +29,15 @@ function prepare(
   input: AdapterRunInput,
   purpose: 'requirement' | 'pipeline' | 'approval',
 ): SelectedAdapterRunInput {
-  const namespace = { kind: 'evidence-staging-namespace' as const, reference: {} }
-  const reference = { kind: 'evidence-staging' as const, namespace, reference: {} }
+  const namespace = {
+    kind: 'evidence-staging-namespace' as const,
+    reference: mintOpaqueIdentity<'evidence-staging-namespace'>(),
+  }
+  const reference = {
+    kind: 'evidence-staging' as const,
+    namespace,
+    reference: mintOpaqueIdentity<'evidence-staging'>(),
+  }
   const native = createLocalDevelopmentAdapterEffects({
     namespace,
     resolveStaging(staging) {

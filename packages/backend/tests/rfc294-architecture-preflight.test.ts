@@ -352,6 +352,8 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   // RFC-491: the native compatibility run (contract tests only) moved to tests/helpers — its source-control pair settled.
 ]
 const PUBLIC_SURFACE_DEBT: readonly string[] = [
+  // RFC-605: the opaque identity references are branded platform tokens (OpaqueIdentity, a designated contract type) and the
+  // task room participant's results no longer carry the committed event reference nobody nudged — three entries settled.
   // RFC-604: the platform logger is a designated contract interface and a callback parameter is part of its method's
   // signature (two detector rules); the function-typed members of inputs became method signatures (RFC-569's form) —
   // runtime-management's material compiler / evidence, source-control's isolation and Git workspace factories and
@@ -366,7 +368,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // and the two frame functions take closed reader / lookup interfaces instead of callbacks — three entries settled.
   // RFC-471: composeSelectedDevelopmentPipelineEvidence is no longer public (its only consumer moved into the module); the
   // same open `object` field of the evidence staging namespace is now first reached through assertEvidenceStagingFactory.
-  'modules/development-automation/application/evidenceStaging.ts#assertEvidenceStagingFactory: unsafe/open type ObjectKeyword',
   // RFC-579: the three development-automation handle contracts RFC-552 surfaced here (DevelopmentConfigIdentityView,
   // DevelopmentConfigOperations, DevelopmentMissionOperations) left the public surface with their routes — three settled.
   // RFC-569: five declarations closed — the repair notices reuse TaskLifecycleAlertNotices, the terminal workspace prune
@@ -378,7 +379,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/identity-access/public/participants.ts#HttpAuthenticationParticipant: unsafe/open type FunctionType',
   'modules/identity-access/public/participants.ts#WebSocketAuthenticationParticipant: unsafe/open type FunctionType',
   'modules/identity-access/public/participants.ts#WebSocketCredential: unsafe/open type ObjectKeyword',
-  'modules/integration/application/ports/developmentPurposeBinding.ts#RequirementAdapterBinding: unsafe/open type ObjectKeyword',
   // RFC-552: the fusion persistence port left knowledge-evolution's public with the maintenance functions (no other module
   // read it); its `Partial` patch is no longer a public deviation.
   'modules/resource-catalog/application/intent/artifactOwners.ts#IntentSkillArtifactOwner: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
@@ -435,7 +435,6 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   // `createTaskTriggerQueries` and the fragment `nonTerminalTaskExists`: bootstrap builds them on the root handle from
   // task-execution's composition and hands them to memory and integration; six entries settled.
   // RFC-434: moved with `TaskRouteOperations` from the folded non-exact `public/taskRoutes` (same debt, exact entrypoint).
-  'modules/task-execution/public/commands.ts#WorkgroupTaskRoomTaskParticipantInTx: forbidden type import @/platform/events/committed/types#CommittedEventRef',
   // RFC-395 II-b O3, plan §6.13: user-accepted same-statement webhook DELETE fragment.
 ]
 // END COMMITTED G3 BASELINES

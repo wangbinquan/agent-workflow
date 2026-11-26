@@ -22,6 +22,7 @@ import { createSelectedPipelineImportAdapter } from '@/modules/development-autom
 import { describeEachProvider } from './helpers/eachProvider'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { held, MemoryPurposeContent, PurposeEffects } from './helpers/developmentPurpose'
+import { mintOpaqueIdentity } from '@/platform/contracts/opaqueIdentity'
 
 const head = 'a'.repeat(40),
   target = 'b'.repeat(40),
@@ -60,7 +61,7 @@ describeEachProvider('RFC-370 published purpose programs and coherent staging', 
         if (configured === undefined) throw new Error('missing selected program configuration')
         const program: AdapterProgramReference = {
           kind: 'development-adapter-program',
-          reference: {},
+          reference: mintOpaqueIdentity(),
         }
         programsByRef.set(program.reference, configured)
         return { ok: true, program }
@@ -72,7 +73,7 @@ describeEachProvider('RFC-370 published purpose programs and coherent staging', 
         expect(this).toBe(binding)
         const configuration: AdapterConfigurationReference = {
           kind: 'development-adapter-configuration',
-          reference: {},
+          reference: mintOpaqueIdentity(),
         }
         configs.set(configuration.reference, configured)
         configurations.push(configuration)

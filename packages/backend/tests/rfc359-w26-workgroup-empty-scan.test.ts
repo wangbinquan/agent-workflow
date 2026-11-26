@@ -44,7 +44,9 @@ import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 // RFC-395 II-b: the captured pre-T source reproduces 05b89c96. Rebaseline only the
 // target task projection, frozen discriminator, and covering-index probe; preserve the inverse and row/byte assertions.
 // M-c: include activated nodeRunReadColumns/table-selection and task definition projection; inverse remains exact.
-const ORIGINAL_SOURCE_HASH = '94cb2ca3af10e30b2f453c9c7256f147195044c07c6c33b3ff592da1da30bbfe'
+// RFC-605: the continue / fail results no longer return the committed event reference (outside the probe; the event is
+// still appended in the same transaction).
+const ORIGINAL_SOURCE_HASH = 'f1b41e62cd32d419487570a8523ce4a76686cd1ebadd68eadd4af5533b0f50d9'
 const SOURCE_PATH = resolve(
   import.meta.dir,
   '../src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',

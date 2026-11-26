@@ -14,6 +14,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { createProviderHttpApplication } from './helpers/providerHttpApplication'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { held, MemoryPurposeContent, PurposeEffects } from './helpers/developmentPurpose'
+import { mintOpaqueIdentity } from '@/platform/contracts/opaqueIdentity'
 
 setDefaultTimeout(60_000)
 
@@ -27,12 +28,15 @@ describeEachProvider('RFC-370 real purpose root content', (harness) => {
     const content = new MemoryPurposeContent()
     const configuration: AdapterConfigurationReference = {
       kind: 'development-adapter-configuration',
-      reference: {},
+      reference: mintOpaqueIdentity(),
     }
     const effects = new PurposeEffects(content.namespace, {
       bind(received) {
         expect(received).toBe(configuration)
-        return { ok: true, program: { kind: 'development-adapter-program', reference: {} } }
+        return {
+          ok: true,
+          program: { kind: 'development-adapter-program', reference: mintOpaqueIdentity() },
+        }
       },
     })
     effects.observeOperation = async (kind, input) => {

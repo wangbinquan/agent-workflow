@@ -8,6 +8,7 @@ import type {
   AdapterProgramReference,
 } from '@/modules/integration/public/participants'
 import { held, MemoryPurposeContent, PurposeEffects } from './helpers/developmentPurpose'
+import { mintOpaqueIdentity } from '@/platform/contracts/opaqueIdentity'
 
 const head = 'a'.repeat(40),
   target = 'b'.repeat(40),
@@ -168,11 +169,11 @@ describe('RFC-370 selected nine operation effects', () => {
         const stage = 'then' in allocation ? await allocation : allocation
         const configuration: AdapterConfigurationReference = {
           kind: 'development-adapter-configuration',
-          reference: {},
+          reference: mintOpaqueIdentity(),
         }
         const program: AdapterProgramReference = {
           kind: 'development-adapter-program',
-          reference: {},
+          reference: mintOpaqueIdentity(),
         }
         const bindEntered = held<void>(),
           bindAck = held<void>(),
@@ -236,7 +237,7 @@ describe('RFC-370 selected nine operation effects', () => {
       stage = 'then' in allocation ? await allocation : allocation
     const configuration: AdapterConfigurationReference = {
       kind: 'development-adapter-configuration',
-      reference: {},
+      reference: mintOpaqueIdentity(),
     }
     const failure = new Error('selected program transport failed')
     let bound = 0
@@ -264,12 +265,15 @@ describe('RFC-370 selected nine operation effects', () => {
         ...input,
         staging: {
           ...stage.reference,
-          namespace: { kind: 'evidence-staging-namespace', reference: {} },
+          namespace: { kind: 'evidence-staging-namespace', reference: mintOpaqueIdentity() },
         },
       }),
     ).rejects.toThrow('development-adapter-staging-namespace-mismatch')
     expect(bound).toBe(1)
-    const program: AdapterProgramReference = { kind: 'development-adapter-program', reference: {} }
+    const program: AdapterProgramReference = {
+      kind: 'development-adapter-program',
+      reference: mintOpaqueIdentity(),
+    }
     effects.programs.bind = async () => {
       throw failure
     }
@@ -286,10 +290,16 @@ describe('RFC-370 selected nine operation effects', () => {
     const allocation = content.staging.create(),
       stage = 'then' in allocation ? await allocation : allocation
     const effects = new PurposeEffects(content.namespace, {
-      bind: () => ({ ok: true, program: { kind: 'development-adapter-program', reference: {} } }),
+      bind: () => ({
+        ok: true,
+        program: { kind: 'development-adapter-program', reference: mintOpaqueIdentity() },
+      }),
     })
     const input = {
-      configuration: { kind: 'development-adapter-configuration' as const, reference: {} },
+      configuration: {
+        kind: 'development-adapter-configuration' as const,
+        reference: mintOpaqueIdentity<'development-adapter-configuration'>(),
+      },
       staging: stage.reference,
       effects,
       operation: samples[0]!.operation,

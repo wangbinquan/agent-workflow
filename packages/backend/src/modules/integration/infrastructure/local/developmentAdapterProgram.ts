@@ -24,6 +24,7 @@ import {
   readStreamCapped,
   reapDetachedGroup,
 } from '@/platform/execution/local/process'
+import { mintOpaqueIdentity } from '@/platform/contracts/opaqueIdentity'
 
 const STDOUT_LIMIT = 256 * 1024
 /** TERM 之后给整组的宽限。 */
@@ -166,7 +167,7 @@ export function createLocalDevelopmentAdapterEffects(deps: {
       }
       const program: AdapterProgramReference = {
         kind: 'development-adapter-program',
-        reference: {},
+        reference: mintOpaqueIdentity(),
       }
       preparedPrograms.set(program.reference, { configuration: input, projectedSecrets })
       return { ok: true, program }
@@ -418,7 +419,7 @@ export function createLocalDevelopmentAdapterEffects(deps: {
     configurationFor(input) {
       const reference: AdapterConfigurationReference = {
         kind: 'development-adapter-configuration',
-        reference: {},
+        reference: mintOpaqueIdentity(),
       }
       configurations.set(reference.reference, input)
       return reference

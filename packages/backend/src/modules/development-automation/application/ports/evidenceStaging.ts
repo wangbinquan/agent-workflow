@@ -1,15 +1,17 @@
+import type { OpaqueIdentity } from '@/platform/contracts/opaqueIdentity'
 import type { EvidenceBudget, EvidenceBundleRecord } from '../../domain/evidence'
 
 /** Content and its producing program share one adapter-owned namespace. */
 export interface EvidenceStagingNamespace {
   readonly kind: 'evidence-staging-namespace'
-  readonly reference: object
+  /** RFC-605: minted by the namespace's implementation, which keys its state by this identity. */
+  readonly reference: OpaqueIdentity<'evidence-staging-namespace'>
 }
 
 export interface EvidenceStagingReference {
   readonly kind: 'evidence-staging'
   readonly namespace: EvidenceStagingNamespace
-  readonly reference: object
+  readonly reference: OpaqueIdentity<'evidence-staging'>
 }
 
 /** A lease retains the same content receiver through writes, adoption and close. */

@@ -10,6 +10,7 @@ import type {
   EvidenceStagingNamespace,
   EvidenceStagingReference,
 } from '../../application/ports/evidenceStaging'
+import { mintOpaqueIdentity } from '@/platform/contracts/opaqueIdentity'
 
 /**
  * RFC-431: a local evidence store opened on first use. The store creates its `blobs/` and `bundles/`
@@ -67,7 +68,7 @@ export function createLocalEvidenceStagingNamespace(
 ): LocalEvidenceStagingNamespace {
   const namespace: EvidenceStagingNamespace = {
     kind: 'evidence-staging-namespace',
-    reference: {},
+    reference: mintOpaqueIdentity(),
   }
   const directories = new WeakMap<object, string>()
   const content = () => (typeof evidence === 'function' ? evidence() : evidence)
@@ -84,7 +85,7 @@ export function createLocalEvidenceStagingNamespace(
       const reference: EvidenceStagingReference = {
         kind: 'evidence-staging',
         namespace,
-        reference: {},
+        reference: mintOpaqueIdentity(),
       }
       directories.set(reference.reference, directory)
       return {

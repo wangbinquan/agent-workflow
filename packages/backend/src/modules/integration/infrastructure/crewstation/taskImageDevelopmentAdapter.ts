@@ -12,6 +12,7 @@ import { createLocalDevelopmentAdapterEffects } from '../local/developmentAdapte
 import { developmentAdapterContentSchema } from '../../domain/developmentAdapterDefinition'
 import type { AdapterProcessObservation } from '../../application/ports/developmentAdapterEffects'
 import { sha256Hex } from '@/platform/contracts/hash'
+import { mintOpaqueIdentity } from '@/platform/contracts/opaqueIdentity'
 
 const text = z.string()
 const operation = z.discriminatedUnion('kind', [
@@ -67,8 +68,15 @@ export async function executeTaskImageDevelopmentAdapter(
   root: string,
 ): Promise<unknown> {
   const input = Request.parse(value)
-  const namespace: EvidenceStagingNamespace = { kind: 'evidence-staging-namespace', reference: {} }
-  const stage: EvidenceStagingReference = { kind: 'evidence-staging', namespace, reference: {} }
+  const namespace: EvidenceStagingNamespace = {
+    kind: 'evidence-staging-namespace',
+    reference: mintOpaqueIdentity(),
+  }
+  const stage: EvidenceStagingReference = {
+    kind: 'evidence-staging',
+    namespace,
+    reference: mintOpaqueIdentity(),
+  }
   const path = input.method === 'run' ? requireWorkPathWithoutSymlinks(input.path, root) : root
   const runRoot =
     input.method === 'run'

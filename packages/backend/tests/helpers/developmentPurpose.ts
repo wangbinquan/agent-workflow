@@ -20,6 +20,7 @@ import type {
   PipelineAdapterEffects,
   ApprovalAdapterEffects,
 } from '@/modules/integration/public/participants'
+import { mintOpaqueIdentity } from '@/platform/contracts/opaqueIdentity'
 
 export const held = <T>() => Promise.withResolvers<T>()
 export const unusedPurposeEffect = (): never => {
@@ -31,7 +32,7 @@ const digest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest(
 export class MemoryPurposeContent {
   readonly namespace: EvidenceStagingNamespace = {
     kind: 'evidence-staging-namespace',
-    reference: {},
+    reference: mintOpaqueIdentity(),
   }
   readonly stages = new Map<object, MemoryPurposeStage>()
   readonly bundles = new Map<string, EvidenceBundleRecord>()
@@ -160,7 +161,11 @@ class MemoryPurposeStage implements EvidenceStagingLease {
   readonly files = new Map<string, string>()
   closed = false
   constructor(readonly content: MemoryPurposeContent) {
-    this.reference = { kind: 'evidence-staging', namespace: content.namespace, reference: {} }
+    this.reference = {
+      kind: 'evidence-staging',
+      namespace: content.namespace,
+      reference: mintOpaqueIdentity(),
+    }
   }
   writeText(input: { readonly relativeName: string; readonly text: string }) {
     this.content.calls.push('write:' + input.relativeName)

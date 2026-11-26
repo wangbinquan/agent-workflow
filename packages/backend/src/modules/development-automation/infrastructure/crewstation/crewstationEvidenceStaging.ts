@@ -7,6 +7,7 @@ import type {
   EvidenceStagingReference,
 } from '../../application/ports/evidenceStaging'
 import { assertEvidenceRelativePath } from './evidenceArtifacts'
+import { mintOpaqueIdentity } from '@/platform/contracts/opaqueIdentity'
 
 /** Content and executable adapters share one selected staging namespace. */
 export function composeCrewStationEvidenceStaging(input: {
@@ -15,7 +16,10 @@ export function composeCrewStationEvidenceStaging(input: {
   readonly reference: (taskId: string, path: string) => string
 }) {
   const taskId = 'development:shared'
-  const namespace: EvidenceStagingNamespace = { kind: 'evidence-staging-namespace', reference: {} }
+  const namespace: EvidenceStagingNamespace = {
+    kind: 'evidence-staging-namespace',
+    reference: mintOpaqueIdentity(),
+  }
   const stages = new WeakMap<
     object,
     { id: string; safe: boolean; retained: boolean; closed: boolean; written: boolean }
@@ -41,7 +45,7 @@ export function composeCrewStationEvidenceStaging(input: {
       const reference: EvidenceStagingReference = {
         kind: 'evidence-staging',
         namespace,
-        reference: {},
+        reference: mintOpaqueIdentity(),
       }
       stages.set(reference.reference, stage)
       await allocate(stage.id)

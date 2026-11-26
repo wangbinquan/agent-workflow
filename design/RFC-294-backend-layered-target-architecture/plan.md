@@ -540,6 +540,9 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 由本会话裁定（用户 2026-11-25 授权）。平台 `Logger` 是指定的平台合同接口（规则一）；方法参数里带类型的回调是方法签名的一部分（规则二）；输入对象里函数类型的
 成员改写为方法签名。`PUBLIC_SURFACE_DEBT` 27 → 19。余下：不透明身份引用 `object` 2 条、`CommittedEventRef` 1 条（结果里的事件引用是给事务属主在提交后发布
 用的，收法另议）、有限键映射类型 1 条、`unknown` DTO 4 条，以及能力 / 凭据 / 身份一族 11 条。
+2026-11-25 [RFC-605](../RFC-605-opaque-identity-handles/proposal.md)（In Progress）：不透明身份引用 2 条改为平台的带品牌令牌 `OpaqueIdentity`（指定的平台
+合同类型）；任务房间结果里的 `CommittedEventRef` 1 条去掉（唯一的事务属主从未读它，事件由持久投递送达）。`PUBLIC_SURFACE_DEBT` 19 → 16。余下：有限键映射
+类型 1 条、`unknown` DTO 4 条，以及能力 / 凭据 / 身份一族 11 条。
 
 ### S10 `composition/` 只装配：全模块收口
 

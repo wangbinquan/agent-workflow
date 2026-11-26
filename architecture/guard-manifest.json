@@ -1987,7 +1987,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "id": "rfc294-architecture-preflight",
-      "lines": 530,
+      "lines": 529,
       "mechanism": "ast",
       "minCorpusFiles": 120,
       "negativeFixture": true,
@@ -3812,7 +3812,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc508-delivery-pipeline-evidence-mr-facts-out-of-composition-boundary.test.ts",
       "id": "rfc508-delivery-pipeline-evidence-mr-facts-out-of-composition-boundary",
-      "lines": 967,
+      "lines": 983,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
       "negativeFixture": true,
@@ -4931,6 +4931,18 @@
       "lines": 135,
       "mechanism": "ast",
       "minCorpusFiles": null,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc605-opaque-identity-handles-boundary.test.ts",
+      "id": "rfc605-opaque-identity-handles-boundary",
+      "lines": 177,
+      "mechanism": "ast",
+      "minCorpusFiles": 300,
       "negativeFixture": true,
       "runner": "bun"
     }

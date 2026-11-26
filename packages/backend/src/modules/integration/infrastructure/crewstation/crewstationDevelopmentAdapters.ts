@@ -20,6 +20,7 @@ import type {
   ApprovalAdapterEffects,
 } from '../../application/ports/developmentAdapterEffects'
 import { sha256Hex } from '@/platform/contracts/hash'
+import { mintOpaqueIdentity } from '@/platform/contracts/opaqueIdentity'
 
 export function composeCrewStationDevelopmentAdapters(input: {
   readonly helper: WorkspaceHelper
@@ -37,7 +38,7 @@ export function composeCrewStationDevelopmentAdapters(input: {
   const configurationFor: AdapterConfigurationBinding['configurationFor'] = (content) => {
     const reference: AdapterConfigurationReference = {
       kind: 'development-adapter-configuration',
-      reference: {},
+      reference: mintOpaqueIdentity(),
     }
     configurations.set(reference.reference, developmentAdapterContentSchema.parse(content))
     return reference
@@ -55,7 +56,7 @@ export function composeCrewStationDevelopmentAdapters(input: {
       if (!result.ok) return result
       const program: AdapterProgramReference = {
         kind: 'development-adapter-program',
-        reference: {},
+        reference: mintOpaqueIdentity(),
       }
       prepared.set(program.reference, content)
       return { ok: true, program }
