@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import type { ExecutionContractResourcePort } from '@/modules/execution-contract/composition/required-ports'
 import type { ExecutionContractRegistration } from '@/modules/execution-contract/public/types'
-import { developmentExecutionContractRegistrations } from '@/modules/development-automation/composition/employeeTypePackage'
+import { developmentExecutionContractRegistrations } from '@/modules/development-automation/application/employeeTypePackage'
 
 const registration = developmentExecutionContractRegistrations.find(
   (candidate) => candidate.contractRef.contractId === 'development.analyze-implement',

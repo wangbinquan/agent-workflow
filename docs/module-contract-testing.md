@@ -166,6 +166,11 @@ context 夹具；两个 React Query hook 测试没有在 render 中订阅被断�
 首次 backend 类型检查因默认 4 GB heap 耗尽未完成；采用 CI 的 6 GB 配置后修正测试类型问题并完整通过。
 GitHub Actions 的全仓结果不计入上述本地数字，发布后应按具体提交 SHA 查询。
 
+首个发布提交 `1ebe493f9` 的主 CI 又定位到一处新增测试的旧路径导入：execution-contract 用例从 composition
+转出位置取 development 注册表，触发 RFC-494 依赖边界守卫。现已改从 application 拥有者位置导入，
+未改变守卫、生产行为或测试断言；按 CI 原 seed 58771 复验该合同文件与 RFC-494 守卫，12 条全部通过。
+修正后的全仓结论应查询后续提交，不能把首轮 CI 描述为全绿。
+
 全部用例编写完成后集中执行。后端持久化用例使用现有 `describeEachProvider`；默认要求 SQLite 和真实 PostgreSQL，
 不能把缺少 PostgreSQL 连接写成静默跳过。本地确需只跑 SQLite 时，必须明确记录 `AW_TEST_PROVIDERS=sqlite`。
 
