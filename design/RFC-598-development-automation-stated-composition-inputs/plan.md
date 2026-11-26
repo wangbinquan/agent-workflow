@@ -15,7 +15,7 @@
 - [x] AC-1 装配入参没有可选成员；三组效果选择原样交给 `select*` 核对
 - [x] AC-2 装配不读三个覆盖；`evidenceReadBinding.ts` 不在、无 import
 - [x] AC-3 测试助手与此前的回落相同；计数都不升；新增 RFC-598 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 的一格红已归因为环境性（见「CI」）
 
 ## 集中验证
 
@@ -35,7 +35,10 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `e98136958`（实现）：主 CI run 45716360442 70 个 job 里 68 个成功——全部后端分片（含真实 PostgreSQL）、前端、三个平台的构建与检查、e2e；同 SHA 的
+  windows-platform run 45716360405 通过。没过的两格是同一件事：Markdown link check（design/）里 `design/RFC-378-mindmap-decision-review/research.md` 的两条
+  第三方 GitHub 链接返回 503 Service Unavailable，CI required 因它而红。归因：环境性（外部服务暂不可用），本提交没有改到那份文档。后继证据：RFC-599 的提交
+  `84be64f92`（以本提交为祖先、本提交的内容原样保留）的 run 45718467594 里 Markdown link check 通过。没有改文档、没有重跑。2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

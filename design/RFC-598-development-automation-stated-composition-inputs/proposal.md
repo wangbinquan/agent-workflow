@@ -1,6 +1,6 @@
 # RFC-598 development-automation 的装配入参全部显式给出（RFC-294 S12 余项：装配不再有缺省）
 
-- **状态**：In Progress（2026-11-25）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话自行裁定落位（见
+- **状态**：Done（2026-11-25，落地 `e98136958`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话自行裁定落位（见
   design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) S12 第 1 项（装配的回落改为必填注入，单机默认值只留在 standalone
   profile）与 RFC-431 的“部署选择显式给出”；接 [RFC-597](../RFC-597-development-automation-required-providers/proposal.md) design §5 留下的一项。

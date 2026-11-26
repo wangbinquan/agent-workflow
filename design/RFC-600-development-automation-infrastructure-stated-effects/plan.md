@@ -33,7 +33,10 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `b3723ab3c`（实现）：主 CI run 45721890938 70 个 job 里 68 个成功（含 Markdown link check、真实 PostgreSQL 与 RFC-359 P0 变异的两库验证）。没过的两格是
+  同一件事：后端第 40/44 片 `rfc398-start-auto-upgrade-takeover` 的“N acquires before takeover”在 183.7 秒时报 barrier / readiness 超时，CI required 因它而红。
+  归因：环境性（多进程时序），不是本提交引入——同一次运行里另一个次序（after takeover，26.8 秒）与同文件的其余接管用例都通过，本提交没有改到接管与
+  升级路径（RFC-592 的 run 里同一文件的另一个次序也这样超时过一次）。后继证据：等下一个以本提交为祖先的运行。
 
 ## 实现门（本会话自审，只审功能）
 

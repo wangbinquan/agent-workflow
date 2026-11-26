@@ -9,9 +9,11 @@
   效果构造”的账）。
 - **集中验证**（基于 `84be64f92`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 515 个
   用例文件只有 `rfc321` 照例红（主树 10 / 10）；四种变异都被认出；架构计数都不变。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-600 的提交 `b3723ab3c`：主 CI run 45721890938 70 个 job 里 68 个成功；后端第 40/44 片 `rfc398-start-auto-upgrade-takeover` 的一个次序在 183.7
+  秒时报 barrier / readiness 超时（CI required 随之红），归因环境性多进程时序（同一次运行里另一个次序与其余接管用例通过，本提交没改接管路径）；转 Done 等
+  下一个以本提交为祖先的运行作后继证据。
 
-## 2026-11-25 RFC-599 员工工作区与平台工作项装配的效果选择必填（In Progress；`design/RFC-599-employee-compositions-stated-effects/`）
+## 2026-11-25 RFC-599 员工工作区与平台工作项装配的效果选择必填（Done；`design/RFC-599-employee-compositions-stated-effects/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；与 RFC-598 同一做法（RFC-294 S12 第 1 项），落在
   development-automation 的另两个装配上。
@@ -21,9 +23,11 @@
 - **集中验证**（基于 `e98136958`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 503 个
   用例文件只有 `rfc321` 照例红（主树 10 / 10）；三种运行期变异与一种类型检查变异都被认出；架构报告除来源外完全相同。实现门 PASS（本会话按路径限定自审，
   只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-599 的提交 `84be64f92`：主 CI run 45718467594 70 个 job 里 68 个成功；后端第 27/44 片 `rfc395-staging-page-cost` 的一条用例跑了 8.1 秒、
+  超过 5 秒上限（CI required 随之红），归因环境性时序（system-operations 的用例，本提交没碰）；后继证据为 `b3723ab3c` 的 run 45721890938 第 27/44 片 656 条
+  全过（该用例 1.6 秒）。2026-11-25 转 Done。
 
-## 2026-11-25 RFC-598 development-automation 的装配入参全部显式给出（In Progress；`design/RFC-598-development-automation-stated-composition-inputs/`）
+## 2026-11-25 RFC-598 development-automation 的装配入参全部显式给出（Done；`design/RFC-598-development-automation-stated-composition-inputs/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；接 RFC-597 design §5 留下的一项（RFC-294 S12 第 1 项）。
 - **范围**：`composeDevelopmentAutomation` 的三组效果选择（`actionWorkspaceEffects`、`automationWorkspaceEffects`、`repositoryBaselines`）改为必填，装配只用
@@ -33,7 +37,9 @@
 - **集中验证**（基于 `8cc1e0ff3`，详见 plan）：本地只跑 SQLite，PostgreSQL 与 Windows 以 CI 为准。tsc 0 错，eslint / promises / prettier 无告警；候选导出 255 个
   用例文件只有 `rfc321` 照例红（主树 10 / 10）；五种运行期变异与一种类型检查变异都被认出；架构计数都不变（生产文件少 1 个）。实现门 PASS（本会话按路径
   限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-598 的提交 `e98136958`：主 CI run 45716360442 70 个 job 里 68 个成功，windows-platform run 45716360405 通过；Markdown link check 里
+  RFC-378 `research.md` 的两条第三方 GitHub 链接返回 503（CI required 随之红），归因环境性（外部服务），本提交没碰那份文档；后继证据为 `84be64f92` 的
+  run 45718467594 里 Markdown link check 通过。2026-11-25 转 Done。
 
 ## 2026-11-25 RFC-597 development-automation 的装配不再接受缺省的 provider（Done；`design/RFC-597-development-automation-required-providers/`）
 

@@ -824,10 +824,10 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   分支，F-H2-2 那类漏接在编译期就被挡下；用例不用的 provider 给调用即抛错的测试替身（查出 `rfc310-pr5-e2e-java` 一处静默落到
   `collector-not-wired` 的用例）。`ReconcilerPorts` 按用例拆分、删去 `*-not-wired` 分支是下一步（直接构造端口的 19 个 RFC-310 用例与三个夹具 helper
   随之改）；装配入参其余 6 个可选成员（三组工作区与基线效果、三个证据读取覆盖）按 S12 的做法另立。
-  2026-11-25 [RFC-598](../RFC-598-development-automation-stated-composition-inputs/proposal.md)（In Progress）：这 6 个收口——三组效果选择必填，
+  2026-11-25 [RFC-598](../RFC-598-development-automation-stated-composition-inputs/proposal.md)（Done，`e98136958`）：这 6 个收口——三组效果选择必填，
   三个覆盖（RFC-429 起无人使用）删去，`composition/evidenceReadBinding.ts` 删去；装配入参从此没有可选成员。`select*` 助手对 infrastructure 其他调用方的
   本机回落另立。
-  2026-11-25 [RFC-599](../RFC-599-employee-compositions-stated-effects/proposal.md)（In Progress）：员工工作区与平台工作项两个装配的效果选择同样改为
+  2026-11-25 [RFC-599](../RFC-599-employee-compositions-stated-effects/proposal.md)（Done，`84be64f92`）：员工工作区与平台工作项两个装配的效果选择同样改为
   必填；它们继承来的可选 provider（`graphDelivery`、`approvalGateway`、`pipelineEvidence`）与 RFC-597 同类，另立。
   2026-11-25 [RFC-600](../RFC-600-development-automation-infrastructure-stated-effects/proposal.md)（In Progress）：infrastructure 的选择核对与收工厂的
   包装不再在没给时造本机实现，生产代码里调用本机效果构造的只剩 standalone profile、本机一族与托管任务镜像里的执行器（S12 的这条原则在

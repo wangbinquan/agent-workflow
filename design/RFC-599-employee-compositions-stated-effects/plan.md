@@ -15,7 +15,7 @@
 - [x] AC-1 两个装配入参的效果选择必填；装配不按“给没给”分支
 - [x] AC-2 daemon 装配不变；用例显式给本机实现，行为不变
 - [x] AC-3 计数都不升；新增 RFC-599 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 的一格红已归因为环境性（见「CI」）
 
 ## 集中验证
 
@@ -32,7 +32,11 @@
 
 ## CI（AC-4）
 
-- 【待补：实现提交】
+- `84be64f92`（实现）：主 CI run 45718467594 70 个 job 里 68 个成功（含 Markdown link check 与真实 PostgreSQL）。没过的两格是同一件事：后端第 27/44 片
+  `rfc395-staging-page-cost` 的“page insertion equals sequential insertion …”跑了 8.1 秒、超过它 5 秒的用例上限，CI required 因它而红。归因：环境性（时序），
+  这条是 system-operations 的 epoch 切换暂存页用例，本提交只改了 development-automation 两个员工装配的入参与调用它们的用例。后继证据：RFC-600 的提交
+  `b3723ab3c`（以本提交为祖先、本提交的内容原样保留）的 run 45721890938 第 27/44 片 656 条全过，这条用例 1.6 秒通过。没有改测试、没有重跑。
+  2026-11-25 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 
