@@ -15,7 +15,7 @@
 - [x] AC-1 旧提交文件不在，绑定器只在 application，模块根从 application 转出，application 文件不越层
 - [x] AC-2 没有文件再取旧位置
 - [x] AC-3 计数 4 → 0；新增 RFC-622 用例并登记
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿
 
 ## 集中验证
 
@@ -31,7 +31,7 @@
 
 ## CI（AC-4）
 
-待推送。
+- 实现提交 `ade7e1dc1`：CI run 45893307751 全绿（70 / 70）。
 
 ## 实现门（本会话自审，只审功能）
 

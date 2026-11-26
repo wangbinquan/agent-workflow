@@ -1,4 +1,4 @@
-## 2026-11-26 RFC-622 source-control 的候选与提交绑定器迁入 application（In Progress；`design/RFC-622-source-control-binders-into-application/`）
+## 2026-11-26 RFC-622 source-control 的候选与提交绑定器迁入 application（Done；`design/RFC-622-source-control-binders-into-application/`）
 
 - **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S10，
   `composition-control-flow-source-control` 余 4 行，全在两个绑定文件里。
@@ -8,9 +8,9 @@
   一条更正（同步 guard-manifest 时不改回别人的条目，按 origin/main + 本次条目提交）。
 - **集中验证**：候选导出（HEAD `72d97076b` + 本 RFC 路径）上 `tsc` / eslint / prettier 全过；用例第一轮 445 个文件里 `rfc511` 的组合文件清单需按迁移后的形状更新，
   改后第二轮全过（`rfc321` 环境性）；架构报告只有 `composition-control-flow-source-control` 4 → 0；变异 4 / 4 被抓。guard-manifest 按 `origin/main` + 本 RFC 的一条提交。
-- **CI 侧**：待推送。
+- **CI 侧**：实现提交 `ade7e1dc1` 的 CI run 45893307751 全绿（70 / 70）。RFC-622 Done。
 
-## 2026-11-26 RFC-621 `auth/` 的两个中性原语离开 legacy 目录（In Progress；`design/RFC-621-system-identity-and-token-file/`）
+## 2026-11-26 RFC-621 `auth/` 的两个中性原语离开 legacy 目录（Done；`design/RFC-621-system-identity-and-token-file/`）
 
 - **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W9-D，
   接 RFC-620。
@@ -20,9 +20,9 @@
 - **集中验证**：候选导出（HEAD `3fc01a40a` + 本 RFC 路径）上 backend / shared 的 `tsc`、eslint、prettier 全过；shared 2,362 条用例全过；backend 第一轮 799 个文件里
   RFC-621 用例查出 identity-access 自己声明的三份 `SYSTEM_USER_ID`，改取 shared 后第二轮 316 个文件全过（`rfc167` 时序敏感、`rfc321` 环境性，与本 RFC 无关）；
   架构报告只有 `legacy-horizontal-files` 44 → 42；变异 4 / 4 被抓。三个带着 RFC-616 在制改动的文件按 `origin/main` + 本 RFC 的行提交。
-- **CI 侧**：待推送。
+- **CI 侧**：实现提交 `72d97076b` 的 CI run 45890130833 全绿（70 / 70）。RFC-621 Done。
 
-## 2026-11-26 RFC-620 静态加密盒归 platform（In Progress；`design/RFC-620-secret-box-into-platform/`）
+## 2026-11-26 RFC-620 静态加密盒归 platform（Done；`design/RFC-620-secret-box-into-platform/`）
 
 - **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W9-D，
   接 RFC-619。
@@ -32,9 +32,9 @@
   owner 改为 platform。`legacy-horizontal-files` 45 → 44。新增 RFC-620 用例。
 - **集中验证**：候选导出（HEAD `2b4eee088` + 本 RFC 路径）上 `tsc` / eslint / prettier 全过；798 个用例除 `rfc167`（负载 ~85 时与对照导出同样红，时序敏感、与本 RFC 无关）
   与 `rfc321`（导出无发布历史）外全过；架构报告只有 `legacy-horizontal-files` 45 → 44；变异 4 / 4 被抓。五个带着 RFC-616 在制改动的读者文件按 `origin/main` + 本 RFC 的一行 import 提交。
-- **CI 侧**：待推送。
+- **CI 侧**：实现提交 `3fc01a40a` 的 CI run 45886498851 全绿（70 / 70）。RFC-620 Done。
 
-## 2026-11-26 RFC-619 util/ 清空（In Progress；`design/RFC-619-util-emptied/`）
+## 2026-11-26 RFC-619 util/ 清空（Done；`design/RFC-619-util-emptied/`）
 
 - **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W9-D，
   接 RFC-617，`util/` 最后三个文件归位。
@@ -47,7 +47,7 @@
   放进 identity-access 会成为 legacy 取模块内部的新边（`rfc317` R1、`rfc305`、`rfc439` 红，改放 `routes/`）与 `rfc575` 读已删目录抛错，均已修；`rfc167` 一条在负载 ~70 时
   红、对照导出同样红、负载回落后通过，与本 RFC 无关；第二轮 483 个文件除 `rfc321`（导出无发布历史）外全过；架构报告只有 `legacy-horizontal-files` 47 → 45；变异 4 / 4 被抓。
   RFC-616 在验证后改了共享工作树里的 `bootstrap/daemonApplication.ts`，本提交按 `origin/main` 上的该文件 + 本 RFC 的一行 import 提交，不带入其在制品。
-- **CI 侧**：待推送。
+- **CI 侧**：实现提交 `2b4eee088` 的 CI run 45884250904 全绿（70 / 70）。RFC-619 Done。
 
 ## 2026-11-26 RFC-618 四个不可达生产文件出生产树（Done；`design/RFC-618-unreachable-production-files-out-of-production-tree/`）
 

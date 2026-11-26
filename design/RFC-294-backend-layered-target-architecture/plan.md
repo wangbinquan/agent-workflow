@@ -611,7 +611,7 @@ PostgreSQL 事务的 owner-native 合同迁入 resource-catalog 的 application 
 >
 > 后继：RFC-370 余项第二步 [RFC-519](../RFC-519-hosted-implementations-out-of-composition-2/proposal.md)（Done，2026-11-19，`8d6797ece`）：余下 4 个托管文件拆开装配与实现，RFC-515 门的例外清单清零。**S10 关闭**：全部模块的 `composition/` 与模块根 `composition.ts` 只装配（RFC-515 门无例外），`composition-forbidden-import-files` 为 0；组合层里余下的是装配期的选择分支，由 `composition-control-flow-*` 上限按实测锁住，其去处随 S12（装配余项）。
 >
-> 后继：[RFC-622](../RFC-622-source-control-binders-into-application/proposal.md)（In Progress，2026-11-26）：source-control 的候选与提交绑定器（选托管操作宿主还是本地步骤、工作区卷还是本进程）属用例编排，原样迁入 application；`composition-control-flow-source-control` 4 → 0。余下 system-operations 2（与发布升级预载钩子相连）、integration 1、resource-catalog 1、task-execution 9 各自另立。
+> 后继：[RFC-622](../RFC-622-source-control-binders-into-application/proposal.md)（Done，2026-11-26，`ade7e1dc1`）：source-control 的候选与提交绑定器（选托管操作宿主还是本地步骤、工作区卷还是本进程）属用例编排，原样迁入 application；`composition-control-flow-source-control` 4 → 0。余下 system-operations 2（与发布升级预载钩子相连）、integration 1、resource-catalog 1、task-execution 9 各自另立。
 
 - **目标**：把 S6 在 task-execution 上达成的状态推广到全部模块，使 design §14 “composition 内实现 = 0”有覆盖全仓的门
   （proposal D16，review R11 / F13）。
@@ -1118,11 +1118,11 @@ provenance 按 RFC-395 design §5.1 不建列；先后判据只用 `seq`（RFC-3
 
 2026-11-26 [RFC-617](../RFC-617-util-primitives-into-platform/proposal.md)（Done，`9f1b2535f` + `a18f85368`）：`util/` 的六个通用原语（`redact`、`safePath`、`fileTrust`、`win32Acl`、`gitHardening`、`gitRef`）原样归 platform，`legacy-horizontal-files` 53 → 47；`util/` 只剩 git 凭据助手（独立二进制入口）与它的租约、OIDC 响应助手。`auth/actor` 的去向是 identity-access 的 `AuthenticatedAuthoritySnapshot`（design §270），属权限传递语义，不按搬文件处理。
 
-2026-11-26 [RFC-619](../RFC-619-util-emptied/proposal.md)（In Progress）：`util/` 清空——git 凭据租约与单二进制凭据助手入口归 `platform/execution/local`，OIDC 回调失败页移到唯一读者 `routes/oidc-auth.ts` 旁边、随 OIDC 路由一族再迁；`legacy-horizontal-files` 47 → 45。legacy 横向目录余 `auth/`、`routes/`、`mcp/`、`ws/` 与 `services/repoCredentials.ts`，都与认证主体或凭据流相连，按 plan 只审功能地分族另立。
+2026-11-26 [RFC-619](../RFC-619-util-emptied/proposal.md)（Done，`2b4eee088`）：`util/` 清空——git 凭据租约与单二进制凭据助手入口归 `platform/execution/local`，OIDC 回调失败页移到唯一读者 `routes/oidc-auth.ts` 旁边、随 OIDC 路由一族再迁；`legacy-horizontal-files` 47 → 45。legacy 横向目录余 `auth/`、`routes/`、`mcp/`、`ws/` 与 `services/repoCredentials.ts`，都与认证主体或凭据流相连，按 plan 只审功能地分族另立。
 
-2026-11-26 [RFC-620](../RFC-620-secret-box-into-platform/proposal.md)（In Progress）：`auth/secretBox.ts` 拆成 `platform/contracts/secretBox.ts`（接口）与 `platform/crypto/secretBox.ts`（实现与密钥文件）；`legacy-horizontal-files` 45 → 44。`auth/` 里其余的中性原语与认证主体一族另立。
+2026-11-26 [RFC-620](../RFC-620-secret-box-into-platform/proposal.md)（Done，`3fc01a40a`）：`auth/secretBox.ts` 拆成 `platform/contracts/secretBox.ts`（接口）与 `platform/crypto/secretBox.ts`（实现与密钥文件）；`legacy-horizontal-files` 45 → 44。`auth/` 里其余的中性原语与认证主体一族另立。
 
-2026-11-26 [RFC-621](../RFC-621-system-identity-and-token-file/proposal.md)（In Progress）：`SYSTEM_USER_ID` 归 shared、守护进程令牌文件归 `platform/crypto`；`legacy-horizontal-files` 44 → 42。
+2026-11-26 [RFC-621](../RFC-621-system-identity-and-token-file/proposal.md)（Done，`72d97076b`）：`SYSTEM_USER_ID` 归 shared、守护进程令牌文件归 `platform/crypto`；`legacy-horizontal-files` 44 → 42。
 
 迁入时按内容分层落位（proposal C10）：用例编排与规则判定进 application / domain，持久化与外部 effect 进 infrastructure；不再把
 用例文件原样停放到 infrastructure，确需原样迁入的在该 RFC 的 design 里列明理由并呈用户确认。RFC-476（第二十三步）
