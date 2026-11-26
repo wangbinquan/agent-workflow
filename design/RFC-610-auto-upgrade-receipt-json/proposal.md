@@ -1,6 +1,6 @@
 # RFC-610 自动升级结论的回执取发布时的 JSON（RFC-294 S9 余项：public 类型偏差 12 → 11）
 
-- **状态**：In Progress（2026-11-26）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
+- **状态**：Done（2026-11-26，落地 `0fdb118d8`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
   收法由本会话裁定（见 design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) S9（public 类型污染清单为空，design §14）；接
   [RFC-606](../RFC-606-runtime-contract-json-and-closed-mapped-types/proposal.md) 的平台 `JsonValue` / `JsonObject`。

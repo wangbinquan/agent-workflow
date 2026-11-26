@@ -16,7 +16,7 @@
 - [x] AC-1 合同在 application 端口，经 required-ports 交出
 - [x] AC-2 归属方只经指定 adapter 取合同，事务类型取自平台
 - [x] AC-3 跨 context 内部文件对为 2，三处清单同步；新增 RFC-609 用例并登记
-- [ ] AC-4 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-4 受影响用例全部通过；exact SHA CI 全绿（后继证据，见下）
 
 ## 集中验证
 
@@ -41,7 +41,7 @@
 
 - `8cf8ee11d`（实现）：exact SHA 主 CI run 45791885352 结论 failure，红在 shard 20 一格：`rfc363-task-preparation-admission` 的 SQLite 一支
   “synchronous admission rollback preserves the failed Task transaction and durably compensates Git”挂满 60 秒超时（同一格里它的 PostgreSQL 一支 545 ms
-  通过，紧随其后的一条也慢到 5 秒）。这份用例自 RFC-527 起没改过，本 RFC 只移动类型声明，未重跑。后继证据待包含本提交的 run 全绿。
+  通过，紧随其后的一条也慢到 5 秒）。这份用例自 RFC-527 起没改过，本 RFC 只移动类型声明，未重跑。后继证据：包含本提交的 `6c92e2be2`（RFC-615）run 45846353277 第 2 次尝试 70 / 70 全绿（第 1 次尝试只有 macOS e2e 3/4 一格在 36 分钟后被取消、日志已不可取，没有失败的用例作业）。2026-11-26 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

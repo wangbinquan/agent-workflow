@@ -13,9 +13,10 @@
   `tests/rfc401-epoch2-history-bridge.test.ts` 的“the additive bridge carries every older version to the head across whole new tables”对每个 epoch-2 历史版本
   建一座桥，RFC-602 的 `c37b675ff`（2026-11-25）把 `db/schema-history/epoch2/` 从 3 个版本加到 13 个之后，在 CI 上 5.1～5.5 秒，超过 5 秒上限（run 45778901981、
   45795931974、45799714886 三轮超时，早些的绿 run 里通过）。按 CLAUDE.md 文首第 4 条，属引入方的问题，本会话保留证据、未代改。
-- **后继**：RFC-609、610、612、613、614 的 Done 待包含它们的一轮主 CI 全绿。
+- **后继**：另一会话的 RFC-615（`63c09bf8a` / `6c92e2be2`）去掉了历史行桥的重复计算、原用例原预算通过；`6c92e2be2` 的 run 45846353277（第 2 次尝试，
+  第 1 次只有 macOS e2e 3/4 一格被取消）70 / 70 全绿，RFC-609、610、612、613、614 据此转 Done。
 
-## 2026-11-26 RFC-614 收上传的 launch 把 upload admission 当必填端口，子任务委派是不收上传的另一个用例（In Progress；`design/RFC-614-launch-upload-admission-required/`）
+## 2026-11-26 RFC-614 收上传的 launch 把 upload admission 当必填端口，子任务委派是不收上传的另一个用例（Done；`design/RFC-614-launch-upload-admission-required/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W4-E8
   （按用例、非可选的 required 端口），RFC-607 design §5 记下的余项。
@@ -25,9 +26,9 @@
 - **集中验证**（基于 `0339842ab`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 390 个用例文件只有 `rfc321` 照例红；4 种变异都被认出；
   架构报告有门禁的计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-614 的提交 `5c7a72129`：exact SHA 主 CI run 45814242489 红在 shard 28（`rfc395-staging-page-cost` 一条 5 秒超时，用例自 10-26 起未改），
-  与本 RFC 无关、未重跑。后继证据待包含本提交的 run 全绿。
+  与本 RFC 无关、未重跑。后继证据：包含本提交的 `6c92e2be2`（RFC-615）run 45846353277 第 2 次尝试 70 / 70 全绿；2026-11-26 转 Done。
 
-## 2026-11-26 RFC-613 provider 运行期的驱动绑定必填，旧的逐次驱动直绑只供用例（In Progress；`design/RFC-613-task-run-binding-required/`）
+## 2026-11-26 RFC-613 provider 运行期的驱动绑定必填，旧的逐次驱动直绑只供用例（Done；`design/RFC-613-task-run-binding-required/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S12
   第 1 项（生产代码不为用例留默认分支）。bootstrap 一直给 provider 运行期的 `taskRunBinding`，没给时的旧直绑分支只有用例在走。
@@ -38,9 +39,9 @@
   那次绑定核对的实参），改钉值后复验通过；`rfc321` 照例红。4 种变异都被认出；架构报告除该计数 10 → 9 与文件导出外有门禁的计数不变。实现门 PASS
   （本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-613 的提交 `0339842ab`：exact SHA 主 CI run 45803731041 后端全绿，红在两格 e2e（Windows 2/4 的 RFC-023 澄清主路径、macOS 1/4 的 opencode
-  运行时超时一族，都是等任务状态超时）；本 RFC 不改生产行为，原因未查实、未重跑。后继证据待包含本提交的 run 全绿。
+  运行时超时一族，都是等任务状态超时）；本 RFC 不改生产行为，原因未查实、未重跑。后继证据：包含本提交的 `6c92e2be2`（RFC-615）run 45846353277 第 2 次尝试 70 / 70 全绿；2026-11-26 转 Done。
 
-## 2026-11-26 RFC-612 source-control 组合层里余下的两份实现归 infrastructure（In Progress；`design/RFC-612-source-control-composition-implementations/`）
+## 2026-11-26 RFC-612 source-control 组合层里余下的两份实现归 infrastructure（Done；`design/RFC-612-source-control-composition-implementations/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S10
   （C1：composition 只构造与注入），source-control 的 `composition/` 余 6 行控制流，其中 2 行在每次调用都走的实现里。
@@ -50,14 +51,14 @@
 - **集中验证**（基于 `b90d7ee7c`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 559 个用例文件只有 `rfc321` 照例红；4 种变异都被认出；
   架构报告除该计数 6 → 4 与文件位置外相同。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-612 的提交 `1d4faeac5`：exact SHA 主 CI run 45799714886 红在 shard 41（RFC-401 历史行桥 5 秒超时，见下面的注记），与本 RFC 无关、未重跑；
-  Windows 平台与快速反馈全绿。后继证据待包含本提交的 run 全绿。
+  Windows 平台与快速反馈全绿。后继证据：包含本提交的 `6c92e2be2`（RFC-615）run 45846353277 第 2 次尝试 70 / 70 全绿；2026-11-26 转 Done。
 
 ## 2026-11-26 RFC-611 CI 吞吐与稳定性（In Progress；`design/RFC-611-ci-throughput-and-stability/`）
 
 - 用户已授权按本会话 CI 诊断建议实施。保留每个 SHA 完整主 CI、原测试/provider/平台覆盖和预算；实施两 lane 排队、静态快速反馈、时长分片刷新、E2E 重平衡、升级测试原子 barrier 与失败诊断、构建成功下游条件、链接检查分级。
 - 实现与回归用例已全部完成并发布为 `6c6185496`。集中验证：89 个单元/拓扑测试有通过证据，真实 Playwright 11 片发现集合完整且互斥，44 份后端原始计时覆盖 3081 文件；升级实进程回归 13 项通过、1 项因本机无 PG URL 未验证。后端完整类型检查及独立实现复核 PASS。完整 CI run `45796122638`、快速反馈 run `45796122676` 已触发，发布时排队中；产出：Codex。
 
-## 2026-11-26 RFC-610 自动升级结论的回执取发布时的 JSON（In Progress；`design/RFC-610-auto-upgrade-receipt-json/`）
+## 2026-11-26 RFC-610 自动升级结论的回执取发布时的 JSON（Done；`design/RFC-610-auto-upgrade-receipt-json/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S9
   （public 类型污染清单为空），`PUBLIC_SURFACE_DEBT` 余 12 条，能力 / 凭据 / 身份一族之外只剩 `AutoUpgradeConclusion` 的回执。
@@ -67,9 +68,9 @@
 - **集中验证**（基于 `8cf8ee11d`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 302 个用例文件全部通过；4 种变异都被认出；
   架构报告除 `public-surface-deviations` 12 → 11 外有门禁的计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-610 的提交 `0fdb118d8`：exact SHA 主 CI run 45795931974 红在 shard 43（RFC-026 澄清 inline 模式的 PostgreSQL 一支 15 秒超时）与 shard 41
-  （RFC-401 历史行桥 5 秒超时），与本 RFC 无关、未重跑；后继证据待包含本提交的 run 全绿。
+  （RFC-401 历史行桥 5 秒超时），与本 RFC 无关、未重跑；后继证据：包含本提交的 `6c92e2be2`（RFC-615）run 45846353277 第 2 次尝试 70 / 70 全绿；2026-11-26 转 Done。
 
-## 2026-11-26 RFC-609 能力模板的 PostgreSQL 归属方经指定 adapter 取资源目录的端口合同（In Progress；`design/RFC-609-capability-template-owner-designated-adapter/`）
+## 2026-11-26 RFC-609 能力模板的 PostgreSQL 归属方经指定 adapter 取资源目录的端口合同（Done；`design/RFC-609-capability-template-owner-designated-adapter/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S9
   （跨 context 内部 import 为 0），全仓跨 context 内部文件对余 4 条，其中 2 条是 code-capability 的能力模板归属方直接 import resource-catalog
@@ -84,7 +85,7 @@
   全部通过（`rfc321` 照例红，`rfc167` 并行下超时、单跑通过）。5 种变异都被认出；架构报告除该计数 4 → 2 与新增两个文件外相同。实现门 PASS
   （本会话按路径限定自审，只审功能）。
 - **CI 侧**：RFC-609 的提交 `8cf8ee11d`：exact SHA 主 CI run 45791885352 红在 shard 20 一格（`rfc363-task-preparation-admission` 的 SQLite 一支挂满 60 秒，
-  PostgreSQL 一支 545 ms 通过），与本 RFC 无关、未重跑；后继证据待包含本提交的 run 全绿。
+  PostgreSQL 一支 545 ms 通过），与本 RFC 无关、未重跑；后继证据：包含本提交的 `6c92e2be2`（RFC-615）run 45846353277 第 2 次尝试 70 / 70 全绿；2026-11-26 转 Done。
 
 ## 2026-11-26 RFC-546 模块级可变单例的进程级例外清单与 §14 口径修订（Done；`design/RFC-546-module-singleton-process-exceptions/`）
 

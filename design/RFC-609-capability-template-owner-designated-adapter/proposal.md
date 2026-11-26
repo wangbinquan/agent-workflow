@@ -1,6 +1,6 @@
 # RFC-609 能力模板的 PostgreSQL 归属方经指定 adapter 取资源目录的端口合同（RFC-294 S9 余项：跨 context 内部文件对 4 → 2）
 
-- **状态**：In Progress（2026-11-26）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
+- **状态**：Done（2026-11-26，落地 `8cf8ee11d`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
   落位由本会话裁定（见 design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) S9（跨 context 内部 import 为 0，design §14），沿用
   RFC-555～557 的“指定 adapter 只取 required-ports 类型”做法。

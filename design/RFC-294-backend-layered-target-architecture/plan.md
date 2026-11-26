@@ -546,10 +546,10 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 2026-11-25 [RFC-606](../RFC-606-runtime-contract-json-and-closed-mapped-types/proposal.md)（Done，`01306b9ce`）：runtime-management 的 4 条收口——平台 `JsonValue` /
 `JsonObject`（指定的平台合同类型）用于用量事件与探测回执视图，清扫失败原因为 `string`，键集合封闭的映射类型算闭合（检测器规则三）。`PUBLIC_SURFACE_DEBT`
 16 → 12。余下：system-operations 的自动升级回执 1 条（记录层载荷按 RFC-398 §2.7 不透明，另立），以及能力 / 凭据 / 身份一族 11 条（等 RFC-546）。
-2026-11-26 [RFC-609](../RFC-609-capability-template-owner-designated-adapter/proposal.md)（In Progress）：跨 context 内部文件对里能力模板归属方的 2 条收口——资源包
+2026-11-26 [RFC-609](../RFC-609-capability-template-owner-designated-adapter/proposal.md)（Done，`8cf8ee11d`）：跨 context 内部文件对里能力模板归属方的 2 条收口——资源包
 PostgreSQL 事务的 owner-native 合同迁入 resource-catalog 的 application 端口、经 `composition/required-ports` 交出，code-capability 经指定 adapter 只取类型，
 事务类型用平台 `PersistenceTx`。跨 context 内部文件对 4 → 2，余下 Integration 用 Task Execution 来源终止能力的 2 条（能力合同一族，延后）。
-2026-11-26 [RFC-610](../RFC-610-auto-upgrade-receipt-json/proposal.md)（In Progress）：system-operations 的自动升级回执 1 条收口——记录端口
+2026-11-26 [RFC-610](../RFC-610-auto-upgrade-receipt-json/proposal.md)（Done，`0fdb118d8`）：system-operations 的自动升级回执 1 条收口——记录端口
 `receipt()` 返回发布出去的 JSON（平台 `JsonObject`），结论的回执随之定型，记录层其余载荷照旧不透明。`PUBLIC_SURFACE_DEBT` 12 → 11，余下的全是
 能力 / 凭据 / 身份一族（延后）。
 
@@ -557,7 +557,7 @@ PostgreSQL 事务的 owner-native 合同迁入 resource-catalog 的 application 
 
 > 2026-11-25 [RFC-608](../RFC-608-repository-facts-scan-selection/proposal.md)（Done，`a3def727e`）：development-automation 的最后一处选择（仓库事实在卷内还是进程内扫描）迁入采集器所在的 infrastructure，`composition-control-flow-development-automation` 1 → 0。余下：task-execution 10、source-control 6、system-operations 2（数据库准备的选择受发布升级门预载钩子约束）、integration 1（webhook 入站，挨着密钥箱，不动）、resource-catalog 1（`resourceAcl`，访问控制一族，不动）。
 >
-> 2026-11-26 [RFC-612](../RFC-612-source-control-composition-implementations/proposal.md)（In Progress）：source-control 组合层里两份每次调用都走的实现归 infrastructure——缓存仓库操作原样迁入 `infrastructure/cachedRepositoryOperations.ts`，仓库组写入的 URL 导入选择迁入 `infrastructure/repositoryUrlImport.ts`；`composition-control-flow-source-control` 6 → 4，余下 4 行是候选与提交两个绑定的装配期选择。
+> 2026-11-26 [RFC-612](../RFC-612-source-control-composition-implementations/proposal.md)（Done，`1d4faeac5`）：source-control 组合层里两份每次调用都走的实现归 infrastructure——缓存仓库操作原样迁入 `infrastructure/cachedRepositoryOperations.ts`，仓库组写入的 URL 导入选择迁入 `infrastructure/repositoryUrlImport.ts`；`composition-control-flow-source-control` 6 → 4，余下 4 行是候选与提交两个绑定的装配期选择。
 
 > 后继：development-automation 第一步 [RFC-494](../RFC-494-development-employee-type-package-out-of-composition/proposal.md)（Done，2026-11-13，`e11313b6b`）：`employeeTypePackage.ts` 除登记对象外的合同与编解码、它依赖的工具合同登记与旧程序升级迁入 development-automation 的 application，composition 只留登记对象与给 bootstrap 的三个转出，`composition-control-flow-development-automation` 660 → 491。落 application 而非下面“归 domain”的字面：内容按 execution-contract 与 digital-employee 的 public 合同定型，design §3 的矩阵不许 domain 取其他模块的文件（RFC-494 design §6 取舍 1）；其中只依赖 zod 与 shared 的上下文 schema 与工作范围规则可再分进 domain（RFC-494 design §8）。S10 的其余范围由后继步骤承接。
 >
@@ -703,7 +703,7 @@ PostgreSQL 事务的 owner-native 合同迁入 resource-catalog 的 application 
 >
 > 后继：第 4 项第十六步 [RFC-546](../RFC-546-module-singleton-process-exceptions/proposal.md)（Done，2026-11-26，`03008a73a`）：Q1～Q3 由本会话裁定（用户 2026-11-25 授权）。进程级的 28 条登记为例外，design §14 该行改为“不计登记的进程级例外”；凭据 / 访问 / 完整性相邻的 9 条是待迁的服务状态（不登记为例外），随延后的 `ws/` 与 legacy 一族处理，在此之前列在只减不增的 `pending` 里。两份清单在 `architecture/module-singleton-exceptions.json`，RFC-546 守卫钉住判据结果等于两份之和。`pending` 清空时第 4 项的退出门达成。
 >
-> 后继：第 1 项余项 [RFC-613](../RFC-613-task-run-binding-required/proposal.md)（In Progress，2026-11-26）：task-execution 的 provider 运行期驱动绑定必填（bootstrap 一直给），`bindProviderTaskRunParticipantsInput` 不再为用例退回旧的逐次驱动直绑；旧直绑迁为 `tests/helpers/legacyTaskRunDriveBinding.ts`，与单机选择共用导出的配置桥接。`composition-control-flow-task-execution` 10 → 9。
+> 后继：第 1 项余项 [RFC-613](../RFC-613-task-run-binding-required/proposal.md)（Done，2026-11-26，`0339842ab`）：task-execution 的 provider 运行期驱动绑定必填（bootstrap 一直给），`bindProviderTaskRunParticipantsInput` 不再为用例退回旧的逐次驱动直绑；旧直绑迁为 `tests/helpers/legacyTaskRunDriveBinding.ts`，与单机选择共用导出的配置桥接。`composition-control-flow-task-execution` 10 → 9。
 
 - **范围**（design §9.3、§10.2 的现状偏差，review F14）：
   1. 模块 composition 的 `select*` 助手与适配器回退改为必填注入，单机默认值只留在单机 profile（`bootstrap/standalone.ts` 与维护 worker 的单机部分
@@ -868,7 +868,7 @@ PostgreSQL 事务的 owner-native 合同迁入 resource-catalog 的 application 
   code-capability 算作 development-automation，余下的只是物理目录；表的 owner `code-capability` / `code-capability/history` 进入逻辑契约（`ownerContext`、
   `retention.owner`），RFC-395 的贡献约定又按 owner 首段定位 schema 文件，所以物理并入要么改 owner（按 RFC-398 立 schema 历史版本、种子与映射预言），
   要么改贡献约定让一个模块承载两个持久化 owner，另立。
-  2026-11-26 [RFC-614](../RFC-614-launch-upload-admission-required/proposal.md)（In Progress）：launch 的 `uploadAdmission?` 收口——收上传的 launch 把它当必填端口，
+  2026-11-26 [RFC-614](../RFC-614-launch-upload-admission-required/proposal.md)（Done，`5c7a72129`）：launch 的 `uploadAdmission?` 收口——收上传的 launch 把它当必填端口，
   子任务委派走不收上传的 `launchMissionWithoutUploads`，`upload-admission-not-wired` 的阻断删去。W4-E8 在端口必填上的部分至此收完，余下 code-capability 兼容岛的物理并入。
 - **E9 digital-employee / event-center / execution-contract**（2026-11-03 路由部分由 [RFC-436](../RFC-436-module-inbound-http-bindings/proposal.md)
   Done，`3cb987341`：两个 HTTP 绑定归入各自模块 `inbound/http`，句柄合同留在 `application/ports`；XC 兼容 seam 仍开放）：在 RFC-361/365/368 已落切片之上，完成路由到 public command / query、

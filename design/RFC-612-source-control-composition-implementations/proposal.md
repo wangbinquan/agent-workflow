@@ -1,6 +1,6 @@
 # RFC-612 source-control 组合层里余下的两份实现归 infrastructure（RFC-294 S10 余项：composition 只装配）
 
-- **状态**：In Progress（2026-11-26）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
+- **状态**：Done（2026-11-26，落地 `1d4faeac5`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
   落位由本会话裁定（见 design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) S10（C1：composition 只构造与注入）；接
   [RFC-608](../RFC-608-repository-facts-scan-selection/proposal.md) 的做法（取决于所选实现能力的选择归 infrastructure）。

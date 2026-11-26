@@ -1,6 +1,6 @@
 # RFC-614 收上传的 launch 把 upload admission 当必填端口，子任务委派是不收上传的另一个用例（RFC-294 W4-E8 余项）
 
-- **状态**：In Progress（2026-11-26）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
+- **状态**：Done（2026-11-26，落地 `5c7a72129`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
   收法由本会话裁定（见 design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) W4-E8（按用例、非可选的 required 端口）；接
   [RFC-603](../RFC-603-reconciler-ports-required/proposal.md)（端口必填、删去 `*-not-wired`）与 [RFC-607](../RFC-607-requirement-materializer-stated-inputs/proposal.md)

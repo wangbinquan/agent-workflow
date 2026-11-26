@@ -15,7 +15,7 @@
 - [x] AC-1 端口必填，无缺席判断与旧阻断码
 - [x] AC-2 委派走不收上传的入口，遇到上传即拒绝
 - [x] AC-3 原用例照旧通过；新增 RFC-614 用例并登记
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿（后继证据，见下）
 
 ## 集中验证
 
@@ -34,8 +34,7 @@
 ## CI（AC-4）
 
 - `5c7a72129`（实现）：exact SHA 主 CI run 45814242489 结论 failure，红在 shard 28 一格：`rfc395-staging-page-cost` 的“page insertion equals sequential
-  insertion …”6,105 ms 超过 5 秒上限（这份用例自 2026-10-26 起没改过，与 Mission launch 无关），未重跑。快速反馈 run 45814242606 全绿。后继证据待包含本提交的
-  run 全绿。
+  insertion …”6,105 ms 超过 5 秒上限（这份用例自 2026-10-26 起没改过，与 Mission launch 无关），未重跑。快速反馈 run 45814242606 全绿。后继证据：包含本提交的 `6c92e2be2`（RFC-615）run 45846353277 第 2 次尝试 70 / 70 全绿（第 1 次尝试只有 macOS e2e 3/4 一格在 36 分钟后被取消、日志已不可取，没有失败的用例作业）。2026-11-26 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 
