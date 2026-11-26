@@ -17,7 +17,7 @@
 - [x] AC-1 物化器入参的 `source` 必填、没有 `documents`；application 不再判断需求源缺席
 - [x] AC-2 兼容物化器不在 `src/`；兼容转出文件删去；生产装配不变
 - [x] AC-3 受影响用例全部通过，行为不变；新增 RFC-607 用例并登记；计数不升
-- [ ] AC-4 exact SHA CI 全绿
+- [x] AC-4 exact SHA CI 全绿（后继证据，见下）
 
 ## 集中验证
 
@@ -35,7 +35,11 @@
 
 ## CI（AC-4）
 
-待推送。
+- `e7fae1424`（实现）：exact SHA 主 CI run 45778901981 结论 failure，红在两格，都是等待超时，与本 RFC 的改动（需求物化器的入参）无关、未重跑：
+  - shard 41：RFC-401 epoch-2 历史行桥的用例 5,544 ms 超过 5 秒上限；
+  - shard 15：`rfc310-employee-case-runtime` 的 PostgreSQL 一支等 30 秒超时（同一格里 SQLite 一支 1.6 秒通过），超时后连接关闭又报一条查询失败。
+  - 两条用例在后继 `a3def727e`（RFC-608，包含本提交）的 run 45781401766 里都通过（shard 41 一次、shard 15 两个 provider 各一次）。
+- 后继证据：包含本提交的 `03008a73a`（RFC-546）run 45785450678 70 / 70 全绿。2026-11-26 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 

@@ -141,17 +141,34 @@ export interface UploadBaselineContext {
   readonly reader: BaselineFileReader
 }
 
-/** upload admission 接线：缺席时带 uploads 的 direct launch 老实 blocked。 */
+/** upload admission：带 uploads 的 direct launch 读上传会话、在 baseline 上放置。 */
 export interface UploadAdmissionDeps {
   readonly uploads: Pick<MissionInputUploadPersistence, 'get'>
   readonly resolveBaseline: (repositoryId: string) => Promise<UploadBaselineContext | null>
 }
 
-export interface LaunchDeps {
+/** The mission store, the admission lookup and the clock every mission command reads. */
+export interface MissionCommandDeps {
   readonly store: MissionPersistence
   readonly lookup: AdmissionLookup
   readonly now: () => number
-  readonly uploadAdmission?: UploadAdmissionDeps
+}
+
+/**
+ * RFC-614 (RFC-294 W4-E8): a launch that accepts uploads takes the upload admission as a required port. A launch that
+ * accepts none (child delegation) is a different use case — `launchMissionWithoutUploads` — so no launch is ever
+ * blocked on a missing port.
+ */
+export interface LaunchDeps extends MissionCommandDeps {
+  readonly uploadAdmission: UploadAdmissionDeps
+}
+
+/** RFC-614: the one way a launch path without upload admission meets uploads — rejected before anything is written. */
+function requireUploadAdmission(admission: UploadAdmissionDeps | null): UploadAdmissionDeps {
+  if (admission === null) {
+    throw new ValidationError('mission-uploads-not-accepted', 'this launch path accepts no uploads')
+  }
+  return admission
 }
 
 export interface LaunchResult {
@@ -303,7 +320,7 @@ type RequirementSourceResolution =
  * repository facts → employee → policy 解析，不得用全局默认替代）。
  */
 async function resolveEmployeeAndPolicy(
-  deps: LaunchDeps,
+  deps: MissionCommandDeps,
   input: {
     readonly repositoryId: string
     readonly repositoryGroupId: string | null
@@ -467,6 +484,22 @@ function resolveRequirementSource(
 }
 
 export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promise<LaunchResult> {
+  return await launchWith(deps, rawInput, deps.uploadAdmission)
+}
+
+/** RFC-614: child delegation and other internal launches carry no uploads; one with uploads is rejected. */
+export async function launchMissionWithoutUploads(
+  deps: MissionCommandDeps,
+  rawInput: unknown,
+): Promise<LaunchResult> {
+  return await launchWith(deps, rawInput, null)
+}
+
+async function launchWith(
+  deps: MissionCommandDeps,
+  rawInput: unknown,
+  uploadAdmission: UploadAdmissionDeps | null,
+): Promise<LaunchResult> {
   const input = parseOr422(launchMissionInputSchema, rawInput)
   const existing = await deps.store.findByIdempotencyKey(input.idempotencyKey)
   if (existing !== null) {
@@ -479,15 +512,11 @@ export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promis
   }
   const now = deps.now()
 
-  // 0) direct uploads：预读行。store 未接线 ⇒ uploadRows 保持 null，后面老实 blocked。
-  let uploadRows: UploadSessionRow[] | null = null
-  if (
-    input.submission.kind === 'direct' &&
-    input.submission.uploads.length > 0 &&
-    deps.uploadAdmission !== undefined
-  ) {
+  // 0) direct uploads：预读行。不收上传的 launch 路径遇到 uploads 在这里拒绝（零写入）。
+  let uploadRows: UploadSessionRow[] = []
+  if (input.submission.kind === 'direct' && input.submission.uploads.length > 0) {
     uploadRows = await readPendingUploadRows(
-      deps.uploadAdmission,
+      requireUploadAdmission(uploadAdmission),
       input.submission.uploads,
       input.actorUserId,
       now,
@@ -568,12 +597,10 @@ export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promis
     if (input.submission.kind === 'direct') {
       if (input.submission.uploads.length === 0) {
         status = 'working'
-      } else if (uploadRows === null) {
-        status = 'blocked'
-        base.blockCode = 'upload-admission-not-wired'
-        base.blockDetail = 'uploads present but upload admission deps are not wired'
       } else {
-        const baseline = await deps.uploadAdmission!.resolveBaseline(input.repositoryId)
+        const baseline = await requireUploadAdmission(uploadAdmission).resolveBaseline(
+          input.repositoryId,
+        )
         const parsedPolicy = automationPolicyContentSchema.safeParse(outcome.policyContent)
         if (baseline === null) {
           status = 'blocked'
@@ -725,7 +752,7 @@ export interface MissionAdmissionPreview {
  * created. Selection and source resolution call the same helpers as launch.
  */
 export async function previewMissionAdmission(
-  deps: LaunchDeps,
+  deps: MissionCommandDeps,
   rawInput: unknown,
 ): Promise<MissionAdmissionPreview> {
   const input = parseOr422(previewMissionAdmissionInputSchema, rawInput)
@@ -812,9 +839,6 @@ export async function previewDirectInput(
 ): Promise<DirectInputPreview> {
   const input = parseOr422(previewDirectInputSchema, rawInput)
   const ua = deps.uploadAdmission
-  if (ua === undefined) {
-    throw new ValidationError('upload-admission-not-wired', 'upload admission deps are not wired')
-  }
   const now = deps.now()
   const rows = await readPendingUploadRows(ua, input.uploads, input.actorUserId, now)
   const { outcome } = await resolveEmployeeAndPolicy(deps, {
@@ -856,7 +880,7 @@ export async function previewDirectInput(
 }
 
 export async function selectMissionRequirementSource(
-  deps: LaunchDeps,
+  deps: MissionCommandDeps,
   input: { readonly missionId: string; readonly sourceKey: string },
 ): Promise<{ readonly status: MissionStatus }> {
   const mission = await deps.store.getMission(input.missionId)
@@ -902,7 +926,7 @@ export async function selectMissionRequirementSource(
 }
 
 export async function retryBlockedMission(
-  deps: LaunchDeps,
+  deps: MissionCommandDeps,
   input: { readonly missionId: string },
 ): Promise<{ readonly status: MissionStatus }> {
   const mission = await deps.store.getMission(input.missionId)
@@ -925,7 +949,7 @@ export async function retryBlockedMission(
 }
 
 export async function cancelMission(
-  deps: LaunchDeps,
+  deps: MissionCommandDeps,
   input: { readonly missionId: string },
 ): Promise<{ readonly status: MissionStatus; readonly pending: boolean }> {
   const mission = await deps.store.getMission(input.missionId)

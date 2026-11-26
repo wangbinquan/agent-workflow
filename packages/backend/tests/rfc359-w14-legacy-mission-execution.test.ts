@@ -39,7 +39,7 @@ import {
   createActionTemplate,
   publishActionTemplate,
 } from '@/modules/development-automation/application/commands/actionTemplateCommands'
-import { launchMission } from '@/modules/development-automation/application/commands/launchMission'
+import { launchMissionWithoutUploads } from '@/modules/development-automation/application/commands/launchMission'
 import type { MissionDriveOutcome } from '@/modules/development-automation/application/missionDriver'
 import {
   composeDevelopmentAdmissionLookup,
@@ -380,7 +380,7 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
           body: 'do the thing',
           uploads: [],
         }
-        const launched = await launchMission(
+        const launched = await launchMissionWithoutUploads(
           { store, lookup, now: Date.now },
           {
             idempotencyKey: `legacy-mission-${kind}`,

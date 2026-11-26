@@ -555,7 +555,7 @@ PostgreSQL 事务的 owner-native 合同迁入 resource-catalog 的 application 
 
 ### S10 `composition/` 只装配：全模块收口
 
-> 2026-11-25 [RFC-608](../RFC-608-repository-facts-scan-selection/proposal.md)（In Progress）：development-automation 的最后一处选择（仓库事实在卷内还是进程内扫描）迁入采集器所在的 infrastructure，`composition-control-flow-development-automation` 1 → 0。余下：task-execution 10、source-control 6、system-operations 2（数据库准备的选择受发布升级门预载钩子约束）、integration 1（webhook 入站，挨着密钥箱，不动）、resource-catalog 1（`resourceAcl`，访问控制一族，不动）。
+> 2026-11-25 [RFC-608](../RFC-608-repository-facts-scan-selection/proposal.md)（Done，`a3def727e`）：development-automation 的最后一处选择（仓库事实在卷内还是进程内扫描）迁入采集器所在的 infrastructure，`composition-control-flow-development-automation` 1 → 0。余下：task-execution 10、source-control 6、system-operations 2（数据库准备的选择受发布升级门预载钩子约束）、integration 1（webhook 入站，挨着密钥箱，不动）、resource-catalog 1（`resourceAcl`，访问控制一族，不动）。
 >
 > 2026-11-26 [RFC-612](../RFC-612-source-control-composition-implementations/proposal.md)（In Progress）：source-control 组合层里两份每次调用都走的实现归 infrastructure——缓存仓库操作原样迁入 `infrastructure/cachedRepositoryOperations.ts`，仓库组写入的 URL 导入选择迁入 `infrastructure/repositoryUrlImport.ts`；`composition-control-flow-source-control` 6 → 4，余下 4 行是候选与提交两个绑定的装配期选择。
 
@@ -701,7 +701,7 @@ PostgreSQL 事务的 owner-native 合同迁入 resource-catalog 的 application 
 >
 > 后继：第 4 项第十五步 [RFC-549](../RFC-549-schema-history-runtime-explicit/proposal.md)（Done，2026-11-23，`85c36f1c0`）：schema 历史运行时不再经 platform 的进程级登记，bootstrap 的 live 绑定带着它交到迁移、恢复、备份、逻辑复制、启动准入与 Worker。模块级可变单例 39 → 37。集中验证查出两类本人缺陷（两条源码锁钉着被改的入参；Worker 用例认不出恒真校验的变异），已改并复验。其余 37 条：「可迁移」一类拆完；凭据 / 访问 / 完整性相邻的 9 条与进程级 28 条的处理待用户确认（RFC-546 Q1～Q3）。
 >
-> 后继：第 4 项第十六步 [RFC-546](../RFC-546-module-singleton-process-exceptions/proposal.md)（In Progress，2026-11-26）：Q1～Q3 由本会话裁定（用户 2026-11-25 授权）。进程级的 28 条登记为例外，design §14 该行改为“不计登记的进程级例外”；凭据 / 访问 / 完整性相邻的 9 条是待迁的服务状态（不登记为例外），随延后的 `ws/` 与 legacy 一族处理，在此之前列在只减不增的 `pending` 里。两份清单在 `architecture/module-singleton-exceptions.json`，RFC-546 守卫钉住判据结果等于两份之和。`pending` 清空时第 4 项的退出门达成。
+> 后继：第 4 项第十六步 [RFC-546](../RFC-546-module-singleton-process-exceptions/proposal.md)（Done，2026-11-26，`03008a73a`）：Q1～Q3 由本会话裁定（用户 2026-11-25 授权）。进程级的 28 条登记为例外，design §14 该行改为“不计登记的进程级例外”；凭据 / 访问 / 完整性相邻的 9 条是待迁的服务状态（不登记为例外），随延后的 `ws/` 与 legacy 一族处理，在此之前列在只减不增的 `pending` 里。两份清单在 `architecture/module-singleton-exceptions.json`，RFC-546 守卫钉住判据结果等于两份之和。`pending` 清空时第 4 项的退出门达成。
 >
 > 后继：第 1 项余项 [RFC-613](../RFC-613-task-run-binding-required/proposal.md)（In Progress，2026-11-26）：task-execution 的 provider 运行期驱动绑定必填（bootstrap 一直给），`bindProviderTaskRunParticipantsInput` 不再为用例退回旧的逐次驱动直绑；旧直绑迁为 `tests/helpers/legacyTaskRunDriveBinding.ts`，与单机选择共用导出的配置桥接。`composition-control-flow-task-execution` 10 → 9。
 
@@ -862,12 +862,14 @@ PostgreSQL 事务的 owner-native 合同迁入 resource-catalog 的 application 
   2026-11-25 [RFC-603](../RFC-603-reconciler-ports-required/proposal.md)（Done，`0f2ded0db`）：application 一侧——`ReconcilerPorts` 的 25 个成员必填，命令与四条发布链
   只取自己读的端口（`Pick`），端口缺席时的 typed block、失败结果与静默跳过删去；RFC-359 P0 的 `p0-9-launchers` 退役（漏给启动器在编译期就被挡下，理由见其
   design §0）。余下 launch / admission 的可选依赖与需求物化器的 `source`。
-  2026-11-25 [RFC-607](../RFC-607-requirement-materializer-stated-inputs/proposal.md)（In Progress）：需求物化器的 `source` 必填、删去只供用例的 `documents`
+  2026-11-25 [RFC-607](../RFC-607-requirement-materializer-stated-inputs/proposal.md)（Done，`e7fae1424`）：需求物化器的 `source` 必填、删去只供用例的 `documents`
   覆盖；只供用例的本机兼容物化器迁入 `tests/helpers/`。余下 launch 的 `uploadAdmission?`（子任务启动不收上传，是用例差异，按用例拆入参另议）。
   2026-11-26 兼容岛物理并入的约束（[RFC-609](../RFC-609-capability-template-owner-designated-adapter/proposal.md) design §5 记下）：报告与表归属早已把
   code-capability 算作 development-automation，余下的只是物理目录；表的 owner `code-capability` / `code-capability/history` 进入逻辑契约（`ownerContext`、
   `retention.owner`），RFC-395 的贡献约定又按 owner 首段定位 schema 文件，所以物理并入要么改 owner（按 RFC-398 立 schema 历史版本、种子与映射预言），
   要么改贡献约定让一个模块承载两个持久化 owner，另立。
+  2026-11-26 [RFC-614](../RFC-614-launch-upload-admission-required/proposal.md)（In Progress）：launch 的 `uploadAdmission?` 收口——收上传的 launch 把它当必填端口，
+  子任务委派走不收上传的 `launchMissionWithoutUploads`，`upload-admission-not-wired` 的阻断删去。W4-E8 在端口必填上的部分至此收完，余下 code-capability 兼容岛的物理并入。
 - **E9 digital-employee / event-center / execution-contract**（2026-11-03 路由部分由 [RFC-436](../RFC-436-module-inbound-http-bindings/proposal.md)
   Done，`3cb987341`：两个 HTTP 绑定归入各自模块 `inbound/http`，句柄合同留在 `application/ports`；XC 兼容 seam 仍开放）：在 RFC-361/365/368 已落切片之上，完成路由到 public command / query、
   Event observer 进入生命周期程序、XC 对 legacy agent / workflow / scriptRun 的兼容 seam 退役。

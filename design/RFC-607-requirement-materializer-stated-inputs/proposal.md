@@ -1,6 +1,6 @@
 # RFC-607 需求物化器的需求源必填，本机兼容物化器迁入用例 helper（RFC-294 W4-E8 余项）
 
-- **状态**：In Progress（2026-11-25）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
+- **状态**：Done（2026-11-26，落地 `e7fae1424`）。用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」：
   落位由本会话裁定（见 design §0）；设计门免、不派 Codex（用户 2026-10-31）；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) W4-E8（按用例的必填端口）与 S12（单机默认值只留在 standalone
   profile）；接 [RFC-603](../RFC-603-reconciler-ports-required/proposal.md) design §7 留下的“需求物化器的 `source`”。

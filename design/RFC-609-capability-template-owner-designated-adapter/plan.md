@@ -39,7 +39,9 @@
 
 ## CI（AC-4）
 
-待推送。
+- `8cf8ee11d`（实现）：exact SHA 主 CI run 45791885352 结论 failure，红在 shard 20 一格：`rfc363-task-preparation-admission` 的 SQLite 一支
+  “synchronous admission rollback preserves the failed Task transaction and durably compensates Git”挂满 60 秒超时（同一格里它的 PostgreSQL 一支 545 ms
+  通过，紧随其后的一条也慢到 5 秒）。这份用例自 RFC-527 起没改过，本 RFC 只移动类型声明，未重跑。后继证据待包含本提交的 run 全绿。
 
 ## 实现门（本会话自审，只审功能）
 

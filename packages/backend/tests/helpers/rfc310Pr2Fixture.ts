@@ -32,7 +32,7 @@ import type {
   ReconcilerPorts,
 } from '../../src/modules/development-automation/application/ports/reconcilerPorts'
 import type { ReconcileDeps } from '../../src/modules/development-automation/application/missionReconciler'
-import { launchMission } from '../../src/modules/development-automation/application/commands/launchMission'
+import { launchMissionWithoutUploads } from '../../src/modules/development-automation/application/commands/launchMission'
 import { reconcilerPortsFor } from './developmentAutomation'
 
 export interface Pr2Fixture {
@@ -180,7 +180,7 @@ export async function buildPr2Fixture(db: PersistenceDb): Promise<Pr2Fixture> {
       }
     },
     async launch(idempotencyKey: string): Promise<string> {
-      const result = await launchMission(
+      const result = await launchMissionWithoutUploads(
         { store: persistence, lookup: admissionLookup, now },
         {
           idempotencyKey,

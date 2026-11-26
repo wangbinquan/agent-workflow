@@ -1,3 +1,14 @@
+## 2026-11-26 RFC-614 收上传的 launch 把 upload admission 当必填端口，子任务委派是不收上传的另一个用例（In Progress；`design/RFC-614-launch-upload-admission-required/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W4-E8
+  （按用例、非可选的 required 端口），RFC-607 design §5 记下的余项。
+- **范围**：`LaunchDeps.uploadAdmission` 必填，预览、选源、重试、取消与共用的选择链改收 `MissionCommandDeps`；新增 `launchMissionWithoutUploads`（与
+  `launchMission` 共用 launch 链，带上传即以 `mission-uploads-not-accepted` 拒绝、零写入），子任务委派改走它；`upload-admission-not-wired` 的阻断与预览里的
+  同名报错删去。三个夹具改调不收上传的入口，“未接线”用例改写。新增 RFC-614 用例。随本提交把 RFC-546、RFC-607、RFC-608 转 Done。
+- **集中验证**（基于 `0339842ab`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 390 个用例文件只有 `rfc321` 照例红；4 种变异都被认出；
+  架构报告有门禁的计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-26 RFC-613 provider 运行期的驱动绑定必填，旧的逐次驱动直绑只供用例（In Progress；`design/RFC-613-task-run-binding-required/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S12
@@ -35,7 +46,8 @@
   新增 RFC-610 用例。CLI 打印的 JSON 逐字不变。
 - **集中验证**（基于 `8cf8ee11d`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 302 个用例文件全部通过；4 种变异都被认出；
   架构报告除 `public-surface-deviations` 12 → 11 外有门禁的计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-610 的提交 `0fdb118d8`：exact SHA 主 CI run 45795931974 红在 shard 43（RFC-026 澄清 inline 模式的 PostgreSQL 一支 15 秒超时）与 shard 41
+  （RFC-401 历史行桥 5 秒超时），与本 RFC 无关、未重跑；后继证据待包含本提交的 run 全绿。
 
 ## 2026-11-26 RFC-609 能力模板的 PostgreSQL 归属方经指定 adapter 取资源目录的端口合同（In Progress；`design/RFC-609-capability-template-owner-designated-adapter/`）
 
@@ -51,9 +63,10 @@
   `rfc349-provider-cutover` 不许 application 层按名字取引擎专属符号，合同改名为中立的 `CapabilityTemplatePackageMutationOwner` 后重选 237 个复验
   全部通过（`rfc321` 照例红，`rfc167` 并行下超时、单跑通过）。5 种变异都被认出；架构报告除该计数 4 → 2 与新增两个文件外相同。实现门 PASS
   （本会话按路径限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-609 的提交 `8cf8ee11d`：exact SHA 主 CI run 45791885352 红在 shard 20 一格（`rfc363-task-preparation-admission` 的 SQLite 一支挂满 60 秒，
+  PostgreSQL 一支 545 ms 通过），与本 RFC 无关、未重跑；后继证据待包含本提交的 run 全绿。
 
-## 2026-11-26 RFC-546 模块级可变单例的进程级例外清单与 §14 口径修订（In Progress；`design/RFC-546-module-singleton-process-exceptions/`）
+## 2026-11-26 RFC-546 模块级可变单例的进程级例外清单与 §14 口径修订（Done；`design/RFC-546-module-singleton-process-exceptions/`）
 
 - **来由**：2026-11-23 落档为 Draft、待用户确认 Q1～Q3；用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」
   答复了包括它在内的四件待定事项，裁定由本会话给出（proposal §5）。RFC-294 S12 第 4 项。
@@ -65,9 +78,9 @@
   - RFC-294 design §14 该行改为“不计登记的进程级例外”并指向清单。生产代码不改。
 - **集中验证**（基于 `a3def727e`，详见 plan）：tsc 0 错，eslint / prettier 无告警；候选导出 370 个用例文件只有 `rfc321` 照例红，守卫在真实语料上与
   两份清单逐条相等；6 种变异都被认出；架构报告除时间与源 SHA 外相同。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-546 的提交 `03008a73a`：exact SHA 主 CI run 45785450678 70 / 70 全绿；2026-11-26 转 Done。
 
-## 2026-11-25 RFC-608 仓库事实扫描的选择归 infrastructure（In Progress；`design/RFC-608-repository-facts-scan-selection/`）
+## 2026-11-25 RFC-608 仓库事实扫描的选择归 infrastructure（Done；`design/RFC-608-repository-facts-scan-selection/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S10
   （composition 只装配），development-automation 的 composition 只剩这一处控制流。
@@ -76,9 +89,10 @@
   `composition-control-flow-development-automation` 1 → 0（max 同步降）。新增 RFC-608 用例。
 - **集中验证**（基于 `e7fae1424`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 543 个用例文件只有 `rfc321` 照例红；3 种变异都被认出；
   架构报告除该计数 1 → 0 与生产文件少 1 个外相同。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-608 的提交 `a3def727e`：exact SHA 主 CI run 45781401766 cancelled（shard 10 跑完 1,304 pass / 0 fail 后被作业时限取消），Windows 平台全绿，
+  未重跑。后继证据：包含本提交的 `03008a73a`（RFC-546）run 45785450678 70 / 70 全绿；2026-11-26 转 Done。
 
-## 2026-11-25 RFC-607 需求物化器的需求源必填，本机兼容物化器迁入用例 helper（In Progress；`design/RFC-607-requirement-materializer-stated-inputs/`）
+## 2026-11-25 RFC-607 需求物化器的需求源必填，本机兼容物化器迁入用例 helper（Done；`design/RFC-607-requirement-materializer-stated-inputs/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-603 design §7
   留下的需求物化器 `source`（RFC-294 W4-E8 / S12）。
@@ -88,7 +102,9 @@
   删去，`childMissionParticipant.ts` 改取 application 的类型。6 个用例 / helper 文件改 import。新增 RFC-607 用例。
 - **集中验证**（基于 `01306b9ce`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 535 个用例文件只有 `rfc321` 照例红；5 种变异都被认出
   （缺席判据改为透过类型断言的 AST）；架构报告生产文件少 2 个，计数不变。实现门 PASS（本会话按路径限定自审，只审功能）。
-- **CI 侧**：待推送。
+- **CI 侧**：RFC-607 的提交 `e7fae1424`：exact SHA 主 CI run 45778901981 红在 shard 41（RFC-401 历史行桥 5 秒超时）与 shard 15（`rfc310-employee-case-runtime`
+  PostgreSQL 一支 30 秒超时），与本 RFC 无关、未重跑，两条在后继 `a3def727e` 的 run 里都通过。后继证据：包含本提交的 `03008a73a`（RFC-546）run 45785450678
+  70 / 70 全绿；2026-11-26 转 Done。
 
 ## 2026-11-25 RFC-606 runtime-management 合同里的开放类型：JSON 值、有限键映射与失败原因（Done；`design/RFC-606-runtime-contract-json-and-closed-mapped-types/`）
 

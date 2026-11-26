@@ -41,7 +41,7 @@ import type {
   ReconcilerPorts,
 } from '../../src/modules/development-automation/application/ports/reconcilerPorts'
 import type { ReconcileDeps } from '../../src/modules/development-automation/application/missionReconciler'
-import { launchMission } from '../../src/modules/development-automation/application/commands/launchMission'
+import { launchMissionWithoutUploads } from '../../src/modules/development-automation/application/commands/launchMission'
 import { reconcilerPortsFor } from './developmentAutomation'
 import {
   createDevelopmentAdapter,
@@ -463,7 +463,7 @@ export async function buildPr3Fixture(
       | { kind: 'direct'; title: string; body: string | null; uploads: [] }
       | { kind: 'external-reference'; externalId: string }
   }): Promise<string> => {
-    const result = await launchMission(
+    const result = await launchMissionWithoutUploads(
       { store: persistence, lookup: admissionLookup, now },
       {
         idempotencyKey: input.idempotencyKey,

@@ -5,7 +5,10 @@ import {
   type ChildMissionIntent,
   type ChildMissionReceipt,
 } from '../domain/stepSaga'
-import { launchMission, type LaunchDeps } from '../application/commands/launchMission'
+import {
+  launchMissionWithoutUploads,
+  type MissionCommandDeps,
+} from '../application/commands/launchMission'
 import type { MissionPersistence } from '../application/ports/missionStore'
 import type { RequirementMaterializer } from '../application/requirementMaterializer'
 
@@ -48,7 +51,8 @@ async function receipt(
 
 /** Same bounded-context participant: standard admission + materialization, no row insertion shortcut. */
 export function createChildMissionParticipant(deps: {
-  readonly launch: LaunchDeps
+  /** RFC-614: child delegation carries no uploads, so it takes no upload admission. */
+  readonly launch: MissionCommandDeps
   readonly store: MissionPersistence
   readonly materializer: RequirementMaterializer
   readonly drive: (missionId: string) => Promise<unknown>
@@ -78,7 +82,7 @@ export function createChildMissionParticipant(deps: {
         }
       }
       const intentDigest = canonicalDigest(input)
-      const launched = await launchMission(deps.launch, {
+      const launched = await launchMissionWithoutUploads(deps.launch, {
         idempotencyKey: input.idempotencyKey,
         repositoryId: input.targetRepositoryRef,
         repositoryGroupId: null,

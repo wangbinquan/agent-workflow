@@ -45,6 +45,7 @@ import type { AdmissionLookup } from '../src/modules/development-automation/appl
 import {
   cancelMission,
   launchMission,
+  launchMissionWithoutUploads,
   previewMissionAdmission,
   retryBlockedMission,
   selectMissionRequirementSource,
@@ -375,18 +376,20 @@ describeEachProvider('rfc310 pr2 admission', (harness) => {
     expect((await f.uploads.getUpload(stolen))!.claimedByMissionId).toBe('m-thief')
   })
 
-  test('upload admission not wired blocks honestly instead of pretending', async () => {
+  // RFC-614: upload admission is a required port of the launch that accepts uploads, so "not wired" no longer exists; a
+  // launch path without it (child delegation) is a different use case and rejects uploads before writing anything.
+  test('the launch path without upload admission rejects uploads instead of pretending', async () => {
     const f = await buildFixture(harness.db)
     const bare = { store: f.deps.store, lookup: f.deps.lookup, now: f.deps.now }
-    const result = await launchMission(
-      bare,
-      directInput('idem-not-wired-1', f.employees.single, null, [
-        { uploadRef: 'whatever', repositoryTargetPath: 'docs/x.md' },
-      ]),
-    )
-    expect(result).toMatchObject({ status: 'blocked', blockCode: 'upload-admission-not-wired' })
-    const mission = (await f.deps.store.getMission(result.missionId))!
-    expect(mission.sourceContentDigest).toBeNull()
+    await expect(
+      launchMissionWithoutUploads(
+        bare,
+        directInput('idem-not-wired-1', f.employees.single, null, [
+          { uploadRef: 'whatever', repositoryTargetPath: 'docs/x.md' },
+        ]),
+      ),
+    ).rejects.toMatchObject({ code: 'mission-uploads-not-accepted' })
+    expect(await f.deps.store.findByIdempotencyKey('idem-not-wired-1')).toBeNull()
   })
 
   test('direct with empty body and no uploads is rejected at the schema layer', async () => {

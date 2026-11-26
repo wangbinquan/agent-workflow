@@ -13,7 +13,7 @@
 
 - [x] AC-1 选择在 infrastructure，composition 无分支，`repositoryFactsScanner.ts` 删去
 - [x] AC-2 `composition-control-flow-development-automation` 为 0，max 降到 0；新增 RFC-608 用例并登记
-- [ ] AC-3 受影响用例全部通过；exact SHA CI 全绿
+- [x] AC-3 受影响用例全部通过；exact SHA CI 全绿（后继证据，见下）
 
 ## 集中验证
 
@@ -30,7 +30,9 @@
 
 ## CI（AC-3）
 
-待推送。
+- `a3def727e`（实现）：exact SHA 主 CI run 45781401766 结论 cancelled——shard 10 跑完 1,304 pass / 0 fail 后被作业时限取消，其余各格全绿；Windows 平台
+  run 45781401707 全绿。与本 RFC 无关、未重跑。
+- 后继证据：包含本提交的 `03008a73a`（RFC-546）run 45785450678 70 / 70 全绿。2026-11-26 转 Done。
 
 ## 实现门（本会话自审，只审功能）
 
