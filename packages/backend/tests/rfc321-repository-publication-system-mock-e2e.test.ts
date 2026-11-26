@@ -39,7 +39,7 @@ import {
   createLocalRepositoryCandidateEffects,
 } from '../src/modules/source-control/composition'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
-import { bindCandidateDeliveryParticipant } from '../src/modules/source-control/composition/repositoryCandidate'
+import { bindCandidateDeliveryParticipant } from '@/modules/source-control/application/repositoryCandidateParticipants'
 import { createUser } from './helpers/userFixture'
 import { runGit } from '../src/platform/execution/local/gitProcess'
 

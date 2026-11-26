@@ -170,7 +170,7 @@ export function composeRepositoryTransportCredentials(
 
 export { bindWorkspaceExcludeParticipant } from './infrastructure/workspaceExcludeBinding'
 
-export { bindRepositoryCommitParticipant } from './composition/repositoryCommit'
+export { bindRepositoryCommitParticipant } from './application/repositoryCommitParticipant'
 
 /** RFC-308 composition-only path binding; absolute path never enters public DTOs. */
 export function ensureBoundPlatformWorkspaceDirectory(input: {
@@ -185,14 +185,14 @@ export function ensureBoundPlatformWorkspaceDirectory(input: {
  * RFC-310 PR-4 T48 —— ChangeCandidate 派生的组装（development-automation 以
  * 结构同形端口接收；两模块互不 import 对方内部，同 requirementSource 先例）。
  */
-export { bindChangeCandidateParticipant } from './composition/repositoryCandidate'
+export { bindChangeCandidateParticipant } from './application/repositoryCandidateParticipants'
 
 /**
  * RFC-310 PR-5 T59：candidate 发布链的 source-control 半（stage 重放 + durable
  * commit + exact-head CAS push）。结构同形注入 development-automation（同
  * changeCandidate 先例）；Mission 侧永不直接调 Git。
  */
-export { bindCandidateDeliveryParticipant } from './composition/repositoryCandidate'
+export { bindCandidateDeliveryParticipant } from './application/repositoryCandidateParticipants'
 
 /**
  * RFC-310 PR-7b T77：conflict merge 的 source-control 半（prepare 保留

@@ -7,7 +7,7 @@ import { GraphEvidenceBindingSchema, canonicalJson } from '@agent-workflow/share
 import {
   bindChangeCandidateParticipant,
   bindCandidateDeliveryParticipant,
-} from '@/modules/source-control/composition/repositoryCandidate'
+} from '@/modules/source-control/application/repositoryCandidateParticipants'
 import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
 import { createGraphVerification } from '@/modules/development-automation/application/graph-development/verification'
 import { createVerificationProfilePersistence } from '@/modules/development-automation/infrastructure/configResourceStore'

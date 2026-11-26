@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import {
   bindChangeCandidateParticipant,
   bindCandidateDeliveryParticipant,
-} from '../src/modules/source-control/composition/repositoryCandidate'
+} from '@/modules/source-control/application/repositoryCandidateParticipants'
 import {
   candidateReceiptRef,
   checkForbiddenCandidatePaths,

@@ -610,6 +610,8 @@ PostgreSQL 事务的 owner-native 合同迁入 resource-catalog 的 application 
 > 后继：RFC-370 余项第一步 [RFC-518](../RFC-518-hosted-implementations-out-of-composition-1/proposal.md)（Done，2026-11-19，`623baace0`）：23 个自足的托管实现原样迁入各模块的 `infrastructure/crewstation/`，`composition-forbidden-import-files` 归零，RFC-515 门的例外清单 27 → 4（余下 4 个调用了本模块的组合助手，由 RFC-519 拆开装配与实现）。
 >
 > 后继：RFC-370 余项第二步 [RFC-519](../RFC-519-hosted-implementations-out-of-composition-2/proposal.md)（Done，2026-11-19，`8d6797ece`）：余下 4 个托管文件拆开装配与实现，RFC-515 门的例外清单清零。**S10 关闭**：全部模块的 `composition/` 与模块根 `composition.ts` 只装配（RFC-515 门无例外），`composition-forbidden-import-files` 为 0；组合层里余下的是装配期的选择分支，由 `composition-control-flow-*` 上限按实测锁住，其去处随 S12（装配余项）。
+>
+> 后继：[RFC-622](../RFC-622-source-control-binders-into-application/proposal.md)（In Progress，2026-11-26）：source-control 的候选与提交绑定器（选托管操作宿主还是本地步骤、工作区卷还是本进程）属用例编排，原样迁入 application；`composition-control-flow-source-control` 4 → 0。余下 system-operations 2（与发布升级预载钩子相连）、integration 1、resource-catalog 1、task-execution 9 各自另立。
 
 - **目标**：把 S6 在 task-execution 上达成的状态推广到全部模块，使 design §14 “composition 内实现 = 0”有覆盖全仓的门
   （proposal D16，review R11 / F13）。

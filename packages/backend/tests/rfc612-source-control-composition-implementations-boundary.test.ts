@@ -118,7 +118,7 @@ describe('RFC-612 —— source-control 组合层里的两份实现归 infrastru
     expect(budgetReads).toBe(2)
   })
 
-  test('候选与提交两个绑定之外，source-control 的组合层没有控制流', () => {
+  test('source-control 的组合层没有控制流（RFC-622 起候选与提交两个绑定也迁入 application）', () => {
     const dir = join(REPO, SC + 'composition')
     const files = [
       SC + 'composition.ts',
@@ -132,12 +132,6 @@ describe('RFC-612 —— source-control 组合层里的两份实现归 infrastru
       compositionControlFlowSets(
         createGateCorpus(files.map((path) => sourceUnit(path, read(path)))),
       )['composition-control-flow-source-control'] ?? []
-    const binders = [
-      SC + 'composition/repositoryCandidate.ts',
-      SC + 'composition/repositoryCommit.ts',
-    ]
-    expect(
-      lines.filter((line) => !binders.some((binder) => line.startsWith(binder + ':'))),
-    ).toEqual([])
+    expect(lines).toEqual([])
   })
 })

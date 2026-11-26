@@ -8,7 +8,7 @@ import { runGit } from '@/platform/execution/local/gitProcess'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
-} from '@/modules/source-control/composition/repositoryCandidate'
+} from '@/modules/source-control/application/repositoryCandidateParticipants'
 import { createFileRepositoryCandidateEffectsFactory } from '@/modules/source-control/infrastructure/local/fileRepositoryCandidateEffects'
 import type { RepositoryCandidateStepEffectsFactory } from '@/modules/source-control/application/ports/repositoryCandidateEffects'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'

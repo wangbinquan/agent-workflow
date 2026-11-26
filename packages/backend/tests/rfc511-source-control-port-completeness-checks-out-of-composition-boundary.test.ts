@@ -126,14 +126,11 @@ const ROOTS: Readonly<
     ],
   },
   [root('repositoryCandidate')]: {
-    offers: [
-      'bindCandidateDeliveryParticipant',
-      'bindChangeCandidateParticipant',
-      'createLocalRepositoryCandidateEffects',
-    ],
-    // RFC-527: each binding branches once on host or steps (the selection is required).
-    shapes: ['if', 'if'],
-    takes: [`import ${CANDIDATE}: requireRepositoryCandidateEffectsFactory`],
+    // RFC-622: the two bindings (each branching once on host or steps) moved into application/repositoryCandidateParticipants;
+    // the composition keeps the standalone selection's local factory only.
+    offers: ['createLocalRepositoryCandidateEffects'],
+    shapes: [],
+    takes: [],
   },
 }
 /** The production calls of every listed check (file and count) and the arguments at the assembly call sites. */
@@ -151,7 +148,8 @@ const CALLS: Readonly<
   requireIsolationWorkspaceFactory: [[`${root('isolationWorkspaces')} x1`], [['selected']]],
   requireRepositoryGitWorkspaceScope: [
     [
-      `${root('repositoryCommit')} x1`,
+      // RFC-622: the commit binder moved into application.
+      `${SC}/application/repositoryCommitParticipant x1`,
       `${root('repositoryGitWorkspaces')} x2`,
       `${root('workspaceChangePublication')} x1`,
     ],
@@ -169,8 +167,9 @@ const CALLS: Readonly<
     [['selected']],
   ],
   requireConflictMergeWorkspaceEffects: [[`${root('conflictMerge')} x1`], [['effects']]],
+  // RFC-622: the two candidate bindings moved into application.
   requireRepositoryCandidateEffectsFactory: [
-    [`${root('repositoryCandidate')} x2`],
+    [`${SC}/application/repositoryCandidateParticipants x2`],
     [['selected'], ['selected']],
   ],
 }

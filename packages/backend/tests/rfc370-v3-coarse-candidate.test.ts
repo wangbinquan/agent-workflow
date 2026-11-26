@@ -19,7 +19,7 @@ import { deriveChangeCandidate } from '@/modules/source-control/application/chan
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
-} from '@/modules/source-control/composition/repositoryCandidate'
+} from '@/modules/source-control/application/repositoryCandidateParticipants'
 import { createHostedRepositoryCandidateOperations } from '@/modules/source-control/infrastructure/crewstation/repositoryCandidate'
 import { createFileRepositoryCandidateEffectsFactory } from '@/modules/source-control/infrastructure/local/fileRepositoryCandidateEffects'
 import type { RepositoryCandidateEffectsFactory } from '@/modules/source-control/composition'

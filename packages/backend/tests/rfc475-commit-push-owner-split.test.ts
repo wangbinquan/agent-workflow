@@ -8,7 +8,7 @@
 // ③ 方向：source-control 的发布用例、binder、合同与 domain 不取 task-execution；task-execution 的提交记账只经 source-control `public/` 取发布
 //    （带负对照）。
 // ④ 合同：`public/participants` 转出 binder 与参与方类型、`public/types` 转出合同类型；public surface 偏差判据对新合同不报任何一条（带负对照）；
-//    模块根 `composition.ts` 转出的提交 binder 与 `composition/repositoryCommit.ts` 的是同一函数，`classifyRepositoryPushFailure` 不再经
+//    模块根 `composition.ts` 转出的提交 binder 与 `application/repositoryCommitParticipant.ts`（RFC-622 起从组合层迁入）的是同一函数，`classifyRepositoryPushFailure` 不再经
 //    composition 转出。
 // ⑤ 记账与转手：`commitPushBinding` 取 `infrastructure/commitPushAttempt` 与 `domain/commitAgent`；task-execution `public/queries` 不再转出
 //    `repositoryPublicationOrdinal`；`util/git` 的两个子仓列表函数在样例上给出原来的结果。
@@ -26,7 +26,7 @@ import {
 } from './architecture/census'
 import { BACKEND_PREFIX, publicSurfaceViolations } from './architecture/rfc294Gates'
 import * as sourceControlComposition from '@/modules/source-control/composition'
-import { bindRepositoryCommitParticipant } from '@/modules/source-control/composition/repositoryCommit'
+import { bindRepositoryCommitParticipant } from '@/modules/source-control/application/repositoryCommitParticipant'
 import { bindWorkspaceChangePublication } from '@/modules/source-control/composition/workspaceChangePublication'
 import * as sourceControlParticipants from '@/modules/source-control/public/participants'
 import { bottomUp, usableSubmodules } from '@/modules/source-control/domain/gitRepositoryModel'
@@ -42,7 +42,7 @@ const SOURCE_CONTROL_FILES = [
   SC + 'application/workspaceChangePublication.ts',
   SC + 'application/ports/workspaceChangePublication.ts',
   SC + 'composition/workspaceChangePublication.ts',
-  SC + 'composition/repositoryCommit.ts',
+  SC + 'application/repositoryCommitParticipant.ts',
   SC + 'domain/repositoryPushFailure.ts',
   SC + 'domain/stagedChangeSummary.ts',
 ] as const

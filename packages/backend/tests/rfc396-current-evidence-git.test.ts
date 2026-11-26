@@ -22,7 +22,7 @@ import { createGraphDesignArtifacts } from '@/modules/development-automation/inf
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
-} from '@/modules/source-control/composition/repositoryCandidate'
+} from '@/modules/source-control/application/repositoryCandidateParticipants'
 import { describeEachProvider } from './helpers/eachProvider'
 import { graphFixture } from './helpers/graphDesign'
 import { createLocalRepositoryCandidateEffects } from '@/modules/source-control/composition'

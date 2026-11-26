@@ -13,7 +13,7 @@ import {
 import {
   bindChangeCandidateParticipant,
   bindCandidateDeliveryParticipant,
-} from '@/modules/source-control/composition/repositoryCandidate'
+} from '@/modules/source-control/application/repositoryCandidateParticipants'
 
 const roots: string[] = []
 afterEach(() => {

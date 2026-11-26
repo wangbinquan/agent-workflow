@@ -10,7 +10,7 @@ import type {
   WorkspaceChangePublicationRequest,
 } from '../application/ports/workspaceChangePublication'
 import type { RepositoryPublicationTransport } from '../public/types'
-import { bindRepositoryCommitParticipant } from './repositoryCommit'
+import { bindRepositoryCommitParticipant } from '../application/repositoryCommitParticipant'
 import {
   bindRepositoryGitSubworkspace,
   requireRepositoryGitWorkspaceScope,

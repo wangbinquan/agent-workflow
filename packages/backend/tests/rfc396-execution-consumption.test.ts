@@ -4,7 +4,7 @@ import { nodeRunFixture, nodeRunOutputFixture, taskFixture } from './helpers/mod
 import { expect, test } from 'bun:test'
 import { createGraphPlatformWorkItems } from '@/modules/development-automation/application/graph-development/platformWorkItems'
 import { graphExecutionContractRegistrations } from '@/modules/development-automation/application/graph-development/toolContracts'
-import { bindCandidateDeliveryParticipant } from '@/modules/source-control/composition/repositoryCandidate'
+import { bindCandidateDeliveryParticipant } from '@/modules/source-control/application/repositoryCandidateParticipants'
 import type { CollaborationHumanInputQueries } from '@/modules/collaboration/application/ports/humanInputQueries'
 import type { EmployeeExecutionArtifactQueries } from '@/modules/task-execution/application/ports/employeeExecutionArtifactQueries'
 import { createGraphExecutionConsumption } from '@/modules/development-automation/application/graph-development/executionConsumption'

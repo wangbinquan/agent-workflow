@@ -17,7 +17,7 @@ import { join, resolve } from 'node:path'
 import {
   bindChangeCandidateParticipant,
   bindCandidateDeliveryParticipant,
-} from '../src/modules/source-control/composition/repositoryCandidate'
+} from '@/modules/source-control/application/repositoryCandidateParticipants'
 import { missionCandidateRef } from '../src/modules/source-control/application/deliverCandidate'
 import { missionSourceBranch } from '../src/modules/source-control/domain/deliveryPolicy'
 import { createLocalRepositoryCandidateEffects } from '@/modules/source-control/composition'

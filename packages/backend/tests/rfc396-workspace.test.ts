@@ -29,7 +29,7 @@ import { ValidationError } from '@/platform/errors/domainErrors'
 import {
   bindChangeCandidateParticipant,
   bindCandidateDeliveryParticipant,
-} from '@/modules/source-control/composition/repositoryCandidate'
+} from '@/modules/source-control/application/repositoryCandidateParticipants'
 import { createHostedRepositoryCandidateOperations } from '@/modules/source-control/infrastructure/crewstation/repositoryCandidate'
 
 const roots: string[] = []

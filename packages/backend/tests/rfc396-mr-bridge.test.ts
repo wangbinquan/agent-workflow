@@ -23,7 +23,7 @@ import {
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
-} from '@/modules/source-control/composition/repositoryCandidate'
+} from '@/modules/source-control/application/repositoryCandidateParticipants'
 import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
 // RFC-498: the graph delivery bridge moved from composition/graphDeliveryBridge.ts; its clock is a required input.
 import {

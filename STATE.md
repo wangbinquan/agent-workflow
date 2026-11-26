@@ -1,3 +1,15 @@
+## 2026-11-26 RFC-622 source-control 的候选与提交绑定器迁入 application（In Progress；`design/RFC-622-source-control-binders-into-application/`）
+
+- **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S10，
+  `composition-control-flow-source-control` 余 4 行，全在两个绑定文件里。
+- **范围**：三个绑定器决定由托管操作宿主还是本地步骤、由工作区卷还是本进程执行用例——用例编排，原样迁入 `application/repositoryCandidateParticipants.ts` 与
+  `application/repositoryCommitParticipant.ts`；模块根 `composition.ts` 照旧转出（bootstrap 不用改）；`composition/repositoryCommit.ts` 删除，`composition/repositoryCandidate.ts`
+  只剩本地夹具的装配。15 个读者按语法树改指；`rfc527`、`rfc521`、`rfc612`、`rfc475` 的读点与清单随之改；计数 4 → 0。新增 RFC-622 用例。另带 `docs/dev-gotchas.md`
+  一条更正（同步 guard-manifest 时不改回别人的条目，按 origin/main + 本次条目提交）。
+- **集中验证**：候选导出（HEAD `72d97076b` + 本 RFC 路径）上 `tsc` / eslint / prettier 全过；用例第一轮 445 个文件里 `rfc511` 的组合文件清单需按迁移后的形状更新，
+  改后第二轮全过（`rfc321` 环境性）；架构报告只有 `composition-control-flow-source-control` 4 → 0；变异 4 / 4 被抓。guard-manifest 按 `origin/main` + 本 RFC 的一条提交。
+- **CI 侧**：待推送。
+
 ## 2026-11-26 RFC-621 `auth/` 的两个中性原语离开 legacy 目录（In Progress；`design/RFC-621-system-identity-and-token-file/`）
 
 - **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 W9-D，

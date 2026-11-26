@@ -52,13 +52,8 @@ const REGISTERED: Readonly<Record<string, readonly Entry[]>> = {
     ['createWorkgroupEvents', 'process-local'],
   ],
   'source-control/composition.ts': [['new WeakMap', 'memo']],
-  // RFC-527 design §6 trade-off 1: without a workspace scope the commit use cases run in this process — the module's
-  // own path (a hosted scope runs the same use cases in its volume), not a stand-in.
-  'source-control/composition/repositoryCommit.ts': [
-    ['commitPreparedRepository', 'option'],
-    ['prepareRepositoryCommit', 'option'],
-    ['readRepositoryCommitPreview', 'option'],
-  ],
+  // RFC-622: the commit binder (its three in-process `option` defaults, RFC-527 design §6 trade-off 1) moved out of
+  // composition into source-control's application.
   'system-operations/composition.ts': [
     ['Object.freeze', 'injected'],
     ['buildPostgresqlSchemaPlan', 'pure'],

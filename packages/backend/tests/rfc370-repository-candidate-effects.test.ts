@@ -5,7 +5,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   bindCandidateDeliveryParticipant,
   bindChangeCandidateParticipant,
-} from '../src/modules/source-control/composition/repositoryCandidate'
+} from '@/modules/source-control/application/repositoryCandidateParticipants'
 import type {
   RepositoryCandidateStepEffectsFactory,
   RepositoryCandidateFileFacts,

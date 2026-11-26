@@ -1,7 +1,8 @@
 // RFC-308 — the bound commit + publication surface of one repository (moved
 // out of the module root `composition.ts` by RFC-475 so the workspace change
 // publication binder can take it without the root's whole import graph; the
-// root still re-exports it).
+// root still re-exports it). RFC-622: moved unchanged from `composition/repositoryCommit.ts` into application — choosing
+// whether a scope's remote volume or this process runs each commit use case is use-case orchestration, not assembly.
 
 import {
   prepareRepositoryCommit,
@@ -13,15 +14,15 @@ import {
   resolvePushBase,
   updateRepositoryRef,
   type RepositoryGit,
-} from '../application/repositoryCommit'
-import type { RepositoryPreviewIndexPort } from '../application/ports/repositoryPreviewIndex'
-import type { RepositoryGitWorkspaceScope } from '../application/ports/repositoryGitWorkspace'
-import { requireRepositoryGitWorkspaceScope } from './repositoryGitWorkspaces'
+} from './repositoryCommit'
+import type { RepositoryPreviewIndexPort } from './ports/repositoryPreviewIndex'
+import type { RepositoryGitWorkspaceScope } from './ports/repositoryGitWorkspace'
+import { requireRepositoryGitWorkspaceScope } from './workspacePorts'
 import type {
   RepositoryCommitCandidateParticipant,
   RepositoryCommitPublicationParticipant,
   RepositoryPublishMode,
-} from '../application/ports/repositoryCommit'
+} from './ports/repositoryCommit'
 
 /**
  * RFC-308 temporary path binder. Consumers receive operations bound to one

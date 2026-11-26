@@ -159,8 +159,9 @@ context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`
   **源码文件同理**（RFC-617 实撞，2026-11-26）：验证之后，并行 RFC 往本次路径里的 `employeeTypePackage.ts` 加了引用它尚未提交文件的导出；
   照工作树提交就会把半截改动带上 main。比对发现不同时，按「`origin/main` 上的该文件 + 本次改动行」提交（在发布锁里现取，避免基于旧头覆盖别人刚提交的内容）。
 - **同步 `guard-manifest.json` 的行数时，只认本次提交里的守卫文件**（RFC-619 实撞，2026-11-26）：同步脚本按工作树重算全部守卫的行数，别人正在改的
-  `rfc371-v2-observation-boundaries` 也被同步出新值；带进提交，清单就和已提交的那份文件对不上。同步后对 `origin/main` 逐条比，行数变了而文件不在
-  本次路径清单里的条目改回原值。
+  `rfc371-v2-observation-boundaries` 也被同步出新值；带进提交，清单就和已提交的那份文件对不上。同步只重算本次路径清单里的守卫；工作树里别的条目
+  （别人改了自己的守卫、或者新登记了守卫）**原样不动**——改回原值等于改了别人的在制品（RFC-621 实撞后更正）。提交时若工作树的清单里有别人的条目，
+  按「`origin/main` 上的清单 + 本次的条目」经私有 index 提交，与验证用的导出逐字比对；`counts.json` 等共享账本同理。
 - **导出目录与自写脚本放在 `/tmp`（含 `/private/tmp` 下的会话 scratchpad）里，3 天没改就会被系统删掉**（2026-11-14、11-15 两次实撞，RFC-496）：
   `/usr/libexec/tmp_cleaner`（launchd `com.apple.tmp_cleaner`，`StartCalendarInterval` 每天 0 点）对 `/tmp` 执行
   `find … -type f -atime +3 -mtime +3 -ctime +3 -delete`，再删 3 天未改的空目录；本机读文件不更新 atime，实际只看修改与状态变更时间。
