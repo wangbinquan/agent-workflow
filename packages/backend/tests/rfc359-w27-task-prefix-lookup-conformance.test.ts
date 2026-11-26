@@ -31,6 +31,14 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 import { patchTaskFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
+import {
+  restorePre615TaskPrefixBindings,
+  restorePre615TaskPrefixQuery,
+  restorePre615TaskPrefixSource,
+  restorePre615TaskPrefixText,
+  renumberSqlParameters,
+  sqlParameterCount,
+} from './helpers/rfc615TaskPrefixOracle'
 
 const VIEWER: TaskListViewer = { userId: 'w27-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
@@ -73,6 +81,7 @@ function restoreText(text: string): string {
 // Restore the lookup literals and remove exactly the additional LIMIT binding.
 // The original budget binding and all other bound objects retain their order.
 function originalQuery(query: SQL): SQL {
+  query = restorePre615TaskPrefixQuery(query)
   const chunks: SQL['queryChunks'] = []
   let limit: 'before' | 'binding' | 'suffix' | 'after' = 'before'
   for (const chunk of query.queryChunks) {
@@ -97,27 +106,27 @@ function originalQuery(query: SQL): SQL {
   return new SQL(chunks)
 }
 function originalCompiledText(text: string): string {
+  text = restorePre615TaskPrefixText(text)
   const start = text.indexOf(DIRECT_LIMIT_START)
   const end = text.indexOf(DIRECT_LIMIT_END, start)
   const placeholder = text.slice(start + DIRECT_LIMIT_START.length, end)
   if (start < 0 || end < 0 || !/^(?:\?|\$[1-9]\d*)$/.test(placeholder))
     throw new Error('missing exact physical prefix LIMIT placeholder')
   const restored = text.slice(0, start) + ORIGINAL_LIMIT + text.slice(end + DIRECT_LIMIT_END.length)
-  let ordinal = 0
-  return restoreText(restored).replace(/\$\d+/g, () => `$${++ordinal}`)
+  return renumberSqlParameters(restoreText(restored))
 }
 function originalBindings(
   sql: string,
   values: readonly unknown[],
   raw: TaskOperationsRawQuery,
 ): readonly unknown[] {
+  values = restorePre615TaskPrefixBindings(sql, values)
+  sql = restorePre615TaskPrefixText(sql)
   const start = sql.indexOf('    root_prefix_budget AS MATERIALIZED (')
   const limit = sql.indexOf(DIRECT_LIMIT_START)
   if (start < 0 || limit < start) throw new Error('missing physical prefix budget boundaries')
-  const count = (text: string) =>
-    [...text.replace(/'(?:''|[^'])*'|"(?:""|[^"])*"/g, '').matchAll(/\?|\$\d+/g)].length
-  const offset = count(sql.slice(0, start))
-  if (count(sql.slice(0, limit)) !== offset + 5)
+  const offset = sqlParameterCount(sql.slice(0, start))
+  if (sqlParameterCount(sql.slice(0, limit)) !== offset + 5)
     throw new Error('additional LIMIT must follow the budget and target projection bindings')
   const parsed = parseTaskOperationsQuery(VIEWER, raw, OPTIONS)
   expect(values.slice(offset, offset + 6)).toEqual([
@@ -440,7 +449,7 @@ describeEachProvider('RFC359 W27 bounded task prefix lookup', (harness) => {
 test('the inverse retains the complete W26 source and all original interpolation sites', () => {
   expect(
     createHash('sha256')
-      .update(restoreText(readFileSync(SOURCE_PATH, 'utf8')))
+      .update(restoreText(restorePre615TaskPrefixSource(readFileSync(SOURCE_PATH, 'utf8'))))
       .digest('hex'),
   ).toBe('330218a931834406ec24ba0b9ca1f6dfc6614a84604d47a05efd83409569a296')
 })

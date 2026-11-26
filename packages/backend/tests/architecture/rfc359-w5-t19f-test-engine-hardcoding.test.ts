@@ -108,6 +108,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // RFC-398 design §7.6: mutate the persistent source file while the child is frozen at the reapproval barrier; the PG resume lane uses its
   // server fixture. Moved from rfc398-auto-upgrade-resume.test.ts when the matrix was split one point per file (CI shard budget).
   'helpers/rfc398AutoUpgradeResume.ts: 1', // real-file-database
+  // RFC-615: build/checkpoint an epoch-1 SQLite WAL file and probe its SQLite ABI for the cache key.
+  // PostgreSQL has no transferable db.sqlite/WAL artifact; its server fixture is unchanged.
+  'helpers/rfc398FrozenSqliteFixture.ts: 2', // real-file-database
   // RFC-398 design §3.8 / §7.6: original SQLite@0223 and private bridge snapshots are compared with real released PG sources in the same
   // transcript. Moved from rfc398-postgresql-bridge.test.ts when the releases were split one per file (CI shard budget).
   'helpers/rfc398PostgresqlBridge.ts: 2', // real-file-database
@@ -355,6 +358,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc398-wal-sidecar-open.test.ts: 6', // real-file-database
   // RFC-532: an epoch-1 standalone installation is a legacy `db.sqlite` file on disk; the local boot admission reads it.
   'rfc532-deployment-database-installation-selection-boundary.test.ts: 1', // real-file-database
+  // RFC-615: inspect independent cached/cold SQLite files, WAL header bytes and frozen migration receipts.
+  // These six native handles verify file-copy isolation, not provider-neutral application behavior.
+  'rfc615-frozen-sqlite-fixture.test.ts: 6', // real-file-database
   'runner-subagent-live-capture.test.ts: 6', // real-file-database
   'scheduler-audit-gap1-limits-resume-startedat.test.ts: 1', // sqlite-execution-engine
   'scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts: 1', // sqlite-execution-engine

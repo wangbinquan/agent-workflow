@@ -14,6 +14,8 @@
 
 将root_prefix_lookup中同一task的两次相关标量查询改为physical_prefix与matches的唯一键单次JOIN，physical_prefix只投影id/startedAt。matches仍不整体物化，prefix/fallback、祖先上下文、descendant/child counts、facets、cursor和受限actor准入条件保持。
 
+最终使用`CROSS JOIN matches m WHERE m.id = p.id`。集中复验发现普通JOIN会被SQLite反转为任务全集外层与prefix自动索引内层，违反原有界成本守卫；CROSS JOIN固定有限prefix为外层，仍仅一次主键匹配。PostgreSQL继续允许优化器规划，原性能门及冷/热/custom/generic证据均重新验证。
+
 原rfc311性能门仍测现有未主动维护语料，保留200/500规模、全部provider/路径、9样本、50倍/250ms阈值与180秒预算。不能仅先VACUUM让原有冷态不再受检。新增计划/等价用例覆盖冷态与显式VACUUM ANALYZE后、custom/generic模式；SQLite也必须通过原语义/计划守卫。
 
 G1打印按运行顺序的原始样本。异常诊断在PG fixture清理前采集真实SQL/参数及可取得的EXPLAIN(ANALYZE,BUFFERS,SETTINGS,FORMAT JSON)、版本/计划设置/统计信息。跨provider比较可能在SQLite后跑时才发生，因此PG侧必须提前保存异常证据；诊断受原case剩余预算约束，失败只记录，不能覆盖或改变性能断言。未知hosted机制保持未知，不将JIT/统计信息写成已确诊原因。
@@ -35,6 +37,8 @@ RFC398 SQLite：每次仍loadFrozenEpoch1History校验provenance；key包括已�
 子workflow逐项以`fromJSON(toJSON(jobs['id'])).result`输出原13组结果，不增加runner汇总作业。JSON往返保留原值，避开[runner #2495](https://github.com/actions/runner/issues/2495)报告的直接result空输出问题；也兼容[actionlint #343](https://github.com/rhysd/actionlint/issues/343)尚未补齐的类型定义，不新增lint忽略。拓扑守卫逐项固定表达式。父CI required仍always执行，先验证full-ci调用result，再逐项要求原13组output为success；空值/failure/cancelled/skipped一律失败。它在计算concurrency之外，使用适合纯Bash的ubuntu-slim，仍为5分钟预算。ubuntu-slim共享账号并发模型，不将其宣称为独立预留容量。
 
 门禁工作数、测试命令、原矩阵/预算/coverage/provider/grep不变；只有计算分组发生移动。计时刷新脚本从来源SHA解析父+同commit子workflow，兼容RFC611旧单文件来源，未知拓扑拒绝。所有读取ci.yml工作作业的既有守卫迁为读取计算定义，新增完整父子接线守卫；required唯一名字保持，分支保护不改。
+
+后端权重采用完整成功run `45797271947` / `92222f0c3`的44份整文件计时，逐源SHA再次校验3092文件完整互斥；当前3102文件中的10个新文件不造时长，继续Bun原生median默认值。[Bun1.4.3官方连续切分算法](https://github.com/oven-sh/bun/blob/bun-v1.4.3/src/runtime/cli/test/Timings.rs)已复现该来源44/44实际片边界；同一来源数据对当前全集的拟合最长片从809.208s降为611.594s。这只是样本内排布评估，最终收益由后继完整hosted执行验收；不使用失败run或单case耗时填权重，不改变44片与15分钟预算。
 
 依据：[可复用workflow支持job concurrency](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations)、[jobs.result及workflow outputs](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#jobs-context)、[同commit相对调用](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows)、[ubuntu-slim限制](https://docs.github.com/en/actions/reference/runners/github-hosted-runners#single-cpu-runners)。
 

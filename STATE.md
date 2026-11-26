@@ -2,7 +2,8 @@
 
 - 用户明确授权解决历史行桥/PG G1两项CI失败、压缩后端长尾和排队，并保持覆盖与门禁标准；设计见 [RFC-615](design/RFC-615-ci-critical-path-and-query-cost/design.md)。
 - 范围：行桥调用内复用与无用hash消除、G1单次prefix匹配及诊断、job内测试准备缓存、计算完成即释放lane而required仍逐项全成功。现有预算和性能阈值保持。
-- 完整实现与集中验证已完成：保留的395个不同用例有通过证据，backend tsc / ESLint / Prettier / actionlint通过。原13版本/78fold行桥用例1150.72ms（仍5s），原双provider+coverage性能门25项全过，G1 PG P95 13.12ms/SQLite18.36ms；原cold阈值与预算未改。SQLite缓存真实进程/冷热/跨文件/SQLite与PG发布样本通过；compiled缓存因完整成本未显示净收益而撤回，保持原每case编译。原13组/70实际作业及GitHub唯一必需context `CI required`保留；准备精确路径发布，exact-SHA CI和实际队列/长尾仍待托管取证。RFC611核心候选`92222f0c3`曾70/70成功，后续`523725652`两项实际失败在本轮授权范围内修复。
+- 首份源码已发布为`63c09bf8a`，此前395个不同用例及静态检查通过。该SHA的快速反馈/Windows平台全绿，原G1云端P95为PG19.96ms/SQLite29.68ms；主CI揭露本轮遗漏的旧SQL逆变换/绑定守卫和新增测试覆盖账本接线，按本人缺陷修复，未重跑追绿。扩展集中复验又发现SQLite普通JOIN被反转的真实成本回退，最终改CROSS JOIN固定有限前缀外层；原双provider+coverage性能门25项再次全过，PG12.82ms/SQLite16.15ms，其他关联回归与后继exact-SHA CI继续验收。
+- 保持原13版本/78fold一个5秒用例、原性能阈值、全部provider/platform/coverage、13组/70实际作业及唯一必需context `CI required`。SQLite缓存真实进程/冷热/跨文件/SQLite与PG发布样本通过；compiled缓存因完整成本无净收益而撤回，保留每case真实编译。采用既有70/70成功的`92222f0c3` / run45797271947完整44份、3092文件整文件权重重平衡；10个未测新文件继续原生默认值，未用失败样本。长尾和队列的最终收益仍以后继托管数据为准；详见RFC615 plan。
 
 ## 2026-11-26 注记：RFC-294 的独立对账已到期；`03008a73a` 之后的主 CI 每轮都有与改动无关的超时红格
 

@@ -1,4 +1,3 @@
-import { TASK_DEFINITION_HOSTS } from '@agent-workflow/shared'
 // RFC-359: keep root ordering over the complete matching set, but compute
 // root match metadata only for the selected families. The oracle restores the
 // exact previous SQL text while retaining every real bound value and snapshot.
@@ -26,6 +25,7 @@ import {
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
+import { renumberSqlParameters, sqlParameterCount } from './helpers/rfc615TaskPrefixOracle'
 
 const VIEWER: TaskListViewer = { userId: 'w21-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
@@ -112,18 +112,16 @@ function originalRootBindings(
 ): readonly unknown[] {
   const start = text.indexOf(PREFIX_START)
   if (start < 0) return values
-  const before = text.slice(0, start).replace(/'(?:''|[^'])*'|"(?:""|[^"])*"/g, '')
-  const offset = [...before.matchAll(/\?|\$\d+/g)].length
+  const end = text.indexOf(PREFIX_END, start)
+  if (end < 0) throw new Error('missing original page boundary')
+  const offset = sqlParameterCount(text.slice(0, start))
   const added = [
     parsed.limit + 1,
-    // The physical-prefix target projection binds the four synthetic definition anchors.
-    TASK_DEFINITION_HOSTS.agent.id,
-    TASK_DEFINITION_HOSTS.workgroup.id,
-    TASK_DEFINITION_HOSTS['digital-employee'].id,
-    TASK_DEFINITION_HOSTS['code-round'].id,
+    // RFC-615's id/started_at projection has no synthetic host bindings.
     parsed.limit + 1,
     ...(parsed.cursor ? [parsed.cursor.branchStartedAt, parsed.cursor.taskId] : []),
   ]
+  expect(sqlParameterCount(text.slice(start, end))).toBe(added.length)
   expect(values.slice(offset, offset + added.length)).toEqual(added)
   return [...values.slice(0, offset), ...values.slice(offset + added.length)]
 }
@@ -138,8 +136,7 @@ function restoreGlobalRootStatsText(text: string): string {
   for (const [current, original] of ORIGINAL_SQL_REWRITES) {
     text = text.replaceAll(current, original)
   }
-  let ordinal = 0
-  return text.replace(/\$\d+/g, () => `$${++ordinal}`)
+  return renumberSqlParameters(text)
 }
 
 // StringChunk holds only emitted SQL text. Other chunks, including every

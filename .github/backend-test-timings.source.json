@@ -1,10 +1,26 @@
 {
-  "sourceRun": 45772006810,
-  "sourceSha": "170f3e2cc32ce7c20c58afc1b2660eec75315d65",
+  "sourceRun": 45797271947,
+  "sourceSha": "92222f0c3c3890eca5ec2ec71c2d5dc452d58042",
   "sourceRepository": "wangbinquan/agent-workflow",
+  "sourceWorkflowPath": ".github/workflows/ci.yml",
+  "finalRunAttempt": 1,
   "sourceShards": 44,
-  "sourceFiles": 3081,
-  "measurement": "Bun whole-file wall clock in milliseconds; all 44 successful shard artifacts",
-  "refresh": "bun scripts/ci/refresh-backend-timings.ts ARTIFACTS_DIR RUN_ID OUTPUT_JSON",
-  "unmeasuredPolicy": "New files retain Bun default weight until a complete successful run supplies measurements."
+  "sourceFiles": 3092,
+  "measuredMilliseconds": 23925119,
+  "unmeasured": [
+    "packages/backend/tests/rfc612-source-control-composition-implementations-boundary.test.ts",
+    "packages/backend/tests/rfc613-task-run-binding-required-boundary.test.ts",
+    "packages/backend/tests/rfc614-launch-upload-admission-required-boundary.test.ts",
+    "packages/backend/tests/rfc615-ci-calculation-admission.test.ts",
+    "packages/backend/tests/rfc615-frozen-sqlite-fixture.test.ts",
+    "packages/backend/tests/rfc615-g1-diagnostics.test.ts",
+    "packages/backend/tests/rfc615-g1-plan-stability.test.ts",
+    "packages/backend/tests/rfc615-history-row-bridge-scope.test.ts",
+    "packages/backend/tests/rfc615-task-prefix-oracle.test.ts",
+    "packages/backend/tests/rfc615-test-fixture-cache.test.ts"
+  ],
+  "removed": [],
+  "projectedCurrentFiles": 3102,
+  "measurement": "Bun whole-file wall clock in milliseconds; all 44 successful source shard artifacts; revalidated by mergeBackendTimings against exact source SHA",
+  "projection": "Current shared checkout test population; unknown files are absent from weights and retain Bun native median fallback"
 }

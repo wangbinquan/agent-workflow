@@ -18,6 +18,12 @@ import {
 import { fastFilteredRootQuery } from '@/modules/task-execution/infrastructure/taskListPage/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
+import {
+  restorePre615TaskPrefixBindings,
+  restorePre615TaskPrefixQuery,
+  restorePre615TaskPrefixSource,
+  restorePre615TaskPrefixText,
+} from './helpers/rfc615TaskPrefixOracle'
 
 const VIEWER = { userId: 'w27-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
@@ -37,6 +43,7 @@ function restoreText(text: string): string {
 }
 
 function originalQuery(query: SQL): SQL {
+  query = restorePre615TaskPrefixQuery(query)
   let gates = 0
   let joins = 0
   const chunks = query.queryChunks.map((chunk) => {
@@ -383,9 +390,20 @@ describeEachProvider('RFC-359 W39 fallback gate preserves the complete task quer
       }
       expect(recording.statements).toHaveLength(2)
       const before = recording.statements[0]
-      const after = recording.statements[1]
-      if (before === undefined || after === undefined)
+      const current = recording.statements[1]
+      if (before === undefined || current === undefined)
         throw new Error('missing actual query record')
+      // Keep the current vector observable, then restore exactly RFC-615's four
+      // removed physical-projection anchors before the unchanged gate proof.
+      expect(current.values).toHaveLength(current.params)
+      const values = restorePre615TaskPrefixBindings(current.sql, current.values)
+      const after = {
+        ...current,
+        sql: restorePre615TaskPrefixText(current.sql),
+        values,
+        params: values.length,
+      }
+      expect(after.params).toBe(current.params + 4)
       expect(candidateRows).toEqual(originalRows)
       expect(JSON.stringify(candidateRows)).toBe(JSON.stringify(originalRows))
       expect<readonly unknown[]>(candidateRows.map((row) => row.id)).toEqual(entry.ids)
@@ -459,7 +477,7 @@ describeEachProvider('RFC-359 W39 fallback gate preserves the complete task quer
 // importing it — the import, five signatures and the calls that pass it along. The rendered SQL is unchanged (the SQL,
 // binding and row proofs in this file stay exact); reversing those hunks restores the previous pin c5141b57….
 test('the gate inverse retains the complete published W38 query source', () => {
-  const source = readFileSync(SOURCE_PATH, 'utf8')
+  const source = restorePre615TaskPrefixSource(readFileSync(SOURCE_PATH, 'utf8'))
   expect(source.split(GATE)).toHaveLength(2)
   expect(source.split(GATED_FROM)).toHaveLength(2)
   expect(createHash('sha256').update(restoreText(source)).digest('hex')).toBe(

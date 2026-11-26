@@ -304,7 +304,10 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // alongside the new SQLite compiler; equivalence tests drive both explicit plans.
   // RFC-395 batched epoch-2 copy (+1 PostgreSQL ref): the regression for the
   // PostgreSQL-only logical target builds its plan as input; no new plan criterion.
-  'platform/persistence/schema/Plan: sqlite 8/7, postgresql 33/7',
+  // RFC-615: the invocation-scope regression adds one PostgreSQL ref via its existing facade.
+  // Its paired SQLite compiler regression directly verifies stored head/edge DDL, projected row
+  // contracts and rejection of a real column change. SQLite gains one ref/drive; the ref gap stays 25.
+  'platform/persistence/schema/Plan: sqlite 9/8, postgresql 34/7',
 ]
 
 /** plan §5 T19d 的「阈值」：两侧 ref 差到这个数就算倒挂，要么补测试、要么进下面的观察名单。 */
@@ -355,8 +358,8 @@ export const INVERTED_PAIRS: readonly string[] = [
   // RFC-398 design §3.8 / §5 / §7.6: paired bridge plus native WAL witness; §11: one
   // type-only reference from the dual-provider codec-correction regression (see above).
   'platform/persistence/migration/SourceReader: 13 vs 4',
-  // RFC-395 batched epoch-2 copy: 8 vs 32 → 8 vs 33, source noted on the ledger line.
-  'platform/persistence/schema/Plan: 8 vs 33',
+  // RFC-615: direct SQLite plan/row-bridge coverage compensates the new PG fixture reference; gap stays 25.
+  'platform/persistence/schema/Plan: 9 vs 34',
 ]
 
 interface Side {

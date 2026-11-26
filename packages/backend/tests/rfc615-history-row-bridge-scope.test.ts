@@ -22,7 +22,14 @@ import {
   withCanonicalFragmentCache,
   type LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
-import type { SchemaEdge } from '@/platform/persistence/schema/history/types'
+import type { HistoryStatement, SchemaEdge } from '@/platform/persistence/schema/history/types'
+import { createHistoryVersion } from '@/platform/persistence/schema/history/compiler'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/schema/history/logicalHistory'
+import { projectLogicalSchemaContract } from '@/platform/persistence/schema/logicalContract'
+import { registryFromContract } from '@/platform/persistence/schema/contract'
+import { compileSqlitePlan } from '@/platform/persistence/schema/sqlitePlan'
+import { index } from '@/platform/persistence/schema/dsl'
+import { itemTable, parentTable, r2Registry } from './helpers/rfc395R2Schema'
 
 type Mutable<T> = T extends object ? { -readonly [Key in keyof T]: Mutable<T[Key]> } : T
 type MutableHistory = Mutable<PostgresqlMigrationHistory>
@@ -266,6 +273,101 @@ const mutations: readonly {
 ]
 
 describe('RFC-615 row bridge invocation scope', () => {
+  test('SQLite compiled heads preserve the exact row contracts admitted by additive and index-only bridges', async () => {
+    const indexName = 'idx_rfc615_parent_name'
+    const indexedParent = { ...parentTable, indexes: [index(indexName, ['name'])] }
+    const registries = [
+      r2Registry([parentTable]),
+      r2Registry([parentTable, itemTable]),
+      r2Registry([indexedParent, itemTable]),
+    ]
+    const baseline = createHistoryVersion({ registry: registries[0]!, slug: 'baseline' })
+    const added = createHistoryVersion({
+      registry: registries[1]!,
+      slug: 'add_items',
+      previous: baseline,
+      edge: { kind: 'add-table', tableId: itemTable.id },
+    })
+    const indexed = createHistoryVersion({
+      registry: registries[2]!,
+      slug: 'index_parent',
+      previous: added,
+      edge: { kind: 'add-index', tableId: parentTable.id, name: indexName },
+    })
+    const versions = [baseline, added, indexed]
+    const history = await loadPostgresqlMigrationHistory({
+      schemaHistory: { head: () => indexed, history: () => versions, metaTables: [] },
+      headContract: projectLogicalSchemaContract(registries[2]!),
+    })
+    // Drive the SQLite compiler directly, then verify both its stored DDL and the
+    // logical row contract used by the bridge. A symbol reference alone proves neither.
+    const plans = registries.map((registry) => compileSqlitePlan(registry))
+    for (const [i, plan] of plans.entries()) {
+      expect<readonly HistoryStatement[]>(plan.statements).toEqual(versions[i]!.sqlite.head)
+      expect(plan.contractDigest).toBe(versions[i]!.contract.contract.digest)
+      expect(projectLogicalSchemaContract(registryFromContract(plan.contract!))).toEqual(
+        history.versions[i]!.contract,
+      )
+    }
+    const parentSql = (plan: (typeof plans)[number]) =>
+      plan.statements.find(
+        (statement) => statement.kind === 'table' && statement.logicalId === parentTable.id,
+      )!.sql
+    expect(parentSql(plans[1]!)).toBe(parentSql(plans[0]!))
+    expect(parentSql(plans[2]!)).toBe(parentSql(plans[0]!))
+    expect(added.sqlite.statements).toEqual(
+      plans[1]!.statements
+        .filter(
+          (statement) =>
+            statement.logicalId === itemTable.id ||
+            statement.logicalId.startsWith(`${itemTable.id}:`),
+        )
+        .map((statement) => statement.sql),
+    )
+    expect(added.sqlite.statements[0]).toContain('CREATE TABLE "r2_items"')
+    expect(added.sqlite.statements[0]).toContain(
+      'FOREIGN KEY ("parent_id") REFERENCES "r2_parents" ("id") ON UPDATE NO ACTION ON DELETE CASCADE',
+    )
+    expect(indexed.sqlite.statements).toEqual([
+      'CREATE INDEX "idx_rfc615_parent_name" ON "r2_parents" ("name")',
+    ])
+    expect(resolvePostgresqlAdditiveRowBridge(history, endpoints(history)).target).toBe(
+      history.head.contract,
+    )
+    expect(resolvePostgresqlIndexOnlyRowBridge(history, endpoints(history, 1)).target).toBe(
+      history.head.contract,
+    )
+    expect(() => resolvePostgresqlIndexOnlyRowBridge(history, endpoints(history))).toThrow(
+      ROW_CHANGED,
+    )
+
+    // A SQLite column change changes real DDL and must still invalidate the same
+    // reviewed index edge; the faster bridge cannot trust only that edge's label.
+    const changedRegistry = r2Registry([
+      {
+        ...indexedParent,
+        columns: {
+          ...indexedParent.columns,
+          name: { ...indexedParent.columns.name, nullable: true },
+        },
+      },
+      itemTable,
+    ])
+    const changedPlan = compileSqlitePlan(changedRegistry)
+    expect(parentSql(changedPlan)).not.toBe(parentSql(plans[2]!))
+    const changedHead = {
+      ...history.head,
+      contract: projectLogicalSchemaContract(registryFromContract(changedPlan.contract!)),
+    }
+    const changedHistory = {
+      ...history,
+      versions: [...history.versions.slice(0, -1), changedHead],
+      head: changedHead,
+    }
+    for (const resolve of [resolvePostgresqlAdditiveRowBridge, resolvePostgresqlIndexOnlyRowBridge])
+      expect(() => resolve(changedHistory, endpoints(changedHistory, 1))).toThrow(ROW_CHANGED)
+  })
+
   test('keeps source/target identity and both bridge modes across insertion and index edges', () => {
     const history = historyFixture()
     for (let from = 0; from < history.versions.length; from += 1) {

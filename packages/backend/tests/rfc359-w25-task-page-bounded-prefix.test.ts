@@ -1,4 +1,3 @@
-import { TASK_DEFINITION_HOSTS } from '@agent-workflow/shared'
 // RFC-395 II-a rebaseline: HEAD inverse matches the previous pin; only A2 subject/name SQL
 // and A7 catalog-query forwarding changed. Prefix/gate inverses and binding assertions remain exact.
 // RFC359 W25: real original SQL, original bindings, complete rows and snapshot.
@@ -33,6 +32,11 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 import { recordStatements } from './helpers/statementRecorder'
 import { persistenceSchemaBinding } from '@/bootstrap/persistenceSchema'
 import { workflowNameExpression } from '@/modules/resource-catalog/infrastructure/executionResourceQueries'
+import {
+  restorePre615TaskPrefixSource,
+  renumberSqlParameters,
+  sqlParameterCount,
+} from './helpers/rfc615TaskPrefixOracle'
 
 const VIEWER: TaskListViewer = { userId: 'w25-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
@@ -95,25 +99,22 @@ function originalBindings(
 ): readonly unknown[] {
   const start = sql.indexOf(START)
   if (start < 0) return values
-  const prefix = sql.slice(0, start).replace(/'(?:''|[^'])*'|"(?:""|[^"])*"/g, '')
-  const offset = [...prefix.matchAll(/\?|\$\d+/g)].length
+  const end = sql.indexOf(END, start)
+  if (end < 0) throw new Error('missing original page boundary')
+  const offset = sqlParameterCount(sql.slice(0, start))
   const parsed = parseTaskOperationsQuery(VIEWER, raw, OPTIONS)
   const added = [
     parsed.limit + 1,
-    // The physical-prefix target projection binds the four synthetic definition anchors.
-    TASK_DEFINITION_HOSTS.agent.id,
-    TASK_DEFINITION_HOSTS.workgroup.id,
-    TASK_DEFINITION_HOSTS['digital-employee'].id,
-    TASK_DEFINITION_HOSTS['code-round'].id,
+    // RFC-615's id/started_at projection has no synthetic host bindings.
     parsed.limit + 1,
     ...(parsed.cursor ? [parsed.cursor.branchStartedAt, parsed.cursor.taskId] : []),
   ]
+  expect(sqlParameterCount(sql.slice(start, end))).toBe(added.length)
   expect(values.slice(offset, offset + added.length)).toEqual(added)
   return [...values.slice(0, offset), ...values.slice(offset + added.length)]
 }
 function originalCompiledText(text: string): string {
-  let ordinal = 0
-  return restoreText(text).replace(/\$\d+/g, () => `$${++ordinal}`)
+  return renumberSqlParameters(restoreText(text))
 }
 interface FixtureRow {
   id: string
@@ -387,7 +388,7 @@ describeEachProvider('RFC359 W25 bounded root prefix', (harness) => {
 test('the inverse retains the exact complete W23 source', () => {
   expect(
     createHash('sha256')
-      .update(restoreText(readFileSync(SOURCE_PATH, 'utf8')))
+      .update(restoreText(restorePre615TaskPrefixSource(readFileSync(SOURCE_PATH, 'utf8'))))
       .digest('hex'),
   ).toBe('4ac284b1e20e2e34199488b4cd589324c5af6db3ae6f13b23d8d201a2045927e')
 })
@@ -496,8 +497,8 @@ test('SQLite runtime skips the full aggregate after a certified page and execute
       )
       const physical = plan.find((row) => row.detail === 'MATERIALIZE physical_prefix')
       const matching = plan.find((row) => row.detail === 'MATERIALIZE root_prefix')
-      const lookup = plan.find((row) => row.detail === 'MATERIALIZE root_prefix_lookup')
-      if (!physical || !matching || !lookup) throw new Error('missing bounded prefix plan')
+      expect(plan.find((row) => row.detail === 'MATERIALIZE root_prefix_lookup')).toBeUndefined()
+      if (!physical || !matching) throw new Error('missing bounded prefix plan')
       expect(plan.filter((row) => row.parent === physical.id).map((row) => row.detail)).toContain(
         'SCAN tasks USING COVERING INDEX idx_tasks_list_started_id',
       )
@@ -507,20 +508,18 @@ test('SQLite runtime skips the full aggregate after a certified page and execute
             (row) => row.parent === matching.id && /^(?:SCAN|SEARCH) [pt](?: |$)/.test(row.detail),
           )
           .map((row) => row.detail),
+        JSON.stringify(plan),
       ).toEqual(['SCAN p'])
-      const probes = plan.filter(
-        (row) => row.parent === lookup.id && row.detail.startsWith('CORRELATED SCALAR SUBQUERY '),
-      )
-      expect(probes).toHaveLength(2)
-      for (const probe of probes)
-        expect(
-          plan
-            .filter(
-              (row) => row.parent === probe.id && /^(?:SCAN|SEARCH) tasks(?: |$)/.test(row.detail),
-            )
-            .map((row) => row.detail),
-        ).toEqual(['SEARCH tasks USING INDEX sqlite_autoindex_tasks_1 (id=?)'])
-      const lookupDescendants = new Set([lookup.id])
+      // RFC-615 fetches membership/root in one indexed JOIN, replacing the two
+      // correlated match probes. Keep the exact bounded scan/lookup proof.
+      expect(
+        plan
+          .filter(
+            (row) => row.parent === matching.id && /^(?:SCAN|SEARCH) tasks(?: |$)/.test(row.detail),
+          )
+          .map((row) => row.detail),
+      ).toEqual(['SEARCH tasks USING INDEX sqlite_autoindex_tasks_1 (id=?)'])
+      const lookupDescendants = new Set([matching.id])
       for (const row of plan) if (lookupDescendants.has(row.parent)) lookupDescendants.add(row.id)
       expect(
         plan
@@ -531,7 +530,6 @@ test('SQLite runtime skips the full aggregate after a certified page and execute
           .map((row) => row.detail),
       ).toEqual([
         'SCAN tasks USING COVERING INDEX idx_tasks_list_started_id',
-        'SEARCH tasks USING INDEX sqlite_autoindex_tasks_1 (id=?)',
         'SEARCH tasks USING INDEX sqlite_autoindex_tasks_1 (id=?)',
       ])
       const deep = withCursor(RAW, 890, 'root-11')

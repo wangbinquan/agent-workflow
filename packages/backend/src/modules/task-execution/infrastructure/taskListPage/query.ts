@@ -610,8 +610,9 @@ export function fastFilteredRootQuery(
       -- tasks.id is unique and open_alerts is DISTINCT: each prefix row has
       -- at most one match. Fetch membership and root together, without two
       -- correlated expansions of the same NOT MATERIALIZED match query.
+      -- CROSS JOIN keeps SQLite's bounded prefix outermost.
       SELECT p.id, m.rid, p.started_at
-      FROM physical_prefix p JOIN matches m ON m.id = p.id
+      FROM physical_prefix p CROSS JOIN matches m WHERE m.id = p.id
     ),
     prefix_roots AS (
       SELECT p.rid, MAX(p.started_at) AS bsa
