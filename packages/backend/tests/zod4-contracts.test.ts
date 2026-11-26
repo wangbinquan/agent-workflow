@@ -90,6 +90,9 @@ describe('Zod 4 API and schema contracts', () => {
       // RFC-396 H5 adds this tool after the Zod migration; all 75 historical digests stay intact.
       'tool/review_graph_limitations':
         '29772ea84af016441b4347043d9e816b4bbb4215e6e11516800e46cedfb38026',
+      // RFC-602: the new bounded child query has its own input contract. Its
+      // explicit JSON Schema oracle lives in rfc602-task-children-contract.test.ts.
+      'tool/list_task_children': 'ec024e88aa98fc67d3e002c33e5ed610b319c4484c9e7c69f053eaa216cea785',
       // RFC-490 (proposal C9): `decision.status` gains "deferred" and "not-applicable", and the
       // field now describes them. The Zod 3 digest of this tool is superseded on purpose.
       'tool/save_clarify_draft': 'd0f51cd3196360d92afb8a80ef5b6b595648f6f89a225edb7d3b5c1c66b0b777',

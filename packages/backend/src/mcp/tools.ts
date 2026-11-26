@@ -277,6 +277,30 @@ const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
       ),
   },
   {
+    name: 'list_task_children',
+    title: 'List direct child tasks',
+    description:
+      'Read one page of direct child task ids and statuses, ordered by start time and id descending. ' +
+      'Returns schemaVersion, parentTaskId, items and nextCursor. The default page size is 100, maximum 200. ' +
+      'Pass nextCursor unchanged as cursor with the same parent task to read the next page; null means the end.',
+    permissions: [],
+    inputSchema: {
+      id: taskId,
+      limit: z.number().int().min(1).max(200).optional(),
+      cursor: z.string().min(1).optional().describe('Opaque nextCursor from the preceding page'),
+    },
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.operations.taskChildrenList({
+          params: { id: String(args.id) },
+          query: {
+            limit: args.limit === undefined ? undefined : String(args.limit),
+            cursor: args.cursor === undefined ? undefined : String(args.cursor),
+          },
+        }),
+      ),
+  },
+  {
     name: 'watch_task',
     title: 'Wait for a task to settle',
     description:

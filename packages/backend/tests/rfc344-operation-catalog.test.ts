@@ -427,10 +427,10 @@ describe('RFC-344 closed operation catalog', () => {
     ).toThrow(/cannot own codec or handler/)
   })
 
-  test('all 53 tools have one exact direct, parameterized, composite or local binding', () => {
+  test('all 54 tools have one exact direct, parameterized, composite or local binding', () => {
     const toolNames = ALL_TOOLS.map((entry) => entry.name).sort()
     const bindingNames = Object.keys(MCP_TOOL_BINDINGS).sort()
-    expect(toolNames).toHaveLength(53)
+    expect(toolNames).toHaveLength(54)
     expect(bindingNames).toEqual(toolNames)
     for (const binding of Object.values(MCP_TOOL_BINDINGS)) {
       expect(operationDependencies(binding).length).toBeGreaterThan(0)

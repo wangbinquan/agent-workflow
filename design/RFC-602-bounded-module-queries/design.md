@@ -58,6 +58,8 @@ SQLite/PostgreSQL 共用递归 CTE，ID 集合用 UNION 去重避免 SQL 环；�
 
 新增 task-execution 窄查询与 GET /api/tasks/:id/children：返回版本化 {schemaVersion:1, parentTaskId, items:[{id,status}], nextCursor}。旧 /api/tasks 的数组合同保持。接口复用既有路由任务可见性与列表谓词；直接子任务条件、public catalog 条件下推。默认页 100、最大 200，按 started_at/id 降序，游标含版本、parent ID、请求者口径与边界；不合规格先拒绝。数据库复用现有 idx_tasks_list_parent_started_id，最多取 limit+1 行，不做 descendant graph/owner 富化。
 
+API 合同注册表使用共享严格 TaskChildrenPageSchema。MCP 的 list_task_children 精确绑定 task-execution.list-task-children.v1，每次调用只读取一页；参数为 id、可选 limit（1..200）和原样透传的 cursor，返回同一版本化 DTO。工具总数、绑定闭包与 JSON Schema 摘要按既有精确守卫同步，保留全部历史断言。HTTP 与 MCP 都不自动扩张为读取全部子任务；完整分页链由 useTaskChildren 消费。
+
 application 定义查询/读取端口与游标规则，infrastructure 实现窄 SQL，providerRuntime 装配 query，daemonHttpComposition 注入 taskRoutes；不向旧 TaskRouteOperations 大接口增加方法。
 
 useTaskChildren 保留 ['tasks','children',parentId]、enabled、父/子活跃轮询与 WS 失效。queryFn 使用同一 AbortSignal 顺序消费到 nextCursor=null，一轮全部成功后才发布完整数组，不设总数 500 上限。续页失败保留上一轮完整结果和 error；首轮失败不发布部分数组。相同父的消费者共用整个分页链；末页不再请求；重复游标报错避免无穷循环。每项只消费 id/status，ChildTaskLink 与画布判定不需要完整 TaskListItem。

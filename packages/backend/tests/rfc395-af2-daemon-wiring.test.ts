@@ -9,9 +9,8 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { metaTableName } from '@/platform/persistence/schema/history/meta'
-import { compileContract } from '@/platform/persistence/schema/contract'
 import { digestSchemaContract } from '@/platform/persistence/schema/canonical'
-import { frozenEpoch1Registry } from '@/platform/persistence/migration/epoch1/definitions'
+import { frozenEpoch1Contract } from '@/platform/persistence/migration/epoch1/contract'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
@@ -36,6 +35,7 @@ import {
 } from './helpers/model'
 import { seedNodeRunDisplayEvidence } from './helpers/rfc395Q1Evidence'
 import { withO2Closure } from './helpers/o2Closure'
+import { seedEmptyCodeHistory } from './helpers/legacyCapabilitySeed'
 
 const actor = buildActor({
   user: {
@@ -61,7 +61,7 @@ describeEachProvider('RFC-395 AF-2 composed daemon wiring', (h) => {
       h.db,
       sql`SELECT generation_id FROM ${meta('generations')} WHERE state = 'active'`,
     )
-    const sourceContract = compileContract(frozenEpoch1Registry)
+    const sourceContract = frozenEpoch1Contract
     const binding = { sourceGenerationId: 'af2-source', sourceContract }
     const run = {
       run_id: 'af2-conversion',
@@ -108,6 +108,7 @@ describeEachProvider('RFC-395 AF-2 composed daemon wiring', (h) => {
       h.db,
       sql`UPDATE ${meta('generations')} SET role = 'converted', run_id = 'af2-conversion', source_generation_id = 'af2-source' WHERE state = 'active'`,
     )
+    await seedEmptyCodeHistory(h.db, { sourceGeneration: 'af2-source', contract: sourceContract })
   }
   async function seedTask(
     home: string,

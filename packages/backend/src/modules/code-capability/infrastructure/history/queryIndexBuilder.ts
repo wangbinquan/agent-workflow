@@ -389,7 +389,7 @@ export function createCodeHistoryIndexCommands(input: {
       ]
       for (const [index, table] of derivedTables.entries()) {
         const [count] = await db
-          .select({ n: sql<number>`count(*)` })
+          .select({ n: sql<number>`count(*)`.mapWith(Number) })
           .from(table)
           .where(eq(table.buildId, buildId))
         if (Number(count?.n) !== expected[index])

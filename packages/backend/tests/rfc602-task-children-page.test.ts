@@ -12,33 +12,29 @@ import {
 } from '@/modules/task-execution/inbound/http/taskRoutes'
 import type { TaskChildrenRead } from '@/modules/task-execution/application/ports/taskChildren'
 import { errorHandler } from '@/platform/errors/domainErrors'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
+import { taskChildrenFixture } from './helpers/model/taskChildren'
 
 const viewer = { userId: 'children-viewer', canReadAllTasks: true }
 
 async function seed(db: PersistenceDb, size: number, parentTaskId = 'children-parent') {
-  const { tasks } = tablesOf(db)
   // This projection owns only task core facts; no definition/owner enrichment
-  // is needed. Seed that real core explicitly instead of constructing runtimes.
-  await db
-    .insert(tasks)
-    .values({ id: parentTaskId, name: parentTaskId, status: 'done', startedAt: 1 })
+  // is needed. Keep the minimal target facts behind the model fixture boundary.
+  await taskChildrenFixture(db, { id: parentTaskId, status: 'done', startedAt: 1 })
   const ids = Array.from(
     { length: size },
     (_, i) => `${parentTaskId}-${String(i).padStart(5, '0')}`,
   )
-  for (let offset = 0; offset < ids.length; offset += 100)
-    await db.insert(tasks).values(
-      ids.slice(offset, offset + 100).map((id) => ({
-        id,
-        name: id,
-        status: 'done' as const,
-        startedAt: 100,
-        parentTaskId,
-      })),
-    )
+  await taskChildrenFixture(
+    db,
+    ids.map((id) => ({
+      id,
+      status: 'done' as const,
+      startedAt: 100,
+      parentTaskId,
+    })),
+  )
   return ids.reverse()
 }
 
@@ -128,30 +124,23 @@ describeEachProvider('RFC-602 bounded direct child pages', (harness) => {
   test('only direct public children participate, and different timestamps/ties share one descending order', async () => {
     await seed(harness.db, 3)
     await seed(harness.db, 1201, 'unrelated-parent')
-    const { tasks } = tablesOf(harness.db)
-    await dbInsert([
-      { id: 'newest', startedAt: 101, parentTaskId: 'children-parent' },
-      { id: 'oldest', startedAt: 99, parentTaskId: 'children-parent' },
-      { id: 'grandchild', startedAt: 999, parentTaskId: 'children-parent-00000' },
+    await taskChildrenFixture(harness.db, [
+      { id: 'newest', status: 'running', startedAt: 101, parentTaskId: 'children-parent' },
+      { id: 'oldest', status: 'running', startedAt: 99, parentTaskId: 'children-parent' },
+      {
+        id: 'grandchild',
+        status: 'running',
+        startedAt: 999,
+        parentTaskId: 'children-parent-00000',
+      },
       {
         id: 'internal-child',
+        status: 'running',
         startedAt: 999,
         parentTaskId: 'children-parent',
         catalogVisibility: 'internal',
       },
     ])
-    async function dbInsert(
-      rows: {
-        id: string
-        startedAt: number
-        parentTaskId: string
-        catalogVisibility?: 'internal'
-      }[],
-    ) {
-      await harness.db
-        .insert(tasks)
-        .values(rows.map((row) => ({ name: row.id, status: 'running' as const, ...row })))
-    }
     // Each randomized case restores different cardinalities. Refresh statistics
     // so the plan reflects this fixture, not a previous case's parent selectivity.
     await harness.executeFixtureDdl('ANALYZE')
@@ -224,7 +213,6 @@ describeEachProvider('RFC-602 bounded direct child pages', (harness) => {
 
   test('mixed task subjects and every lifecycle status share the same narrow child projection', async () => {
     await seed(harness.db, 0)
-    const { tasks, taskDefinitions } = tablesOf(harness.db)
     const cases = [
       ['workflow', 'pending'],
       ['workgroup', 'running'],
@@ -241,23 +229,15 @@ describeEachProvider('RFC-602 bounded direct child pages', (harness) => {
       status,
       startedAt: index + 10,
     }))
-    await harness.db.insert(tasks).values(
-      expected.map(({ id, status, startedAt }) => ({
+    await taskChildrenFixture(
+      harness.db,
+      expected.map(({ id, subjectKind, status, startedAt }) => ({
         id,
         name: id,
         status,
         startedAt,
-        parentTaskId: 'children-parent',
-      })),
-    )
-    await harness.db.insert(taskDefinitions).values(
-      expected.map(({ id, subjectKind }) => ({
-        taskId: id,
         subjectKind,
-        definitionOrigin: 'authored' as const,
-        engineKind: subjectKind === 'workgroup' ? 'workgroup' : 'workflow',
-        workflowSnapshot: '{}',
-        inputs: '{}',
+        parentTaskId: 'children-parent',
       })),
     )
     const query = createTaskChildrenQuery(createTaskChildrenRead(harness.db))
@@ -280,8 +260,7 @@ describeEachProvider('RFC-602 bounded direct child pages', (harness) => {
 
   test('keyset continuation crosses timestamp ties and inclusive numeric boundary values without gaps', async () => {
     const tied = await seed(harness.db, 3)
-    const { tasks } = tablesOf(harness.db)
-    await harness.db.insert(tasks).values([
+    await taskChildrenFixture(harness.db, [
       {
         id: 'latest-safe-time',
         name: 'latest',
@@ -317,6 +296,30 @@ describeEachProvider('RFC-602 bounded direct child pages', (harness) => {
 })
 
 describe('RFC-602 child cursor and failure semantics', () => {
+  test('task route composition requires the child query before registering handlers', () => {
+    const unexpected = () => {
+      throw new Error('route composition must not call unrelated dependencies')
+    }
+    const dependencies: Omit<TaskRouteDependencies, 'children'> = {
+      workspaceQueries: new Proxy(
+        {},
+        { get: unexpected },
+      ) as TaskRouteDependencies['workspaceQueries'],
+      operations: new Proxy({}, { get: unexpected }) as TaskRouteDependencies['operations'],
+      diagnostics: new Proxy({}, { get: unexpected }) as TaskRouteDependencies['diagnostics'],
+    }
+    let thrown: unknown
+    try {
+      // @ts-expect-error Deliberately exercise a missing required composition dependency.
+      mountTaskRoutes(new Hono(), dependencies)
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(Error)
+    if (!(thrown instanceof Error)) throw new Error('expected task route composition to fail')
+    expect(thrown.message).toBe('task-children-query-not-composed')
+  })
+
   test('invalid page inputs are rejected before reading and cursors stay bound to their query', async () => {
     let reads = 0
     const query = createTaskChildrenQuery({

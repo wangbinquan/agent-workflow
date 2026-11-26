@@ -34,6 +34,7 @@ import {
   SkillSchema,
   TaskCatalogPageSchema,
   TaskCatalogSourcesDocumentSchema,
+  TaskChildrenPageSchema,
   TaskListItemSchema,
   WorkgroupSchema,
   WorkflowDetailSchema,
@@ -728,6 +729,15 @@ export const ENDPOINTS: EndpointSpec[] = [
     happy: {
       pathParams: (h) => ({ id: h.fixtures.taskId }),
       schema: z.object({ task: z.any().optional() }).passthrough(),
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/tasks/:id/children',
+    happy: {
+      pathParams: (h) => ({ id: h.fixtures.taskId }),
+      query: { limit: '100' },
+      schema: TaskChildrenPageSchema,
     },
   },
   { method: 'POST', path: '/api/tasks' },

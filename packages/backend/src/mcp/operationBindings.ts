@@ -36,6 +36,7 @@ export const MCP_OPERATIONS = Object.freeze({
   repoRefsList: query('source-control.list-repo-refs.v1', '/api/repos/refs'),
   taskGet: query('task-execution.get-task.v1', '/api/tasks/:id'),
   taskList: query('task-execution.list-tasks.v1', '/api/tasks'),
+  taskChildrenList: query('task-execution.list-task-children.v1', '/api/tasks/:id/children'),
   taskDiffGet: query('task-execution.get-task-diff.v1', '/api/tasks/:id/diff'),
   taskNodeRunsList: query('task-execution.list-node-runs.v1', '/api/tasks/:id/node-runs'),
   taskCancel: command('task-execution.cancel-task.v1', 'POST', '/api/tasks/:id/cancel'),
@@ -364,7 +365,7 @@ const resourceCases = (
   return cases
 }
 
-/** Exact 52-tool binding closure. Adding a tool without a binding is a startup error. */
+/** Exact tool binding closure. Adding a tool without a binding is a startup error. */
 export const MCP_TOOL_BINDINGS = Object.freeze({
   launch_task: compositeBinding('launch_task', [
     MCP_OPERATIONS.workflowGet,
@@ -373,6 +374,7 @@ export const MCP_TOOL_BINDINGS = Object.freeze({
   list_repo_refs: directBinding('list_repo_refs', MCP_OPERATIONS.repoRefsList),
   get_task: directBinding('get_task', MCP_OPERATIONS.taskGet),
   list_tasks: directBinding('list_tasks', MCP_OPERATIONS.taskList),
+  list_task_children: directBinding('list_task_children', MCP_OPERATIONS.taskChildrenList),
   watch_task: compositeBinding('watch_task', [MCP_OPERATIONS.taskGet]),
   get_task_diff: directBinding('get_task_diff', MCP_OPERATIONS.taskDiffGet),
   list_node_runs: directBinding('list_node_runs', MCP_OPERATIONS.taskNodeRunsList),
