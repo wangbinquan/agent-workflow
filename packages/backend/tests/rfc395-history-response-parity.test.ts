@@ -1,4 +1,6 @@
 // RFC-395 U-5: frozen /code response examples, not archive record-order expectations.
+// The archive reader repairs the old timestamp-only continuation omission; all
+// other response fields retain parity with the independent frozen epoch-1 query.
 import { setDefaultTimeout, afterEach, beforeEach, expect, test } from 'bun:test'
 import { Hono, type Context } from 'hono'
 import { buildActor } from '@/auth/actor'
@@ -206,7 +208,7 @@ describeEachProvider('RFC-395 history response parity', (h) => {
     ])
       expect(await (await app().request(path)).json()).toEqual({ items: [], nextCursor: null })
   })
-  test('timestamp ties retain the existing cursor omission and stale cursors restart from the top', async () => {
+  test('archive cursors include timestamp ties and stale cursors still restart from the top', async () => {
     await seedCodeHistoryRows(h.db, 'code_work_items', [
       item('a'),
       item('z'),
@@ -215,11 +217,12 @@ describeEachProvider('RFC-395 history response parity', (h) => {
     const first = await queries().workItems.page({ limit: 1 })
     expect(first.items.map((row) => row.workItemId)).toEqual(['z'])
     expect(first.nextCursor).toBe(`${NOW}:z`)
-    expect(
-      (await queries().workItems.page({ limit: 1, cursor: first.nextCursor })).items.map(
-        (row) => row.workItemId,
-      ),
-    ).toEqual(['older'])
+    const second = await queries().workItems.page({ limit: 1, cursor: first.nextCursor })
+    expect(second.items.map((row) => row.workItemId)).toEqual(['a'])
+    expect(second.nextCursor).toBe(`${NOW}:a`)
+    const third = await queries().workItems.page({ limit: 1, cursor: second.nextCursor })
+    expect(third.items.map((row) => row.workItemId)).toEqual(['older'])
+    expect(third.nextCursor).toBeNull()
     expect(
       (await queries().workItems.page({ cursor: 'invalid' })).items.map((row) => row.workItemId),
     ).toEqual(['z', 'a', 'older'])
@@ -550,7 +553,7 @@ describeEachProvider('RFC-395 history response parity', (h) => {
 describeEachProvider('RFC-395 converter to HTTP epoch-1 parity', (target) => {
   withR2TargetHarness(target, (source) => {
     afterEach(() => resetRouteMetaRegistry(), 5_000)
-    test('historyRule → runConversion → sink rows → package reader → all four endpoints', async () => {
+    test('historyRule → runConversion → all four endpoints retain parity except the repaired timestamp continuation', async () => {
       resetRouteMetaRegistry()
       const root = mkdtempSync(join(tmpdir(), 'aw-h-history-roundtrip-'))
       try {
@@ -685,9 +688,10 @@ describeEachProvider('RFC-395 converter to HTTP epoch-1 parity', (target) => {
         )
         const oracleQueries = createEpoch1HistoryQueries(epoch1Db)
         const oracle = historyApp({ ...current, ...oracleQueries })
+        const tiedContinuationPath = `/api/code/work-items?limit=1&cursor=${NOW}:z-item`
         const paths = [
           '/api/code/work-items?endpointId=ep&projectId=project&capability=mr-review&limit=1&rounds=1',
-          `/api/code/work-items?limit=1&cursor=${NOW}:z-item`,
+          tiedContinuationPath,
           '/api/code/work-items?endpointId=missing',
           '/api/code/rounds/round-3/attempts',
           '/api/code/rounds/missing/attempts',
@@ -696,6 +700,7 @@ describeEachProvider('RFC-395 converter to HTTP epoch-1 parity', (target) => {
           '/api/code/deliveries?failedOnly=true',
           '/api/code/metrics?windowMs=100',
           '/api/code/metrics?windowMs=99',
+          `/api/code/work-items?limit=1&cursor=${NOW}:a-item`,
         ]
         const expected: unknown[] = []
         for (const path of paths) {
@@ -704,6 +709,42 @@ describeEachProvider('RFC-395 converter to HTTP epoch-1 parity', (target) => {
           expected.push(await response.json())
         }
         expect(expected[0]).toMatchObject({ items: [{ workItemId: 'z-item', roundsHidden: 3 }] })
+        // Keep the frozen query unchanged and expose its actual omission. The
+        // archive endpoint below must instead return the tied a-item before
+        // advancing to older-item. Spell out the complete DTOs independently
+        // of the current reader, its sort/cursor helpers, and archive order.
+        const olderPage = {
+          items: [
+            {
+              workItemId: 'older-item',
+              capability: 'mr-review',
+              anchorKind: 'mr',
+              anchorId: 'older-item',
+              status: 'settled',
+              epoch: 3,
+              rounds: [],
+              roundsHidden: 0,
+            },
+          ],
+          nextCursor: null,
+        }
+        expect(expected[1]).toEqual(olderPage)
+        expect(expected[10]).toEqual(olderPage)
+        const repairedTiedPage = {
+          items: [
+            {
+              workItemId: 'a-item',
+              capability: 'mr-review',
+              anchorKind: 'mr',
+              anchorId: 'a-item',
+              status: 'settled',
+              epoch: 3,
+              rounds: [],
+              roundsHidden: 0,
+            },
+          ],
+          nextCursor: `${NOW}:a-item`,
+        }
         expect(expected[3]).toMatchObject({
           attempts: [{ attemptId: 'z-attempt' }, { attemptId: 'a-attempt' }],
         })
@@ -769,7 +810,10 @@ describeEachProvider('RFC-395 converter to HTTP epoch-1 parity', (target) => {
           for (const [i, path] of paths.entries()) {
             const response = await converted.request(path)
             expect(response.status).toBe(200)
-            expect({ path, body: await response.json() }).toEqual({ path, body: expected[i] })
+            expect({ path, body: await response.json() }).toEqual({
+              path,
+              body: path === tiedContinuationPath ? repairedTiedPage : expected[i],
+            })
           }
         } finally {
           await reader.close()

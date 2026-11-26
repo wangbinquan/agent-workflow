@@ -33,8 +33,10 @@ export function createWorkItemProjectionRead(
             (input.stableProjectId === undefined ||
               row.stable_project_id === input.stableProjectId) &&
             (input.capability === undefined || row.capability === input.capability) &&
-            // The frozen query deliberately uses only the timestamp, even when ids tie.
-            (cursor === null || row.created_at < cursor.createdAt),
+            // Match both components of the descending cursor so same-millisecond rows survive paging.
+            (cursor === null ||
+              row.created_at < cursor.createdAt ||
+              (row.created_at === cursor.createdAt && row.id < cursor.id)),
         )
         .sort((a, b) => b.created_at - a.created_at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
         .slice(0, limit + 1)

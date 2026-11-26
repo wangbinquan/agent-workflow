@@ -1,3 +1,19 @@
+## 2026-11-25 模块对外合同补测与历史分页修复（实现与本地验证完成）
+
+- **来由/范围**：用户要求全面审视并补全各模块的功能、性能、边界、异常与规格用例。核对 RFC-294 的 18 个正式模块、
+  `code-capability` 兼容模块、前端数据消费者/公共集合/事件中心，以及 bootstrap/platform 的既有生命周期证据。
+  新增 19 个 backend `module-contract-*.test.ts` 与 3 个 frontend 同前缀文件；主要合同、已有行为证据、补充点和证明范围见
+  [模块合同用例文档](docs/module-contract-testing.md)。测试补充按 `CLAUDE.md` RFC 例外执行，未新增架构账本或第二套测试执行器。
+- **发现并修复**：旧历史工作项 reader 只按时间戳续页，同毫秒记录可能丢失；现按已有 `createdAt + id` 游标规格续页。
+  新增真实历史包跨三页回归；更新 `rfc395-history-response-parity.test.ts` 对该漏行行为的期望，其余完整响应/转换验收保留，
+  冻结 epoch-1 helper/oracle、游标编码、DTO 与归档格式均未改。生产只修改这一处条件。
+- **集中验证**：全部用例写完后执行；新后端 133 个执行用例（含 SQLite + 独立 PostgreSQL 17）、前端 15 条、关联回归
+  136 条、测试策略 96 条均获有效通过结果。首轮夹具/React Query 消费字段/测试类型问题已修正，仅受影响文件复验；
+  backend/frontend 完整 tsc、修改范围 ESLint/Prettier 通过。backend 首次 4 GB heap 耗尽不计通过，最终按 CI 6 GB 完成。
+  独立只读功能复核未发现阻塞性问题；未运行全仓本地 gate、真实模型/托管平台负载或长时 soak。CI 全仓结果按发布提交 SHA 查询。
+- **明确边界**：性能断言是调用/SQL/返回行数/批次/并发/停止预算，不是生产延迟 SLA；legacy history 全表读取、资源摘要逐页查找、
+  仓库组全图快照、子任务固定 500 条窗口仍是现有实现限制，文档未把它们描述为已消除。
+
 ## 2026-11-25 RFC-601 员工工作区与平台工作项装配的 provider 必填（Done；`design/RFC-601-employee-compositions-required-providers/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」；与 RFC-597 同一做法，落在 RFC-599 §3 留下的员工两个装配上。
