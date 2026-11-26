@@ -1,5 +1,7 @@
-// RFC-451 — composes the cached-repository management surface over the selected mirrors and the local mirror cache.
+// RFC-451 — the cached-repository management surface over the selected mirrors and the local mirror cache.
 // The branches and settings are the ones the `/api/cached-repos` route used to assemble itself.
+// RFC-612 (RFC-294 S10 remainder): moved unchanged from `composition/` — it implements the `CachedRepositoryOperations` port
+// (a remote registration refreshes through the mirrors, the local mirror cache fetches the clone), so it is infrastructure.
 
 import type { SecretBox } from '@/auth/secretBox'
 import type { CachedRepositoryOperations } from '../application/ports/cachedRepositoryOperations'
@@ -10,13 +12,13 @@ import {
   retryBatchRow,
   startBatchImport,
   type RepositoryBatchImports,
-} from '../infrastructure/local/repositoryBatchImport'
+} from './local/repositoryBatchImport'
 import {
   deleteCachedRepo,
   listCachedRepos,
   listCachedReposPage,
   refreshCachedRepo,
-} from '../infrastructure/local/repositoryMirrorCache'
+} from './local/repositoryMirrorCache'
 
 /** The settings these operations read per call (the daemon's live configuration). */
 export interface CachedRepositorySettingsSnapshot {

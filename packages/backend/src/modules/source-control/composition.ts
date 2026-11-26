@@ -279,11 +279,12 @@ export {
   idleRepositoryMirrorRefresh,
 } from './composition/repositoryMirrorRefresh'
 /** RFC-447: repository-group management and the standalone URL import. */
-export { composeRepositoryGroups, localRepositoryUrlImport } from './composition/repositoryGroups'
+export { composeRepositoryGroups } from './composition/repositoryGroups'
+export { localRepositoryUrlImport } from './infrastructure/repositoryUrlImport'
 export {
   composeCachedRepositoryOperations,
   type CachedRepositorySettings,
-} from './composition/cachedRepositoryOperations'
+} from './infrastructure/cachedRepositoryOperations'
 export type {
   RepositoryMirrors,
   RepositoryRemoteEffects,

@@ -1,3 +1,14 @@
+## 2026-11-26 RFC-612 source-control 组合层里余下的两份实现归 infrastructure（In Progress；`design/RFC-612-source-control-composition-implementations/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S10
+  （C1：composition 只构造与注入），source-control 的 `composition/` 余 6 行控制流，其中 2 行在每次调用都走的实现里。
+- **范围**：缓存仓库操作原样迁入 `infrastructure/cachedRepositoryOperations.ts`（组合层文件删去）；仓库组写入的 URL 导入选择连同 `localRepositoryUrlImport`
+  迁入 `infrastructure/repositoryUrlImport.ts`，`composeRepositoryGroups` 只绑定用例；模块根转出不变。`composition-control-flow-source-control` 6 → 4。
+  新增 RFC-612 用例。
+- **集中验证**（基于 `b90d7ee7c`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警；候选导出 559 个用例文件只有 `rfc321` 照例红；4 种变异都被认出；
+  架构报告除该计数 6 → 4 与文件位置外相同。实现门 PASS（本会话按路径限定自审，只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-26 RFC-611 CI 吞吐与稳定性（In Progress；`design/RFC-611-ci-throughput-and-stability/`）
 
 - 用户已授权按本会话 CI 诊断建议实施。保留每个 SHA 完整主 CI、原测试/provider/平台覆盖和预算；实施两 lane 排队、静态快速反馈、时长分片刷新、E2E 重平衡、升级测试原子 barrier 与失败诊断、构建成功下游条件、链接检查分级。
