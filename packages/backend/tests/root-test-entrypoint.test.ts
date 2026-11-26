@@ -37,6 +37,10 @@ const frontendPkg = JSON.parse(
 ) as RootPackageJson
 const backendBunfig = readFileSync(resolve(root, 'packages', 'backend', 'bunfig.toml'), 'utf8')
 const ciWorkflow = readFileSync(resolve(root, '.github', 'workflows', 'ci.yml'), 'utf8')
+const ciFeedbackWorkflow = readFileSync(
+  resolve(root, '.github', 'workflows', 'ci-feedback.yml'),
+  'utf8',
+)
 // 2026-10-14 CI 提速：macOS 后端腿从 ci.yml 移到这条 nightly，命令 / 片数 / 预算原样。
 const macosBackendNightly = readFileSync(
   resolve(root, '.github', 'workflows', 'backend-macos-nightly.yml'),
@@ -155,6 +159,25 @@ function occurrenceCount(source: string, marker: string): number {
   return source.split(marker).length - 1
 }
 
+// RFC-611: different source SHAs must wait without replacing pending runs. Two
+// stable run-number lanes bound fanout while the original required job finishes.
+const fullCiAdmissionGroup =
+  "${{ github.workflow }}-${{ github.ref }}-${{ (endsWith(format('{0}', github.run_number), '0') || " +
+  "endsWith(format('{0}', github.run_number), '2') || " +
+  "endsWith(format('{0}', github.run_number), '4') || " +
+  "endsWith(format('{0}', github.run_number), '6') || " +
+  "endsWith(format('{0}', github.run_number), '8')) && 'even' || 'odd' }}"
+
+function isQueuedFullCiAdmission(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false
+  const concurrency = value as Record<string, unknown>
+  return (
+    concurrency.group === fullCiAdmissionGroup &&
+    concurrency.queue === 'max' &&
+    concurrency['cancel-in-progress'] === false
+  )
+}
+
 /** Numeric literal of a `const NAME = 12_345` declaration in the e2e helper. */
 function e2eConstant(source: string, name: string, where: string): number {
   const literal = source.match(new RegExp(`const ${name} = ([\\d_]+)`))?.[1]
@@ -163,6 +186,116 @@ function e2eConstant(source: string, name: string, where: string): number {
 }
 
 describe('repository test entrypoint', () => {
+  test('only eligible successful CI completions can supersede a timing collector', () => {
+    const workflow = parse(readFileSync(resolve(root, '.github/workflows/ci-timings.yml'), 'utf8'))
+    expect(workflow.concurrency).toBeUndefined()
+    expect(workflow.on.workflow_run).toEqual({ workflows: ['CI'], types: ['completed'] })
+    const job = workflow.jobs.collect
+    expect(job.if).toContain("github.event.workflow_run.conclusion == 'success'")
+    expect(job.if).toContain("github.event.workflow_run.event == 'push'")
+    expect(job.if).toContain("github.event.workflow_run.head_branch == 'main'")
+    expect(job.if).toContain(
+      'github.event.workflow_run.head_repository.full_name == github.repository',
+    )
+    expect(job.concurrency).toEqual({ group: 'ci-timing-refresh', 'cancel-in-progress': true })
+    expect(workflow.permissions).toEqual({ actions: 'read', contents: 'read' })
+  })
+
+  test('complete CI retains every pending SHA in two stable admission lanes', () => {
+    const workflow = parse(ciWorkflow)
+    expect(isQueuedFullCiAdmission(workflow.concurrency)).toBe(true)
+    for (const job of Object.values(workflow.jobs) as { concurrency?: { queue?: unknown } }[])
+      expect(job.concurrency?.queue).toBeUndefined()
+    expect(workflow.on.push).toEqual({ branches: ['main'] })
+    expect(workflow.on.pull_request).toEqual({ branches: ['main'] })
+    expect(workflow.on).toHaveProperty('workflow_dispatch')
+  })
+
+  test('actionlint compatibility exception covers only the validated CI queue field', () => {
+    const config = parse(readFileSync(resolve(root, '.github/actionlint.yaml'), 'utf8'))
+    expect(config).toEqual({
+      paths: {
+        '.github/workflows/ci.yml': {
+          ignore: [
+            '^unexpected key "queue" for "concurrency" section\\. expected one of "cancel-in-progress", "group"$',
+          ],
+        },
+      },
+    })
+  })
+
+  test('full CI admission rejects replacement queues and per-attempt or per-SHA fanout', () => {
+    const concurrency = parse(ciWorkflow).concurrency as Record<string, unknown>
+    for (const invalid of [
+      { ...concurrency, queue: undefined },
+      { ...concurrency, queue: 'single' },
+      { ...concurrency, 'cancel-in-progress': true },
+      { ...concurrency, group: '${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}' },
+      { ...concurrency, group: fullCiAdmissionGroup.replaceAll('run_number', 'run_attempt') },
+      { ...concurrency, group: '${{ github.workflow }}-${{ github.ref }}' },
+    ]) {
+      expect(isQueuedFullCiAdmission(invalid)).toBe(false)
+    }
+  })
+
+  test('latest static feedback is advisory and never substitutes for complete CI', () => {
+    const workflow = parse(ciFeedbackWorkflow)
+    expect(workflow.name).toBe('CI feedback')
+    expect(workflow.on.push).toEqual({ branches: ['main'] })
+    expect(workflow.on.pull_request).toEqual({ branches: ['main'] })
+    expect(workflow.on).toHaveProperty('workflow_dispatch')
+    expect(workflow.permissions).toEqual({ contents: 'read' })
+    expect(workflow.concurrency).toEqual({
+      group: '${{ github.workflow }}-${{ github.ref }}',
+      'cancel-in-progress': true,
+    })
+    expect(workflowJobNames(ciFeedbackWorkflow)).toEqual(['static-feedback'])
+    const job = workflow.jobs['static-feedback']
+    expect(job.name).toBe('Static feedback (advisory)')
+    expect(job['runs-on']).toBe('ubuntu-latest')
+    expect(job['timeout-minutes']).toBe(15)
+    expect(job.needs).toBeUndefined()
+    const commands = job.steps.flatMap((step: { run?: string }) =>
+      step.run === undefined ? [] : [step.run],
+    )
+    expect(commands).toEqual([
+      'bun install --frozen-lockfile',
+      'bun run format:check',
+      'bun run lint',
+      'bun run typecheck',
+    ])
+    expect(workflowJob(ciWorkflow, 'ci-required')).not.toContain('static-feedback')
+    expect(workflowJob(ciWorkflow, 'lint')).toContain('run: bun run format:check')
+    expect(workflowJob(ciWorkflow, 'lint')).toContain('run: bun run lint')
+    expect(workflowJob(ciWorkflow, 'lint')).toContain('run: bun run typecheck')
+  })
+
+  test('CI and feedback share only formatting caches within the same tool/config boundary', () => {
+    const expectedVersion = pkg.packageManager?.match(/^bun@(\d+\.\d+\.\d+)$/)?.[1]
+    const cachePrefix =
+      `prettier-v1-\${{ runner.os }}-bun-${expectedVersion}-` +
+      "${{ hashFiles('bun.lock', 'package.json', 'packages/*/package.json', '**/.prettier*', '**/prettier.config.*', '!**/node_modules/**') }}-"
+    for (const [source, jobName] of [
+      [ciWorkflow, 'lint'],
+      [ciFeedbackWorkflow, 'static-feedback'],
+    ] as const) {
+      const steps = parse(source).jobs[jobName].steps as {
+        uses?: string
+        with?: { path?: string; key?: string; 'restore-keys'?: string }
+      }[]
+      const qualityCaches = steps.filter((step) =>
+        step.with?.path?.includes('node_modules/.cache/'),
+      )
+      expect(qualityCaches).toHaveLength(1)
+      expect(qualityCaches[0]?.uses).toBe('actions/cache@v6')
+      expect(qualityCaches[0]?.with).toEqual({
+        path: 'node_modules/.cache/prettier',
+        key: cachePrefix + '${{ github.sha }}',
+        'restore-keys': cachePrefix,
+      })
+    }
+  })
+
   test('every Actions workflow pins the exact Bun release declared by packageManager', () => {
     const expectedVersion = pkg.packageManager?.match(/^bun@(\d+\.\d+\.\d+)$/)?.[1]
     expect(expectedVersion).toBeDefined()
@@ -450,6 +583,9 @@ describe('repository test entrypoint', () => {
     for (const platform of e2ePlatforms) {
       const job = workflowJob(ciWorkflow, platform.job)
       expect(job).toContain(`needs: ${platform.build}`)
+      expect(job).toContain(
+        `if: \${{ !cancelled() && needs.${platform.build}.result == 'success' }}`,
+      )
       expect(job).toContain('fail-fast: false')
       expect(job).toContain(`os: [${platform.os}]`)
       expect(job).toContain(`shard: ${platform.shards}`)
@@ -461,10 +597,13 @@ describe('repository test entrypoint', () => {
     expect(e2eJob).toContain('steps: &e2e-steps')
     expect(workflowJob(ciWorkflow, 'e2e-macos')).toContain('steps: *e2e-steps')
     expect(workflowJob(ciWorkflow, 'e2e-windows')).toContain('steps: *e2e-steps')
-    // TWO invocations — the windows branch and the POSIX one — and both must
-    // read the denominator from the matrix that declares each platform's
-    // complete shard set. The anchored steps are reused byte-for-byte.
-    expect(occurrenceCount(e2eJob, '--shard=${{ matrix.shard }}/${{ matrix.shards }}')).toBe(2)
+    // Native discovery retains the same filters; the planner consumes the one
+    // complete matrix denominator. Execution must not shard the selected files again.
+    expect(occurrenceCount(e2eJob, '--shard=${{ matrix.shard }}/${{ matrix.shards }}')).toBe(1)
+    expect(e2eJob).toContain('bun run scripts/ci/plan-e2e-shards.ts')
+    expect(occurrenceCount(e2eJob, '--list --reporter=json --project=chromium')).toBe(2)
+    expect(occurrenceCount(e2eJob, '--config=playwright.ci.config.ts --project=chromium')).toBe(2)
+    expect(e2eJob).not.toContain('bun run e2e -- --shard=')
     expect(e2eJob).toContain('AW_E2E_WINDOWS_EXCLUDE')
   })
 
@@ -773,16 +912,18 @@ describe('repository test entrypoint', () => {
     // shard used to take the shipped-binary smoke, the Playwright suite, the
     // axe a11y sweep and the focus-ring geometry audit down with it — while the
     // run still looked like "those guards had nothing to say".
-    for (const job of [
-      'build-binary',
-      'build-binary-macos',
-      'build-binary-windows',
-      'e2e',
-      'e2e-macos',
-      'e2e-windows',
-    ]) {
+    for (const job of ['build-binary', 'build-binary-macos', 'build-binary-windows']) {
       const source = workflowJob(ciWorkflow, job)
       expect(`${job}: ${source.includes('if: ${{ !cancelled() }}')}`).toBe(`${job}: true`)
+    }
+    for (const [job, build] of [
+      ['e2e', 'build-binary'],
+      ['e2e-macos', 'build-binary-macos'],
+      ['e2e-windows', 'build-binary-windows'],
+    ]) {
+      const source = workflowJob(ciWorkflow, job!)
+      expect(source).toContain(`if: \${{ !cancelled() && needs.${build}.result == 'success' }}`)
+      expect(source).toContain(`needs: ${build}`)
     }
   })
 

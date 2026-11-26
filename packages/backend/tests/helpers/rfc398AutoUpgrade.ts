@@ -1,11 +1,13 @@
 // RFC-398 §7.6: real start/auto children, durable barriers and real process death.
 import { Database, type SQLQueryBindings } from 'bun:sqlite'
+import { randomUUID } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   watch,
   writeFileSync,
@@ -22,6 +24,89 @@ import { readAutoUpgradeSessions } from '@/modules/system-operations/infrastruct
 import { readDaemonInfoFile } from '@/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries'
 import { isProcessAlive } from '@/platform/execution/local/process'
 import { frozenValues } from './rfc395V2/contentFixtures'
+
+/** A reader may already have opened the old file when the next checkpoint is published. */
+export function publishAutoUpgradeBarriers(hooks: string, points: readonly string[]): void {
+  const temporary = join(hooks, `barriers-${randomUUID()}.tmp`)
+  try {
+    writeFileSync(temporary, JSON.stringify(points))
+    renameSync(temporary, join(hooks, 'barriers.json'))
+  } finally {
+    rmSync(temporary, { force: true })
+  }
+}
+
+export interface AutoUpgradeWaitChild {
+  readonly process: { readonly pid: number; readonly exited: Promise<number> }
+  readonly exitCode: number | null
+  readonly expectedExit: boolean
+  readonly output: string
+  readonly error: string
+}
+
+/** Observe only this wait's live children; earlier rejected starts are valid retry fixtures. */
+export function waitForAutoUpgradeFixture<T>(
+  hooks: string,
+  read: () => T | null,
+  children: readonly AutoUpgradeWaitChild[],
+  timeout = 180_000,
+): Promise<T> {
+  const activeChildren = children.filter((child) => child.exitCode === null)
+  return new Promise<T>((accept, reject) => {
+    let settled = false
+    const watcher = watch(hooks, () => inspect())
+    const fallback = setInterval(() => inspect(), 200) // readiness may write only outside hooks
+    const timer = setTimeout(
+      () =>
+        done(
+          new Error(
+            `barrier/readiness timed out\n${children.map((child) => child.error).join('\n')}`,
+          ),
+        ),
+      timeout,
+    )
+    const done = (error: Error | null, value?: T) => {
+      if (settled) return
+      settled = true
+      watcher.close()
+      clearInterval(fallback)
+      clearTimeout(timer)
+      if (error) reject(error)
+      else accept(value!)
+    }
+    function inspect(exit?: { child: AutoUpgradeWaitChild; code: number }) {
+      if (settled) return
+      try {
+        const value = read()
+        if (value !== null) {
+          done(null, value)
+        } else if (exit && exit.code !== 0 && !exit.child.expectedExit) {
+          done(
+            new Error(
+              `barrier/readiness child ${exit.child.process.pid} exited unexpectedly with code ${exit.code}\n` +
+                `stdout:\n${exit.child.output}\nstderr:\n${exit.child.error}`,
+            ),
+          )
+        }
+      } catch (error) {
+        done(error as Error)
+      }
+    }
+    for (const child of activeChildren) {
+      // The raw exit is independent of pipe drain: a descendant can still own stdout/stderr.
+      void child.process.exited.then(
+        (code) => inspect({ child, code }),
+        (error: unknown) =>
+          done(
+            new Error(`cannot observe barrier/readiness child ${child.process.pid}`, {
+              cause: error,
+            }),
+          ),
+      )
+    }
+    inspect()
+  })
+}
 
 export const rfc398Main = resolve(import.meta.dir, '../../src/main.ts')
 export async function autoUpgradeFixture(
@@ -72,13 +157,14 @@ export async function autoUpgradeFixture(
     AGENT_WORKFLOW_DEV_LOCK_HANDOFF_MS: '0',
     NO_COLOR: '1',
   }
-  interface Child {
+  interface Child extends AutoUpgradeWaitChild {
     readonly process: Pick<ReturnType<typeof Bun.spawn>, 'pid' | 'kill' | 'exited'>
     readonly output: string
     readonly error: string
     readonly exited: Promise<number>
   }
   const processes: Child[] = []
+  const expectedExits = new Set<number>()
   function spawn(args: string[], extra: Record<string, string | undefined> = {}): Child {
     const process = Bun.spawn([globalThis.process.execPath, 'run', rfc398Main, ...args], {
       env: { ...env, ...extra },
@@ -88,6 +174,11 @@ export async function autoUpgradeFixture(
     })
     let output = '',
       error = ''
+    let exitCode: number | null = null
+    const rawExit = process.exited.then((code) => {
+      exitCode = code
+      return code
+    })
     const drain = async (stream: ReadableStream<Uint8Array>, append: (text: string) => void) => {
       const decoder = new TextDecoder()
       for await (const chunk of stream) append(decoder.decode(chunk, { stream: true }))
@@ -107,7 +198,13 @@ export async function autoUpgradeFixture(
       get error() {
         return error
       },
-      exited: Promise.all([process.exited, stdout, stderr]).then(([code]) => code),
+      get exitCode() {
+        return exitCode
+      },
+      get expectedExit() {
+        return expectedExits.has(process.pid)
+      },
+      exited: Promise.all([rawExit, stdout, stderr]).then(([code]) => code),
     }
     processes.push(result)
     return result
@@ -120,36 +217,10 @@ export async function autoUpgradeFixture(
           .filter(Boolean)
           .map((line) => JSON.parse(line) as { point: string; pid: number; parent: number })
       : []
-  const wait = async <T>(read: () => T | null, timeout = 180_000): Promise<T> => {
-    return new Promise<T>((accept, reject) => {
-      const watcher = watch(hooks, () => inspect())
-      const fallback = setInterval(() => inspect(), 200) // readiness may write only outside the hook directory
-      const timer = setTimeout(
-        () =>
-          done(
-            new Error(`barrier/readiness timed out\n${processes.map((p) => p.error).join('\n')}`),
-          ),
-        timeout,
-      )
-      const done = (error: Error | null, value?: T) => {
-        watcher.close()
-        clearInterval(fallback)
-        clearTimeout(timer)
-        if (error) reject(error)
-        else accept(value!)
-      }
-      function inspect() {
-        try {
-          const value = read()
-          if (value !== null) done(null, value)
-        } catch (error) {
-          done(error as Error)
-        }
-      }
-      inspect()
-    })
-  }
+  const wait = <T>(read: () => T | null, timeout = 180_000): Promise<T> =>
+    waitForAutoUpgradeFixture(hooks, read, processes, timeout)
   const kill = (pid: number) => {
+    expectedExits.add(pid)
     if (!isProcessAlive(pid)) return
     try {
       process.kill(pid, 'SIGKILL')
@@ -169,7 +240,7 @@ export async function autoUpgradeFixture(
     start: (extra: Record<string, string | undefined> = {}) =>
       spawn(['start', '--host', '127.0.0.1', '--port', '0'], extra),
     barriers(points: string[]) {
-      writeFileSync(join(hooks, 'barriers.json'), JSON.stringify(points))
+      publishAutoUpgradeBarriers(hooks, points)
     },
     release(point: string) {
       writeFileSync(join(hooks, `${point}.release`), '')

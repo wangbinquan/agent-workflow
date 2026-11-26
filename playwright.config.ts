@@ -14,10 +14,11 @@
 //     stays chromium-only so PR CI cost / wall-clock doesn't double; webkit
 //     coverage runs daily and surfaces Safari-specific selector / focus /
 //     animation drift without blocking iteration speed.
-//   * CI shard via `--shard=N/M` (built-in Playwright flag) — see
-//     e2e/README.md for the sharding contract. CI uses three shards on
-//     Ubuntu/macOS and four on Windows; each runner gets one complete
-//     file-granularity group subset for its platform.
+//   * Main CI discovers tests with this config, then selects whole files
+//     through playwright.ci.config.ts using historical duration weights.
+//     Linux uses three shards; macOS and Windows use four. The child config
+//     must not also receive native --shard. Local/nightly entrypoints retain
+//     this base config and may still use Playwright's native sharding.
 //
 // The spec spawns its own daemon via e2e/harness.ts so the binary path
 // and stub-opencode wiring stay co-located with the test.

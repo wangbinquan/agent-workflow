@@ -1,0 +1,10 @@
+{
+  "sourceRun": 45772006810,
+  "sourceSha": "170f3e2cc32ce7c20c58afc1b2660eec75315d65",
+  "sourceRepository": "wangbinquan/agent-workflow",
+  "sourceShards": 44,
+  "sourceFiles": 3081,
+  "measurement": "Bun whole-file wall clock in milliseconds; all 44 successful shard artifacts",
+  "refresh": "bun scripts/ci/refresh-backend-timings.ts ARTIFACTS_DIR RUN_ID OUTPUT_JSON",
+  "unmeasuredPolicy": "New files retain Bun default weight until a complete successful run supplies measurements."
+}

@@ -8,8 +8,12 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # Shared main needs a terminal result for each original committed source.
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
+  # Retain each original SHA while admitting at most two complete runs per ref.
+  # A lane stays occupied through CI required; run_number is stable on reruns.
+  # Each lane can queue 100 pending runs. Other workflows share runner capacity.
+  group: >-
+    ${{ github.workflow }}-${{ github.ref }}-${{ (endsWith(format('{0}', github.run_number), '0') || endsWith(format('{0}', github.run_number), '2') || endsWith(format('{0}', github.run_number), '4') || endsWith(format('{0}', github.run_number), '6') || endsWith(format('{0}', github.run_number), '8')) && 'even' || 'odd' }}
+  queue: max
   cancel-in-progress: false
 
 jobs:
@@ -45,6 +49,14 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Cache Prettier results
+        # Restore content-validated formatting only, within the tool/config key.
+        uses: actions/cache@v6
+        with:
+          path: node_modules/.cache/prettier
+          key: prettier-v1-${{ runner.os }}-bun-1.4.3-${{ hashFiles('bun.lock', 'package.json', 'packages/*/package.json', '**/.prettier*', '**/prettier.config.*', '!**/node_modules/**') }}-${{ github.sha }}
+          restore-keys: prettier-v1-${{ runner.os }}-bun-1.4.3-${{ hashFiles('bun.lock', 'package.json', 'packages/*/package.json', '**/.prettier*', '**/prettier.config.*', '!**/node_modules/**') }}-
 
       - name: Format check
         run: bun run format:check
@@ -314,10 +326,12 @@ jobs:
 
       - name: Upload measured backend test timings (ubuntu shards)
         # Only this shard's files, as Bun measured them. A cancelled (timed-out)
-        # shard writes nothing, so a refresh never mixes in a partial file.
+        # or failed shard must never publish a reusable timing sample. Otherwise
+        # a later successful rerun whose optional upload fails could leave the
+        # earlier failed sample under the same artifact name.
         # Auxiliary evidence: an upload problem must not turn a shard red, and a
         # re-run attempt replaces the earlier attempt's artifact of the same name.
-        if: (success() || failure()) && matrix.os == 'ubuntu-latest'
+        if: success() && matrix.os == 'ubuntu-latest'
         continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
@@ -616,12 +630,9 @@ jobs:
           if-no-files-found: ignore
 
   docs:
-    # Catch broken links / dead RFC cross-references before they rot the
-    # design docs. design/ has 50+ RFC dirs with relative `../RFC-NNN/...`
-    # paths and external pointers (multica / opencode source) — easy for
-    # any of them to silently break. Skips docs/blog/ (drafts may carry
-    # placeholder URLs) and root README (points at future PRs / external
-    # integrations on purpose).
+    # RFC-611: all local references remain a per-commit gate. Only changed
+    # design documents query external sites here; the full historical external
+    # sweep remains visible in design-links-nightly.yml.
     name: Markdown link check (design/)
     runs-on: ubuntu-latest
     permissions:
@@ -630,48 +641,29 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Lychee — fail on broken links in design/
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Check every local design link and install Lychee
+        # The action installs lychee on GITHUB_PATH for the next step. Its args
+        # remain constant: dynamic filenames are passed as argv by our script.
         uses: lycheeverse/lychee-action@v2
         with:
-          # 403 / 429 are accepted because some sites (GitHub anonymous,
-          # Wikipedia rate limits) block CI runners — those aren't
-          # actionable as "broken links". 200 / 206 cover normal + range.
-          #
-          # The retry/timeout flags cover a DIFFERENT failure mode that
-          # `--accept` structurally cannot: a dropped TCP connection yields no
-          # HTTP status at all, so no status allowlist can absorb it. Observed
-          # on main 2026-08-02 — `w3c.github.io` reset the connection
-          # (`os error 104`) and reddened a run whose only change was two i18n
-          # files; the URL returned 200 on every manual retry. Being explicit
-          # here also beats inheriting lychee's defaults silently.
-          # This repository's own Actions run links are evidence pointers, not
-          # navigation: they are not checked online. Their HTML pages return
-          # intermittent 502s for valid IDs, runs expire with the retention
-          # period, and checking ~225 of them through api.github.com spent the
-          # repository's shared GITHUB_TOKEN budget on every push — 370 requests
-          # at a 55% success rate, host backoff grew to 30 s per request and the
-          # job hit its 15-minute limit on every main run (e.g. 38608703903).
-          # Every other link keeps the normal policy.
-          args: >-
-            --no-progress
-            --verbose
-            --host-stats
-            --max-concurrency 4
-            --accept 200,206,403,429
-            --max-retries 5
-            --retry-wait-time 5
-            --timeout 30
-            --exclude '^https://github\.com/${{ github.repository }}/actions/runs/'
-            'design/**/*.md'
+          lycheeVersion: v0.24.2
+          args: --offline --no-progress --verbose 'design/**/*.md'
           fail: true
           jobSummary: true
+
+      - name: Check external links in changed design documents
+        # The selector compares immutable push/PR endpoints, fetches missing
+        # shallow objects and conservatively checks all docs if comparison fails.
+        # HTTP statuses, retries, timeout and Actions-evidence exclusions retain
+        # their previous policy in scripts/ci/check-design-links.ts.
+        run: bun scripts/ci/check-design-links.ts
         env:
-          # Use the workflow token for github.com requests so lychee gets
-          # authenticated rate limits (5000/hr) instead of anonymous
-          # (60/hr) — otherwise GitHub links will randomly red on busy
-          # PRs even when valid.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Only host backoff diagnostics; preserve the original checking policy.
           RUST_LOG: warn,lychee_lib::ratelimit::host=debug
 
   build-binary:
@@ -851,17 +843,15 @@ jobs:
     # the per-runner workload returns below that measured envelope. This is ten
     # e2e jobs, not the old twelve, and the platform-local build dependencies
     # above stagger their release instead of making every OS enter one wave.
-    # Every runner still uses Playwright's built-in `--shard=N/M`: each spec
-    # file remains one test group, every group is selected exactly once per OS,
-    # and file-local `test.beforeAll` semantics remain unchanged.
+    # RFC-611 discovers the same test population with Playwright, then balances
+    # whole files by measured/estimated duration. Every file is selected once
+    # per OS and file-local `test.beforeAll` semantics remain unchanged.
     name: Playwright e2e (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
     needs: build-binary
-    # Same reasoning as build-binary's `if`: a red unit shard must not silently
-    # skip the only layer that exercises real layout and browser a11y. If
-    # build-binary itself failed there is no artifact to
-    # download and this job fails loudly on the download step — which is the
-    # honest signal, unlike a skip.
-    if: ${{ !cancelled() }}
+    # Unrelated test failures must not skip browser coverage. This platform's
+    # build must succeed first; otherwise its failure already keeps CI required
+    # red and downloading a nonexistent artifact would add no useful evidence.
+    if: ${{ !cancelled() && needs.build-binary.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
@@ -952,6 +942,9 @@ jobs:
       - name: Run e2e (shard ${{ matrix.shard }}/${{ matrix.shards }})
         env:
           CI: 'true'
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ runner.temp }}/e2e-discovery.json
+          AW_E2E_SHARD_PLAN: ${{ runner.temp }}/e2e-shard-plan.json
+          AW_E2E_TIMINGS_OUTPUT: ${{ runner.temp }}/e2e-timings.json
           # RFC-254 T31 — the windows leg skips two specs, and ONLY these two.
           #
           # Both fail on POSIX as well, and both were attributed by building at
@@ -988,13 +981,38 @@ jobs:
           AW_E2E_TIER_EXCLUDE: '@nightly'
         shell: bash
         run: |
+          # Discover through Playwright itself with exactly the execution filters.
           if [ "$RUNNER_OS" = "Windows" ]; then
-            bun run e2e -- --shard=${{ matrix.shard }}/${{ matrix.shards }} \
+            bun run e2e -- --list --reporter=json --project=chromium \
               --grep-invert "$AW_E2E_TIER_EXCLUDE|$AW_E2E_WINDOWS_EXCLUDE"
           else
-            bun run e2e -- --shard=${{ matrix.shard }}/${{ matrix.shards }} \
+            bun run e2e -- --list --reporter=json --project=chromium \
               --grep-invert "$AW_E2E_TIER_EXCLUDE"
           fi
+          bun run scripts/ci/plan-e2e-shards.ts \
+            --report "$PLAYWRIGHT_JSON_OUTPUT_NAME" --platform "$RUNNER_OS" \
+            --shard=${{ matrix.shard }}/${{ matrix.shards }} --output "$AW_E2E_SHARD_PLAN"
+          # The child config selects complete files; applying --shard again would omit tests.
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            bun run e2e -- --config=playwright.ci.config.ts --project=chromium \
+              --grep-invert "$AW_E2E_TIER_EXCLUDE|$AW_E2E_WINDOWS_EXCLUDE"
+          else
+            bun run e2e -- --config=playwright.ci.config.ts --project=chromium \
+              --grep-invert "$AW_E2E_TIER_EXCLUDE"
+          fi
+
+      - name: Upload measured e2e file timings
+        if: success() || failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-test-timings-${{ runner.os }}-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/e2e-timings.json
+            ${{ runner.temp }}/e2e-shard-plan.json
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 14
 
       - name: Upload Playwright trace on failure
         if: failure()
@@ -1012,7 +1030,7 @@ jobs:
   e2e-macos:
     name: Playwright e2e (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
     needs: build-binary-macos
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && needs.build-binary-macos.result == 'success' }}
     # 2026-10-30: with three shards the slowest macOS leg took 14–19 of its 20
     # minutes in eight green main runs, and run 40976668372 hit the deadline on
     # a runner 1.5x slower across all 151 shared tests. One more runner, same
@@ -1032,7 +1050,7 @@ jobs:
   e2e-windows:
     name: Playwright e2e (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
     needs: build-binary-windows
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && needs.build-binary-windows.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:

@@ -1,0 +1,42 @@
+name: Design links nightly
+
+# External sites can fail independently of an unrelated source commit. Keep the
+# complete historical sweep visible daily; changed docs remain in the main gate.
+on:
+  schedule:
+    - cron: '17 10 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  design-links:
+    name: All design document links
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Check every local design link and install Lychee
+        uses: lycheeverse/lychee-action@v2
+        with:
+          lycheeVersion: v0.24.2
+          args: --offline --no-progress --verbose 'design/**/*.md'
+          fail: true
+          jobSummary: true
+
+      - name: Check all external design links
+        run: bun scripts/ci/check-design-links.ts --all
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUST_LOG: warn,lychee_lib::ratelimit::host=debug

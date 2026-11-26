@@ -38,12 +38,22 @@ Two levels of parallelism stack:
    plants a DB violation in test 2 that test 1 expects to be absent —
    intra-file parallelism would race them).
 2. **Shards (CI matrix-level, in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml))** —
-   the built-in `--shard=N/M` flag splits the discovered test groups across
-   different CI runners. CI uses `M=3` on Ubuntu/macOS and `M=4` on Windows.
-   With `fullyParallel` disabled, Playwright keeps every spec file as one test
-   group and partitions those groups by test count; every group is selected by
-   exactly one shard. File-local `test.beforeAll` and ordered-test semantics
-   therefore stay intact.
+   main CI uses `M=3` on Ubuntu and `M=4` on macOS/Windows. Playwright's native
+   `--list --reporter=json` first discovers the exact chromium/tier/platform
+   population. `scripts/ci/plan-e2e-shards.ts` assigns complete spec files using
+   the platform's committed timing estimates, then `playwright.ci.config.ts`
+   runs that exact subset without applying native `--shard` a second time.
+   The reporter checks the executed test identities against the plan. File-local
+   `test.beforeAll`, ordered-test semantics, four workers and retries stay intact.
+   Local default runs and other nightly workflows retain native sharding.
+
+The initial `.github/e2e-test-timings.json` values are estimates reconstructed
+from successful run 45772006810, not exact hook-inclusive benchmark results.
+New specs enter discovery automatically and receive a 60-second fallback
+weight until measured. Each CI shard uploads `e2e-test-timings-<OS>-<N>` with
+its plan and measured file windows; incomplete/failed measurements must not
+replace the committed weights. Timing changes affect placement only, never
+which tests are covered. See [RFC-611](../design/RFC-611-ci-throughput-and-stability/design.md).
 
 CI wall-clock today (RFC-054 W1-8 baseline):
 
@@ -55,19 +65,19 @@ CI wall-clock today (RFC-054 W1-8 baseline):
 
 ## Running a subset locally
 
-| Goal                         | Command                                                          |
-| ---------------------------- | ---------------------------------------------------------------- |
-| All chromium tests           | `bun run e2e`                                                    |
-| One spec file                | `bun run e2e e2e/main.spec.ts`                                   |
-| One test (substring match)   | `bun run e2e -g "happy path"`                                    |
-| First Windows CI shard       | `bun run e2e -- --shard=1/4`                                     |
-| All shards sequentially      | `for i in 1 2 3 4; do bun run e2e -- --shard=$i/4; done`         |
-| Single worker (debug a race) | `bun run e2e -- --workers=1`                                     |
-| Headed (visible browser)     | `bun run e2e -- --headed`                                        |
-| With stdout/stderr forwarded | `E2E_VERBOSE=1 bun run e2e`                                      |
-| UI trace viewer post-failure | `bunx playwright show-trace test-results/.../trace.zip`          |
-| Runtime parity only          | `bun run e2e -- e2e/runtime-scenario-matrix.spec.ts --workers=1` |
-| Real runtimes before release | `bun run e2e:release-runtimes`                                   |
+| Goal                           | Command                                                          |
+| ------------------------------ | ---------------------------------------------------------------- |
+| All chromium tests             | `bun run e2e`                                                    |
+| One spec file                  | `bun run e2e e2e/main.spec.ts`                                   |
+| One test (substring match)     | `bun run e2e -g "happy path"`                                    |
+| Native diagnostic shard        | `bun run e2e -- --shard=1/4`                                     |
+| All native shards sequentially | `for i in 1 2 3 4; do bun run e2e -- --shard=$i/4; done`         |
+| Single worker (debug a race)   | `bun run e2e -- --workers=1`                                     |
+| Headed (visible browser)       | `bun run e2e -- --headed`                                        |
+| With stdout/stderr forwarded   | `E2E_VERBOSE=1 bun run e2e`                                      |
+| UI trace viewer post-failure   | `bunx playwright show-trace test-results/.../trace.zip`          |
+| Runtime parity only            | `bun run e2e -- e2e/runtime-scenario-matrix.spec.ts --workers=1` |
+| Real runtimes before release   | `bun run e2e:release-runtimes`                                   |
 
 The `bun run e2e -- <flag>` double-dash is required so the flag reaches
 Playwright, not bun's script runner.

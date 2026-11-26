@@ -1,0 +1,10 @@
+# GitHub supports concurrency.queue; upstream actionlint 1.7.12 does not yet.
+# https://github.com/rhysd/actionlint/issues/657
+# Only this exact diagnostic in the main CI file is covered. The complete
+# concurrency contract (including max + false) is checked by
+# packages/backend/tests/root-test-entrypoint.test.ts. Remove when upstream
+# recognizes queue; all other actionlint diagnostics remain errors.
+paths:
+  '.github/workflows/ci.yml':
+    ignore:
+      - '^unexpected key "queue" for "concurrency" section\. expected one of "cancel-in-progress", "group"$'

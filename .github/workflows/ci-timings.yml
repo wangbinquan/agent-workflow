@@ -1,0 +1,74 @@
+name: CI timing refresh
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  collect:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    # Only eligible successful runs enter this group. A failed CI completion
+    # must not cancel an in-progress collector and leave no replacement.
+    concurrency:
+      group: ci-timing-refresh
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - name: Detect timing collector in the completed source
+        id: source
+        run: |
+          if [ -f scripts/ci/refresh-backend-timings.ts ] && [ -f scripts/ci/refresh-e2e-timings.ts ]; then
+            echo 'supported=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'Completed source predates the timing collector; no review artifact is produced.'
+          fi
+      - uses: oven-sh/setup-bun@v2
+        if: steps.source.outputs.supported == 'true'
+        with:
+          bun-version: '1.4.3'
+      - uses: actions/download-artifact@v6
+        if: steps.source.outputs.supported == 'true'
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          pattern: backend-test-timings-*
+          path: ${{ runner.temp }}/measured-backend
+      - uses: actions/download-artifact@v6
+        if: steps.source.outputs.supported == 'true'
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          pattern: e2e-test-timings-*
+          path: ${{ runner.temp }}/measured-e2e
+      - name: Validate complete source measurements and prepare review artifacts
+        if: steps.source.outputs.supported == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          bun scripts/ci/refresh-backend-timings.ts \
+            "$RUNNER_TEMP/measured-backend" "$SOURCE_RUN" \
+            "$RUNNER_TEMP/timing-review/backend-test-timings.json"
+          bun scripts/ci/refresh-e2e-timings.ts \
+            "$RUNNER_TEMP/measured-e2e" "$SOURCE_RUN" \
+            "$RUNNER_TEMP/timing-review/e2e-test-timings.json"
+      - uses: actions/upload-artifact@v6
+        if: steps.source.outputs.supported == 'true'
+        with:
+          name: reviewed-ci-timings-${{ github.event.workflow_run.id }}
+          path: ${{ runner.temp }}/timing-review/
+          if-no-files-found: error
+          retention-days: 14

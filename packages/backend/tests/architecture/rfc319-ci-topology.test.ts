@@ -87,24 +87,32 @@ describe('RFC-319 —— PR 腿只跑 PR 档', () => {
   test('两个分支都排除了 nightly 档（漏掉任一分支 ⇒ 那个 OS 的 PR 门跑全量）', () => {
     const runStep = CI_CODE.slice(CI_CODE.indexOf('Run e2e (shard'))
     const invocations = e2eInvocations(runStep)
-    expect(invocations.length, 'e2e 调用的形态变了，这条守卫需要跟着改').toBe(2)
+    expect(invocations.length, '原生发现和实际执行各有两个平台分支').toBe(4)
     for (const call of invocations) {
       expect(call, `这条调用没有排除 nightly 档：${call}`).toContain('AW_E2E_TIER_EXCLUDE')
+    }
+    expect(invocations.filter((call) => call.includes('--list'))).toHaveLength(2)
+    const execution = invocations.filter((call) => !call.includes('--list'))
+    expect(execution).toHaveLength(2)
+    for (const call of execution) {
+      expect(call).toContain('--config=playwright.ci.config.ts')
+      expect(call).not.toContain('--shard=')
     }
   })
 
   test('**windows 腿把两个排除项合成一条正则**（Playwright 只认一个 --grep-invert）', () => {
     const runStep = CI_CODE.slice(CI_CODE.indexOf('Run e2e (shard'))
-    const windowsCall = e2eInvocations(runStep).find((call) =>
+    const windowsCalls = e2eInvocations(runStep).filter((call) =>
       call.includes('AW_E2E_WINDOWS_EXCLUDE'),
     )
-    expect(windowsCall, 'windows 腿的既有排除项不见了').toBeDefined()
-    expect(
-      grepInvertCount(windowsCall!),
-      '写了两个 --grep-invert：Playwright 只认最后一个，前一个静默失效。' +
-        '两个排除项必须合成一条正则（用 | 连接）',
-    ).toBe(1)
-    expect(windowsCall!).toContain('$AW_E2E_TIER_EXCLUDE|$AW_E2E_WINDOWS_EXCLUDE')
+    expect(windowsCalls, 'windows 的发现与执行必须保留既有排除项').toHaveLength(2)
+    for (const windowsCall of windowsCalls) {
+      expect(
+        grepInvertCount(windowsCall),
+        '写了两个 --grep-invert：Playwright 只认最后一个，两个排除项必须合成一条正则',
+      ).toBe(1)
+      expect(windowsCall).toContain('$AW_E2E_TIER_EXCLUDE|$AW_E2E_WINDOWS_EXCLUDE')
+    }
   })
 })
 
