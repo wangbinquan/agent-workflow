@@ -55,7 +55,7 @@ describe('RFC-615 computation admission and terminal gate', () => {
     expect(required.steps[0].shell).toBe('bash')
   })
 
-  test('all 13 original gate groups, 70 runner jobs and per-job deadlines remain present', () => {
+  test('all 13 original gate groups, 69 runner jobs and per-job deadlines remain present', () => {
     expect(Object.keys(work.jobs)).toEqual([...CI_WORK_JOB_IDS])
     expect(Object.keys(work.on.workflow_call.outputs)).toEqual([...CI_WORK_JOB_IDS])
     expect(Object.keys(required.env).sort()).toEqual(Object.keys(success).sort())
@@ -78,7 +78,8 @@ describe('RFC-615 computation admission and terminal gate', () => {
         runnerJobs += Object.values(matrix).reduce((count, values) => count * values.length, 1)
       } else runnerJobs++
     }
-    expect(runnerJobs).toBe(70)
+    // RFC-623 changes only macOS E2E's complete partition from four to three.
+    expect(runnerJobs).toBe(69)
     expect(required.env.FULL_CI_RESULT).toBe("${{ needs['full-ci'].result }}")
   })
 

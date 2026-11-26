@@ -104,29 +104,97 @@ describe('duration partitions', () => {
     'e2e/c.spec.ts': 30_000,
     'e2e/d.spec.ts': 20_000,
   })
-  test('all shards cover exactly the discovered files and test IDs, with no file split', () => {
-    for (const platform of ['linux', 'macos', 'windows'] as const) {
-      const total = platform === 'linux' ? 3 : 4
+  for (const [platform, total] of [
+    ['linux', 3],
+    ['macos', 3],
+    ['macos', 4],
+    ['windows', 4],
+  ] as const) {
+    test(`${platform} ${total} shards cover exactly the discovered files and test IDs, with no file split`, () => {
       const plans = Array.from({ length: total }, (_, index) =>
         planE2EShards(tests, timings, platform, index + 1, total),
       )
-      const ids = plans.flatMap((plan) => selectedE2ETests(plan).map((test) => test.id))
+      const selected = plans.flatMap((plan) => selectedE2ETests(plan))
+      const ids = selected.map((test) => test.id)
       expect(ids.sort()).toEqual(tests.map((test) => test.id).sort())
       expect(new Set(ids).size).toBe(ids.length)
+      expect(selected.sort((a, b) => a.id.localeCompare(b.id))).toEqual(
+        [...tests].sort((a, b) => a.id.localeCompare(b.id)),
+      )
+      const files = [...new Set(tests.map((test) => test.file))].sort()
+      expect(plans[0]!.assignments.flat().sort()).toEqual(files)
+      for (const file of files) {
+        const owners = plans.filter((plan) =>
+          selectedE2ETests(plan).some((test) => test.file === file),
+        )
+        expect(owners).toHaveLength(1)
+        expect(
+          selectedE2ETests(owners[0]!)
+            .filter((test) => test.file === file)
+            .map((test) => test.id)
+            .sort(),
+        ).toEqual(
+          tests
+            .filter((test) => test.file === file)
+            .map((test) => test.id)
+            .sort(),
+        )
+      }
       const a = plans.find((plan) => selectedE2ETests(plan).some((test) => test.id === 'a1'))!
       expect(selectedE2ETests(a).map((test) => test.id)).toContain('a2')
       expect(plans[0]!.assignments.findIndex((files) => files.includes('e2e/a.spec.ts'))).not.toBe(
         plans[0]!.assignments.findIndex((files) => files.includes('e2e/b.spec.ts')),
       )
-      for (const plan of plans)
+      for (const plan of plans) {
+        expect(plan.tests).toEqual(plans[0]!.tests)
+        expect(plan.discoveryDigest).toBe(plans[0]!.discoveryDigest)
+        expect(plan.assignments).toEqual(plans[0]!.assignments)
         expect(parseE2EShardPlan(JSON.parse(JSON.stringify(plan)))).toEqual(plan)
+      }
+    })
+    test(`${platform} ${total} shards retain a new spec with the conservative fallback regardless of input order`, () => {
+      const plan = planE2EShards(tests, timings, platform, 1, total)
+      expect(plan.unknownFiles).toEqual(['e2e/new.spec.ts'])
+      expect(plan.assignments.flat().filter((file) => file === 'e2e/new.spec.ts')).toHaveLength(1)
+      expect(plan.estimatedShardMs.reduce((a, b) => a + b, 0)).toBe(560_000)
+      expect(planE2EShards([...tests].reverse(), timings, platform, 1, total)).toEqual(plan)
+    })
+  }
+  test('macOS three and historical four shards retain the same native population, including expected skips', () => {
+    const input = [...tests, discovered('disabled', 'skip', 'skipped')]
+    const expected = [...input].sort((a, b) => a.id.localeCompare(b.id))
+    const populations = [3, 4].map((total) =>
+      Array.from({ length: total }, (_, index) =>
+        planE2EShards(input, timings, 'macos', index + 1, total),
+      ),
+    )
+    for (const plans of populations) {
+      // Exactly once describes shard ownership, not the number of execution
+      // attempts. Expected skips and the existing retry policy remain intact.
+      const selected = plans.flatMap((plan) => selectedE2ETests(plan))
+      expect(selected.sort((a, b) => a.id.localeCompare(b.id))).toEqual(expected)
+      expect(new Set(selected.map((test) => test.id)).size).toBe(input.length)
+      for (const plan of plans)
+        expect([...plan.tests].sort((a, b) => a.id.localeCompare(b.id))).toEqual(expected)
     }
+    expect(new Set(populations.flat().map((plan) => plan.discoveryDigest)).size).toBe(1)
   })
-  test('a new spec remains in the partition with the conservative fallback; input order is irrelevant', () => {
-    const plan = planE2EShards(tests, timings, 'linux', 1, 3)
-    expect(plan.unknownFiles).toEqual(['e2e/new.spec.ts'])
-    expect(plan.estimatedShardMs.reduce((a, b) => a + b, 0)).toBe(560_000)
-    expect(planE2EShards([...tests].reverse(), timings, 'linux', 1, 3)).toEqual(plan)
+  test('every macOS three-shard runtime selection rejects omitted, duplicate and foreign identities', () => {
+    const config = { shard: null, workers: 4, fullyParallel: false }
+    for (const current of [1, 2, 3]) {
+      const plan = planE2EShards(tests, timings, 'macos', current, 3)
+      const ids = selectedE2ETests(plan).map((test) => test.id)
+      expect(() => assertE2ERuntimeSelection(plan, ids, config)).not.toThrow()
+      expect(() => assertE2ERuntimeSelection(plan, ids.slice(1), config)).toThrow('coverage')
+      expect(() => assertE2ERuntimeSelection(plan, [...ids, ids[0]!], config)).toThrow('coverage')
+      expect(() =>
+        assertE2ERuntimeSelection(plan, ['foreign-id', ...ids.slice(1)], config),
+      ).toThrow('coverage')
+      const otherShardId = tests.find((test) => !ids.includes(test.id))!.id
+      expect(() =>
+        assertE2ERuntimeSelection(plan, [otherShardId, ...ids.slice(1)], config),
+      ).toThrow('coverage')
+    }
   })
   test('OS weights are distinct, obsolete weights add no tests, and skipped files are still assigned', () => {
     const weights = timingInput({

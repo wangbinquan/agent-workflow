@@ -16,7 +16,7 @@
 //     animation drift without blocking iteration speed.
 //   * Main CI discovers tests with this config, then selects whole files
 //     through playwright.ci.config.ts using historical duration weights.
-//     Linux uses three shards; macOS and Windows use four. The child config
+//     Linux and macOS use three shards; Windows uses four. The child config
 //     must not also receive native --shard. Local/nightly entrypoints retain
 //     this base config and may still use Playwright's native sharding.
 //

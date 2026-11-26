@@ -1,3 +1,7 @@
+## 2026-11-26 RFC-623 第三轮 CI：macOS runner 需求与完整计时分片（In Progress；`design/RFC-623-macos-ci-runner-demand/`）
+
+用户已授权择优实施。macOS E2E 4→3片并更新完整clean reporter权重；全部测试exact-once、arm64、4workers、原20分钟与13组门禁保持。source topology严格兼容历史3/4/4与新3/3/4；实测区分领取等待、执行与总墙钟。先完整开发与用例，再集中验证和exact-SHA CI。详见本RFC三件套。
+
 ## 2026-11-26 RFC-622 source-control 的候选与提交绑定器迁入 application（Done；`design/RFC-622-source-control-binders-into-application/`）
 
 - **来由**：用户 2026-11-26「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S10，

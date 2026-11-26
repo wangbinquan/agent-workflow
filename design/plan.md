@@ -653,6 +653,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-620](./RFC-620-secret-box-into-platform/proposal.md) | 静态加密盒归 platform（RFC-294 W9-D 余项）：`auth/secretBox.ts` 拆成 `platform/contracts/secretBox.ts`（`SecretBox` 接口，application 只取合同）与 `platform/crypto/secretBox.ts`（AES-256-GCM 实现与守护进程密钥文件，原样迁移）；四个模块与 bootstrap 共用，是中性机制而非 identity-access 的；读者按语法树改指（混合 import 拆成两条）；`legacy-horizontal-files` 45 → 44。无用户可见变化。 | Done |
 | [RFC-621](./RFC-621-system-identity-and-token-file/proposal.md) | `auth/` 的两个中性原语离开 legacy 目录（RFC-294 W9-D 余项）：`SYSTEM_USER_ID` 迁入 `@agent-workflow/shared`、`auth/actor.ts` 不再转出它，守护进程令牌文件原样迁入 `platform/crypto/tokenFile.ts`；58 个读者按语法树改指；`legacy-horizontal-files` 44 → 42。无用户可见变化。 | Done |
 | [RFC-622](./RFC-622-source-control-binders-into-application/proposal.md) | source-control 的候选与提交绑定器迁入 application（RFC-294 S10 余项）：`bindChangeCandidateParticipant` / `bindCandidateDeliveryParticipant` / `bindRepositoryCommitParticipant` 决定由托管操作宿主还是本进程执行用例，属用例编排，原样迁入 `application/`，模块根照旧转出；`composition/repositoryCommit.ts` 删除；`composition-control-flow-source-control` 4 → 0。无用户可见变化。 | Done |
+| [RFC-623](./RFC-623-macos-ci-runner-demand/proposal.md) | 第三轮CI：macOS E2E 4→3，完整clean reporter权重与source拓扑兼容；保持测试全集、arm64、20分钟及13组严格门禁 | In Progress；用户授权择优实施 |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`
