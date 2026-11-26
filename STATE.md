@@ -1,3 +1,15 @@
+## 2026-11-26 RFC-613 provider 运行期的驱动绑定必填，旧的逐次驱动直绑只供用例（In Progress；`design/RFC-613-task-run-binding-required/`）
+
+- **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S12
+  第 1 项（生产代码不为用例留默认分支）。bootstrap 一直给 provider 运行期的 `taskRunBinding`，没给时的旧直绑分支只有用例在走。
+- **范围**：`ProviderTaskRunBindingSelection` 改为必填绑定的接口，`bindProviderTaskRunParticipantsInput` 只检查给定的绑定；旧直绑（`composeLegacyTaskRunDriveBinding`、
+  `LegacyTaskRunComposition`）迁为 `tests/helpers/legacyTaskRunDriveBinding.ts`，与单机选择共用导出的 `createLocalTaskRunConfigurationBridge`；两个测试助手与
+  三个用例改从它取，断言旧接收者语义的一条用例改写，两条源码锁随之改。`composition-control-flow-task-execution` 10 → 9。新增 RFC-613 用例。
+- **集中验证**（基于 `1d4faeac5`，详见 plan）：tsc 0 错，eslint / promises / prettier 无告警。715 个用例文件里查出一处本人缺陷（`rfc510` 逐字钉着
+  那次绑定核对的实参），改钉值后复验通过；`rfc321` 照例红。4 种变异都被认出；架构报告除该计数 10 → 9 与文件导出外有门禁的计数不变。实现门 PASS
+  （本会话按路径限定自审，只审功能）。
+- **CI 侧**：待推送。
+
 ## 2026-11-26 RFC-612 source-control 组合层里余下的两份实现归 infrastructure（In Progress；`design/RFC-612-source-control-composition-implementations/`）
 
 - **来由**：用户 2026-11-25「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批，不要每个RFC就停下来，你要持续推进」；RFC-294 S10

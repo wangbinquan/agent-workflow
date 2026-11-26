@@ -176,16 +176,17 @@ const ROOTS: Readonly<
   },
   [root('localTaskRunSelection')]: {
     offers: [
-      'LegacyTaskRunComposition',
+      'LocalTaskRunFamilyFactories',
       'ProviderTaskRunBindingSelection',
       'bindProviderTaskRunParticipantsInput',
-      'composeLegacyTaskRunDriveBinding',
       'composeLocalTaskRunSelection',
+      'createLocalTaskRunConfigurationBridge',
     ],
     // The run-binding selection; RFC-514 moved the local configuration bridge's lookup (and its throw) to
     // application/taskRunSelection.ts as createTaskRunConfigurationReferences. RFC-527 moved the exclude-profile
-    // selection, which only tests used, to tests/helpers/taskWorkspaceExcludeProfiles.ts.
-    shapes: ['if'],
+    // selection, which only tests used, to tests/helpers/taskWorkspaceExcludeProfiles.ts. RFC-613 made the drive binding
+    // required: the legacy direct arm (fixtures only) is tests/helpers/legacyTaskRunDriveBinding.ts, no branch is left.
+    shapes: [],
     takes: [
       `import ${RUN_PORTS}: TaskRunContentNamespace, TaskRunFamilyBinding`,
       `import ${RUNS}: createTaskRunConfigurationReferences, requireTaskRunDriveBinding`,
@@ -214,7 +215,8 @@ const CALLS: Readonly<Record<string, readonly [readonly string[], readonly strin
   ],
   requireTaskRunRootSelection: [[`${root('taskRunSelection')} x1`], ['selected']],
   requireTaskRunConfiguration: [[`${root('taskRunSelection')} x1`], ['configuration']],
-  requireTaskRunDriveBinding: [[`${root('localTaskRunSelection')} x1`], ['selected']],
+  // RFC-613: the provider runtime's binding is required; the single check takes the given one directly.
+  requireTaskRunDriveBinding: [[`${root('localTaskRunSelection')} x1`], ['input.taskRunBinding']],
   requirePortOutputValidationContent: [[`${root('portOutputValidation')} x1`], ['content']],
   requireTaskLaunchConfigurationInput: [[`${root('launchConfiguration')} x1`], ['input']],
 }

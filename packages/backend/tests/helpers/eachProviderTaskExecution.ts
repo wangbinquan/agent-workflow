@@ -27,7 +27,10 @@ import { testDriveFactory } from './taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { localTaskAgentRunProviders } from '@/bootstrap/runFamilyProviders'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
-import type { LegacyTaskRunComposition } from '@/modules/task-execution/composition/localTaskRunSelection'
+import {
+  composeLegacyTaskRunDriveBinding,
+  type LegacyTaskRunComposition,
+} from './legacyTaskRunDriveBinding'
 import { composeTaskWorkspaceExcludeProfilesFor } from './taskWorkspaceExcludeProfiles'
 import {
   bindTaskRunRootSelection,
@@ -213,19 +216,23 @@ export async function createEachProviderTaskExecution(
   const runBinding =
     taskRunRoot === undefined
       ? {
-          taskAgentRunsFor:
-            options.taskAgentRunsFor ??
-            ((binding) => composeLocalTaskAgentRunFamilyFor(binding, localTaskAgentRunProviders)),
-          taskScriptRunsFor: options.taskScriptRunsFor ?? composeLocalTaskScriptRunFamily,
-          // RFC-526: the legacy arm gives its prompt and artifact owners — the local ones the provider runtime used to
-          // default to, unless the case gave its own.
-          nodeRunPromptsFor:
-            options.nodeRunPromptsFor ??
-            ((root: string) =>
-              composeNodeRunPromptOperations(createFileNodeRunPromptContent(join(root, 'runs')))),
-          portArtifactsFor:
-            options.portArtifactsFor ??
-            ((root: string) => composePortArtifactOperations(createFilePortArtifactContent(root))),
+          // RFC-613: the provider runtime requires its drive binding; the legacy per-drive binding is a test helper.
+          taskRunBinding: composeLegacyTaskRunDriveBinding({
+            taskAgentRunsFor:
+              options.taskAgentRunsFor ??
+              ((binding) => composeLocalTaskAgentRunFamilyFor(binding, localTaskAgentRunProviders)),
+            taskScriptRunsFor: options.taskScriptRunsFor ?? composeLocalTaskScriptRunFamily,
+            // RFC-526: the legacy arm gives its prompt and artifact owners — the local ones the provider runtime used to
+            // default to, unless the case gave its own.
+            nodeRunPromptsFor:
+              options.nodeRunPromptsFor ??
+              ((root: string) =>
+                composeNodeRunPromptOperations(createFileNodeRunPromptContent(join(root, 'runs')))),
+            portArtifactsFor:
+              options.portArtifactsFor ??
+              ((root: string) =>
+                composePortArtifactOperations(createFilePortArtifactContent(root))),
+          }),
         }
       : { taskRunBinding: taskRunRoot.drive }
   const workspaceExcludeProfilesFor = composeTaskWorkspaceExcludeProfilesFor(

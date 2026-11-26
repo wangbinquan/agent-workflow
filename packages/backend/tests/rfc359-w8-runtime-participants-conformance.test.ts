@@ -26,7 +26,7 @@ import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { localTaskAgentRunProviders } from '@/bootstrap/runFamilyProviders'
 import { composeLocalTaskScriptRunFamily } from '@/modules/task-execution/composition/localTaskScriptRunFamily'
-import { composeLegacyTaskRunDriveBinding } from '@/modules/task-execution/composition/localTaskRunSelection'
+import { composeLegacyTaskRunDriveBinding } from './helpers/legacyTaskRunDriveBinding'
 import { composeTaskWorkspaceExcludeProfilesFor } from './helpers/taskWorkspaceExcludeProfiles'
 import {
   composePortArtifactOperations,

@@ -22,12 +22,8 @@ import {
 import type { WorkspaceExcludeProfileReceipt } from '@/modules/source-control/public/types'
 import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
 import { createWorkerIdentity } from '@/modules/task-execution/domain/ownership'
-import type {
-  ProviderTaskRunBindingSelection,
-  LegacyTaskRunComposition,
-} from '@/modules/task-execution/composition/localTaskRunSelection'
+import type { LegacyTaskRunComposition } from './helpers/legacyTaskRunDriveBinding'
 import { composeTaskWorkspaceExcludeProfilesFor } from './helpers/taskWorkspaceExcludeProfiles'
-import type { createTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
 import { held } from './helpers/portArtifactContent'
@@ -50,7 +46,7 @@ async function fixture(
   harness: ProviderHarness,
   factory: WorkspaceExcludeProfileFactory,
   agentAck?: ReturnType<typeof held<ReturnType<typeof unusedAgentFamily>>>,
-  legacy?: Extract<ProviderTaskRunBindingSelection, { readonly taskRunBinding?: undefined }>,
+  legacy?: LegacyTaskRunComposition,
 ) {
   const db = harness.db,
     userId = ulid(),
@@ -232,64 +228,45 @@ async function fixture(
 }
 
 describeEachProvider('RFC-370 selected workspace profiles in real Task drives', (harness) => {
-  test('legacy factories retain the complete common receiver, including default content factories', async () => {
-    type Receiver = Parameters<typeof createTaskExecutionRuntimeParticipants>[0] &
-      LegacyTaskRunComposition
+  // RFC-613: the legacy per-drive binding is a test helper (`tests/helpers/legacyTaskRunDriveBinding.ts`); the provider
+  // runtime takes its drive binding and no longer hands its own input to the factories as their receiver. What stays: every
+  // drive calls the case's factories, with the drive's runtime and, when the case gives them, its content owners.
+  test('the legacy per-drive binding calls the case factories on every drive, including default content factories', async () => {
     for (const replaceContents of [false, true]) {
-      const receivers: Receiver[] = [],
-        calls: string[] = []
+      const calls: string[] = []
       const contents = unusedTaskRunContents()
-      const note = (receiver: Receiver, call: string) => {
-        receivers.push(receiver)
-        calls.push(call)
-        expect(receiver.db).toBe(harness.db)
-        expect(receiver.persistence).toBe(h.provider.persistence)
-        expect(receiver.activity).toBe(h.provider.participants.activity)
-        expect(receiver.coordinatorFactory).toBeDefined()
-        expect(receiver.stop).toBeDefined()
-        expect(receiver.runtimeSessionLeases).toBeDefined()
-        expect(receiver.memoryInjectionQueries).toBeDefined()
-        expect(typeof receiver.runtimeRegistry.resolveRuntimeByName).toBe('function')
-        expect(typeof receiver.nodeRunPromptsFor).toBe('function')
-        expect(typeof receiver.portArtifactsFor).toBe('function')
-        expect(receiver.taskAgentRunsFor).toBe(legacy.taskAgentRunsFor)
-        expect(receiver.taskScriptRunsFor).toBe(legacy.taskScriptRunsFor)
-      }
-      const legacy = {
+      const legacy: LegacyTaskRunComposition = {
         ...(replaceContents
           ? {
-              nodeRunPromptsFor(this: Receiver) {
-                note(this, 'prompt')
+              nodeRunPromptsFor() {
+                calls.push('prompt')
                 return contents.nodeRunPrompts
               },
-              portArtifactsFor(this: Receiver) {
-                note(this, 'archive')
+              portArtifactsFor() {
+                calls.push('archive')
                 return contents.portArtifacts
               },
             }
           : {
               // RFC-526: the legacy arm gives its prompt and artifact owners — here the local ones the provider runtime
-              // used to default to (no receiver trace, as before).
+              // used to default to.
               nodeRunPromptsFor: (root: string) =>
                 composeNodeRunPromptOperations(createFileNodeRunPromptContent(join(root, 'runs'))),
               portArtifactsFor: (root: string) =>
                 composePortArtifactOperations(createFilePortArtifactContent(root)),
             }),
-        taskAgentRunsFor(
-          this: Receiver,
-          binding: Parameters<LegacyTaskRunComposition['taskAgentRunsFor']>[0],
-        ) {
-          note(this, 'agent')
-          expect(binding.nodeRunRuntime).toBe(this.nodeRunRuntime)
-          expect(binding.runtimeRegistry).toBe(this.runtimeRegistry)
+        taskAgentRunsFor(binding) {
+          calls.push('agent')
+          expect(binding.nodeRunRuntime).toBeDefined()
+          expect(typeof binding.runtimeRegistry.resolveRuntimeByName).toBe('function')
           if (replaceContents) {
             expect(binding.nodeRunPrompts).toBe(contents.nodeRunPrompts)
             expect(binding.portArtifacts).toBe(contents.portArtifacts)
           }
           return unusedAgentFamily()
         },
-        taskScriptRunsFor(this: Receiver) {
-          note(this, 'script')
+        taskScriptRunsFor() {
+          calls.push('script')
           return unusedScriptFamily()
         },
       }
@@ -311,8 +288,6 @@ describeEachProvider('RFC-370 selected workspace profiles in real Task drives', 
             ? ['prompt', 'archive', 'agent', 'script', 'prompt', 'archive', 'agent', 'script']
             : ['agent', 'script', 'agent', 'script'],
         )
-        for (const receiver of receivers) expect(receiver).toBe(receivers[0]!)
-        expect(receivers[0]!.taskRunBinding).toBeDefined()
         expect((await h.rows()).map((row) => row.workspaceProfileDigest)).toEqual([
           'legacy-receiver',
           'legacy-receiver',

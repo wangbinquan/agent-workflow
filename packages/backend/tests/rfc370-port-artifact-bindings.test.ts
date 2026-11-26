@@ -552,7 +552,10 @@ test('the real drive binds its exact selected artifact receiver into the family 
   expect(objectFields(selected[0]!.arguments[0]!, drive).get('portArtifacts')).toBe(
     'binding.portArtifacts',
   )
-  expect(drive.text).toContain('const portArtifacts = input.portArtifactsFor(request.appHome)')
+  // RFC-613: the per-drive archive owner of the legacy direct binding moved with it into the test helper.
+  expect(
+    readFileSync(new URL('./helpers/legacyTaskRunDriveBinding.ts', import.meta.url), 'utf8'),
+  ).toContain('const portArtifacts = input.portArtifactsFor(request.appHome)')
   // RFC-422: the port artifact mapping is built by the opener in infrastructure/local/taskAgentRunFamily.ts.
   const local = source('modules/task-execution/infrastructure/local/taskAgentRunFamily.ts')
   expect(calls(local, local, 'input.portArtifacts.archive')).toHaveLength(1)

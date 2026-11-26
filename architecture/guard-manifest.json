@@ -3836,7 +3836,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc510-task-execution-port-completeness-checks-out-of-composition-boundary.test.ts",
       "id": "rfc510-task-execution-port-completeness-checks-out-of-composition-boundary",
-      "lines": 709,
+      "lines": 711,
       "mechanism": "ast",
       "minCorpusFiles": 3000,
       "negativeFixture": true,
@@ -5027,6 +5027,18 @@
       "lines": 143,
       "mechanism": "ast",
       "minCorpusFiles": 11,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/rfc613-task-run-binding-required-boundary.test.ts",
+      "id": "rfc613-task-run-binding-required-boundary",
+      "lines": 111,
+      "mechanism": "ast",
+      "minCorpusFiles": 3000,
       "negativeFixture": true,
       "runner": "bun"
     }

@@ -7,11 +7,7 @@ import type {
   TaskRunContentNamespace,
   TaskRunFamilyBinding,
 } from '../application/ports/taskRunSelection'
-import {
-  bindTaskRunRootSelection,
-  type TaskRunDriveBinding,
-  type TaskRunRootSelection,
-} from './taskRunSelection'
+import type { TaskRunDriveBinding, TaskRunRootSelection } from './taskRunSelection'
 import {
   composeLocalTaskAgentRunFamilyFor,
   type LocalTaskAgentRunFamilyBinding,
@@ -23,26 +19,20 @@ import {
   requireTaskRunDriveBinding,
 } from '../application/taskRunSelection'
 
-/** Legacy direct compositions retain their complete native factory vocabulary here. */
-export interface LegacyTaskRunComposition {
-  readonly nodeRunPromptsFor: (appHome: string) => NodeRunPromptOperations
-  readonly portArtifactsFor: (appHome: string) => PortArtifactOperations
+/** The native family factories the local configuration bridge adapts (the standalone selection's, or a case's own). */
+export interface LocalTaskRunFamilyFactories {
   readonly taskAgentRunsFor: (binding: LocalTaskAgentRunFamilyBinding) => TaskAgentRunFamily
   readonly taskScriptRunsFor: (request: TaskDriveRequest) => TaskScriptRunFamily
 }
 
-export type ProviderTaskRunBindingSelection =
-  | { readonly taskRunBinding: TaskRunDriveBinding }
-  | (Pick<
-      LegacyTaskRunComposition,
-      'taskAgentRunsFor' | 'taskScriptRunsFor' | 'nodeRunPromptsFor' | 'portArtifactsFor'
-    > & {
-      readonly taskRunBinding?: undefined
-    })
+/** RFC-613: the provider runtime always receives its drive binding — bootstrap gives its selection's; cases that replace
+ * the families per drive build one with `tests/helpers/legacyTaskRunDriveBinding.ts`. */
+export interface ProviderTaskRunBindingSelection {
+  readonly taskRunBinding: TaskRunDriveBinding
+}
 
-function localConfigurationBridge(
-  input: Pick<LegacyTaskRunComposition, 'taskAgentRunsFor' | 'taskScriptRunsFor'>,
-) {
+/** Adapts a selected-family binding to the native factories: configuration references and the binding's content receivers. */
+export function createLocalTaskRunConfigurationBridge(input: LocalTaskRunFamilyFactories) {
   const references = createTaskRunConfigurationReferences()
   const contentNamespace: TaskRunContentNamespace = Object.freeze({
     kind: 'task-run-content-namespace',
@@ -79,7 +69,7 @@ export function composeLocalTaskRunSelection(input: {
   /** RFC-489: the other modules' implementations of the native task agent run family (bootstrap passes them in). */
   readonly taskAgentProviders: LocalTaskAgentRunProviders
 }): TaskRunRootSelection {
-  const bridge = localConfigurationBridge({
+  const bridge = createLocalTaskRunConfigurationBridge({
     taskAgentRunsFor: (binding) =>
       composeLocalTaskAgentRunFamilyFor(binding, input.taskAgentProviders),
     taskScriptRunsFor: composeLocalTaskScriptRunFamily,
@@ -96,44 +86,10 @@ export function composeLocalTaskRunSelection(input: {
   }
 }
 
-/** Direct legacy fixtures still bind prompt→archive→Agent→script at every drive. */
-export function composeLegacyTaskRunDriveBinding(
-  input: LegacyTaskRunComposition,
-): TaskRunDriveBinding {
-  const bridge = localConfigurationBridge(input)
-  return Object.freeze<TaskRunDriveBinding>({
-    bind(request, owners) {
-      const nodeRunPrompts = input.nodeRunPromptsFor(request.appHome)
-      const portArtifacts = input.portArtifactsFor(request.appHome)
-      return bindTaskRunRootSelection({
-        runs: {
-          contentNamespace: bridge.contentNamespace,
-          nodeRunPrompts,
-          portArtifacts,
-          taskAgentRunsFor: (binding) => bridge.taskAgentRunsFor(binding),
-          taskScriptRunsFor: (binding) => bridge.taskScriptRunsFor(binding),
-        },
-        configurationFor: (drive) => bridge.configurationFor(drive),
-      }).drive.bind(request, owners)
-    },
-  })
-}
-
-/** The freshly assembled provider input remains the receiver of all legacy factories. */
-/** RFC-526: the legacy arm (fixtures only) gives its prompt and artifact owners too; nothing is defaulted here. */
+/** RFC-613: the drive binding is required, so there is nothing to select here; the given binding is checked once. */
 export function bindProviderTaskRunParticipantsInput<Input extends object>(
   input: Input & ProviderTaskRunBindingSelection,
-): Input & { readonly taskRunBinding: TaskRunDriveBinding } {
-  if (input.taskRunBinding !== undefined) {
-    const selected = input.taskRunBinding
-    requireTaskRunDriveBinding(selected)
-    return Object.assign(input, { taskRunBinding: selected })
-  }
-  const receiver = Object.assign(input, {
-    taskAgentRunsFor: input.taskAgentRunsFor,
-    taskScriptRunsFor: input.taskScriptRunsFor,
-    nodeRunPromptsFor: input.nodeRunPromptsFor,
-    portArtifactsFor: input.portArtifactsFor,
-  })
-  return Object.assign(receiver, { taskRunBinding: composeLegacyTaskRunDriveBinding(receiver) })
+): Input & ProviderTaskRunBindingSelection {
+  requireTaskRunDriveBinding(input.taskRunBinding)
+  return input
 }

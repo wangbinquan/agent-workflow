@@ -702,6 +702,8 @@ PostgreSQL 事务的 owner-native 合同迁入 resource-catalog 的 application 
 > 后继：第 4 项第十五步 [RFC-549](../RFC-549-schema-history-runtime-explicit/proposal.md)（Done，2026-11-23，`85c36f1c0`）：schema 历史运行时不再经 platform 的进程级登记，bootstrap 的 live 绑定带着它交到迁移、恢复、备份、逻辑复制、启动准入与 Worker。模块级可变单例 39 → 37。集中验证查出两类本人缺陷（两条源码锁钉着被改的入参；Worker 用例认不出恒真校验的变异），已改并复验。其余 37 条：「可迁移」一类拆完；凭据 / 访问 / 完整性相邻的 9 条与进程级 28 条的处理待用户确认（RFC-546 Q1～Q3）。
 >
 > 后继：第 4 项第十六步 [RFC-546](../RFC-546-module-singleton-process-exceptions/proposal.md)（In Progress，2026-11-26）：Q1～Q3 由本会话裁定（用户 2026-11-25 授权）。进程级的 28 条登记为例外，design §14 该行改为“不计登记的进程级例外”；凭据 / 访问 / 完整性相邻的 9 条是待迁的服务状态（不登记为例外），随延后的 `ws/` 与 legacy 一族处理，在此之前列在只减不增的 `pending` 里。两份清单在 `architecture/module-singleton-exceptions.json`，RFC-546 守卫钉住判据结果等于两份之和。`pending` 清空时第 4 项的退出门达成。
+>
+> 后继：第 1 项余项 [RFC-613](../RFC-613-task-run-binding-required/proposal.md)（In Progress，2026-11-26）：task-execution 的 provider 运行期驱动绑定必填（bootstrap 一直给），`bindProviderTaskRunParticipantsInput` 不再为用例退回旧的逐次驱动直绑；旧直绑迁为 `tests/helpers/legacyTaskRunDriveBinding.ts`，与单机选择共用导出的配置桥接。`composition-control-flow-task-execution` 10 → 9。
 
 - **范围**（design §9.3、§10.2 的现状偏差，review F14）：
   1. 模块 composition 的 `select*` 助手与适配器回退改为必填注入，单机默认值只留在单机 profile（`bootstrap/standalone.ts` 与维护 worker 的单机部分

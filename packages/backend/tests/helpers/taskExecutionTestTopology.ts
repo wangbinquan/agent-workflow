@@ -45,7 +45,7 @@ import { createTaskExecutionPersistence } from '../../src/modules/task-execution
 import { createTaskExecutionRuntimeParticipants } from '../../src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import { createRuntimeSessionLeaseOperations } from '../../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
 import { driveTaskEngineApplication } from '../../src/modules/task-execution/composition/taskEngineApplication'
-import { composeLegacyTaskRunDriveBinding } from '../../src/modules/task-execution/composition/localTaskRunSelection'
+import { composeLegacyTaskRunDriveBinding } from './legacyTaskRunDriveBinding'
 import { composeTaskWorkspaceExcludeProfilesFor } from './taskWorkspaceExcludeProfiles'
 import type { RunTaskOptions } from '../../src/modules/task-execution/composition/taskEngineRuntimeOptions'
 import { pickInheritableRunConfig } from '../../src/modules/task-execution/application/ports/taskExecutionTopology'

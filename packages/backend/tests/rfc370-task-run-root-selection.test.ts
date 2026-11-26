@@ -16,7 +16,7 @@ import {
   taskRunBindingPending,
   type TaskRunRootSelection,
 } from '@/modules/task-execution/composition/taskRunSelection'
-import { composeLegacyTaskRunDriveBinding } from '@/modules/task-execution/composition/localTaskRunSelection'
+import { composeLegacyTaskRunDriveBinding } from './helpers/legacyTaskRunDriveBinding'
 import { held, callablePromise } from './helpers/portArtifactContent'
 import {
   chosenTaskRuns,
