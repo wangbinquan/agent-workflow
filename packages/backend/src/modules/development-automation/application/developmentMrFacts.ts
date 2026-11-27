@@ -1,6 +1,10 @@
 // RFC-508（RFC-294 S10 第十五步）—— 开发交付的 MR 事实：读取（失败原样返回，成功时映射快照、数未解决且不是自己的评审线程）与
 // 采集（四条原文错误；成功时算快照摘要、投影事实格、给线程算摘要）。事实源端口由 integration 按结构满足、装配根注入；采集的时钟由
 // 装配传入。
+//
+// 读取遇到「两次读之间分支动了」会重采：事实源在这种情况下整组丢弃并要求调用方重采
+// （`modules/integration/application/mrFacts.ts` 文件头）。员工刚推送完修复提交就来读线程时，MR 的头提交正好从旧值变成它自己
+// 推上去的新值；不重采的话，这一次读取失败会被工作项当成阻塞，交办停下来等人恢复（2026-11-27 在真实 GitLab 上遇到）。
 
 import { canonicalDigest } from '../domain/canonicalJson'
 import { projectMrCells } from '../domain/mrFacts'
@@ -17,7 +21,14 @@ export function createDevelopmentMrFacts(deps: DevelopmentMrFactsDependencies) {
   return {
     async collect(repositoryId: string, mrRef: string, selfMarker: string) {
       // RFC-471: a missing binding is the source's `code-host-connection-missing` (same code, same text).
-      const result = await deps.mrFacts.collect(repositoryId, mrRef, { selfMarker })
+      let result = await deps.mrFacts.collect(repositoryId, mrRef, { selfMarker })
+      // The source's two "a branch moved while I was reading" results. A branch that has just
+      // moved is stable on the next read; one that keeps moving is reported after three reads.
+      // Any other failure is returned at once.
+      const moved = (code: string) =>
+        code === 'mr-facts-head-race' || code === 'mr-facts-target-race'
+      for (let read = 1; read < 3 && !result.ok && moved(result.code); read += 1)
+        result = await deps.mrFacts.collect(repositoryId, mrRef, { selfMarker })
       if (!result.ok) return result
       return {
         ok: true as const,
