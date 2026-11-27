@@ -38,9 +38,11 @@
 
 `bun run dev` 没有配置端口时，后端每次热重载都换一个随机端口；Vite 只在启动时读一次 `.daemon.info`，于是第一次保存后端源文件之后，`localhost:5174` 上所有 `/api` 请求都是 500。现在重载的那一代沿用上一代公布的端口（`bootstrap/developmentReload.ts` 的 `developmentListenPort`；配置了端口时照旧，原端口被别的进程占用时退回随机端口）。`serveDaemon` 与 `main.ts` 未改。回归用例：`dev-reload-cli.test.ts`（真实 `--hot` 进程，保存后地址不变）、`dev-reload.test.ts`（4 条）。本地：引用这两个源文件的 79 个后端测试文件全部通过，tsc 与 eslint 干净；主 CI 结论待本提交的 run。细节见 `docs/dev-gotchas.md` 同名条目。
 
-## 2026-11-26 RFC-625 第二批 CI：Windows 进程身份与不可变准备复用（In Progress；`design/RFC-625-ci-process-identity-and-manifest-reuse/`）
+## 2026-11-26 RFC-625 第二批 CI：Windows 进程身份与不可变准备复用（Done；有限范围交付）
 
-用户已授权本批完整CI实测。Windows进程创建身份/接管token、job内不可变manifest复用及三份完整green计时max权重已实现，原覆盖/隔离/预算保持。集中验证修复PG延迟配置与Windows触发清单问题；共享源码持续变化使本地跨进程命中结果受限，完整结论待干净提交的主CI与Windows原生CI。详情见设计与plan。
+Windows进程创建身份/接管token、job内不可变manifest复用及44片真实max权重已发布，原测试、隔离和门禁保持。精确19ef Windows身份/锁23/23通过（4项native实际执行）；最终权重5f的立即后继033f5fa / CI45986840401首次69/69成功，本任务29份相关内容相同，另含并发MR事实重采修复及新增测试。完整3135文件测量：Q3 992.055→882.905秒（−11.0%）、V2 801.568→362.810秒（−54.7%）、全后端累计−3.39%；最大后端837→782秒，但P95与累计runner区间未改善。整轮34分25秒→3小时07分48秒，其中初始等待2小时08分35秒，不能宣称整体CI提速。
+
+人工门三case×三平台全部首次通过；033另有Linux mindmap一条原retry1后通过，collector保持原准入、跳过E2E权重刷新。5f自身66success/2failure/1cancelled的负结果保留：一个5秒case超时、一个片普遍变慢后触及15分钟预算，底层原因未明，后继绿色不等于根因修复。历史PID7256复用也未能追溯证实。详见[实测验收](design/RFC-625-ci-process-identity-and-manifest-reuse/acceptance.md)。本批结论绑定033内容，后继收口仅文档，其他生产在制品不属于本批已验证声明。
 
 ## 2026-11-26 RFC-624 第一批测试准备与重复执行优化（Done；`design/RFC-624-test-preparation-deduplication/`）
 
