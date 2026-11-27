@@ -185,7 +185,8 @@ context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`
   就先把另一张从模块的 `schemaContribution.tables` 里临时拿掉，追加完一张再放回去追加第二张。四个 PostgreSQL 大版本的目录用
   `--catalog --postgresql-url-env <变量名>` 逐个生成（已存在的会被复核）；生成出的 `*.contract.json` 要过 prettier（格式门覆盖
   `packages/**/*.json`，摘要不受影响）。同一笔还要带：`tests/fixtures/release-upgrade/seeds/epoch2/NNNN.json`、`mapping-oracle.json`
-  的条目、两个备份用例里的 `activeTableCount`。
+  的条目、两个备份用例里的 `activeTableCount`。每多一个 epoch-2 版本，`rfc401-epoch2-history-bridge` 的整链用例在 CI 上多约 0.4 秒
+  （13 个版本 2.8 秒，15 个版本 3.5 秒，上限 5 秒）。
 - **枚举列别再手写一份 CHECK。** `c.enum(...)` 已经生成取值约束；旁边再写同义的 `checks: [...]`，表上就有两条一样的约束。同模块旧表上的
   显式 CHECK 是历史转换留下的，不是范式。
 - **`modules/run-observability/composition.ts` 被按 sha256 锁住**（`rfc395-nonruntime-source-roles`）。新表从 `composition/schema.ts` 与

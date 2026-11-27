@@ -5864,3 +5864,19 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 - **单条双 provider 连续用户旅程**（AC-9）：各段都有双 provider 的真实链路用例（清单见 RFC-395 plan），连续旅程由编译后二进制上的 e2e（SQLite）承担。
   待补：用确定性执行器在同一任务上走完 启动 → 执行 → 等待人工 → 作答 → 完成 → 回滚 / 重试 → 历史查询 → 导出，断言任务状态、run 身份与 seq、
   人工答案、重试结果和导出内容；用 `describeEachProvider` 在 SQLite 与 PostgreSQL 上各跑一遍，并在独立与托管装配下复用。
+
+
+## `rfc363-task-preparation-admission` 的 SQLite 一例偶发挂满 60 秒（2026-11-26 第三次记录，CI 偶发，未处置）
+
+- 现象：`RFC-363 Task preparation admission [sqlite] > synchronous admission rollback preserves the failed Task transaction and durably
+  compensates Git` 挂满用例自带的 60 秒；超时之后报一条用例之间的未处理错误：期望 `reject-after-source-freeze`，收到
+  `Failed to run the query 'ROLLBACK'`（`tests/rfc363-task-preparation-admission.test.ts:391`）。有日志的两次里，同一条用例的
+  `[postgresql]` 一支都通过（343 毫秒、545 毫秒），同片其余用例通过。
+- 出现过的地方：`60b5ccb1e`（RFC-616 实现）主 CI run 45924005558 的后端 21/44 分片；`8cf8ee11d`（RFC-609）run 45791885352 的后端 20/44
+  分片，同一条用例、同一句报错；STATE.md 里 `9afd1539d`（RFC-521，2026-11-20）那一轮记的“撞自带的 60 秒”。三个提交互不相关，
+  都没有动这个用例文件。
+- 归因：既有的偶发失败，不属于上述任何一次提交。本机带着 RFC-616 的改动单跑这个文件 15 条全过；`5d94192c7`（内容只比 `60b5ccb1e`
+  多三张图）的 run 45924784549 上同一分片通过。日志里只有外层那句“ROLLBACK 失败”，没有驱动给的原因。按「flaky 不能掩盖红 case」没有重跑
+  追绿，如实记录。
+- 待办：先让这次失败带出驱动的原始错误（现在只看得到包装后的一句），再判断是任务启动事务的回滚时序问题还是夹具的问题。它每出现一次
+  就让一轮主 CI 少一格，值得单独查。
