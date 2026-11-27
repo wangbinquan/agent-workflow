@@ -1,0 +1,775 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-27T05:04:03.649298+00:00",
+  "scope": "RFC624 complete primary baseline and two complete first-attempt candidates; retain first candidate, no fastest-sample selection.",
+  "repository": "wangbinquan/agent-workflow",
+  "runOrder": ["baseline-790", "first-candidate-9cb", "final-candidate-240"],
+  "units": {
+    "times": "seconds unless named Ms or Minutes",
+    "quantiles": "linear interpolation over all successful shards",
+    "execution": "first actual non-skipped step to job.completed_at; step-span retained separately",
+    "wall": "run.created_at to last real job.completed_at; run.updated_at is a separate proxy",
+    "queue": "job.created_at to first actual step; initial whole-run wait includes admission and runner wait, not separately observable",
+    "runnerMinutes": "unrounded interval sum, no billing rounding or OS multipliers",
+    "backendFileMs": "sum of complete collector whole-file runtime observations",
+    "e2eSpecMs": "first-test-begin to last-test-end spec spans; include hooks/retry gaps, exclude global setup; parallel sums are not wall-clock"
+  },
+  "runs": [
+    {
+      "label": "baseline-790",
+      "role": "baseline",
+      "mappingSide": "before",
+      "runId": 45925598806,
+      "sourceSha": "79085123ad2a953955a25c250f8c937fa3af1e28",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/45925598806",
+      "runAttempt": 1,
+      "conclusion": "success",
+      "successfulJobs": 69,
+      "createdAt": "2026-11-27T01:58:35Z",
+      "firstActualStepAt": "2026-11-27T02:24:32Z",
+      "lastWorkCompletedAt": "2026-11-27T03:19:26Z",
+      "requiredFirstStepAt": "2026-11-27T03:19:31Z",
+      "lastJobCompletedAt": "2026-11-27T03:19:33Z",
+      "runUpdatedAt": "2026-11-27T03:19:34Z",
+      "wallSeconds": 4858.0,
+      "runUpdatedAtProxySeconds": 4859.0,
+      "initialWaitSeconds": 1557.0,
+      "calculationSpanIncludingQueuesSeconds": 3294.0,
+      "requiredTailQueueSeconds": 5.0,
+      "runnerStepSpanMinutes": 582.833333,
+      "runnerFirstStepToJobEndMinutes": 585.25,
+      "collectorRunId": 45933509875,
+      "collectorReviewArtifact": "reviewed-ci-timings-45925598806",
+      "collectorSourceMatchesExactRunSha": true,
+      "e2eCollectorStatus": {
+        "status": "updated"
+      },
+      "runSnapshotSha256": "6228f01f79f121b2c71e9f9cfed7eb4dbdfa5620cca27924fe347765a9c89c2e",
+      "jobsSnapshotSha256": "246a6a96fb29626036b7590657c25371ed6d70ab47ccebb82dd1e034f0aa4f71"
+    },
+    {
+      "label": "first-candidate-9cb",
+      "role": "reference",
+      "mappingSide": "after",
+      "runId": 45933650528,
+      "sourceSha": "9cbf497ac393053235816af1172071ca511c97c8",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/45933650528",
+      "runAttempt": 1,
+      "conclusion": "success",
+      "successfulJobs": 69,
+      "createdAt": "2026-11-27T03:21:03Z",
+      "firstActualStepAt": "2026-11-27T03:21:05Z",
+      "lastWorkCompletedAt": "2026-11-27T04:01:26Z",
+      "requiredFirstStepAt": "2026-11-27T04:03:47Z",
+      "lastJobCompletedAt": "2026-11-27T04:03:50Z",
+      "runUpdatedAt": "2026-11-27T04:03:51Z",
+      "wallSeconds": 2567.0,
+      "runUpdatedAtProxySeconds": 2568.0,
+      "initialWaitSeconds": 2.0,
+      "calculationSpanIncludingQueuesSeconds": 2421.0,
+      "requiredTailQueueSeconds": 141.0,
+      "runnerStepSpanMinutes": 574.6,
+      "runnerFirstStepToJobEndMinutes": 577.016667,
+      "collectorRunId": 45937727467,
+      "collectorReviewArtifact": "reviewed-ci-timings-45933650528",
+      "collectorSourceMatchesExactRunSha": true,
+      "e2eCollectorStatus": {
+        "status": "updated"
+      },
+      "runSnapshotSha256": "6c366870de8491197be47709000b3fca1888093196f939f3d5856b164832f975",
+      "jobsSnapshotSha256": "a3c29937d21b564f8e251af72943077720f68d406bcb3d6aaa3c0d4acf187b73"
+    },
+    {
+      "label": "final-candidate-240",
+      "role": "candidate",
+      "mappingSide": "after",
+      "runId": 45939395356,
+      "sourceSha": "240ee33846083810b7456f31990b23e963595b52",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/45939395356",
+      "runAttempt": 1,
+      "conclusion": "success",
+      "successfulJobs": 69,
+      "createdAt": "2026-11-27T04:20:48Z",
+      "firstActualStepAt": "2026-11-27T04:20:50Z",
+      "lastWorkCompletedAt": "2026-11-27T04:55:08Z",
+      "requiredFirstStepAt": "2026-11-27T04:55:11Z",
+      "lastJobCompletedAt": "2026-11-27T04:55:13Z",
+      "runUpdatedAt": "2026-11-27T04:55:14Z",
+      "wallSeconds": 2065.0,
+      "runUpdatedAtProxySeconds": 2066.0,
+      "initialWaitSeconds": 2.0,
+      "calculationSpanIncludingQueuesSeconds": 2058.0,
+      "requiredTailQueueSeconds": 3.0,
+      "runnerStepSpanMinutes": 556.566667,
+      "runnerFirstStepToJobEndMinutes": 559.2,
+      "collectorRunId": 45942711721,
+      "collectorReviewArtifact": "reviewed-ci-timings-45939395356",
+      "collectorSourceMatchesExactRunSha": true,
+      "e2eCollectorStatus": {
+        "status": "skipped",
+        "reason": "retried-tests",
+        "retriedFiles": ["windows/e2e/rfc294-human-gate-restart.spec.ts"]
+      },
+      "runSnapshotSha256": "1ce91f65c25e6a1ab7757c45d7ec853af8edbb6037d5803ad8c122db1e6abd47",
+      "jobsSnapshotSha256": "cb1c318044844117b72c2f27461fe5b4fd04978c67e10001d9f964a07be7788f"
+    }
+  ],
+  "eligibility": {
+    "allCompleteFirstAttempt69Success": true,
+    "eligibleForObservedTimingComparison": true,
+    "eligibleForCleanE2EComparison": false,
+    "finalE2ERetriedTests": 1,
+    "requiredFinal": {
+      "jobId": 140320343389,
+      "fullCiResult": "success",
+      "outputCount": 13,
+      "allOutputs": "success",
+      "logSha256": "eeed110d419b1285d3a3ebb0206532d5dcd93a52eb50327b368f8e9bfa2ca9d7"
+    }
+  },
+  "backend": {
+    "shards": 44,
+    "jobBudgetSeconds": 900,
+    "filePopulations": [3128, 3130, 3130],
+    "sourceTreeExactMatch": [true, true, true],
+    "successfulTimingUploads": [44, 44, 44],
+    "measuredWholeFileMs": [24911954, 25144491, 23888536],
+    "unmeasuredOrRemoved": [0, 0, 0],
+    "jobExecutionSeconds": [
+      {
+        "min": 422.0,
+        "median": 639.0,
+        "p95": 775.7,
+        "max": 817.0,
+        "sum": 26945.0
+      },
+      {
+        "min": 325.0,
+        "median": 615.0,
+        "p95": 788.55,
+        "max": 803.0,
+        "sum": 27054.0
+      },
+      {
+        "min": 344.0,
+        "median": 592.5,
+        "p95": 717.4,
+        "max": 837.0,
+        "sum": 25821.0
+      }
+    ],
+    "testStepSeconds": [
+      {
+        "min": 375.0,
+        "median": 597.0,
+        "p95": 726.85,
+        "max": 765.0,
+        "sum": 24951.0
+      },
+      {
+        "min": 291.0,
+        "median": 566.0,
+        "p95": 739.8,
+        "max": 767.0,
+        "sum": 25180.0
+      },
+      {
+        "min": 301.0,
+        "median": 549.5,
+        "p95": 677.0,
+        "max": 802.0,
+        "sum": 23920.0
+      }
+    ],
+    "jobQueueSeconds": [
+      {
+        "min": 2755.0,
+        "median": 3485.0,
+        "p95": 4095.0,
+        "max": 4161.0,
+        "sum": 150994.0
+      },
+      {
+        "min": 2.0,
+        "median": 799.5,
+        "p95": 1574.0,
+        "max": 1620.0,
+        "sum": 33572.0
+      },
+      {
+        "min": 2.0,
+        "median": 654.0,
+        "p95": 1363.75,
+        "max": 1441.0,
+        "sum": 30007.0
+      }
+    ],
+    "costPoolsMs": {
+      "static_migration_15_to_shared": [113056, 12020, 11457],
+      "architecture_reports_3_to_2": [88001, 96454, 69429],
+      "q3_phase_11": [954994, 1190203, 992055],
+      "v2_v3_shared_positive": [17814, 13432, 12525],
+      "new_execution_contracts": [0, 2750, 2787],
+      "fixture_lifecycle": [688, 2400, 1391],
+      "affected_total": [1174553, 1317259, 1089644]
+    },
+    "newFinalRegressionCases": {
+      "file": "packages/backend/tests/rfc395-ci-fixture-lifecycle.test.ts",
+      "caseCount": 5,
+      "includedInPools": ["fixture_lifecycle", "affected_total"]
+    },
+    "sourceIntegrity": [
+      {
+        "label": "baseline-790",
+        "exactSourceTreeFiles": 3128,
+        "timingDataSha256": "7c8404d2777c1bbc7b4262d5021c4246b0c563959538cba06f9ba2630c10a8e2",
+        "sourceMetadataSha256": "b31beae527b7f8d474e2d1d105238cf0bb93193a9228b12207c7e9e382030fb5"
+      },
+      {
+        "label": "first-candidate-9cb",
+        "exactSourceTreeFiles": 3130,
+        "timingDataSha256": "be7acd6076d704eb86aae27eb61bbf80b3206ef3a581cb21bf8bd19cd2764b8f",
+        "sourceMetadataSha256": "50e55f79119cd883c8bfe6857efa84135c29d922a5c824a0285414575a08a48f"
+      },
+      {
+        "label": "final-candidate-240",
+        "exactSourceTreeFiles": 3130,
+        "timingDataSha256": "bfb58a5da5461522edc840e73c629b159339121595beef05a077bd31851f9476",
+        "sourceMetadataSha256": "cc36217fd857dde634a664978cc86240e18bd29741ea7c993418e021025f3030"
+      }
+    ]
+  },
+  "frontend": {
+    "linux": {
+      "files": [897, 897, 897],
+      "cases": [7801, 7804, 7804],
+      "sameFilePopulation": true,
+      "samePerShardFiles": true,
+      "duplicatesOrMissing": 0,
+      "nodeSourceGuardFiles": [0, 4, 4],
+      "nodeSourceGuardCases": [0, 28, 28],
+      "domFiles": [897, 893, 893],
+      "finalNodeAndDomConfigurationMatchesNativeResolvedProof": true,
+      "shardColumns": ["shard", "jobId", "queueSeconds", "jobExecutionSeconds", "testStepSeconds", "vitestDurationSeconds"],
+      "observations": [
+        [
+          [1, 140266073683, 2542.0, 208.0, 187.0, 186.05],
+          [2, 140266073749, 2653.0, 130.0, 111.0, 110.54],
+          [3, 140266073326, 2747.0, 181.0, 151.0, 149.68]
+        ],
+        [
+          [1, 140291751090, 3.0, 132.0, 114.0, 113.46],
+          [2, 140291751050, 3.0, 141.0, 126.0, 121.97],
+          [3, 140291751060, 3.0, 174.0, 156.0, 152.88]
+        ],
+        [
+          [1, 140309970206, 211.0, 150.0, 140.0, 138.91],
+          [2, 140309970165, 2.0, 141.0, 122.0, 120.81],
+          [3, 140309970296, 514.0, 167.0, 151.0, 148.05]
+        ]
+      ],
+      "testStepSumsSeconds": [449.0, 396.0, 413.0],
+      "vitestDurationSumsSeconds": [446.27, 388.31, 407.77],
+      "jobExecutionSumsSeconds": [519.0, 447.0, 458.0],
+      "fileBodyCostPoolsMs": {
+        "node_source_guards": [115.0, 67.0, 70.0],
+        "real_validation_panel": [80.0, 207.0, 213.0]
+      },
+      "limits": "28 source-guard cases unchanged; two Panel files include three new negative cases. File-body ms exclude full DOM/module/setup cost. Logs prove project labels, environment is corroborated by identical published config and native resolution."
+    },
+    "windows": {
+      "files": [897, 897, 897],
+      "cases": [7801, 7804, 7804],
+      "sameFilePopulation": true,
+      "samePerShardFiles": true,
+      "duplicatesOrMissing": 0,
+      "nodeSourceGuardFiles": [0, 4, 4],
+      "nodeSourceGuardCases": [0, 28, 28],
+      "domFiles": [897, 893, 893],
+      "finalNodeAndDomConfigurationMatchesNativeResolvedProof": true,
+      "shardColumns": ["shard", "jobId", "queueSeconds", "jobExecutionSeconds", "testStepSeconds", "vitestDurationSeconds"],
+      "observations": [
+        [
+          [1, 140266073711, 2564.0, 351.0, 293.0, 279.74],
+          [2, 140266075153, 2644.0, 406.0, 343.0, 338.28],
+          [3, 140266075372, 1571.0, 385.0, 327.0, 321.86]
+        ],
+        [
+          [1, 140291750921, 3.0, 253.0, 212.0, 207.34],
+          [2, 140291750909, 3.0, 269.0, 223.0, 219.06],
+          [3, 140291750972, 3.0, 420.0, 348.0, 342.95]
+        ],
+        [
+          [1, 140309970230, 111.0, 329.0, 273.0, 266.52],
+          [2, 140309970169, 11.0, 237.0, 197.0, 192.09],
+          [3, 140309970250, 145.0, 407.0, 348.0, 342.49]
+        ]
+      ],
+      "testStepSumsSeconds": [963.0, 783.0, 818.0],
+      "vitestDurationSumsSeconds": [939.88, 769.35, 801.1],
+      "jobExecutionSumsSeconds": [1142.0, 942.0, 973.0],
+      "fileBodyCostPoolsMs": {
+        "node_source_guards": [306.0, 94.0, 79.0],
+        "real_validation_panel": [138.0, 475.0, 380.0]
+      },
+      "limits": "28 source-guard cases unchanged; two Panel files include three new negative cases. File-body ms exclude full DOM/module/setup cost. Logs prove project labels, environment is corroborated by identical published config and native resolution."
+    }
+  },
+  "e2e": {
+    "topology": {
+      "linux": 3,
+      "macos": 3,
+      "windows": 4
+    },
+    "workers": 4,
+    "jobBudgetSeconds": 1200,
+    "eligibleForCleanE2EComparison": false,
+    "retryDetail": {
+      "platform": "windows",
+      "shard": 3,
+      "file": "e2e/rfc294-human-gate-restart.spec.ts",
+      "jobId": 140311082622,
+      "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/45939395356/job/140311082622",
+      "caseId": "582c172f2c1b4a356b24-8c52f0c984e9b8e3fc59",
+      "title": "clarify and review continuations recover when SIGKILL lands after commit but before wake",
+      "sourceLine": 451,
+      "results": [
+        {
+          "status": "failed",
+          "retry": 0
+        },
+        {
+          "status": "passed",
+          "retry": 1
+        }
+      ],
+      "logReportedDurationsSeconds": [31.7, 59.3],
+      "failure": "daemon exited code 1 before ready; another daemon already running PID 7256, .daemon.lock",
+      "sameFileOriginalCases": 3,
+      "otherCasesRetried": 0,
+      "logSha256": "4e90ac61a2b22bef4ad993a8d730df9e215e0c4cb144199bcdd14f44fc177988",
+      "attribution": "Not inferred by this comparison; root assigned independent attribution."
+    },
+    "platforms": {
+      "linux": {
+        "testPopulation": [536, 536, 536],
+        "filePopulation": [122, 122, 122],
+        "sameFullTestIdsFileExpectedStatus": true,
+        "sameAllShardFilesAssignmentsAndWeights": true,
+        "missingOrDuplicateIds": 0,
+        "retriedTests": [0, 0, 0],
+        "jobExecutionSeconds": [
+          {
+            "min": 388.0,
+            "median": 428.0,
+            "p95": 464.9,
+            "max": 469.0,
+            "sum": 1285.0
+          },
+          {
+            "min": 415.0,
+            "median": 532.0,
+            "p95": 556.3,
+            "max": 559.0,
+            "sum": 1506.0
+          },
+          {
+            "min": 390.0,
+            "median": 401.0,
+            "p95": 422.6,
+            "max": 425.0,
+            "sum": 1216.0
+          }
+        ],
+        "testStepSeconds": [
+          {
+            "min": 323.0,
+            "median": 350.0,
+            "p95": 399.5,
+            "max": 405.0,
+            "sum": 1078.0
+          },
+          {
+            "min": 349.0,
+            "median": 478.0,
+            "p95": 496.9,
+            "max": 499.0,
+            "sum": 1326.0
+          },
+          {
+            "min": 331.0,
+            "median": 338.0,
+            "p95": 373.1,
+            "max": 377.0,
+            "sum": 1046.0
+          }
+        ],
+        "jobQueueSeconds": [
+          {
+            "min": 49.0,
+            "median": 319.0,
+            "p95": 433.3,
+            "max": 446.0,
+            "sum": 814.0
+          },
+          {
+            "min": 47.0,
+            "median": 953.0,
+            "p95": 1273.4,
+            "max": 1309.0,
+            "sum": 2309.0
+          },
+          {
+            "min": 335.0,
+            "median": 668.0,
+            "p95": 769.7,
+            "max": 781.0,
+            "sum": 1784.0
+          }
+        ],
+        "shardColumns": ["shard", "jobId", "queueSeconds", "jobExecutionSeconds", "testStepSeconds"],
+        "observations": [
+          [
+            [1, 140275094244, 446.0, 388.0, 323.0],
+            [2, 140275094273, 319.0, 469.0, 405.0],
+            [3, 140275094231, 49.0, 428.0, 350.0]
+          ],
+          [
+            [1, 140292290939, 1309.0, 532.0, 499.0],
+            [2, 140292290827, 47.0, 559.0, 478.0],
+            [3, 140292290892, 953.0, 415.0, 349.0]
+          ],
+          [
+            [1, 140311200804, 335.0, 401.0, 331.0],
+            [2, 140311201093, 781.0, 425.0, 377.0],
+            [3, 140311200837, 668.0, 390.0, 338.0]
+          ]
+        ],
+        "specCostPoolsMs": {
+          "canvas_controls": [10138, 1332, 2537],
+          "independent_retry_groups": [214385, 317314, 217044]
+        },
+        "costPoolClean": {
+          "canvas_controls": [true, true, true],
+          "independent_retry_groups": [true, true, true]
+        },
+        "retryGroupCaseCount": 13
+      },
+      "macos": {
+        "testPopulation": [536, 536, 536],
+        "filePopulation": [122, 122, 122],
+        "sameFullTestIdsFileExpectedStatus": true,
+        "sameAllShardFilesAssignmentsAndWeights": true,
+        "missingOrDuplicateIds": 0,
+        "retriedTests": [0, 0, 0],
+        "jobExecutionSeconds": [
+          {
+            "min": 585.0,
+            "median": 604.0,
+            "p95": 898.3,
+            "max": 931.0,
+            "sum": 2120.0
+          },
+          {
+            "min": 256.0,
+            "median": 602.0,
+            "p95": 746.0,
+            "max": 762.0,
+            "sum": 1620.0
+          },
+          {
+            "min": 255.0,
+            "median": 719.0,
+            "p95": 837.8,
+            "max": 851.0,
+            "sum": 1825.0
+          }
+        ],
+        "testStepSeconds": [
+          {
+            "min": 513.0,
+            "median": 537.0,
+            "p95": 822.3,
+            "max": 854.0,
+            "sum": 1904.0
+          },
+          {
+            "min": 216.0,
+            "median": 543.0,
+            "p95": 686.1,
+            "max": 702.0,
+            "sum": 1461.0
+          },
+          {
+            "min": 221.0,
+            "median": 643.0,
+            "p95": 767.2,
+            "max": 781.0,
+            "sum": 1645.0
+          }
+        ],
+        "jobQueueSeconds": [
+          {
+            "min": 393.0,
+            "median": 414.0,
+            "p95": 549.9,
+            "max": 565.0,
+            "sum": 1372.0
+          },
+          {
+            "min": 4.0,
+            "median": 334.0,
+            "p95": 536.5,
+            "max": 559.0,
+            "sum": 897.0
+          },
+          {
+            "min": 117.0,
+            "median": 397.0,
+            "p95": 667.9,
+            "max": 698.0,
+            "sum": 1212.0
+          }
+        ],
+        "shardColumns": ["shard", "jobId", "queueSeconds", "jobExecutionSeconds", "testStepSeconds"],
+        "observations": [
+          [
+            [1, 140278523073, 393.0, 604.0, 537.0],
+            [2, 140278523122, 565.0, 585.0, 513.0],
+            [3, 140278523078, 414.0, 931.0, 854.0]
+          ],
+          [
+            [1, 140292785556, 559.0, 762.0, 702.0],
+            [2, 140292785600, 4.0, 602.0, 543.0],
+            [3, 140292785557, 334.0, 256.0, 216.0]
+          ],
+          [
+            [1, 140311654792, 397.0, 851.0, 781.0],
+            [2, 140311654762, 117.0, 719.0, 643.0],
+            [3, 140311654775, 698.0, 255.0, 221.0]
+          ]
+        ],
+        "specCostPoolsMs": {
+          "canvas_controls": [13226, 2491, 1524],
+          "independent_retry_groups": [477456, 317143, 369948]
+        },
+        "costPoolClean": {
+          "canvas_controls": [true, true, true],
+          "independent_retry_groups": [true, true, true]
+        },
+        "retryGroupCaseCount": 13
+      },
+      "windows": {
+        "testPopulation": [530, 530, 530],
+        "filePopulation": [121, 121, 121],
+        "sameFullTestIdsFileExpectedStatus": true,
+        "sameAllShardFilesAssignmentsAndWeights": true,
+        "missingOrDuplicateIds": 0,
+        "retriedTests": [0, 0, 1],
+        "jobExecutionSeconds": [
+          {
+            "min": 267.0,
+            "median": 413.0,
+            "p95": 565.65,
+            "max": 579.0,
+            "sum": 1672.0
+          },
+          {
+            "min": 361.0,
+            "median": 430.0,
+            "p95": 463.85,
+            "max": 464.0,
+            "sum": 1685.0
+          },
+          {
+            "min": 359.0,
+            "median": 481.0,
+            "p95": 609.8,
+            "max": 617.0,
+            "sum": 1938.0
+          }
+        ],
+        "testStepSeconds": [
+          {
+            "min": 208.0,
+            "median": 356.0,
+            "p95": 495.75,
+            "max": 507.0,
+            "sum": 1427.0
+          },
+          {
+            "min": 301.0,
+            "median": 368.0,
+            "p95": 410.5,
+            "max": 412.0,
+            "sum": 1449.0
+          },
+          {
+            "min": 285.0,
+            "median": 416.0,
+            "p95": 537.5,
+            "max": 542.0,
+            "sum": 1659.0
+          }
+        ],
+        "jobQueueSeconds": [
+          {
+            "min": 1561.0,
+            "median": 1616.5,
+            "p95": 1706.1,
+            "max": 1716.0,
+            "sum": 6510.0
+          },
+          {
+            "min": 392.0,
+            "median": 546.5,
+            "p95": 884.15,
+            "max": 938.0,
+            "sum": 2423.0
+          },
+          {
+            "min": 46.0,
+            "median": 418.5,
+            "p95": 717.05,
+            "max": 737.0,
+            "sum": 1620.0
+          }
+        ],
+        "shardColumns": ["shard", "jobId", "queueSeconds", "jobExecutionSeconds", "testStepSeconds"],
+        "observations": [
+          [
+            [1, 140275550448, 1650.0, 490.0, 432.0],
+            [2, 140275550450, 1561.0, 336.0, 280.0],
+            [3, 140275550487, 1716.0, 579.0, 507.0],
+            [4, 140275550468, 1583.0, 267.0, 208.0]
+          ],
+          [
+            [1, 140292794771, 392.0, 463.0, 412.0],
+            [2, 140292795032, 938.0, 361.0, 301.0],
+            [3, 140292794827, 579.0, 464.0, 402.0],
+            [4, 140292794819, 514.0, 397.0, 334.0]
+          ],
+          [
+            [1, 140311082552, 233.0, 569.0, 512.0],
+            [2, 140311082575, 46.0, 359.0, 285.0],
+            [3, 140311082622, 604.0, 617.0, 542.0],
+            [4, 140311082577, 737.0, 393.0, 320.0]
+          ]
+        ],
+        "specCostPoolsMs": {
+          "canvas_controls": [11270, 465, 1431],
+          "independent_retry_groups": [373995, 325052, 497461]
+        },
+        "costPoolClean": {
+          "canvas_controls": [true, true, true],
+          "independent_retry_groups": [true, true, false]
+        },
+        "retryGroupCaseCount": 13
+      }
+    }
+  },
+  "deltas": {
+    "baseline-790→final-candidate-240": {
+      "wallSeconds": -2793.0,
+      "initialWaitSeconds": -1555.0,
+      "calculationSpanSeconds": -1236.0,
+      "requiredTailQueueSeconds": -2.0,
+      "runnerFirstStepToJobEndMinutes": -26.05,
+      "backendCostPoolsMs": {
+        "static_migration_15_to_shared": -101599,
+        "architecture_reports_3_to_2": -18572,
+        "q3_phase_11": 37061,
+        "v2_v3_shared_positive": -5289,
+        "new_execution_contracts": 2787,
+        "fixture_lifecycle": 703,
+        "affected_total": -84909
+      },
+      "e2eCostPoolDeltasMsIncludingRetries": {
+        "linux": {
+          "canvas_controls": {
+            "deltaMs": -7601,
+            "bothClean": true
+          },
+          "independent_retry_groups": {
+            "deltaMs": 2659,
+            "bothClean": true
+          }
+        },
+        "macos": {
+          "canvas_controls": {
+            "deltaMs": -11702,
+            "bothClean": true
+          },
+          "independent_retry_groups": {
+            "deltaMs": -107508,
+            "bothClean": true
+          }
+        },
+        "windows": {
+          "canvas_controls": {
+            "deltaMs": -9839,
+            "bothClean": true
+          },
+          "independent_retry_groups": {
+            "deltaMs": 123466,
+            "bothClean": false
+          }
+        }
+      }
+    },
+    "first-candidate-9cb→final-candidate-240": {
+      "wallSeconds": -502.0,
+      "initialWaitSeconds": 0.0,
+      "calculationSpanSeconds": -363.0,
+      "requiredTailQueueSeconds": -138.0,
+      "runnerFirstStepToJobEndMinutes": -17.816667,
+      "backendCostPoolsMs": {
+        "static_migration_15_to_shared": -563,
+        "architecture_reports_3_to_2": -27025,
+        "q3_phase_11": -198148,
+        "v2_v3_shared_positive": -907,
+        "new_execution_contracts": 37,
+        "fixture_lifecycle": -1009,
+        "affected_total": -227615
+      },
+      "e2eCostPoolDeltasMsIncludingRetries": {
+        "linux": {
+          "canvas_controls": {
+            "deltaMs": 1205,
+            "bothClean": true
+          },
+          "independent_retry_groups": {
+            "deltaMs": -100270,
+            "bothClean": true
+          }
+        },
+        "macos": {
+          "canvas_controls": {
+            "deltaMs": -967,
+            "bothClean": true
+          },
+          "independent_retry_groups": {
+            "deltaMs": 52805,
+            "bothClean": true
+          }
+        },
+        "windows": {
+          "canvas_controls": {
+            "deltaMs": 966,
+            "bothClean": true
+          },
+          "independent_retry_groups": {
+            "deltaMs": 172409,
+            "bothClean": false
+          }
+        }
+      }
+    }
+  },
+  "limits": ["One complete observation per source is not a controlled performance experiment; host load, runner/cache allocation and execution order are uncontrolled.", "Primary comparison is790→240;9cb is retained as the first complete candidate, including slower Q3/report results.", "Final CI workflow/job attempt is1, but one Windows E2E case had Playwright retry1. Whole-run retry-free and clean all-E2E comparison claims are false.", "E2E collector correctly succeeded with neutral skipped/retried-tests; backend review retained. No E2E weights generated from this source and no weights applied.", "Observed actual E2E cost, including Windows retry, is retained; no counterfactual seconds saved by avoiding serial group retries are inferred.", "Final backend max837s is worse than baseline817 and first-candidate803; final Q3 992055ms remains above baseline954994 despite improvement from first-candidate1190203.", "New regression cost is included. Whole-file sums and parallel spec spans are not wall-clock critical paths."],
+  "independentReview": {
+    "e2e": "PASS: exact provenance, population, assignments, skip/retry behavior; e2e-independent-review.json",
+    "windowsRetry": "Only the middle case retried; source does not establish whether old PID was alive, reused, or another liveness cause. No attribution to serial removal.",
+    "file": "candidate-evidence/independent-windows-retry-attribution.json"
+  }
+}

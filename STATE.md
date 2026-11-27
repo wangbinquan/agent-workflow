@@ -1,6 +1,6 @@
-## 2026-11-26 RFC-624 第一批测试准备与重复执行优化（In Progress；`design/RFC-624-test-preparation-deduplication/`）
+## 2026-11-26 RFC-624 第一批测试准备与重复执行优化（Done；`design/RFC-624-test-preparation-deduplication/`）
 
-用户已批准边界明确的第一批：数据库模板准备、重复扫描/报告、独立E2E重试及纯源码/真实组件测试优化；保持覆盖、隔离与原门禁，完整开发后集中验证并对比exact-SHA CI耗时。
+第一批与固定key修正已发布，240ee338 / CI45939395356首次69/69通过；覆盖、隔离、44后端片、E2E 3/3/4与13组required保持。相对79085123，总墙钟80m58s→34m25s，累计runner585.25→559.20分钟；排队影响显著，不全归因于代码。受影响后端成本1174.553→1089.644秒，Q3仍+3.9%、后端max仍+20秒。Windows一条恢复case触发原retry1后通过，仅失败case重跑；collector按原标准拒绝E2E权重刷新，锁冲突根因未定。详见[实测验收](design/RFC-624-test-preparation-deduplication/acceptance.md)，结论只绑定240代码，后继收口为纯文档。
 
 ## 2026-11-26 RFC-623 第三轮 CI：macOS runner 需求与完整计时分片（Done；`design/RFC-623-macos-ci-runner-demand/`）
 
