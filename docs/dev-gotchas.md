@@ -177,6 +177,48 @@ context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`
   时 HEAD 还是改动之前的提交，于是 RFC-551 把未消费符号清到 0 之后，它的“未消费段非空”校验只在推送后的 CI 上红（实现提交的后端 1/44
   分片）。这类用例要在候选导出里跑——导出用本地提交固化了候选内容，HEAD 就是候选；或者推送前先按“候选提交”的状态推演它读到的值。
 
+## 新增持久化表与新增页面时会碰到的守卫，以及它们各自的真实判据（RFC-616，2026-11-26）
+
+一次交付里连撞的十几处，都不是功能缺陷，是“守卫看的东西和你以为的不一样”。按动手的先后列：
+
+- **结构历史一次只能追加一张表。** `bun run scripts/schema-history.ts --append add-table <slug>` 只接受恰好一张新表；同一个 RFC 加两张，
+  就先把另一张从模块的 `schemaContribution.tables` 里临时拿掉，追加完一张再放回去追加第二张。四个 PostgreSQL 大版本的目录用
+  `--catalog --postgresql-url-env <变量名>` 逐个生成（已存在的会被复核）；生成出的 `*.contract.json` 要过 prettier（格式门覆盖
+  `packages/**/*.json`，摘要不受影响）。同一笔还要带：`tests/fixtures/release-upgrade/seeds/epoch2/NNNN.json`、`mapping-oracle.json`
+  的条目、两个备份用例里的 `activeTableCount`。
+- **枚举列别再手写一份 CHECK。** `c.enum(...)` 已经生成取值约束；旁边再写同义的 `checks: [...]`，表上就有两条一样的约束。同模块旧表上的
+  显式 CHECK 是历史转换留下的，不是范式。
+- **`modules/run-observability/composition.ts` 被按 sha256 锁住**（`rfc395-nonruntime-source-roles`）。新表从 `composition/schema.ts` 与
+  `bootstrap/persistenceSchema.ts` 导出，不要动那个根文件；被锁文件改一个字节守卫就红，改回 HEAD 的字节即可。
+- **读 `node_runs` 不能在 SQL 里按排位列排序**（`rfc395-run-selection-boundary`，账本只减不增）：取 `seq` 出来在内存里按（任务、`seq`）排。
+  工作组配置只能经 `task-execution/infrastructure/taskWorkgroupConfig.ts` 的读取器取（`rfc395-task-definition-boundary`）。
+- **task-execution 源码里不能出现文本 `.nodeIds`**（`rfc339-wrapper-runtime-cutover` 是文本判据）：过滤条件里要用它时解构成别的名字。
+- **PostgreSQL 执行面上，可空列的排序要写明 NULL 的位置**（`rfc349-null-ordering-parity`）：用 `engineOf(db).ascNullsFirst(...)` /
+  `descNullsLast(...)`；确实不可能为 NULL 的，在该用例的 `PROVABLY_NULL_FREE` 里写出理由。
+- **`route-error-code-coverage` 的语料是 git 已跟踪的测试文件。** 新错误码由一个还没提交的新用例文件点名时，本地这条守卫是红的，
+  提交之后才绿——红的原因是“文件未跟踪”，不是没写用例。别为了让它本地变绿去改别的用例。
+- **`rfc305-architecture-lock` 列的是 identity-access 的全部消费方。** 装配根多读一个它的 composition 入口，就要在清单里加一行并写明用途。
+- **前端三条棘轮**：运行时设置的 CSS 变量要带回退值（`var(--x, 0)`，`theme-css-ratchet`）；每个静态 `className` 都要有对应的 CSS 规则
+  （`rfc317-dead-class-invariants`）；每个 `<TabBar>` 的调用点都要在 `tab-callsite-contract` 里归类。
+- **按类名在 `styles.css` 里截取一段来断言的用例，会被改名悄悄放空。** `css.indexOf('.某类名')` 返回 -1 时 `slice(0, -1)` 取到的是整份文件的余下部分，
+  断言对象就变了。这类用例先断言锚点存在。
+- **兄弟组件互相 import 会成值环**（`repo-value-scc`）：两个组件都要用的纯函数放进叶子模块（本次是把 `viewOfHintTarget` 挪进 `processSearch.ts`）。
+- **i18next 把 `:` 当命名空间分隔符。** 由标识拼出的键里有冒号（`system:repo-prep`）时要先换掉，否则整段被当成另一个命名空间、静默回落到键名。
+- **图表配色验证只看填充色，不看印在填充色上的字。** “调色板通过了色觉校验”不等于白字在橙、绿、蓝上够对比度（实测 2.5:1 到 4.1:1）。
+  每个 `--viz-*` 与它的 `-ink` 逐对算对比度，写成用例（`rfc616-chart-primitives`）。暗色主题的色阶是“越亮越高”，文案别写“颜色越深数值越高”。
+- **应用在 `.content` 里滚动，不在文档上滚动。** e2e 里量 `document.documentElement.scrollWidth - innerWidth` 永远是 0，量不出横向溢出；
+  要量 `.content` 的 `scrollWidth - clientWidth`（`e2e/intent-builder.spec.ts` 的做法），并且在取不到元素时让探针失败而不是返回 0。
+- **“内容区没有横向溢出”不等于窄屏可用，这一类只有看截图才看得出来。** 本次三处都通过了溢出断言：固定最小宽度的图放在自己的横向滚动容器里，
+  页面不溢出，但最新的数据点和它的标签在可见区域之外；十来列的自动布局表格把中文名称列挤成一字一行（数字列都不折行，中文在任意两字之间
+  都能断行，所以不溢出、只变成竖排）——给名称列最小宽度，让表在 `TableViewport` 里横向滚动，短标签列用 `.data-table__nowrap`；
+  `PageHeader` 的 `back` 槽位在一个纵向 flex 容器里，直接传 `<button className="btn …">` 会被拉满整行、文字居中——传链接，
+  或包一层 `.page__heading-back`。
+- **时间范围按整分钟取整时，“刷新”只挪锚点等于什么都没读。** 查询键里是取整后的起止时间，同一分钟内再点刷新键不变，React Query 不会重取。
+  手动刷新的页面要显式 `invalidateQueries`；键里不含时间范围的详情查询更是从不会被挪锚点带动。
+- **e2e 的运行时替身只应答带输出信封的提示词。** 自由文本的系统 Agent（没有信封 nonce）在每种替身模式下都以 3 退出，所以“让模型归纳文本”这类功能
+  在 e2e 里只能走“没有可分析的文本”分支；`URL.pathname` 不解码 `%40`，按路径匹配路由时要用编码后的写法。
+- **本机 `tsc --noEmit` 要给 6 GB 堆**（`NODE_OPTIONS=--max-old-space-size=6144`），否则在后端包上内存溢出，溢出的输出看起来像一堆类型错误之前的崩溃栈。
+
 ## 测试 / CI
 
 - **改了共享 union / schema / 导出类型之后，本地自查必须覆盖「爆炸半径」而不是「我改的那几个文件」**（2026-09-21 实撞两次，RFC-366 + RFC-367 各中一次，方向相反）：两次都是「绿」的口径比改动的影响面窄，于是人declare done 之后才由对方查出来。

@@ -67,6 +67,7 @@ test('the canonical program declares every step, phase, failure policy and profi
     'scheduled-backup',
     'submodule-refresh',
     'batch-import-gc',
+    'process-insight',
     'hosted-execution-settlement',
     'hosted-workspace-command-reconciliation',
     'hosted-workspace-lifecycle',

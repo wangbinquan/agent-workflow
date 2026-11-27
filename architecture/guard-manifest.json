@@ -823,9 +823,21 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc371-v2-observation-boundaries.test.ts",
       "id": "rfc371-v2-observation-boundaries",
-      "lines": 166,
+      "lines": 178,
       "mechanism": "ast",
       "minCorpusFiles": 1000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc616-process-metrics-boundaries.test.ts",
+      "id": "rfc616-process-metrics-boundaries",
+      "lines": 247,
+      "mechanism": "ast",
+      "minCorpusFiles": 2000,
       "negativeFixture": true,
       "runner": "bun"
     },

@@ -35,6 +35,8 @@ describe('RFC-284 T22 — DAEMON_CADENCE 数值锁', () => {
       hostedObjectRecovery: 600_000,
       // RFC-438 移入（非调参）：定时任务节拍，原 services/scheduledTaskScheduler.ts 的 SCHEDULE_TICK_MS。
       scheduledTasks: 30_000,
+      // RFC-616 新增（非调参）：过程度量文本主题分析队列的认领拍，每拍至多处理一条。
+      processInsight: 2_000,
     })
   })
 })

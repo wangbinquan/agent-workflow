@@ -467,6 +467,8 @@ export const {
   observationCallModels,
   observationCalls,
   observationPrices,
+  observationOperations,
+  observationInsightAnalyses,
   runtimes,
   cachedRepos,
   hostedTaskWorkspaces,

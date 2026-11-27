@@ -141,6 +141,86 @@ const observationPricesDefinition = owner.table({
 
 export const observationPrices = materializeDrizzle(observationPricesDefinition).table
 
+// RFC-616 §10.1 — what a person did, recorded by the route registry for routes that
+// declare `observe`. A repeated `session` operation within 30 minutes moves
+// `last_at` of the same row; every other operation is one row with first = last.
+// No foreign key to tasks: a row outliving its task is harmless, because every
+// read starts from units the reader may see.
+const observationOperationsDefinition = owner.table({
+  id: 'observation_operations',
+  schemaSymbol: 'observationOperations',
+  columns: {
+    id: c.id('id', { primary: true }),
+    action: c.text('action'),
+    subjectKind: c.enum('subject_kind', ['task', 'node-run', 'employee-case']),
+    subjectId: c.id('subject_id'),
+    actorUserId: c.id('actor_user_id'),
+    transport: c.enum('transport', ['http', 'mcp']),
+    firstAt: c.epochMs('first_at'),
+    lastAt: c.epochMs('last_at'),
+  },
+  indexes: [
+    index('observation_operations_subject_idx', [
+      'subject_kind',
+      'subject_id',
+      'action',
+      'last_at',
+    ]),
+    index('observation_operations_actor_idx', [
+      'actor_user_id',
+      'action',
+      'subject_kind',
+      'subject_id',
+      'last_at',
+    ]),
+  ],
+  retention: retention.business,
+})
+
+export const observationOperations = materializeDrizzle(observationOperationsDefinition).table
+
+// RFC-616 §10.2 — text-theme analyses: a small job queue and its results. An empty
+// `subject_id` stands for units without a source id, so lookups never compare NULLs.
+const observationInsightAnalysesDefinition = owner.table({
+  id: 'observation_insight_analyses',
+  schemaSymbol: 'observationInsightAnalyses',
+  columns: {
+    id: c.id('id', { primary: true }),
+    subjectKind: c.enum('subject_kind', ['workflow', 'workgroup', 'digital-employee']),
+    subjectId: c.text('subject_id'),
+    subjectName: c.text('subject_name', { nullable: true }),
+    scopeKind: c.enum('scope_kind', ['all', 'user']),
+    scopeUserId: c.text('scope_user_id'),
+    windowFrom: c.epochMs('window_from'),
+    windowTo: c.epochMs('window_to'),
+    triggerKind: c.enum('trigger_kind', ['manual', 'scheduled']),
+    requestedBy: c.id('requested_by', { nullable: true }),
+    status: c.enum('status', ['pending', 'running', 'done', 'failed']),
+    inputJson: c.jsonText('input_json', { nullable: true }),
+    resultJson: c.jsonText('result_json', { nullable: true }),
+    errorCode: c.text('error_code', { nullable: true }),
+    errorMessage: c.text('error_message', { nullable: true }),
+    createdAt: c.epochMs('created_at'),
+    startedAt: c.epochMs('started_at', { nullable: true }),
+    finishedAt: c.epochMs('finished_at', { nullable: true }),
+  },
+  indexes: [
+    index('observation_insight_analyses_subject_idx', [
+      'subject_kind',
+      'subject_id',
+      'scope_kind',
+      'scope_user_id',
+      'created_at',
+    ]),
+    index('observation_insight_analyses_status_idx', ['status', 'created_at']),
+  ],
+  retention: retention.business,
+})
+
+export const observationInsightAnalyses = materializeDrizzle(
+  observationInsightAnalysesDefinition,
+).table
+
 export const schemaContribution = {
   owner: 'run-observability',
   version: 1,
@@ -148,5 +228,7 @@ export const schemaContribution = {
     observationCallModelsDefinition,
     observationCallsDefinition,
     observationPricesDefinition,
+    observationOperationsDefinition,
+    observationInsightAnalysesDefinition,
   ],
 } as const

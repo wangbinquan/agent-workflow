@@ -703,6 +703,19 @@ export async function composeDaemonSession(
       })
     },
   })
+  // RFC-616: the queue of process-metrics text-theme analyses. One analysis per beat, so one model call at a time;
+  // an analysis the previous session left running can no longer finish and is failed before the first beat.
+  const processInsightRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
+    id: 'process-insight',
+    intervalMs: DAEMON_CADENCE.processInsight,
+    beforeStart: () => runtime.processInsights.repairInterrupted().then(() => undefined),
+    run: () => runtime.processInsights.tick(),
+    onError(error) {
+      input.log.warn('process insight tick failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
 
   // RFC-359 W3-T14 / RFC-391: both providers retain the same close participants and order.
   const memoryDistillRecoverOnClose: DaemonProviderCloseParticipant = Object.freeze({
@@ -781,6 +794,7 @@ export async function composeDaemonSession(
       'scheduled-backup': backupRuntimeFactory,
       'submodule-refresh': submoduleRefreshRuntimeFactory,
       'batch-import-gc': batchImportRuntimeFactory,
+      'process-insight': processInsightRuntimeFactory,
     },
     closeParticipants: {
       'memory-distill-recover-running': memoryDistillRecoverOnClose,

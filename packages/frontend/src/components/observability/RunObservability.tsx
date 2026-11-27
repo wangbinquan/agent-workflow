@@ -3,7 +3,7 @@
 // the window moves with "now" on refresh and every 30 seconds while the page is
 // visible, except while the user is paging back through older rows.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import type { TaskStatus } from '@agent-workflow/shared'
 import { ErrorBanner } from '@/components/ErrorBanner'
@@ -19,18 +19,22 @@ import { ObservationOverviewPanel } from './ObservationOverview'
 import { ObservationSystemPanel } from './ObservationSystem'
 import { ObservationTaskDetailView } from './ObservationTaskDetail'
 import { ObservationTasksPanel, type ObservationTaskFilter } from './ObservationTasks'
+import { ProcessMetrics } from '@/components/process-metrics/ProcessMetrics'
+import { PROCESS_QUERY } from '@/components/process-metrics/processClient'
+import type { ProcessSearchFields } from '@/components/process-metrics/processSearch'
 import './RunObservability.css'
 
-export const OBSERVATION_TABS = ['overview', 'tasks', 'agents', 'system'] as const
+export const OBSERVATION_TABS = ['overview', 'tasks', 'agents', 'system', 'process'] as const
 export type ObservationTab = (typeof OBSERVATION_TABS)[number]
 
-export interface ObservationSearch {
+export interface ObservationSearch extends ProcessSearchFields {
   readonly range: ObservationRange
   readonly tab: ObservationTab
   /** The task opened from the tasks tab or the overview. */
   readonly task?: string
   readonly q?: string
   readonly status?: TaskStatus
+  /** The system kind on the system tab; the subject kind on the process tab (RFC-616). */
   readonly kind?: string
 }
 
@@ -41,11 +45,48 @@ const TAB_LABEL: Record<ObservationTab, string> = {
   tasks: 'runObservability.tabTasks',
   agents: 'runObservability.tabAgents',
   system: 'runObservability.tabSystem',
+  process: 'runObservability.tabProcess',
 }
 const RANGE_LABEL: Record<ObservationRange, string> = {
   '24h': 'runObservability.range24h',
   '7d': 'runObservability.range7d',
   '30d': 'runObservability.range30d',
+  '90d': 'runObservability.range90d',
+}
+
+/** Fields that mean something on one tab only; leaving the tab drops them from the URL. */
+function leaveTab(search: ObservationSearch): ObservationSearch {
+  const {
+    task: _task,
+    kind: _kind,
+    subject: _subject,
+    view: _view,
+    compare: _compare,
+    split: _split,
+    origin: _origin,
+    unit: _unit,
+    ...rest
+  } = search
+  return rest
+}
+
+/**
+ * The active tab chosen again: back to where the tab starts — the task list from an opened
+ * task, the subject list from an opened subject. What narrows the list itself (the system
+ * kind, the subject kind, the task filters) stays.
+ */
+function tabStart(search: ObservationSearch): ObservationSearch {
+  const {
+    task: _task,
+    subject: _subject,
+    view: _view,
+    compare: _compare,
+    split: _split,
+    origin: _origin,
+    unit: _unit,
+    ...rest
+  } = search
+  return rest
 }
 
 /** Re-anchor the window every interval while the document is visible and not paused. */
@@ -74,11 +115,15 @@ export function RunObservability(props: {
   onChange: (next: ObservationSearch) => void
 }) {
   const { t, i18n } = useTranslation()
+  const queryClient = useQueryClient()
   const { search, onChange } = props
   const [taskCursors, setTaskCursors] = useState<readonly (string | undefined)[]>([undefined])
   const [systemCursors, setSystemCursors] = useState<readonly (string | undefined)[]>([undefined])
   const paging = taskCursors.length > 1 || systemCursors.length > 1
-  const [anchor, refresh] = useMovingAnchor(paging || search.task !== undefined)
+  // RFC-616: a subject summary is a heavy computation, so the process tab never refreshes on a timer.
+  const [anchor, refresh] = useMovingAnchor(
+    paging || search.task !== undefined || search.tab === 'process',
+  )
   const window = useMemo(() => observationWindow(search.range, anchor), [search.range, anchor])
   const overview = useQuery({
     queryKey: [...OBSERVATION_QUERY, 'overview', window],
@@ -118,25 +163,32 @@ export function RunObservability(props: {
         meta={<span className="muted">{t('runObservability.subtitle')}</span>}
         actions={
           <>
-            <Segmented<ObservationRange>
-              value={search.range}
-              ariaLabel={t('runObservability.range')}
-              options={OBSERVATION_RANGES.map((range) => ({
-                value: range,
-                label: t(RANGE_LABEL[range]),
-              }))}
-              onChange={(range) => {
-                reset()
-                refresh()
-                onChange({ ...search, range })
-              }}
-            />
+            {/* RFC-616 added a fourth range: on a phone the picker scrolls inside itself. */}
+            <div className="page-filter run-observation__range">
+              <Segmented<ObservationRange>
+                value={search.range}
+                ariaLabel={t('runObservability.range')}
+                options={OBSERVATION_RANGES.map((range) => ({
+                  value: range,
+                  label: t(RANGE_LABEL[range]),
+                }))}
+                onChange={(range) => {
+                  reset()
+                  refresh()
+                  onChange({ ...search, range })
+                }}
+              />
+            </div>
             <button
               type="button"
               className="btn btn--sm"
               onClick={() => {
                 reset()
                 refresh()
+                // RFC-616: the window moves in whole minutes, and the process tab never moves it
+                // on its own, so there the button must read again even within the same minute.
+                if (search.tab === 'process')
+                  void queryClient.invalidateQueries({ queryKey: PROCESS_QUERY })
               }}
             >
               {t('runObservability.refresh')}
@@ -145,18 +197,24 @@ export function RunObservability(props: {
         }
       />
       <p className="muted">
-        {t('runObservability.usageBasis')}{' '}
-        {t('runObservability.updatedAt', {
-          time: new Date(anchor).toLocaleTimeString(i18n.language),
-        })}
+        {t(
+          search.tab === 'process'
+            ? 'runObservability.processBasis'
+            : 'runObservability.usageBasis',
+        )}{' '}
+        {t(
+          search.tab === 'process'
+            ? 'runObservability.updatedAtManual'
+            : 'runObservability.updatedAt',
+          { time: new Date(anchor).toLocaleTimeString(i18n.language) },
+        )}
       </p>
       <TabBar<ObservationTab>
         tabs={OBSERVATION_TABS.map((tab) => ({ key: tab, label: t(TAB_LABEL[tab]) }))}
         active={search.tab}
-        onSelect={(tab) => {
-          const { task: _task, ...rest } = search
-          onChange({ ...rest, tab })
-        }}
+        onSelect={(tab) =>
+          onChange(tab === search.tab ? tabStart(search) : { ...leaveTab(search), tab })
+        }
         ariaLabel={t('runObservability.tabsLabel')}
         idPrefix="run-observation"
       />
@@ -208,6 +266,9 @@ export function RunObservability(props: {
             }}
             onCursors={setSystemCursors}
           />
+        ) : null}
+        {search.tab === 'process' ? (
+          <ProcessMetrics search={search} window={window} onChange={onChange} />
         ) : null}
       </div>
     </div>

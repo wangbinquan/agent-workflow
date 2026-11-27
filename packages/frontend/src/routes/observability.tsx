@@ -7,6 +7,7 @@ import {
   type ObservationTab,
 } from '@/components/observability/RunObservability'
 import { isObservationRange } from '@/components/observability/observationFormat'
+import { validateProcessSearch } from '@/components/process-metrics/processSearch'
 import { Route as RootRoute } from './__root'
 
 const text = (value: unknown, max: number): string | undefined =>
@@ -27,6 +28,8 @@ export function validateObservationSearch(raw: Record<string, unknown>): Observa
     ...(q === undefined ? {} : { q }),
     ...(status.success ? { status: status.data } : {}),
     ...(kind === undefined ? {} : { kind }),
+    // RFC-616: the process tab's own fields; they are meaningless on the other tabs.
+    ...(raw.tab === 'process' ? validateProcessSearch(raw) : {}),
   }
 }
 
@@ -49,7 +52,8 @@ function Page() {
       onChange={(next) =>
         void navigate({
           search: next,
-          resetScroll: next.task !== search.task || next.tab !== search.tab,
+          resetScroll:
+            next.task !== search.task || next.tab !== search.tab || next.subject !== search.subject,
         })
       }
     />

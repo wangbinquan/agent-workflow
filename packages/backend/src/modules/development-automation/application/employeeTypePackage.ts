@@ -35,6 +35,7 @@ import {
   usesMinimalMergeRequestToolContracts,
   usesTargetAwareMergeRequestPipeline,
 } from '../domain/mergeRequestLifecycle'
+import { describeProcessMetrics, projectHumanFeedbackJson } from './employeeProcessMetrics'
 
 type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &
   EmployeeTypeReactionCodec &
@@ -3089,6 +3090,8 @@ export const runtimePackage = {
     }
     return checks
   },
+
+  describeProcessMetrics,
 }
 
 /** The shared MR delivery/care vocabulary, without the legacy intake and implementation spine. */
@@ -4181,6 +4184,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     }
     return '[]'
   },
+  projectHumanFeedbackJson,
   selectReactionToolSlotJson(requestJson) {
     const request = z
       .object({
@@ -5455,4 +5459,5 @@ export const mergeRequestLifecycleRuntimeCodec = {
   buildInvocationStartedOutputJson:
     developmentEmployeeRuntimeCodec.buildInvocationStartedOutputJson,
   buildInvocationResultOutputJson: developmentEmployeeRuntimeCodec.buildInvocationResultOutputJson,
+  projectHumanFeedbackJson,
 }

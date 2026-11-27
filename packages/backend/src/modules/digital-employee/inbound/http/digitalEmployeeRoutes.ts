@@ -525,6 +525,11 @@ export function mountDigitalEmployeeRoutes(
       {
         method: 'POST',
         path: '/api/employee-cases/:id/resume',
+        observe: {
+          action: 'employee-case.resume',
+          subject: { kind: 'employee-case', param: 'id' },
+          mode: 'each',
+        },
         executionGroup: 'digital-employee',
         permissions: ['development-missions:retry'],
         tokenAccess: 'allow',
@@ -542,6 +547,11 @@ export function mountDigitalEmployeeRoutes(
       {
         method: 'POST',
         path: '/api/employee-cases/:id/terminate',
+        observe: {
+          action: 'employee-case.terminate',
+          subject: { kind: 'employee-case', param: 'id' },
+          mode: 'each',
+        },
         permissions: ['development-missions:cancel'],
         tokenAccess: 'allow',
         summary: 'Fence one employee case at an observed external terminal state',

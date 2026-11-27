@@ -1,0 +1,73 @@
+{
+  "formatVersion": 1,
+  "epoch": 2,
+  "after": "0013_rfc616_observation_operations",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-616-process-metrics/design.md"
+    ],
+    "note": "RFC-616 independently authored rows of the human-operation ledger. They cover the three subject kinds (task, node-run, employee-case), both transports, single operations (first_at = last_at) and one viewing session whose last_at moved forward. Seed rows represent a native installation at this history point; an ordinary upgrade adds an empty table, and rows appear only as people operate afterwards. No production recorder or query was used to author values."
+  },
+  "rows": [
+    {
+      "table": "observation_operations",
+      "values": {
+        "id": "rfc616-operation-cancel",
+        "action": "task.cancel",
+        "subject_kind": "task",
+        "subject_id": "rfc616-task",
+        "actor_user_id": "rfc616-user-owner",
+        "transport": "http",
+        "first_at": 1778459500000,
+        "last_at": 1778459500000
+      }
+    },
+    {
+      "table": "observation_operations",
+      "values": {
+        "id": "rfc616-operation-retry",
+        "action": "task.retry-node",
+        "subject_kind": "task",
+        "subject_id": "rfc616-task",
+        "actor_user_id": "rfc616-user-owner",
+        "transport": "mcp",
+        "first_at": 1778459560000,
+        "last_at": 1778459560000
+      }
+    },
+    {
+      "table": "observation_operations",
+      "values": {
+        "id": "rfc616-operation-review-view",
+        "action": "review.view",
+        "subject_kind": "node-run",
+        "subject_id": "rfc616-node-run",
+        "actor_user_id": "rfc616-user-reviewer",
+        "transport": "http",
+        "first_at": 1778459600000,
+        "last_at": 1778460500000
+      }
+    },
+    {
+      "table": "observation_operations",
+      "values": {
+        "id": "rfc616-operation-case-resume",
+        "action": "employee-case.resume",
+        "subject_kind": "employee-case",
+        "subject_id": "rfc616-case",
+        "actor_user_id": "rfc616-user-owner",
+        "transport": "http",
+        "first_at": 1778459700000,
+        "last_at": 1778459700000
+      }
+    }
+  ],
+  "historyExpectations": [
+    {
+      "table": "observation_operations",
+      "rows": []
+    }
+  ],
+  "content": []
+}

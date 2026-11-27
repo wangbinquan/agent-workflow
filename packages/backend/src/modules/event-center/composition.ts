@@ -34,6 +34,8 @@ import type { CommittedEventDeliveryPersistencePort } from '@/platform/events/co
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 
 export { runEventCenterCycle } from './application/eventCenterWorker'
+// RFC-616: the event history of subjects, offered to process metrics through the platform contract.
+export { createProcessSubjectEvents } from './composition/processFacts'
 export { createEventAutomationWorkIntentStore } from './infrastructure/eventAutomationWorkIntentStore'
 // RFC-370 M2: the hosted observer program receiver (task image) and its
 // CrewStation factory, reached by bootstrap through this exact entry.

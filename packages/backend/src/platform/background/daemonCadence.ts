@@ -82,6 +82,11 @@ export const DAEMON_CADENCE = {
    * 非 hourly：被放弃的上传与 owner 释放的固定引用要在分钟级收敛，不进 MAINTENANCE_PHASE。
    */
   hostedObjectRecovery: 10 * MINUTE_MS,
+  /**
+   * RFC-616 —— 过程度量的文本主题分析队列（run-observability `application/process/insightAnalyses.ts`）。
+   * 每拍最多取一条排队中的分析；队列为空时一拍只是一条索引查询。每周定时的检查由它自己按小时节流。
+   */
+  processInsight: 2_000,
 } as const satisfies Record<string, number>
 
 /**

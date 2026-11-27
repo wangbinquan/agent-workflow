@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { ExecutionSwimlane } from '@/components/ExecutionSwimlane'
 import { LoadingState } from '@/components/LoadingState'
+import { MetricGrid, MetricTile } from '@/components/MetricTile'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { TableViewport } from '@/components/TableViewport'
@@ -91,24 +92,22 @@ export function ObservationTaskDetailView(props: { taskId: string; onBack: () =>
         title={data.task.name}
         meta={<TaskStatusChip status={data.task.status} />}
       />
-      <div className="observability__metrics">
-        <Card title={t('runObservability.wallClock')}>
-          <p className="observability__metric-value">{durationLabel(wall, t)}</p>
-        </Card>
-        <Card title={t('runObservability.runningTime')}>
-          <p className="observability__metric-value">{durationLabel(data.task.runningMs, t)}</p>
-        </Card>
-        <Card title={t('runObservability.totalTokens')}>
-          <p className="observability__metric-value">{count(tokenTotal(data.usage))}</p>
-          <p className="observability__metric-detail">
-            {t('runObservability.calls', { count: data.usage.calls })}
-            {data.usage.incompleteCalls > 0 ? ' · ' + t('runObservability.lowerBoundHint') : ''}
-          </p>
-        </Card>
-        <Card title={t('runObservability.cost')}>
-          <p className="observability__metric-value">{usageCost(data.usage, t)}</p>
-        </Card>
-      </div>
+      <MetricGrid>
+        <MetricTile label={t('runObservability.wallClock')} value={durationLabel(wall, t)} />
+        <MetricTile
+          label={t('runObservability.runningTime')}
+          value={durationLabel(data.task.runningMs, t)}
+        />
+        <MetricTile
+          label={t('runObservability.totalTokens')}
+          value={count(tokenTotal(data.usage))}
+          detail={
+            t('runObservability.calls', { count: data.usage.calls }) +
+            (data.usage.incompleteCalls > 0 ? ' · ' + t('runObservability.lowerBoundHint') : '')
+          }
+        />
+        <MetricTile label={t('runObservability.cost')} value={usageCost(data.usage, t)} />
+      </MetricGrid>
       {data.truncated ? (
         <NoticeBanner tone="warning">
           {t('runObservability.truncated', { count: calls.length })}

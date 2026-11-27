@@ -215,6 +215,11 @@ export function mountReviewRoutes(
     {
       method: 'GET',
       path: '/api/reviews/:nodeRunId',
+      observe: {
+        action: 'review.view',
+        subject: { kind: 'node-run', param: 'nodeRunId' },
+        mode: 'session',
+      },
       permissions: ['tasks:read'],
       tokenAccess: 'allow',
       summary: 'Get one review gate',
@@ -400,6 +405,11 @@ export function mountReviewRoutes(
     {
       method: 'POST',
       path: '/api/reviews/:nodeRunId/comments',
+      observe: {
+        action: 'review.comment',
+        subject: { kind: 'node-run', param: 'nodeRunId' },
+        mode: 'each',
+      },
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Add a review comment',

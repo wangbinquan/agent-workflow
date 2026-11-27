@@ -2379,6 +2379,42 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
           </Field>
         </SettingsCard>
 
+        {/* RFC-616 §9.4 —— 过程度量的文本主题分析：跑在哪个运行时、何时运行。
+            运行时与上面几张卡同一个约定：「继承」选项由 RuntimeSelect 交回 null，
+            原样进草稿，PATCH 里的 null 才会清掉已保存的值。 */}
+        <SettingsCard
+          title={t('settings.systemAgents.processInsightTitle')}
+          hint={t('settings.systemAgents.processInsightHint')}
+        >
+          <Field
+            label={t('settings.processInsightRuntimeLabel')}
+            hint={t('settings.processInsightRuntimeHint')}
+          >
+            <RuntimeSelect
+              value={state.processInsightRuntime}
+              ariaLabel={t('settings.processInsightRuntimeLabel')}
+              onChange={(v) => setState({ ...state, processInsightRuntime: v })}
+            />
+          </Field>
+          <Field
+            group
+            label={t('settings.processInsightScheduleLabel')}
+            hint={t('settings.processInsightScheduleHint')}
+          >
+            <Segmented<NonNullable<Config['processInsightSchedule']>>
+              // 未配置 = 手动（后端同一个回落：processInsightSchedule ?? 'manual'）。
+              value={state.processInsightSchedule ?? 'manual'}
+              onChange={(v) => setState({ ...state, processInsightSchedule: v })}
+              options={[
+                { value: 'manual', label: t('settings.processInsightScheduleManual') },
+                { value: 'weekly', label: t('settings.processInsightScheduleWeekly') },
+              ]}
+              ariaLabel={t('settings.processInsightScheduleLabel')}
+              testidPrefix="settings-process-insight-schedule"
+            />
+          </Field>
+        </SettingsCard>
+
         <SettingsCard
           title={t('settings.systemAgents.mergeTitle')}
           hint={t('settings.systemAgents.mergeHint')}

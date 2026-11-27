@@ -328,6 +328,14 @@ test('tasks filter by keyword and status and page by cursor; a task opens its ca
 
   fireEvent.click(screen.getByRole('button', { name: '返回任务列表' }))
   expect(await screen.findByRole('button', { name: '查看 Nightly build' })).toBeDefined()
+
+  // RFC-616 regression: choosing the active tab again leads from an opened task back to the
+  // list too. Adding the process tab had turned that click into a no-op.
+  fireEvent.click(screen.getByRole('button', { name: '查看 Nightly build' }))
+  await screen.findByRole('heading', { name: 'Nightly build' })
+  fireEvent.click(screen.getByRole('tab', { name: '任务' }))
+  expect(await screen.findByRole('button', { name: '查看 Nightly build' })).toBeDefined()
+  expect(screen.queryByRole('heading', { name: 'Nightly build' })).toBeNull()
 })
 
 test('an invisible task explains itself instead of failing', async () => {

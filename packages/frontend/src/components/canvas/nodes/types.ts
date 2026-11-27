@@ -163,6 +163,30 @@ export interface CanvasNodeData extends Record<string, unknown> {
    * (golden-lock — those canvases stay byte-for-byte unchanged).
    */
   callNav?: 'child'
+  /**
+   * RFC-616 §11.3: metric heat for this node, set by the process-metrics canvas
+   * from WorkflowCanvas' `nodeHeat` map — any node kind, cards and wrapper
+   * frames alike. When defined, CanvasNodeCard stamps `data-heat="<level>"` on
+   * the card root and prints `label` on one extra line; a wrapper frame stamps
+   * `data-heat` on its header strip only (the frame holds other nodes) and
+   * prints the label there. Undefined on every other canvas and for nodes
+   * absent from the map ⇒ no attribute, no extra element (golden-lock — those
+   * canvases stay byte-for-byte unchanged).
+   */
+  heat?: CanvasNodeHeat
   /** Editable workflow only: opens the shared picker with explicit wrapper scope. */
   onAddInsideWrapper?: (wrapperNodeId: string, trigger?: HTMLElement | null) => void
+}
+
+/**
+ * RFC-616 §11.3 — one node's metric heat on a process-metrics canvas: `level`
+ * is the rank step (1 = lowest … 5 = highest) that picks `--viz-heat-<level>`
+ * and its ink, `label` is the already formatted metric value printed on the
+ * node. WorkflowCanvas takes a map of these as `nodeHeat`. (Declared below
+ * CanvasNodeData so the line references other documents make into that
+ * interface stay put.)
+ */
+export interface CanvasNodeHeat {
+  readonly level: 1 | 2 | 3 | 4 | 5
+  readonly label: string
 }

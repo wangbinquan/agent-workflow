@@ -70,6 +70,8 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
           'activityOperations',
           'routePersistence',
           'reactionExecution',
+          // RFC-616: case, round and type facts offered to process metrics.
+          'processFacts',
         ].sort(),
       )
       expect(Object.keys(automation).sort()).toEqual(

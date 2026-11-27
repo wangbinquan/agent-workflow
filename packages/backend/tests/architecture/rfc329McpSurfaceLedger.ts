@@ -200,6 +200,37 @@ export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
     group: '/api/observability',
     category: 'not-in-scope',
   },
+  // RFC-616: the six routes of the process metrics tab.
+  {
+    leaf: 'GET /api/observability/process/subjects',
+    group: '/api/observability/process',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/observability/process/subjects/:id/:id',
+    group: '/api/observability/process',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/observability/process/subjects/:id/:id/units',
+    group: '/api/observability/process',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/observability/process/units/:id/:id',
+    group: '/api/observability/process',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/observability/process/subjects/:id/:id/insight',
+    group: '/api/observability/process',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'POST /api/observability/process/subjects/:id/:id/insight',
+    group: '/api/observability/process',
+    category: 'not-in-scope',
+  },
   { leaf: 'GET /api/reviews/pending-count', group: '/api/reviews', category: 'deliberate' },
   { leaf: 'GET /api/whoami', group: '/api/whoami', category: 'deliberate' },
   {
@@ -1293,6 +1324,8 @@ export const EXEMPT_REASONS: Readonly<Record<string, string>> = {
     'RFC-390: this existing webhook transport receives code-host delivery envelopes; it is not an agent operation. The production-shaped test lane now includes it in the route census.',
   '/api/observability':
     'RFC-371 v2（2026-10-14）：运行观测页面的总览、任务、任务详情、Agent、模型与系统执行六个只读统计路由；Agent 查询工具不在本 RFC 范围，需要时另立 RFC 接入 MCP。登记仅限这六个精确路由。',
+  '/api/observability/process':
+    'RFC-616（2026-11-26）：过程度量页签的能力列表、能力汇总、单元明细、单元详情，以及文本主题分析的读取与发起，共六个路由；与运行观测的统计路由同属页面读面，Agent 查询工具不在本 RFC 范围，需要时另立 RFC 接入 MCP。登记仅限这六个精确路由。',
   '/api/observability/pricing':
     'RFC-371 v2（2026-10-14）：运行时 × 模型的人民币价格目录、历史与新增版本是设置页的独立配置接口，沿用运行时配置的 settings:write 合同；不新增 Agent MCP 配置工具。登记仅限这三个精确路由。',
   '(infrastructure)':

@@ -10,6 +10,7 @@ import {
   ResponsibilityReviewBranch,
   type ResponsibilityCardPresentation,
   type ResponsibilityExternalResourceAction,
+  type ResponsibilityHeatLevel,
   type ResponsibilityIngressPresentation,
   type ResponsibilityProjectedIngress,
 } from './ResponsibilityFlowDisplay'
@@ -70,6 +71,14 @@ export type EmployeeCapabilityToolState = {
   detail: string
   compactDetail?: string
   attention?: boolean
+  /**
+   * RFC-616 §11.3 — metric heat step (1 = lowest … 5 = highest). When a
+   * `toolState` returns it, the work-item card (`data-work-item-ref`) it
+   * describes outputs `data-heat="<step>"` and takes the matching
+   * `--viz-heat-*` fill and ink. Absent ⇒ the card is unchanged. Only work-item
+   * cards read it: `reviewToolState` and `toolSlotState` ignore it.
+   */
+  heat?: ResponsibilityHeatLevel
 }
 
 type ResponsibilityCardState = EmployeeCapabilityToolState
@@ -1342,6 +1351,7 @@ export function EmployeeCapabilityPanorama(props: EmployeeCapabilityPanoramaProp
                               id={`${props.cardIdPrefix ?? 'toolbox-duty'}-${item.workItemRef}`}
                               data-work-item-ref={item.workItemRef}
                               data-capability-tool-ref={`work-item:${item.workItemRef}`}
+                              data-heat={state?.heat}
                               type="button"
                               className={`employee-toolbox-card--${kind.className}${
                                 state === undefined ? '' : ` employee-toolbox-card--${state.state}`

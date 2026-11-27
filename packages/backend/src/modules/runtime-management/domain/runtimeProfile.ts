@@ -355,4 +355,6 @@ export interface RuntimeRefConfig {
   intentBuilderRuntime?: string | null
   /** RFC-239 — change-narrative (AI 导读) system agent selection. */
   changeNarrativeRuntime?: string | null
+  /** RFC-616 — process-insight (text-theme analysis) system agent selection. */
+  processInsightRuntime?: string | null
 }

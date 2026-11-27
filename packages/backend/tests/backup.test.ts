@@ -167,9 +167,10 @@ describe('createBackup', () => {
           .get() as { generation_id: string }
       ).generation_id,
       schemaDigest: manifest.database.schemaDigest,
-      // The activated registry has 244 tables: RFC-602 adds 10 derived history
-      // index tables to the previous 234; migration metadata is a separate artifact.
-      activeTableCount: 244,
+      // The activated registry has 246 tables: RFC-602 adds 10 derived history
+      // index tables to the previous 234, RFC-616 adds the two process-metrics
+      // tables of run observation; migration metadata is a separate artifact.
+      activeTableCount: 246,
       archiveOnlyTableCount: 0,
     })
   })

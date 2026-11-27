@@ -39,6 +39,8 @@ const PAUSABLE_WRITERS = [
   // handle，SQLite daemon 这一侧曾是在 §8 直接 `registerAfterCommitEventPump(pump)`
   // 的裸注册，于是整个冻结窗口里它都挂着。
   { id: 'after-commit-event-pump', factory: 'afterCommitPumpFactory' },
+  // RFC-616：过程度量的文本主题分析队列每拍认领并写回一行分析记录，同样是周期写手。
+  { id: 'process-insight', factory: 'processInsightRuntimeFactory' },
 ] as const
 
 describe('RFC-349 SQLite daemon periodic writers are provider-session handles', () => {

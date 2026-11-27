@@ -12,6 +12,7 @@ import {
   composeEventCenter,
   deferEventCenterModule,
   createEventAutomationWorkIntentStore,
+  createProcessSubjectEvents,
 } from '@/modules/event-center/composition'
 import {
   createCodeHostWebhookDeliveryConsumer,
@@ -232,6 +233,8 @@ export function composeDaemonIntegrationModules(input: {
     developmentToolConnections: composeDevelopmentToolConnectionCatalog(input.db),
     crewStationEvents: input.adapters.crewStationEvents,
     finalizeClaimedWorkspace,
+    // RFC-616: the event history of subjects, offered to process metrics.
+    processSubjectEvents: createProcessSubjectEvents(input.db),
   })
 }
 export type DaemonIntegrationModules = ReturnType<typeof composeDaemonIntegrationModules>

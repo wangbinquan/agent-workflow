@@ -209,6 +209,9 @@ export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersist
       if (input.refs.changeNarrativeRuntime === input.name) {
         references.push('config.changeNarrativeRuntime')
       }
+      if (input.refs.processInsightRuntime === input.name) {
+        references.push('config.processInsightRuntime')
+      }
       references.push(
         ...(await this.participants.usage.inspect(transaction, { runtimeName: input.name })),
       )

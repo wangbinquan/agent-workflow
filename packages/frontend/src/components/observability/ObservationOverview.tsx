@@ -1,9 +1,11 @@
 // RFC-371 v2 §6 — overview: four metrics, daily tokens, the largest tasks and
-// agents, and the business / system split of the window.
+// agents, and the business / system split of the window. The four metrics are
+// the shared metric tiles (RFC-616), the same ones process metrics use.
 import { useTranslation } from 'react-i18next'
 import type { ObservationOverview } from '@agent-workflow/shared'
 import { Card } from '@/components/Card'
 import { EmptyState } from '@/components/EmptyState'
+import { MetricGrid, MetricTile } from '@/components/MetricTile'
 import { TableViewport } from '@/components/TableViewport'
 import { ObservationDailyChart } from './ObservationDailyChart'
 import { UsageCells, UsageHeaderCells } from './ObservationUsage'
@@ -19,65 +21,61 @@ export function ObservationOverviewPanel(props: {
   const tasks = data.tasks
   return (
     <div className="stack--md">
-      <div className="observability__metrics">
-        <Card title={t('runObservability.cardTokens')}>
-          <p className="observability__metric-value">{count(tokenTotal(data.usage))}</p>
-          <p className="observability__metric-detail">
-            {t('runObservability.calls', { count: data.usage.calls })}
-            {data.usage.failedCalls > 0
-              ? ' · ' + t('runObservability.failedCalls', { count: data.usage.failedCalls })
-              : ''}
-          </p>
-          {data.usage.incompleteCalls > 0 ? (
-            <p className="observability__metric-detail">
-              {t('runObservability.incompleteCalls', { count: data.usage.incompleteCalls })}
-            </p>
-          ) : null}
-        </Card>
-        <Card title={t('runObservability.cardCost')}>
-          <p className="observability__metric-value">{usageCost(data.usage, t)}</p>
-          {data.usage.unpricedCalls > 0 ? (
-            <p className="observability__metric-detail">
-              {t('runObservability.unpricedCalls', { count: data.usage.unpricedCalls })}
-            </p>
-          ) : null}
-        </Card>
-        <Card title={t('runObservability.cardTasks')}>
-          <p className="observability__metric-value">
-            {t('runObservability.tasksTotal', { count: tasks.total })}
-          </p>
-          <p className="observability__metric-detail">
-            {t('runObservability.tasksBreakdown', {
-              done: tasks.done,
-              failed: tasks.failed,
-              canceled: tasks.canceled,
-              running: tasks.running,
-              waiting: tasks.waiting,
-              interrupted: tasks.interrupted,
+      <MetricGrid>
+        <MetricTile
+          label={t('runObservability.cardTokens')}
+          value={count(tokenTotal(data.usage))}
+          detail={[
+            t('runObservability.calls', { count: data.usage.calls }) +
+              (data.usage.failedCalls > 0
+                ? ' · ' + t('runObservability.failedCalls', { count: data.usage.failedCalls })
+                : ''),
+            data.usage.incompleteCalls > 0
+              ? t('runObservability.incompleteCalls', { count: data.usage.incompleteCalls })
+              : null,
+          ]}
+        />
+        <MetricTile
+          label={t('runObservability.cardCost')}
+          value={usageCost(data.usage, t)}
+          detail={
+            data.usage.unpricedCalls > 0
+              ? t('runObservability.unpricedCalls', { count: data.usage.unpricedCalls })
+              : undefined
+          }
+        />
+        <MetricTile
+          label={t('runObservability.cardTasks')}
+          value={t('runObservability.tasksTotal', { count: tasks.total })}
+          detail={t('runObservability.tasksBreakdown', {
+            done: tasks.done,
+            failed: tasks.failed,
+            canceled: tasks.canceled,
+            running: tasks.running,
+            waiting: tasks.waiting,
+            interrupted: tasks.interrupted,
+          })}
+        />
+        {tasks.durationSamples > 0 ? (
+          <MetricTile
+            label={t('runObservability.cardDuration')}
+            value={t('runObservability.durationPercentiles', {
+              p50: durationLabel(tasks.durationP50, t),
+              p95: durationLabel(tasks.durationP95, t),
             })}
-          </p>
-        </Card>
-        <Card title={t('runObservability.cardDuration')}>
-          {tasks.durationSamples > 0 ? (
-            <>
-              <p className="observability__metric-value">
-                {t('runObservability.durationPercentiles', {
-                  p50: durationLabel(tasks.durationP50, t),
-                  p95: durationLabel(tasks.durationP95, t),
-                })}
-              </p>
-              <p className="observability__metric-detail">
-                {t('runObservability.durationMax', {
-                  max: durationLabel(tasks.durationMax, t),
-                  count: tasks.durationSamples,
-                })}
-              </p>
-            </>
-          ) : (
-            <p className="observability__metric-detail">{t('runObservability.noDuration')}</p>
-          )}
-        </Card>
-      </div>
+            detail={t('runObservability.durationMax', {
+              max: durationLabel(tasks.durationMax, t),
+              count: tasks.durationSamples,
+            })}
+          />
+        ) : (
+          <MetricTile
+            label={t('runObservability.cardDuration')}
+            value="—"
+            detail={t('runObservability.noDuration')}
+          />
+        )}
+      </MetricGrid>
 
       <Card title={t('runObservability.dailyTitle')}>
         <p className="muted">{t('runObservability.dailyHint')}</p>

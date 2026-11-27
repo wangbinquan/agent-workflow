@@ -107,7 +107,10 @@ export function GroupWrapperNode({ data, selected }: Props) {
       data-wrapper-drop-preview={dragPreview?.state}
     >
       <NodeValidationBadge data={data} />
-      <div className="canvas-node__header">
+      {/* RFC-616 §11.3 — metric heat goes on the header strip only: the frame
+       *  itself holds other nodes, so filling it would bury their own heat.
+       *  Absent ⇒ no attribute and no extra element. */}
+      <div className="canvas-node__header" data-heat={data.heat?.level}>
         <span className="canvas-node__heading-copy">
           <span className="canvas-node__kind">
             {icon} {label}
@@ -117,6 +120,11 @@ export function GroupWrapperNode({ data, selected }: Props) {
           ) : null}
         </span>
         <WrapperHeaderPill kind={kind} />
+        {data.heat === undefined ? null : (
+          <span className="canvas-node__heat" title={data.heat.label}>
+            {data.heat.label}
+          </span>
+        )}
       </div>
       <NodeConfigurationSummary data={data} />
       {data.onAddInsideWrapper !== undefined ? (

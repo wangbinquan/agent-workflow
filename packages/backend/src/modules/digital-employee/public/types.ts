@@ -24,6 +24,12 @@ export interface EmployeeTypePackageRegistration {
   validateContractFixtureJson(requestJson: string): string
   /** Optional provider-owned bridge for a program crossing WorkContract revisions. */
   upgradeProgramSourceJson?(requestJson: string): string | null
+  /**
+   * RFC-616 — optional process-metrics declaration: `{ "reworkWorkItemRefs": string[] }`,
+   * the work items whose job is repairing something that came back. Without it
+   * the type has no first-pass measure.
+   */
+  describeProcessMetricsJson?(): string
 }
 
 /**
@@ -57,6 +63,15 @@ export interface EmployeeTypeContextCodec {
    */
   resolveExternalSubjectBindingsJson?(contextTypeId: string, stateJson: string): string
   resolveAttentionSubjectsJson(contextTypeId: string, stateJson: string): string
+  /**
+   * RFC-616 — optional projection of the feedback people wrote that one Context
+   * records: `{ "items": [{ "text": string, "at": number, "workItemRef"?: string }] }`.
+   * `at` is epoch milliseconds, 0 when the Context has no time for the item;
+   * `workItemRef` names the work item that handles the feedback. A Context
+   * holding none answers with no items. Without the member the type reports no
+   * human feedback.
+   */
+  projectHumanFeedbackJson?(contextTypeId: string, stateJson: string): string
 }
 
 /** Reaction half of a runtime-only pure type-package codec. */

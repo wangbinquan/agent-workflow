@@ -101,6 +101,7 @@ export function createRuntimeManagement(
         mergeAgentRuntime: cfg.mergeAgentRuntime,
         intentBuilderRuntime: cfg.intentBuilderRuntime,
         changeNarrativeRuntime: cfg.changeNarrativeRuntime,
+        processInsightRuntime: cfg.processInsightRuntime,
       })
       await tests.reconcile()
       return { ok: true }

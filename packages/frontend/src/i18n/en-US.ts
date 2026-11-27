@@ -5,6 +5,7 @@ import type { Resources } from './zh-CN'
 import { buildPermissionCatalogResources } from './permissionCatalog'
 import { observationPricingEn } from './observationPricing'
 import { runObservabilityEn } from './runObservability'
+import { processMetricsEn } from './processMetrics'
 import { mindmapEn } from './mindmap'
 import { markdownEditorEn } from './markdownEditor'
 import { executionEn } from './execution'
@@ -19,6 +20,7 @@ export const enUS: Resources = {
   mindmap: mindmapEn,
   observationPricing: observationPricingEn,
   runObservability: runObservabilityEn,
+  processMetrics: processMetricsEn,
   permissions: buildPermissionCatalogResources('en-US'),
   tabBar: {
     scrollStart: 'Show more sections before',
@@ -2988,6 +2990,14 @@ export const enUS: Resources = {
     changeNarrativeRuntimeLabel: 'Change-narrative runtime',
     changeNarrativeRuntimeHint:
       "Runtime profile used when generating the AI walkthrough on a task's Structural changes tab; empty inherits the global default runtime.",
+    processInsightRuntimeLabel: 'Process theme analysis runtime',
+    processInsightRuntimeHint:
+      'Runtime the text theme analysis in process metrics runs on; leave empty to use the default runtime.',
+    processInsightScheduleLabel: 'Process theme analysis trigger',
+    processInsightScheduleHint:
+      'Manual: runs only when someone clicks “Analyze” on the metrics page. Weekly: once a week, analyzes every workflow, workgroup and digital employee that had new tasks in the last 30 days; the usage counts as system work.',
+    processInsightScheduleManual: 'Manual',
+    processInsightScheduleWeekly: 'Weekly',
     systemAgents: {
       commitPushTitle: 'Commit & push',
       commitPushHint:
@@ -3001,6 +3011,9 @@ export const enUS: Resources = {
       narrativeTitle: 'Change walkthrough',
       narrativeHint:
         'Built-in agent that writes the overview, per-group sentences and reading order for a task change (RFC-239).',
+      processInsightTitle: 'Process theme analysis',
+      processInsightHint:
+        'Built-in agent that groups the review comments, clarification Q&A and human input behind process metrics into themes (RFC-616).',
       intentTitle: 'Intent builder',
       intentHint:
         'Turns natural-language goals into workflow/workgroup/agent/skill changesets (RFC-234).',
@@ -4261,6 +4274,8 @@ export const enUS: Resources = {
     renameActionHint: 'Change the workgroup name and description.',
     aclActionHint: 'Review visibility, members, and ownership.',
     deleteActionHint: 'Permanently remove this workgroup.',
+    metricsActionHint:
+      'See where this workgroup spends time and tokens, round by round, and where people step in.',
     memberSave: 'Save member',
     saveAll: 'Save all changes',
     finishAddingBeforeSave: 'Finish or clear the pending member draft before saving.',
@@ -5815,6 +5830,8 @@ export const enUS: Resources = {
     renameActionHint: 'Change the workflow name and description.',
     aclActionHint: 'Review visibility, members, and ownership.',
     deleteActionHint: 'Permanently remove this workflow.',
+    metricsActionHint:
+      'See where this workflow spends time and tokens, stage by stage, and where people step in.',
     deleteTitle: 'Delete workflow',
     deleteDescription: 'Delete {{name}} at version {{version}}? This cannot be undone.',
     actionDraftChanged:

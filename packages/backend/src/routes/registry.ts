@@ -39,8 +39,11 @@ import {
   ExecutionGroupSchema,
   type ExecutionGroup,
   type Permission,
+  type ProcessOperationAction,
+  type ProcessOperationSubjectKind,
 } from '@agent-workflow/shared'
 import { assertExecutionAvailable } from '@/platform/http/executionAvailability'
+import { createLogger } from '@/platform/logging/logger'
 import { tryActorOf } from '@/auth/actor'
 import {
   registerHttpOperationProjection,
@@ -77,6 +80,60 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
  */
 export type TokenAccess = 'allow' | 'never'
 
+/**
+ * RFC-616 §5.4 — declares that a successful call of this route is something a
+ * person did and that process metrics should know about it. Declaring it is
+ * all a route does: the registry records who did it and when, for HTTP and for
+ * bound (MCP) invocations alike, and the handler contains no bookkeeping.
+ *
+ * Only what the ledgers do not already hold is declared (opening a review,
+ * retrying a node, resuming a case, …). A decision or a submitted answer has
+ * its author and time in the gate's own ledger and is not declared here.
+ */
+export interface RouteObservation {
+  readonly action: ProcessOperationAction
+  /** What the operation was done to, and the path parameter that carries its id. */
+  readonly subject: { readonly kind: ProcessOperationSubjectKind; readonly param: string }
+  /**
+   * `session`: repeats by the same person on the same subject within 30 minutes
+   * are one record (a page that polls). `each`: every call is a record.
+   */
+  readonly mode: 'session' | 'each'
+}
+
+/** One recorded operation, as handed to the sink. */
+export interface RouteOperationRecord {
+  readonly action: ProcessOperationAction
+  readonly subjectKind: ProcessOperationSubjectKind
+  readonly subjectId: string
+  readonly mode: 'session' | 'each'
+  readonly actorUserId: string
+  readonly transport: 'http' | 'mcp'
+  readonly at: number
+}
+
+/** Where recorded operations go. Bound per app by the composition root. */
+export interface RouteOperationSink {
+  record(operation: RouteOperationRecord): Promise<void>
+}
+
+// The sink rides on the app it serves, like the execution status reader: there is no process-level table.
+const ROUTE_OPERATION_SINK = Symbol('route-operation-sink')
+
+function routeOperationSinkOf(app: object): RouteOperationSink | undefined {
+  return Object.hasOwn(app, ROUTE_OPERATION_SINK)
+    ? (app as { readonly [ROUTE_OPERATION_SINK]: RouteOperationSink })[ROUTE_OPERATION_SINK]
+    : undefined
+}
+
+/** Bind the sink before routes are mounted. An app without one (tests, tools) records nothing. */
+export function attachRouteOperationSink(app: object, sink: RouteOperationSink): void {
+  if (routeOperationSinkOf(app) !== undefined) throw new Error('route-operation-sink-already-bound')
+  Object.defineProperty(app, ROUTE_OPERATION_SINK, { value: sink })
+}
+
+const operationLog = createLogger('route-operations')
+
 export interface RouteMeta<P extends string = string> {
   readonly method: HttpMethod
   /** Hono path template, byte-identical to the string passed at registration. */
@@ -110,6 +167,8 @@ export interface RouteMeta<P extends string = string> {
   readonly tokenAccess: TokenAccess
   /** One-line English summary; feeds the generated API documentation. */
   readonly summary: string
+  /** RFC-616: a successful call is a human operation process metrics record. */
+  readonly observe?: RouteObservation
 }
 
 const REGISTRY = new Map<string, RouteMeta>()
@@ -133,13 +192,29 @@ export function lookupRouteMeta(method: string, path: string): RouteMeta | undef
 
 export class RouteMetaError extends Error {}
 
-/** Two declarations describe the same authorization contract. */
+// Compared field by field: every `createApp` builds fresh declaration objects, so two identical
+// declarations are never the same reference.
+function sameObservation(
+  a: RouteObservation | undefined,
+  b: RouteObservation | undefined,
+): boolean {
+  if (a === undefined || b === undefined) return a === b
+  return (
+    a.action === b.action &&
+    a.mode === b.mode &&
+    a.subject.kind === b.subject.kind &&
+    a.subject.param === b.subject.param
+  )
+}
+
+/** Two declarations describe the same contract. */
 function sameMeta(a: RouteMeta, b: RouteMeta): boolean {
   return (
     a.tokenAccess === b.tokenAccess &&
     a.publicReason === b.publicReason &&
     a.summary === b.summary &&
     a.executionGroup === b.executionGroup &&
+    sameObservation(a.observe, b.observe) &&
     a.permissions.length === b.permissions.length &&
     a.permissions.every((p, i) => p === b.permissions[i])
   )
@@ -164,6 +239,14 @@ function validate(meta: RouteMeta): void {
   if (meta.summary.trim() === '') {
     throw new RouteMetaError(
       `${key(meta.method, meta.path)}: summary is required (it is published)`,
+    )
+  }
+  if (
+    meta.observe !== undefined &&
+    !meta.path.split('/').includes(`:${meta.observe.subject.param}`)
+  ) {
+    throw new RouteMetaError(
+      `${key(meta.method, meta.path)}: observe.subject.param '${meta.observe.subject.param}' is not a parameter of the path`,
     )
   }
 }
@@ -270,11 +353,12 @@ export function registerRoute<P extends string>(
   REGISTRY.set(k, meta)
   const operation = registerHttpOperationProjection(meta)
   const authorize = routeMetaGate(meta)
-  const gate: MiddlewareHandler = (c, next) =>
+  const admit: MiddlewareHandler = (c, next) =>
     authorize(c, async () => {
       assertExecutionAvailable(app, meta.executionGroup)
       await next()
     })
+  const gate = meta.observe === undefined ? admit : observed(app, meta.observe, admit)
   registerBoundOperationHandler({
     app,
     operationId: operation.operationId,
@@ -289,6 +373,52 @@ export function registerRoute<P extends string>(
   // needs — and it keeps this switch-free, so a future HttpMethod addition
   // cannot silently fall through.
   app.on(meta.method, meta.path, gate, ...handlers)
+}
+
+/**
+ * RFC-616 §5.4 — wrap a route's gate so a successful call is recorded.
+ *
+ * The wrapper sits where the HTTP router and the bound (MCP) invoker both
+ * enter, so one declaration covers both transports. A failed call is never
+ * recorded, on either transport: over HTTP Hono turns a thrown error into a
+ * response before control returns here (`c.error` is set, the status is ≥ 400);
+ * a bound invocation lets the error propagate past this frame.
+ *
+ * Recording is strictly an afterthought of the operation: it runs after the
+ * handler has produced its response and its failure is logged and dropped.
+ */
+function observed(
+  app: object,
+  observation: RouteObservation,
+  admit: MiddlewareHandler,
+): MiddlewareHandler {
+  return async (c, next) => {
+    const sink = routeOperationSinkOf(app)
+    if (sink === undefined) return admit(c, next)
+    await admit(c, next)
+    if (c.error !== undefined || c.res.status >= 400) return
+    const actor = tryActorOf(c)
+    // The daemon's own calls are not a person's.
+    if (actor === null || actor.source === 'daemon') return
+    const subjectId = c.req.param(observation.subject.param)
+    if (subjectId === undefined || subjectId === '') return
+    try {
+      await sink.record({
+        action: observation.action,
+        subjectKind: observation.subject.kind,
+        subjectId,
+        mode: observation.mode,
+        actorUserId: actor.user.id,
+        transport: c.get('operationTransport') === 'mcp' ? 'mcp' : 'http',
+        at: Date.now(),
+      })
+    } catch (error) {
+      operationLog.warn('route operation not recorded', {
+        action: observation.action,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
 }
 
 /**

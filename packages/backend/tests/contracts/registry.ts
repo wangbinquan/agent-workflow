@@ -1055,6 +1055,96 @@ export const ENDPOINTS: EndpointSpec[] = [
     ]
   })(),
 
+  // RFC-616: process metrics, computed on demand from the ledgers. The numbers are
+  // covered by rfc616-process-*.test.ts; this inventory covers the mounted app.
+  ...(() => {
+    const from = Date.UTC(2026, 8, 1)
+    const window = { from: String(from), to: String(from + 30 * 86_400_000) }
+    const compared = z.object({ value: z.number().nullable(), baseline: z.number().nullable() })
+    return [
+      {
+        method: 'GET' as const,
+        path: '/api/observability/process/subjects',
+        happy: {
+          query: { ...window, kind: 'workflow' },
+          schema: z.object({
+            asOf: z.number(),
+            kind: z.literal('workflow'),
+            scope: z.enum(['all', 'own']),
+            partial: z.boolean(),
+            unitLimit: z.number().int().positive(),
+            items: z.array(z.object({ subjectId: z.string().nullable(), units: z.number().int() })),
+          }),
+        },
+      },
+      {
+        method: 'GET' as const,
+        path: '/api/observability/process/subjects/:kind/:subjectId',
+        happy: {
+          // A subject without units is still answered: every statistic is "no sample".
+          pathParams: { kind: 'workflow', subjectId: 'contract-process-none' },
+          query: window,
+          schema: z.object({
+            kind: z.literal('workflow'),
+            subjectId: z.string().nullable(),
+            subjectName: z.string().nullable(),
+            scope: z.enum(['all', 'own']),
+            counts: z.object({ total: z.literal(0) }),
+            metrics: z.object({ units: compared, successRate: compared }),
+            note: z.object({ units: z.literal(0), partial: z.literal(false) }),
+            compare: z.object({ mode: z.literal('off') }),
+            stages: z.array(z.unknown()),
+            hints: z.array(z.unknown()),
+            definition: z.null(),
+          }),
+        },
+      },
+      {
+        method: 'GET' as const,
+        path: '/api/observability/process/subjects/:kind/:subjectId/units',
+        happy: {
+          pathParams: { kind: 'workgroup', subjectId: 'contract-process-none' },
+          query: window,
+          schema: z.object({
+            asOf: z.number(),
+            items: z.array(z.object({ unitId: z.string() })),
+            nextCursor: z.string().nullable(),
+            identities: z.array(z.object({ id: z.string() })),
+          }),
+        },
+      },
+      { method: 'GET' as const, path: '/api/observability/process/units/:kind/:unitId' },
+      {
+        method: 'GET' as const,
+        path: '/api/observability/process/subjects/:kind/:subjectId/insight',
+        happy: {
+          pathParams: { kind: 'digital-employee', subjectId: 'contract-process-none' },
+          query: window,
+          schema: z.object({
+            asOf: z.number(),
+            scope: z.enum(['all', 'own']),
+            schedule: z.enum(['manual', 'weekly']),
+            result: z.null(),
+            active: z.null(),
+            failure: z.null(),
+            stale: z.literal(false),
+          }),
+        },
+      },
+      {
+        method: 'POST' as const,
+        path: '/api/observability/process/subjects/:kind/:subjectId/insight',
+        happy: {
+          // Nothing to read, so nothing is queued and no model is called.
+          pathParams: { kind: 'workflow', subjectId: 'contract-process-none' },
+          body: { from, to: from + 30 * 86_400_000 },
+          status: 202,
+          schema: z.object({ id: z.literal(''), status: z.literal('empty') }),
+        },
+      },
+    ]
+  })(),
+
   // ---- RFC-349 database provider + one-click migration ----
   {
     method: 'GET',

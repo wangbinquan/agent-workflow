@@ -52,6 +52,9 @@ export function CanvasNodeCard({
       : data.previewInputPort !== undefined
         ? 'new'
         : undefined
+  // RFC-616 §11.3: metric heat from the process-metrics canvas. Absent ⇒ no
+  // attribute and no extra line, so every other canvas renders what it did.
+  const heat = data.heat
   return (
     <div
       className={`canvas-node canvas-node--card ${className}${selected ? ' canvas-node--selected' : ''}`}
@@ -60,6 +63,7 @@ export function CanvasNodeCard({
       data-loop-body={loopBody ? 'true' : undefined}
       data-surface={data.surface}
       data-connect-preview={connectPreview}
+      data-heat={heat?.level}
       {...dataAttributes}
     >
       {overlays}
@@ -84,6 +88,11 @@ export function CanvasNodeCard({
         <NodeConfigurationSummary data={data} />
       ) : (
         <div className="canvas-node__id">{data.nodeId}</div>
+      )}
+      {heat === undefined ? null : (
+        <div className="canvas-node__heat" title={heat.label}>
+          {heat.label}
+        </div>
       )}
       {children}
     </div>

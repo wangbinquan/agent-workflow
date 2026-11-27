@@ -4,4 +4,6 @@ export {
   observationCallModels,
   observationCalls,
   observationPrices,
+  observationOperations,
+  observationInsightAnalyses,
 } from '../infrastructure/persistence/schema'

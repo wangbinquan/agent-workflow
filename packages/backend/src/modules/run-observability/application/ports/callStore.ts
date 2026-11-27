@@ -111,6 +111,30 @@ export interface CallModelRow extends ModelUsage {
   readonly costState: ObservationCostState
 }
 
+/** RFC-616: usage of the calls of one (task, node run, purpose, system kind). */
+export interface NodeRunUsage {
+  readonly taskId: string
+  /** null: the call was not made for a node run (system work beside the graph). */
+  readonly nodeRunId: string | null
+  readonly purpose: 'task' | 'system'
+  readonly systemKind: string | null
+  readonly calls: number
+  readonly incompleteCalls: number
+  readonly unpricedCalls: number
+  /** input + cache read + cache write + output. */
+  readonly tokens: number
+  readonly costNano: number
+}
+
+/** RFC-616: one system call of a task, for attribution by time. */
+export interface SystemCallSlice {
+  readonly taskId: string
+  readonly startedAt: number
+  readonly endedAt: number | null
+  readonly tokens: number
+  readonly costNano: number
+}
+
 export interface CallStore {
   insert(call: NewCall, at: number): Promise<void>
   pricingContext(callId: string): Promise<CallPricingContext | null>
@@ -146,4 +170,10 @@ export interface CallStore {
   runtimeModels(): Promise<
     readonly { readonly runtimeId: string; readonly model: string; readonly calls: number }[]
   >
+  /** RFC-616: every call of the tasks (≤ 500), grouped by node run, purpose and system kind. */
+  usageByNodeRun(taskIds: readonly string[]): Promise<readonly NodeRunUsage[]>
+  /** RFC-616: the system calls of one kind made for the tasks (≤ 500), oldest first. */
+  systemCalls(taskIds: readonly string[], systemKind: string): Promise<readonly SystemCallSlice[]>
+  /** RFC-616: start of the oldest recorded call; null when nothing was ever recorded. */
+  usageSince(): Promise<number | null>
 }

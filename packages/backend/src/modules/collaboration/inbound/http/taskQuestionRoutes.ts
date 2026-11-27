@@ -114,6 +114,7 @@ export function mountTaskQuestionRoutes(app: Hono, operations: CollaborationRout
     {
       method: 'POST',
       path: '/api/tasks/:id/questions/manual',
+      observe: { action: 'question.manual', subject: { kind: 'task', param: 'id' }, mode: 'each' },
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Raise a manual question',
@@ -227,6 +228,11 @@ export function mountTaskQuestionRoutes(app: Hono, operations: CollaborationRout
     {
       method: 'POST',
       path: '/api/tasks/:id/questions/dispatch',
+      observe: {
+        action: 'question.dispatch',
+        subject: { kind: 'task', param: 'id' },
+        mode: 'each',
+      },
       executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',

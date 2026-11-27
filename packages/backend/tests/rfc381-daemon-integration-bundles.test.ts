@@ -144,6 +144,8 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
             'developmentToolConnections',
             'crewStationEvents',
             'finalizeClaimedWorkspace',
+            // RFC-616: the event history of subjects, offered to process metrics.
+            'processSubjectEvents',
           ].sort(),
         )
         expect(session.integrationModules.webhookIngressPersistence).toBe(

@@ -56,6 +56,9 @@ describe('RFC-201 Settings draft registry', () => {
       'mergeAgentModel',
       // RFC-239 change narrative (AI 导读)
       'changeNarrativeRuntime',
+      // RFC-616 过程度量的文本主题分析：运行时 + 触发方式。
+      'processInsightRuntime',
+      'processInsightSchedule',
       // RFC-234 intent-builder system agent (T12 settings card).
       'intentBuilderRuntime',
       'intentBuilderLang',

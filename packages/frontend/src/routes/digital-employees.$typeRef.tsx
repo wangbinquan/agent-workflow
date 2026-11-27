@@ -61,6 +61,7 @@ import {
   requestedJobTemplateDecision,
 } from '@/components/digital-employees/access'
 import { ResourceBadges } from '@/components/ResourceBadges'
+import { processMetricsLink } from '@/components/process-metrics/processSearch'
 import { useUserLookup } from '@/hooks/useUserLookup'
 import { TabBar, tabDomIds } from '@/components/TabBar'
 import { useActor, usePermission } from '@/hooks/useActor'
@@ -3929,8 +3930,12 @@ function EmployeesPanel(props: {
   language: string
 }): ReactElement {
   const zh = props.language.startsWith('zh')
+  const { t } = useTranslation()
   const qc = useQueryClient()
   const canUpdate = usePermission('digital-employees:update')
+  // RFC-616 —— 度量入口只给打得开运行观测页的人：与 lib/nav.ts 里 /observability
+  // 那一项同一个权限点。没有它的人点进去只会看到无权限页。
+  const canOpenMetrics = usePermission('tasks:read')
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<DigitalEmployeeDefinition | null>(null)
   const [name, setName] = useState('')
@@ -4297,6 +4302,15 @@ function EmployeesPanel(props: {
                 >
                   {zh ? '创建任务' : 'Create task'}
                 </Link>
+                {canOpenMetrics ? (
+                  <Link
+                    {...processMetricsLink('digital-employee', employee.id)}
+                    className="btn btn--sm"
+                    data-testid={`digital-employee-process-metrics-${employee.id}`}
+                  >
+                    {t('processMetrics.entry')}
+                  </Link>
+                ) : null}
               </div>
             </article>
           )

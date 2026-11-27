@@ -1,0 +1,90 @@
+{
+  "formatVersion": 1,
+  "epoch": 2,
+  "after": "0014_rfc616_observation_insight_analyses",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-616-process-metrics/design.md"
+    ],
+    "note": "RFC-616 independently authored rows of the text-theme analysis queue. They cover the three subject kinds, both scopes (all, and one user), both triggers and the stored states: a finished analysis with its input summary and result document, a failed one that keeps its error, and a queued scheduled one for units without a source (empty subject_id). JSON columns hold raw JSON text. Seed rows represent a native installation at this history point; an ordinary upgrade adds an empty table. No production analysis, runner or query was used to author values."
+  },
+  "rows": [
+    {
+      "table": "observation_insight_analyses",
+      "values": {
+        "id": "rfc616-analysis-done",
+        "subject_kind": "workflow",
+        "subject_id": "rfc616-workflow",
+        "subject_name": "Requirement to merge",
+        "scope_kind": "all",
+        "scope_user_id": "",
+        "window_from": 1775867500000,
+        "window_to": 1778459500000,
+        "trigger_kind": "manual",
+        "requested_by": "rfc616-user-owner",
+        "status": "done",
+        "input_json": "{\"sources\":[{\"source\":\"review\",\"items\":3,\"truncated\":false},{\"source\":\"clarify\",\"items\":1,\"truncated\":false}],\"newestAt\":1778459400000}",
+        "result_json": "{\"groups\":[{\"source\":\"review\",\"items\":3,\"truncated\":false,\"themes\":[{\"name\":\"Edge cases are not covered\",\"items\":2,\"share\":0.67,\"stages\":[\"design\"],\"quotes\":[{\"text\":\"What happens when the callback arrives twice?\",\"unitId\":\"rfc616-task\"}],\"advice\":\"Add a failure-scenario section to the design prompt.\"}],\"otherItems\":1},{\"source\":\"clarify\",\"items\":1,\"truncated\":false,\"themes\":[],\"otherItems\":1}],\"stageLabels\":{\"design\":\"Design\"}}",
+        "error_code": null,
+        "error_message": null,
+        "created_at": 1778459500000,
+        "started_at": 1778459502000,
+        "finished_at": 1778459530000
+      }
+    },
+    {
+      "table": "observation_insight_analyses",
+      "values": {
+        "id": "rfc616-analysis-failed",
+        "subject_kind": "workgroup",
+        "subject_id": "rfc616-workgroup",
+        "subject_name": null,
+        "scope_kind": "user",
+        "scope_user_id": "rfc616-user-reviewer",
+        "window_from": 1775867500000,
+        "window_to": 1778459500000,
+        "trigger_kind": "manual",
+        "requested_by": "rfc616-user-reviewer",
+        "status": "failed",
+        "input_json": "{\"sources\":[{\"source\":\"workgroup-message\",\"items\":5,\"truncated\":true}],\"newestAt\":1778459450000}",
+        "result_json": null,
+        "error_code": "invalid-output",
+        "error_message": "The model did not answer in the requested format.",
+        "created_at": 1778459600000,
+        "started_at": 1778459602000,
+        "finished_at": 1778459650000
+      }
+    },
+    {
+      "table": "observation_insight_analyses",
+      "values": {
+        "id": "rfc616-analysis-pending",
+        "subject_kind": "digital-employee",
+        "subject_id": "",
+        "subject_name": null,
+        "scope_kind": "all",
+        "scope_user_id": "",
+        "window_from": 1777854700000,
+        "window_to": 1778459500000,
+        "trigger_kind": "scheduled",
+        "requested_by": null,
+        "status": "pending",
+        "input_json": null,
+        "result_json": null,
+        "error_code": null,
+        "error_message": null,
+        "created_at": 1778459700000,
+        "started_at": null,
+        "finished_at": null
+      }
+    }
+  ],
+  "historyExpectations": [
+    {
+      "table": "observation_insight_analyses",
+      "rows": []
+    }
+  ],
+  "content": []
+}

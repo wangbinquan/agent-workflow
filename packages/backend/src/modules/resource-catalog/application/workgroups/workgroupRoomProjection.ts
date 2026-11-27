@@ -5,10 +5,11 @@
 // grammar without either provider importing the other's infrastructure.
 
 import {
-  parseBatchShardKey,
-  parseMsgShardKey,
+  attributeWorkgroupHostRun,
+  uniqueAgentMembersOf,
   WORKGROUP_TURN_LEADER_NODE_ID,
   WORKGROUP_TURN_MEMBER_NODE_ID,
+  type WorkgroupHostRunRoster,
   type WorkgroupMemberCurrentRun,
   type WorkgroupMode,
   type WorkgroupRunEntry,
@@ -122,23 +123,6 @@ export function parseStoredTemplateMetadata(
   }
 }
 
-function runKindOf(
-  run: WorkgroupRoomHostRun,
-  assignmentIds: ReadonlySet<string>,
-): WorkgroupRunKind | null {
-  if (run.nodeId === WORKGROUP_TURN_LEADER_NODE_ID) {
-    // wg-gate is the completion-gate holder run, not a leader thinking round.
-    return run.rerunCause === 'wg-gate' ? null : 'leader-round'
-  }
-  if (run.nodeId === WORKGROUP_TURN_MEMBER_NODE_ID && run.shardKey !== null) {
-    if (parseMsgShardKey(run.shardKey) !== null) return 'message-turn'
-    if (assignmentIds.has(run.shardKey)) return 'assignment'
-    // Batch rows freeze the member identity in their shard key.
-    if (parseBatchShardKey(run.shardKey) !== null) return 'assignment'
-  }
-  return null
-}
-
 interface ClassifiedRun {
   readonly run: WorkgroupRoomHostRun
   readonly kind: WorkgroupRunKind
@@ -146,35 +130,11 @@ interface ClassifiedRun {
   readonly maxMsgId: string | null
 }
 
-function classify(
-  run: WorkgroupRoomHostRun,
-  leaderMemberId: string | null,
-  assignmentIds: ReadonlySet<string>,
-  uniqueAgentMemberById: ReadonlyMap<string, string | null>,
-): ClassifiedRun | null {
-  const kind = runKindOf(run, assignmentIds)
-  if (kind === null) return null
-  if (kind === 'leader-round') {
-    if (leaderMemberId === null) return null
-    return { run, kind, memberId: leaderMemberId, maxMsgId: null }
-  }
-  if (kind === 'assignment') {
-    const viaBatch = parseBatchShardKey(run.shardKey)?.memberId ?? null
-    const viaAgent =
-      run.agentOverrideId != null ? (uniqueAgentMemberById.get(run.agentOverrideId) ?? null) : null
-    const memberId = viaBatch ?? viaAgent
-    if (memberId === null) return null
-    return { run, kind, memberId, maxMsgId: null }
-  }
-
-  const parsed = run.shardKey === null ? null : parseMsgShardKey(run.shardKey)
-  if (parsed === null || parsed.memberId.length === 0) return null
-  return {
-    run,
-    kind,
-    memberId: parsed.memberId,
-    maxMsgId: parsed.maxMessageId,
-  }
+// RFC-616: the attribution rule itself lives in shared (`workgroupHostRun.ts`) so process metrics
+// read the same one; this projection only pairs the result with its run snapshot.
+function classify(run: WorkgroupRoomHostRun, roster: WorkgroupHostRunRoster): ClassifiedRun | null {
+  const attribution = attributeWorkgroupHostRun(run, roster)
+  return attribution === null ? null : { run, ...attribution }
 }
 
 function isBetter(
@@ -208,18 +168,15 @@ export function deriveWorkgroupRunHistory(
 ): WorkgroupRunEntry[] {
   const assignmentIds = new Set(assignments.map((assignment) => assignment.id))
   const nameOf = new Map(members.map((member) => [member.id, member.displayName ?? null]))
-  const uniqueAgentMemberById = new Map<string, string | null>()
-  for (const member of members) {
-    if (member.memberType !== 'agent' || member.agentId == null) continue
-    uniqueAgentMemberById.set(
-      member.agentId,
-      uniqueAgentMemberById.has(member.agentId) ? null : member.id,
-    )
+  const roster: WorkgroupHostRunRoster = {
+    leaderMemberId,
+    assignmentIds,
+    uniqueAgentMemberById: uniqueAgentMembersOf(members),
   }
 
   const classified: ClassifiedRun[] = []
   for (const run of hostRuns) {
-    const entry = classify(run, leaderMemberId, assignmentIds, uniqueAgentMemberById)
+    const entry = classify(run, roster)
     if (entry !== null) classified.push(entry)
   }
   classified.sort((left, right) => left.run.selection.sequence - right.run.selection.sequence)

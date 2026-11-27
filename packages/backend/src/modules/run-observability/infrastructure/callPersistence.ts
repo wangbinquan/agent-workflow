@@ -29,6 +29,8 @@ import type {
   CallRow,
   CallStore,
   ModelAggregate,
+  NodeRunUsage,
+  SystemCallSlice,
 } from '../application/ports/callStore'
 
 const DAY_MS = 86_400_000
@@ -436,5 +438,97 @@ export function createCallPersistence(db: PersistenceDb): CallStore {
         .groupBy(runtime, observationCallModels.model)
       return rows.map((row) => ({ runtimeId: row.runtimeId, model: row.model, calls: row.calls }))
     },
+
+    async usageByNodeRun(taskIds) {
+      const ids = boundedIds(taskIds)
+      if (!ids.length) return []
+      const { observationCalls } = tablesOf(db)
+      const rows = await db
+        .select({
+          taskId: observationCalls.taskId,
+          nodeRunId: observationCalls.nodeRunId,
+          purpose: observationCalls.purpose,
+          systemKind: observationCalls.systemKind,
+          calls: count(),
+          incompleteCalls: tally(sql`${observationCalls.usageState} <> 'complete'`),
+          unpricedCalls: tally(sql`${observationCalls.costState} in ('unpriced', 'partial')`),
+          tokens: total(
+            sql`${observationCalls.inputTokens} + ${observationCalls.cacheReadTokens} + ${observationCalls.cacheWriteTokens} + ${observationCalls.outputTokens}`,
+          ),
+          costNano: total(observationCalls.costNano),
+        })
+        .from(observationCalls)
+        .where(inArray(observationCalls.taskId, ids))
+        .groupBy(
+          observationCalls.taskId,
+          observationCalls.nodeRunId,
+          observationCalls.purpose,
+          observationCalls.systemKind,
+        )
+      return rows.flatMap((row): NodeRunUsage[] =>
+        row.taskId === null ? [] : [{ ...row, taskId: row.taskId, calls: Number(row.calls) }],
+      )
+    },
+
+    async systemCalls(taskIds, systemKind) {
+      const ids = boundedIds(taskIds)
+      if (!ids.length) return []
+      const { observationCalls } = tablesOf(db)
+      const rows = await db
+        .select({
+          taskId: observationCalls.taskId,
+          startedAt: observationCalls.startedAt,
+          endedAt: observationCalls.endedAt,
+          input: observationCalls.inputTokens,
+          cacheRead: observationCalls.cacheReadTokens,
+          cacheWrite: observationCalls.cacheWriteTokens,
+          output: observationCalls.outputTokens,
+          costNano: observationCalls.costNano,
+        })
+        .from(observationCalls)
+        .where(
+          and(
+            inArray(observationCalls.taskId, ids),
+            eq(observationCalls.purpose, 'system'),
+            eq(observationCalls.systemKind, systemKind),
+          ),
+        )
+        .orderBy(asc(observationCalls.startedAt), asc(observationCalls.id))
+      return rows.flatMap((row): SystemCallSlice[] =>
+        row.taskId === null
+          ? []
+          : [
+              {
+                taskId: row.taskId,
+                startedAt: Number(row.startedAt),
+                endedAt: row.endedAt === null ? null : Number(row.endedAt),
+                tokens:
+                  Number(row.input) +
+                  Number(row.cacheRead) +
+                  Number(row.cacheWrite) +
+                  Number(row.output),
+                costNano: Number(row.costNano),
+              },
+            ],
+      )
+    },
+
+    async usageSince() {
+      const { observationCalls } = tablesOf(db)
+      const row = await first(
+        db
+          .select({ startedAt: observationCalls.startedAt })
+          .from(observationCalls)
+          .orderBy(asc(observationCalls.startedAt))
+          .limit(1),
+      )
+      return row ? Number(row.startedAt) : null
+    },
   }
+}
+
+/** Facts ports take at most 500 ids per call; callers chunk. */
+function boundedIds(ids: readonly string[]): string[] {
+  if (ids.length > 500) throw new RangeError('task id batch exceeds 500')
+  return [...new Set(ids)]
 }

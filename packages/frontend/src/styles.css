@@ -92,6 +92,44 @@
   --code-operator: #01709c;
   --code-property: #c2402f;
 
+  /* RFC-616 — chart tokens, shared by every chart component (MetricTile,
+     SegmentedBar, MeterBar, ColumnChart, TrendChart, HeatScale, the canvas and
+     duty-map heat). Four categorical hues in a fixed order, one muted fill for
+     "everything else", three ordered steps of one hue, five heat steps of one
+     hue, each with the ink that reads on it at 4.5:1 or better (a share printed
+     inside a part of a bar is small text). The set was checked with the
+     palette validator on both panel surfaces (adjacent categorical pairs stay
+     apart under colour-vision deficiency; ordered and heat steps are monotone
+     in lightness). State colours stay the semantic tokens above. */
+  --viz-cat-1: #257de0;
+  --viz-cat-2: #f47230;
+  --viz-cat-3: #00b894;
+  --viz-cat-4: #f2a600;
+  --viz-other: #b4b9c2;
+  --viz-cat-1-ink: #0b0b0b;
+  --viz-cat-2-ink: #0b0b0b;
+  --viz-cat-3-ink: #0b0b0b;
+  --viz-cat-4-ink: #0b0b0b;
+  --viz-other-ink: #0b0b0b;
+  --viz-ord-1: #84b9f3;
+  --viz-ord-2: #257de0;
+  --viz-ord-3: #0f4a96;
+  --viz-ord-1-ink: #0b0b0b;
+  --viz-ord-2-ink: #0b0b0b;
+  --viz-ord-3-ink: #ffffff;
+  --viz-heat-1: #cce3fd;
+  --viz-heat-2: #84b9f3;
+  --viz-heat-3: #338ced;
+  --viz-heat-4: #1b64be;
+  --viz-heat-5: #0e3d7e;
+  --viz-heat-1-ink: #10141a;
+  --viz-heat-2-ink: #10141a;
+  --viz-heat-3-ink: #10141a;
+  --viz-heat-4-ink: #ffffff;
+  --viz-heat-5-ink: #ffffff;
+  --viz-grid: #e7e9ee;
+  --viz-axis: #c2c6ce;
+
   --focus-ring-color: var(--accent);
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
@@ -1169,6 +1207,56 @@
 ) {
   outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
   outline-offset: 1px;
+}
+
+/* RFC-616 §11.3 — metric heat on the duty map (process-metrics page). A card
+ * carries `data-heat` only when its `toolState` returned a `heat` step, so the
+ * authoring and runtime maps are untouched. The step replaces the card fill
+ * (and, through the same variable, the fan-out stack behind it) and its ink
+ * replaces the text colour; the state border, the state bar and the selection
+ * outline above are left alone. Declared after every state, hover and selection
+ * rule and scoped under the map so the heat fill wins over all of them.
+ * Colours come from the `--viz-heat-*` tokens alone — no literal, no other
+ * token. */
+.employee-toolbox-map .employee-toolbox-card[data-heat='1'] {
+  --employee-card-background: var(--viz-heat-1);
+
+  color: var(--viz-heat-1-ink);
+}
+
+.employee-toolbox-map .employee-toolbox-card[data-heat='2'] {
+  --employee-card-background: var(--viz-heat-2);
+
+  color: var(--viz-heat-2-ink);
+}
+
+.employee-toolbox-map .employee-toolbox-card[data-heat='3'] {
+  --employee-card-background: var(--viz-heat-3);
+
+  color: var(--viz-heat-3-ink);
+}
+
+.employee-toolbox-map .employee-toolbox-card[data-heat='4'] {
+  --employee-card-background: var(--viz-heat-4);
+
+  color: var(--viz-heat-4-ink);
+}
+
+.employee-toolbox-map .employee-toolbox-card[data-heat='5'] {
+  --employee-card-background: var(--viz-heat-5);
+
+  color: var(--viz-heat-5-ink);
+}
+
+/* The kind pill and the detail text carry their own muted / accent colours;
+ * on a heat fill they follow the ink, and the pill drops its tint (its outline
+ * is already `currentColor`). */
+.employee-toolbox-map .employee-toolbox-card[data-heat] :is(.employee-toolbox-card__kind, small) {
+  color: inherit;
+}
+
+.employee-toolbox-map .employee-toolbox-card[data-heat] .employee-toolbox-card__kind {
+  background: transparent;
 }
 
 @media (max-width: 760px) {
@@ -3107,6 +3195,36 @@
   --code-type: #e3c07b;
   --code-operator: #67cdea;
   --code-property: #ff9c8f;
+
+  /* RFC-616 — chart tokens on the dark panel: the same roles, re-stepped. */
+  --viz-cat-1: #338ced;
+  --viz-cat-2: #e76624;
+  --viz-cat-3: #00a888;
+  --viz-cat-4: #d28e05;
+  --viz-other: #5a6270;
+  --viz-cat-1-ink: #0b0b0b;
+  --viz-cat-2-ink: #0b0b0b;
+  --viz-cat-3-ink: #0b0b0b;
+  --viz-cat-4-ink: #0b0b0b;
+  --viz-other-ink: #ffffff;
+  --viz-ord-1: #1757ac;
+  --viz-ord-2: #338ced;
+  --viz-ord-3: #9dc8f7;
+  --viz-ord-1-ink: #ffffff;
+  --viz-ord-2-ink: #0b0b0b;
+  --viz-ord-3-ink: #0b0b0b;
+  --viz-heat-1: #0e3d7e;
+  --viz-heat-2: #1b64be;
+  --viz-heat-3: #338ced;
+  --viz-heat-4: #84b9f3;
+  --viz-heat-5: #cce3fd;
+  --viz-heat-1-ink: #eef1f6;
+  --viz-heat-2-ink: #ffffff;
+  --viz-heat-3-ink: #0b0b0b;
+  --viz-heat-4-ink: #0b0b0b;
+  --viz-heat-5-ink: #0b0b0b;
+  --viz-grid: #2a2f38;
+  --viz-axis: #454c59;
 }
 
 :root[data-theme='light'] {
@@ -3140,6 +3258,35 @@
     --info: var(--info-fg);
     --info-fill: #275988;
     --on-info: #ffffff;
+
+    --viz-cat-1: #338ced;
+    --viz-cat-2: #e76624;
+    --viz-cat-3: #00a888;
+    --viz-cat-4: #d28e05;
+    --viz-other: #5a6270;
+    --viz-cat-1-ink: #0b0b0b;
+    --viz-cat-2-ink: #0b0b0b;
+    --viz-cat-3-ink: #0b0b0b;
+    --viz-cat-4-ink: #0b0b0b;
+    --viz-other-ink: #ffffff;
+    --viz-ord-1: #1757ac;
+    --viz-ord-2: #338ced;
+    --viz-ord-3: #9dc8f7;
+    --viz-ord-1-ink: #ffffff;
+    --viz-ord-2-ink: #0b0b0b;
+    --viz-ord-3-ink: #0b0b0b;
+    --viz-heat-1: #0e3d7e;
+    --viz-heat-2: #1b64be;
+    --viz-heat-3: #338ced;
+    --viz-heat-4: #84b9f3;
+    --viz-heat-5: #cce3fd;
+    --viz-heat-1-ink: #eef1f6;
+    --viz-heat-2-ink: #ffffff;
+    --viz-heat-3-ink: #0b0b0b;
+    --viz-heat-4-ink: #0b0b0b;
+    --viz-heat-5-ink: #0b0b0b;
+    --viz-grid: #2a2f38;
+    --viz-axis: #454c59;
   }
 }
 
@@ -12200,6 +12347,132 @@ details.form-section--compact[open] > summary {
       inset 0 0 0 1px #d97706,
       0 0 0 3px color-mix(in srgb, #d97706 35%, transparent);
   }
+}
+
+/* RFC-616 §11.3 — metric heat on the canvas (process-metrics page). `data-heat`
+ * and `.canvas-node__heat` exist only where the page passed `nodeHeat` for that
+ * node, so every other canvas is untouched (golden-lock).
+ *
+ * A card takes its heat step as the fill and that step's ink as its text. The
+ * run-status overlay above only owns the border and the halo, so "what
+ * happened" and "how much" stay two separate channels. These rules sit after
+ * the base card and the status overlay and are one attribute more specific
+ * than `.canvas-node--card`, so the heat fill wins over both. A wrapper frame
+ * holds other nodes: only its header strip is filled. Colours come from the
+ * `--viz-heat-*` tokens alone — each step ships its own legible ink for both
+ * themes — so there is no colour literal and no other token in this block. */
+.canvas-node__heat {
+  margin-top: 4px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-node--card > .canvas-node__heat {
+  margin-left: 43px;
+}
+
+.canvas-node--card[data-heat='1'] {
+  background: var(--viz-heat-1);
+  color: var(--viz-heat-1-ink);
+}
+
+.canvas-node--card[data-heat='2'] {
+  background: var(--viz-heat-2);
+  color: var(--viz-heat-2-ink);
+}
+
+.canvas-node--card[data-heat='3'] {
+  background: var(--viz-heat-3);
+  color: var(--viz-heat-3-ink);
+}
+
+.canvas-node--card[data-heat='4'] {
+  background: var(--viz-heat-4);
+  color: var(--viz-heat-4-ink);
+}
+
+.canvas-node--card[data-heat='5'] {
+  background: var(--viz-heat-5);
+  color: var(--viz-heat-5-ink);
+}
+
+/* Text that sits directly on the card surface follows the heat ink. Tiles that
+ * bring their own background (icon, fact band, badges) keep their own colours.
+ * The nested port-label selector lifts the whole list above the clarify-channel
+ * port rule further down the file, which sets its own text colour. */
+.canvas-node--card[data-heat]
+  :is(
+    .canvas-node__kind,
+    .canvas-node__title,
+    .canvas-node__id,
+    .canvas-node__configuration,
+    .canvas-node__port-row,
+    .canvas-node__port-row .canvas-node__port-label,
+    .canvas-node__cross-clarify-handle-label,
+    .muted
+  ) {
+  color: inherit;
+}
+
+.canvas-node--wrapper-group > .canvas-node__header[data-heat='1'] {
+  background: var(--viz-heat-1);
+  color: var(--viz-heat-1-ink);
+}
+
+.canvas-node--wrapper-group > .canvas-node__header[data-heat='2'] {
+  background: var(--viz-heat-2);
+  color: var(--viz-heat-2-ink);
+}
+
+.canvas-node--wrapper-group > .canvas-node__header[data-heat='3'] {
+  background: var(--viz-heat-3);
+  color: var(--viz-heat-3-ink);
+}
+
+.canvas-node--wrapper-group > .canvas-node__header[data-heat='4'] {
+  background: var(--viz-heat-4);
+  color: var(--viz-heat-4-ink);
+}
+
+.canvas-node--wrapper-group > .canvas-node__header[data-heat='5'] {
+  background: var(--viz-heat-5);
+  color: var(--viz-heat-5-ink);
+}
+
+/* A wrapper header normally stacks its kind label above its pill. With heat it
+ * becomes one compact row — kind and pill on the left, the value pushed to the
+ * right — so the strip stays inside the clearance the frame keeps above its
+ * inner nodes: they paint over the frame, and a third stacked line would end up
+ * underneath them. The strip follows the frame's rounded top (10px radius inside
+ * a 1px border); the kind label and the kind pill switch to the heat ink, the
+ * pill keeping its shape as an outline instead of a tinted chip. */
+.canvas-node--wrapper-group > .canvas-node__header[data-heat] {
+  flex-flow: row wrap;
+  justify-content: flex-start;
+  gap: 2px 8px;
+  border-radius: 9px 9px 0 0;
+}
+
+.canvas-node--wrapper-group
+  > .canvas-node__header[data-heat]
+  :is(.canvas-node__kind, .wrapper-header-pill) {
+  color: inherit;
+}
+
+.canvas-node--wrapper-group > .canvas-node__header[data-heat] .wrapper-header-pill {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.canvas-node--wrapper-group .canvas-node__heat {
+  max-width: 100%;
+  margin-top: 0;
+  margin-left: auto;
 }
 
 /* Port rows rendered inside the node body (RFC-006). The old layout
@@ -29685,4 +29958,565 @@ button.status-chip {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ============================================================================
+   RFC-616 — chart primitives shared by run observation and process metrics:
+   MetricTile, SegmentedBar, MeterBar, ColumnChart, TrendChart, HeatScale.
+   Every colour is a --viz-* token (or a semantic state token); marks are thin,
+   data ends are rounded, adjacent fills are separated by a 2px gap, and text
+   always wears the text tokens.
+   ========================================================================== */
+.viz-fill--cat-1 {
+  background: var(--viz-cat-1);
+  color: var(--viz-cat-1-ink);
+}
+.viz-fill--cat-2 {
+  background: var(--viz-cat-2);
+  color: var(--viz-cat-2-ink);
+}
+.viz-fill--cat-3 {
+  background: var(--viz-cat-3);
+  color: var(--viz-cat-3-ink);
+}
+.viz-fill--cat-4 {
+  background: var(--viz-cat-4);
+  color: var(--viz-cat-4-ink);
+}
+.viz-fill--other {
+  background: var(--viz-other);
+  color: var(--viz-other-ink);
+}
+.viz-fill--ord-1 {
+  background: var(--viz-ord-1);
+  color: var(--viz-ord-1-ink);
+}
+.viz-fill--ord-2 {
+  background: var(--viz-ord-2);
+  color: var(--viz-ord-2-ink);
+}
+.viz-fill--ord-3 {
+  background: var(--viz-ord-3);
+  color: var(--viz-ord-3-ink);
+}
+.viz-fill--good {
+  background: var(--success-fill);
+  color: var(--on-success);
+}
+.viz-fill--warn {
+  background: var(--warn-fill);
+  color: var(--on-warn);
+}
+.viz-fill--crit {
+  background: var(--danger-fill);
+  color: var(--on-danger);
+}
+
+/* Doubled class: a heat step must win over the base fill of whatever cell carries it. */
+.viz-heat--1.viz-heat--1 {
+  background: var(--viz-heat-1);
+  color: var(--viz-heat-1-ink);
+}
+.viz-heat--2.viz-heat--2 {
+  background: var(--viz-heat-2);
+  color: var(--viz-heat-2-ink);
+}
+.viz-heat--3.viz-heat--3 {
+  background: var(--viz-heat-3);
+  color: var(--viz-heat-3-ink);
+}
+.viz-heat--4.viz-heat--4 {
+  background: var(--viz-heat-4);
+  color: var(--viz-heat-4-ink);
+}
+.viz-heat--5.viz-heat--5 {
+  background: var(--viz-heat-5);
+  color: var(--viz-heat-5-ink);
+}
+
+.viz-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The line under a chart that repeats the hovered or focused mark's exact value. */
+.viz-readout {
+  min-height: 1.5em;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.viz-table-toggle > summary {
+  width: fit-content;
+  color: var(--accent);
+  font-size: var(--font-sm);
+  cursor: pointer;
+}
+.viz-table-toggle > .table-viewport {
+  margin-top: var(--space-2);
+}
+
+.viz-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 0;
+  padding: 0;
+  font-size: var(--font-sm);
+  list-style: none;
+}
+.viz-legend li,
+.viz-legend__key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.viz-legend__swatch {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.viz-legend--stack {
+  flex-direction: column;
+  gap: 6px;
+}
+.viz-legend--stack li {
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.viz-legend__value {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: var(--space-3);
+}
+.metric-grid--compact {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+}
+.metric-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 14px var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+.metric-grid--compact .metric-tile {
+  padding: 10px var(--space-3);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.metric-tile__label,
+.metric-tile__detail {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-sm);
+  overflow-wrap: anywhere;
+}
+.metric-tile__value {
+  margin: 0;
+  font-size: var(--font-xl);
+  font-weight: 600;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.metric-grid--compact .metric-tile__value {
+  font-size: 18px;
+}
+.metric-tile__delta {
+  margin: 2px 0 0;
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+.metric-tile__delta--good {
+  color: var(--success-fg);
+}
+.metric-tile__delta--bad {
+  color: var(--danger-fg);
+}
+.metric-tile__delta--neutral {
+  color: var(--muted);
+}
+
+.segbar-block,
+.column-chart-block,
+.trend-chart-block {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.segbar {
+  display: flex;
+  gap: 2px;
+  height: 28px;
+  min-width: 0;
+}
+.segbar__seg {
+  display: flex;
+  flex: 0 1 0;
+  align-items: center;
+  min-width: 3px;
+  padding: 0 var(--space-2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: var(--font-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: default;
+}
+.segbar__seg[data-tight] {
+  padding: 0;
+}
+/* The printed value of a part; the part clips it, so a label never spills into its neighbour. */
+.segbar__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.segbar__seg:hover,
+.segbar__seg:focus-visible {
+  filter: brightness(1.1);
+}
+/* Parts fill the bar edge to edge, so the ring is drawn inside the part. */
+.segbar__seg:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset-inset);
+}
+.segbar--thin {
+  display: inline-flex;
+  width: 100%;
+  min-width: 120px;
+  height: 8px;
+  vertical-align: middle;
+}
+.segbar--thin .segbar__seg {
+  min-width: 2px;
+  padding: 0;
+}
+
+.meter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 120px;
+}
+.meter__track {
+  flex: 1 1 auto;
+  min-width: 48px;
+  height: 8px;
+}
+.meter__bar {
+  display: block;
+  min-width: 2px;
+  height: 8px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--viz-cat-1);
+}
+.meter__value {
+  flex: 0 0 auto;
+  min-width: 38px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.column-chart {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  height: 190px;
+  overflow-x: auto;
+}
+.column-chart__col {
+  display: grid;
+  flex: 1 0 56px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 6px;
+  max-width: 96px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: default;
+}
+/* Columns sit flush inside the scrolling chart, so the ring is drawn inside the column. */
+.column-chart__col:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset-inset);
+}
+.column-chart__track {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 0;
+  border-bottom: 1px solid var(--viz-axis);
+}
+.column-chart__value {
+  font-size: var(--font-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.column-chart__bar {
+  width: 24px;
+  height: calc((100% - 24px) * var(--ratio, 0));
+  min-height: 2px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--viz-cat-1);
+}
+.column-chart__col:hover .column-chart__bar,
+.column-chart__col:focus-visible .column-chart__bar {
+  filter: brightness(1.12);
+}
+.column-chart__label {
+  color: var(--muted);
+  font-size: var(--font-sm);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.trend-chart__scroll {
+  overflow-x: auto;
+}
+.trend-chart {
+  display: block;
+}
+.trend-chart text {
+  fill: var(--muted);
+  font-family: var(--font-ui);
+  font-size: var(--font-xs);
+}
+.trend-chart .trend-chart__end {
+  fill: var(--text);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+.trend-chart__grid {
+  stroke: var(--viz-grid);
+  stroke-width: 1;
+}
+.trend-chart__axis,
+.trend-chart__cross {
+  stroke: var(--viz-axis);
+  stroke-width: 1;
+}
+.trend-chart__line {
+  fill: none;
+  stroke: var(--viz-cat-1);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.trend-chart__area {
+  fill: var(--viz-cat-1);
+  opacity: 0.1;
+}
+.trend-chart__dot {
+  fill: var(--viz-cat-1);
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+.trend-chart__hit {
+  fill: transparent;
+  outline: none;
+}
+/* An SVG rect has no outline box in every engine; the focused period is framed with a stroke. */
+.trend-chart__hit:focus-visible {
+  stroke: var(--focus-ring-color);
+  stroke-width: var(--focus-ring-width);
+}
+
+.heat-scale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+.heat-scale__steps {
+  display: inline-flex;
+  gap: 2px;
+}
+.heat-scale__steps i {
+  width: 22px;
+  height: 10px;
+  border-radius: 2px;
+}
+/* What the steps mean, after the low and high ends; it wraps under them on a narrow screen. */
+.heat-scale__note {
+  flex: 1 1 16ch;
+  min-width: 0;
+}
+
+/* ============================================================================
+   RFC-616 — the process metrics tab of run observation (.process-metrics).
+   Layout only: tiles, charts, tables, chips and cards are the shared primitives.
+   ========================================================================== */
+/* A sentence and the action that goes with it, on one line while they fit. */
+.process-metrics__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  min-width: 0;
+}
+/* A segmented control inside a filter bar or a card head: `.page-filter` lets it scroll inside
+   itself on a narrow screen; here it must not push what follows it down. */
+.process-metrics__picker {
+  margin-bottom: 0;
+  min-width: 0;
+}
+.process-metrics__note {
+  margin: 0;
+  font-size: var(--font-sm);
+}
+.process-metrics__subtitle {
+  margin: 0;
+  font-size: var(--font-md);
+  font-weight: 600;
+  line-height: 1.45;
+}
+.process-metrics__grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--space-3);
+}
+.process-metrics__grid2 > * {
+  min-width: 0;
+}
+/* A segmented control inside a card keeps its own width instead of stretching. */
+.process-metrics .card__body > .segmented {
+  align-self: flex-start;
+}
+.process-metrics__canvas {
+  height: min(60vh, 520px);
+}
+.process-metrics__group-row > th {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  color: var(--muted);
+  font-size: var(--font-sm);
+  font-weight: 600;
+}
+/* One step per level of nesting: a node inside a loop inside a git wrapper sits two steps in. */
+.data-table .process-metrics__indent {
+  padding-left: calc(12px + 16px * var(--depth, 1));
+}
+/* The name column of a wide table: with ten columns beside it the name would otherwise be
+   squeezed to one character a line. It keeps this width and the table scrolls in its viewport. */
+.data-table .process-metrics__name {
+  min-width: 14em;
+}
+.process-metrics__expanded {
+  padding: var(--space-3) var(--space-4);
+}
+
+.process-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 10px var(--space-4);
+  margin: 0;
+}
+.process-facts dt {
+  color: var(--muted);
+  font-size: var(--font-sm);
+}
+.process-facts dd {
+  margin: 0;
+  font-size: var(--font-md);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.process-hints {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.process-hint {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-3) 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.process-hint__title {
+  margin: 0;
+  font-size: var(--font-md);
+  font-weight: 600;
+}
+.process-hint__body,
+.process-hint__go {
+  grid-column: 2;
+  margin: 0;
+  font-size: 13px;
+}
+.process-hint__body {
+  color: var(--muted);
+}
+
+.process-themes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.process-themes__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.process-theme {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+}
+.process-theme__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px var(--space-3);
+}
+.process-theme__name {
+  font-size: var(--font-md);
+  font-weight: 600;
+}
+.process-theme__quote {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.process-theme__advice {
+  margin: 0;
+  font-size: 13px;
 }

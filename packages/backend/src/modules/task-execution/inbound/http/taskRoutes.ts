@@ -391,6 +391,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     {
       method: 'POST',
       path: '/api/tasks/:id/cancel',
+      observe: { action: 'task.cancel', subject: { kind: 'task', param: 'id' }, mode: 'each' },
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Cancel a task',
@@ -542,6 +543,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     {
       method: 'POST',
       path: '/api/tasks/:id/resume',
+      observe: { action: 'task.resume', subject: { kind: 'task', param: 'id' }, mode: 'each' },
       executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
@@ -585,6 +587,11 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     {
       method: 'POST',
       path: '/api/tasks/:id/sync-workflow',
+      observe: {
+        action: 'task.sync-workflow',
+        subject: { kind: 'task', param: 'id' },
+        mode: 'each',
+      },
       permissions: ['tasks:update'],
       tokenAccess: 'allow',
       summary: 'Sync the task to its workflow definition',
@@ -633,6 +640,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     {
       method: 'POST',
       path: '/api/tasks/:id/alerts/:alertId/repair',
+      observe: { action: 'task.repair', subject: { kind: 'task', param: 'id' }, mode: 'each' },
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Apply an alert repair',
@@ -667,6 +675,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
     {
       method: 'POST',
       path: '/api/tasks/:id/nodes/:nodeRunId/retry',
+      observe: { action: 'task.retry-node', subject: { kind: 'task', param: 'id' }, mode: 'each' },
       executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',

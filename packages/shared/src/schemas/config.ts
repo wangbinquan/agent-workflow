@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { utf16MaxLength } from './utf16Length'
 import { sparsePatch } from './sparsePatch'
 import { MaintenanceScheduleSchema } from './maintenance'
+import { ProcessInsightScheduleSchema } from './processMetrics'
 import { SETTINGS_NUMERIC_BOUNDS, type SettingsNumericPath } from '../settingsNumericBounds'
 // RFC-366: `memoryDistillLaunchOrigins` is keyed by the same neutral launch-origin
 // codec the task wire uses (taskOperations.ts declares it as exactly that — a
@@ -468,6 +469,12 @@ export const ConfigSchema = z.object({
   /** RFC-239 — runtime profile for the change-narrative system agent (AI 导读).
    *  Unset → global defaultRuntime → opencode (RFC-117 chain). */
   changeNarrativeRuntime: z.string().min(1).optional(),
+  /** RFC-616 — runtime profile for the process-insight system agent (text-theme analysis of
+   *  process metrics). Unset → global defaultRuntime → opencode (RFC-117 chain). */
+  processInsightRuntime: z.string().min(1).optional(),
+  /** RFC-616 — when text-theme analyses run: only when someone asks (`manual`, the default),
+   *  or also once a week for every subject with new units (`weekly`). */
+  processInsightSchedule: ProcessInsightScheduleSchema.optional(),
   /**
    * RFC-050: language the distiller emits candidate `title` (after the
    * `[category:xxx]` prefix) + `bodyMd` in. Independent from the frontend
@@ -981,6 +988,8 @@ export const ConfigPatchSchema = sparsePatch(ConfigSchema)
     taskCommitExcludePatterns: TaskCommitExcludePatternsSchema.nullable().optional(),
     memoryDistillRuntime: z.string().min(1).nullable().optional(),
     changeNarrativeRuntime: z.string().min(1).nullable().optional(),
+    processInsightRuntime: z.string().min(1).nullable().optional(),
+    processInsightSchedule: ProcessInsightScheduleSchema.nullable().optional(),
     commitPushRuntime: z.string().min(1).nullable().optional(),
     mergeAgentRuntime: z.string().min(1).nullable().optional(),
     memoryDistillModel: z.string().min(1).nullable().optional(),

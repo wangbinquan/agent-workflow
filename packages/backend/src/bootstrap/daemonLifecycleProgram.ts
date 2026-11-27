@@ -108,6 +108,7 @@ export const DAEMON_BACKGROUND_JOBS = [
   { id: 'scheduled-backup', phase: 'pre-listen', requiresExecution: true, stopTimeoutMs: 10000 },
   { id: 'submodule-refresh', phase: 'pre-listen', requiresExecution: true, stopTimeoutMs: 10000 },
   { id: 'batch-import-gc', phase: 'pre-listen', requiresExecution: true, stopTimeoutMs: 10000 },
+  { id: 'process-insight', phase: 'pre-listen', requiresExecution: true, stopTimeoutMs: 10000 },
   {
     id: 'hosted-execution-settlement',
     phase: 'pre-listen',

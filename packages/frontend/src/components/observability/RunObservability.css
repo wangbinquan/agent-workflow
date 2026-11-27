@@ -1,26 +1,5 @@
-/* RFC-371 v2 — run observation: metric grid, numeric cells and the daily stacked token bars. */
-.observability__metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-  gap: var(--space-3);
-}
-
-.observability__metric-value {
-  margin: 0;
-  font-size: var(--font-xl);
-  font-weight: 600;
-  line-height: 1.2;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-
-.observability__metric-detail {
-  margin: var(--space-1) 0 0;
-  color: var(--muted);
-  font-size: var(--font-sm);
-  overflow-wrap: anywhere;
-}
-
+/* RFC-371 v2 — run observation: numeric cells and the daily stacked token bars.
+   The four overview metrics are the shared metric tiles (styles.css, RFC-616). */
 .observability__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
@@ -136,4 +115,11 @@
   margin: 0;
   font-size: var(--font-sm);
   font-variant-numeric: tabular-nums;
+}
+
+/* RFC-616: the range picker sits in the page header; `.page-filter` lets it scroll inside itself
+   on a phone, and here it must not add space under the header. */
+.run-observation__range {
+  margin-bottom: 0;
+  min-width: 0;
 }

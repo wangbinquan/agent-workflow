@@ -1075,7 +1075,8 @@ test.describe('RFC-054 W2-5 — visual regression on key pages', () => {
     await primeAuth(page)
     await page.goto(`${requireDaemon().baseUrl}/settings?tab=systemAgents`)
     await expect(page.getByRole('heading', { name: 'System agents', exact: true })).toBeVisible()
-    await expect(page.locator('.settings-card')).toHaveCount(6)
+    // RFC-616：6 → 7（+「过程主题分析」卡片）。基线图要在 ubuntu 上重新生成。
+    await expect(page.locator('.settings-card')).toHaveCount(7)
     await waitForStableAuthenticatedShell(page)
     await expect(page).toHaveScreenshot('settings-system-agents.png', SNAPSHOT_OPTS)
   })

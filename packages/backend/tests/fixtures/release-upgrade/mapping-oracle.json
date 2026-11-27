@@ -14212,6 +14212,88 @@
       ],
       "projections": [],
       "rebuildMeaning": "Native schema upgrade preserves every stored value. Explicit rebuild may replace build identities and their derived rows; compare source generation/contract/table/original identity plus the independently authored projection values, while original archive bytes and old ID indexes remain byte-for-byte unchanged."
+    },
+    {
+      "table": "observation_operations",
+      "sourcePhase": "current",
+      "source": "rfc616",
+      "references": [
+        "design/RFC-616-process-metrics/design.md"
+      ],
+      "disposition": "preserved",
+      "sourceKey": [
+        "id"
+      ],
+      "destinations": [
+        {
+          "table": "observation_operations",
+          "key": {
+            "id": {
+              "sourceColumn": "id"
+            }
+          },
+          "preserveColumns": [
+            "id",
+            "action",
+            "subject_kind",
+            "subject_id",
+            "actor_user_id",
+            "transport",
+            "first_at",
+            "last_at"
+          ],
+          "targetKeyColumns": [
+            "id"
+          ]
+        }
+      ],
+      "projections": []
+    },
+    {
+      "table": "observation_insight_analyses",
+      "sourcePhase": "current",
+      "source": "rfc616",
+      "references": [
+        "design/RFC-616-process-metrics/design.md"
+      ],
+      "disposition": "preserved",
+      "sourceKey": [
+        "id"
+      ],
+      "destinations": [
+        {
+          "table": "observation_insight_analyses",
+          "key": {
+            "id": {
+              "sourceColumn": "id"
+            }
+          },
+          "preserveColumns": [
+            "id",
+            "subject_kind",
+            "subject_id",
+            "subject_name",
+            "scope_kind",
+            "scope_user_id",
+            "window_from",
+            "window_to",
+            "trigger_kind",
+            "requested_by",
+            "status",
+            "input_json",
+            "result_json",
+            "error_code",
+            "error_message",
+            "created_at",
+            "started_at",
+            "finished_at"
+          ],
+          "targetKeyColumns": [
+            "id"
+          ]
+        }
+      ],
+      "projections": []
     }
   ]
 }

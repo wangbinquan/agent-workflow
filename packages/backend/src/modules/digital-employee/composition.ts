@@ -20,6 +20,8 @@ import type {
   ToolConnectionCatalogPort,
 } from './composition/required-ports'
 export { createProgramArtifactStore } from './infrastructure/programArtifactStore'
+// RFC-616: case, round and type facts offered to process metrics through the platform contract.
+export { createProcessEmployeeFacts } from './composition/processFacts'
 import { createReactionRoundQueries } from './infrastructure/reactionRoundQueries'
 import type { EmployeeReactionRoundQueryPort } from './public/types'
 import { createEmployeeInputUploadPersistence } from './infrastructure/inputUploadStore'

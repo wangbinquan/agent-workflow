@@ -1,7 +1,7 @@
 // RFC-225 — workgroup detail studio with one versioned autosave writer.
 
 import { ResourcePackageExportButton } from '@/components/ResourcePackageExportButton'
-import { ResourceActionList } from '@/components/ResourceActionList'
+import { ResourceActionItem, ResourceActionList } from '@/components/ResourceActionList'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -27,6 +27,7 @@ import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { IntentProvenanceBadge } from '@/components/IntentProvenanceBadge'
+import { processMetricsLink } from '@/components/process-metrics/processSearch'
 import { RenameDialog } from '@/components/RenameDialog'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import {
@@ -194,6 +195,9 @@ export function WorkgroupEditor(props: {
   const canDelete = usePermission('workgroups:delete') && resourceAccess.canManage
   const canExecuteTasks = usePermission('tasks:execute')
   const canWriteIntent = usePermission('intent:write')
+  // RFC-616 —— 度量入口只给打得开运行观测页的人：与 lib/nav.ts 里 /observability
+  // 那一项同一个权限点。没有它的人点进去只会看到无权限页。
+  const canOpenMetrics = usePermission('tasks:read')
   const config = useOwnedEditScope(workgroupToConfigDraft(props.initial))
   const members = useOwnedEditScope(
     workgroupToMembersState(props.initial),
@@ -956,6 +960,18 @@ export function WorkgroupEditor(props: {
               <strong>{t('intent.entryModify')}</strong>
               <span>{t('intent.entryModifyHint')}</span>
             </button>
+          )}
+          {canOpenMetrics && (
+            <ResourceActionItem
+              label={t('processMetrics.entry')}
+              description={t('workgroups.metricsActionHint')}
+              onClick={() => {
+                // 与上面的意图入口同一个顺序：先收起动作弹窗，再离开本页。
+                setHeaderSurface(null)
+                void navigate(processMetricsLink('workgroup', props.initial.id))
+              }}
+              data-testid="workgroup-process-metrics-entry"
+            />
           )}
           {canUpdate && (
             <button

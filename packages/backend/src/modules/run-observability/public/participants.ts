@@ -4,3 +4,9 @@ export type {
   CallObservations,
   CallObservedUsage,
 } from '../application/callObservations'
+// RFC-616 §9.3 — the model call of a text-theme analysis, implemented by task-execution's system agent runs.
+export type {
+  InsightRunRequest,
+  InsightRunResult,
+  InsightRunner,
+} from '../application/process/ports/insightRunner'

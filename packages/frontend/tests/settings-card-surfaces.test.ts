@@ -37,7 +37,8 @@ describe('RFC-299 — every settings surface uses semantic SettingsCard groups',
     ['git', 'function GitTab', 'export function GcTab', 3],
     ['network', 'export function NetworkTab', 'export function AppearanceTab', 2],
     ['appearance', 'export function AppearanceTab', '// RFC-156/234', 1],
-    ['system agents', 'export function SystemAgentsTab', 'function RenderingTab', 6],
+    // RFC-616：6 → 7，多出来的一张是「过程主题分析」（运行时 + 触发方式）。
+    ['system agents', 'export function SystemAgentsTab', 'function RenderingTab', 7],
     ['rendering', 'function RenderingTab', '// RFC-036 — OIDC providers', 1],
     ['authentication', 'function AuthenticationTab', '// RFC-286 F3', 2],
   ])('%s section keeps its expected card count', (_name, start, end, expected) => {

@@ -10,12 +10,17 @@ export type ResponsibilityProjectedIngress = WorkIngress & {
   routeKind: ResponsibilityIngressRouteKind
 }
 
+/** RFC-616 §11.3 — metric heat step of a work-item card (1 = lowest … 5 = highest). */
+export type ResponsibilityHeatLevel = 1 | 2 | 3 | 4 | 5
+
 export interface ResponsibilityCardPresentation {
   kind: { label: string; className: string }
   fanOut: boolean
   state?: {
     state: string
     attention?: boolean
+    /** RFC-616 §11.3 — the work-item card outputs `data-heat`; absent ⇒ unchanged card. */
+    heat?: ResponsibilityHeatLevel
   }
   detail: string
   compactDetail: string
@@ -361,6 +366,7 @@ export function ResponsibilityIngressBranch(props: ResponsibilityIngressBranchPr
         id={`${props.cardIdPrefix}-${props.item.workItemRef}`}
         data-work-item-ref={props.item.workItemRef}
         data-capability-tool-ref={`work-item:${props.item.workItemRef}`}
+        data-heat={state?.heat}
         type="button"
         className={`employee-toolbox-card--${kind.className}${
           state === undefined ? '' : ` employee-toolbox-card--${state.state}`
@@ -520,6 +526,7 @@ export function ResponsibilityReviewBranch(props: ResponsibilityReviewBranchProp
           id={`${props.cardIdPrefix}-${props.item.workItemRef}`}
           data-work-item-ref={props.item.workItemRef}
           data-capability-tool-ref={`work-item:${props.item.workItemRef}`}
+          data-heat={state?.heat}
           type="button"
           className={`employee-toolbox-review-branch__merged-item employee-toolbox-card--${kind.className}${
             props.afterApprovalState === undefined

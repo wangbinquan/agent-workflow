@@ -316,6 +316,9 @@ describe('RFC-305 identity-access architecture', () => {
       // RFC-472: the application root composes identity-access's owner admission for intent's port.
       'packages/backend/src/bootstrap/daemonApplication.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/bootstrap/daemonApplication.ts -> @/modules/identity-access/composition/ownerIdentityQueries',
+      // RFC-616: process metrics name who started, reviewed and answered. The HTTP root composes the owner
+      // lookup the task list uses and hands it to run-observability's identity port.
+      'packages/backend/src/bootstrap/daemonHttpComposition.ts -> @/modules/identity-access/composition/ownerIdentityQueries',
       'packages/backend/src/bootstrap/daemonHttpComposition.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/bootstrap/daemonHttpComposition.ts -> @/modules/identity-access/composition/userOperations',
       'packages/backend/src/bootstrap/daemonHttpComposition.ts -> @/modules/identity-access/public/participants',

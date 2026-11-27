@@ -139,6 +139,11 @@ export function mountWorkgroupTaskRoutes(
     {
       method: 'POST',
       path: '/api/workgroup-tasks/:taskId/dw-confirm',
+      observe: {
+        action: 'workgroup.plan-confirm',
+        subject: { kind: 'task', param: 'taskId' },
+        mode: 'each',
+      },
       executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
@@ -177,6 +182,11 @@ export function mountWorkgroupTaskRoutes(
     {
       method: 'POST',
       path: '/api/workgroup-tasks/:taskId/messages',
+      observe: {
+        action: 'workgroup.message',
+        subject: { kind: 'task', param: 'taskId' },
+        mode: 'each',
+      },
       executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
@@ -197,6 +207,11 @@ export function mountWorkgroupTaskRoutes(
     {
       method: 'POST',
       path: '/api/workgroup-tasks/:taskId/assignments/:id/deliver',
+      observe: {
+        action: 'workgroup.deliver',
+        subject: { kind: 'task', param: 'taskId' },
+        mode: 'each',
+      },
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Deliver an assignment',
@@ -217,6 +232,11 @@ export function mountWorkgroupTaskRoutes(
     {
       method: 'POST',
       path: '/api/workgroup-tasks/:taskId/confirm',
+      observe: {
+        action: 'workgroup.confirm',
+        subject: { kind: 'task', param: 'taskId' },
+        mode: 'each',
+      },
       executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
@@ -236,6 +256,11 @@ export function mountWorkgroupTaskRoutes(
     {
       method: 'PUT',
       path: '/api/workgroup-tasks/:taskId/config',
+      observe: {
+        action: 'workgroup.config',
+        subject: { kind: 'task', param: 'taskId' },
+        mode: 'each',
+      },
       permissions: ['tasks:update'],
       tokenAccess: 'never',
       summary: 'Update workgroup task config (members / switches)',
@@ -254,6 +279,11 @@ export function mountWorkgroupTaskRoutes(
     {
       method: 'POST',
       path: '/api/workgroup-tasks/:taskId/assignments/:id/cancel',
+      observe: {
+        action: 'workgroup.cancel-assignment',
+        subject: { kind: 'task', param: 'taskId' },
+        mode: 'each',
+      },
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
       summary: 'Cancel an assignment',

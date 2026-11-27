@@ -122,6 +122,11 @@ export function mountClarifyRoutes(app: Hono, operations: CollaborationRouteOper
     {
       method: 'POST',
       path: '/api/clarify/:nodeRunId/followup',
+      observe: {
+        action: 'clarify.followup',
+        subject: { kind: 'node-run', param: 'nodeRunId' },
+        mode: 'each',
+      },
       executionGroup: 'task',
       permissions: ['tasks:execute'],
       tokenAccess: 'allow',
@@ -231,6 +236,11 @@ export function mountClarifyRoutes(app: Hono, operations: CollaborationRouteOper
     {
       method: 'GET',
       path: '/api/clarify/:nodeRunId',
+      observe: {
+        action: 'clarify.view',
+        subject: { kind: 'node-run', param: 'nodeRunId' },
+        mode: 'session',
+      },
       permissions: ['tasks:read'],
       tokenAccess: 'allow',
       summary: 'Get one clarify gate',

@@ -90,6 +90,9 @@ describe('RFC-371 v2 observation boundaries', () => {
       '@/platform/persistence/databaseTransaction',
       '@/routes/registry',
       '@/platform/errors/domainErrors',
+      // RFC-616: process metrics read the owning contexts' facts through the
+      // neutral contract those contexts implement; bootstrap binds them.
+      '@/platform/contracts/processFacts',
       // RFC-400: the task-facts port names the caller with identity-access's
       // public authority snapshot (type-only) instead of the legacy Actor.
       '@/modules/identity-access/public/participants',
@@ -111,7 +114,14 @@ describe('RFC-371 v2 observation boundaries', () => {
   })
 
   test('only run observation imports the observation tables', () => {
-    const tables = new Set(['observationCalls', 'observationCallModels', 'observationPrices'])
+    const tables = new Set([
+      'observationCalls',
+      'observationCallModels',
+      'observationPrices',
+      // RFC-616: recorded human operations and queued text-theme analyses.
+      'observationOperations',
+      'observationInsightAnalyses',
+    ])
     const importsTables = (unit: SourceUnit) =>
       unit.source.statements.some(
         (statement) =>

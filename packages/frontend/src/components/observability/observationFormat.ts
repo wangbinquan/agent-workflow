@@ -10,7 +10,8 @@ import { formatObservationCny, observationBuiltinProtocol } from '@agent-workflo
 import { formatDurationMs } from '@/lib/duration'
 import type { ObservationWindow } from './observationClient'
 
-export const OBSERVATION_RANGES = ['24h', '7d', '30d'] as const
+// RFC-616 adds 90 days: process metrics compare weeks and need a longer look back.
+export const OBSERVATION_RANGES = ['24h', '7d', '30d', '90d'] as const
 export type ObservationRange = (typeof OBSERVATION_RANGES)[number]
 
 const HOUR = 3_600_000
@@ -18,6 +19,7 @@ const RANGE_MS: Record<ObservationRange, number> = {
   '24h': 24 * HOUR,
   '7d': 7 * 24 * HOUR,
   '30d': 30 * 24 * HOUR,
+  '90d': 90 * 24 * HOUR,
 }
 
 export function isObservationRange(value: unknown): value is ObservationRange {

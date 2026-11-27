@@ -55,7 +55,10 @@ export type GraphDeliveryLifecycleRuntimeCodec = RuntimeCodec
 /** Compose the new immutable type revision while keeping graph@1 registered unchanged. */
 export function createGraphDeliveryLifecycleTypePackage(
   core: EmployeeTypePackageRegistration,
-  development: Pick<EmployeeTypePackageRegistration, 'validateContractFixtureJson'>,
+  development: Pick<
+    EmployeeTypePackageRegistration,
+    'validateContractFixtureJson' | 'describeProcessMetricsJson'
+  >,
 ): EmployeeTypePackageRegistration {
   const descriptor = coreDescriptorSchema.parse(JSON.parse(core.descriptorJson))
   const shared = mergeRequestLifecycleDescriptor
@@ -143,6 +146,10 @@ export function createGraphDeliveryLifecycleTypePackage(
         ? core.validateContractFixtureJson(json)
         : development.validateContractFixtureJson(json)
     },
+    // RFC-616: the merged-in lifecycle brings its rework work items with it.
+    ...(development.describeProcessMetricsJson === undefined
+      ? {}
+      : { describeProcessMetricsJson: () => development.describeProcessMetricsJson!() }),
   }
 }
 
@@ -289,5 +296,7 @@ export function createGraphDeliveryLifecycleRuntimeCodec(core: RuntimeCodec): Ru
     },
     buildInvocationStartedOutputJson: shared.buildInvocationStartedOutputJson,
     buildInvocationResultOutputJson: shared.buildInvocationResultOutputJson,
+    // RFC-616: review comments live in the shared lifecycle's merge-request context; graph contexts hold none.
+    projectHumanFeedbackJson: shared.projectHumanFeedbackJson,
   }
 }

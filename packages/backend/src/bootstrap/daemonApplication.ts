@@ -20,7 +20,11 @@ import {
   type DaemonApplicationProvider,
   type DaemonApplicationDatabase,
 } from './daemonSessionAdapters'
-import { composeProviderAppComposition, type ProviderAppOwnerInput } from './daemonHttpComposition'
+import {
+  composeProviderAppComposition,
+  type ProviderAppComposition,
+  type ProviderAppOwnerInput,
+} from './daemonHttpComposition'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { DEFAULT_DISTILL_POLICY, resolveDistillPolicy } from '@agent-workflow/shared'
 import {
@@ -283,6 +287,8 @@ export interface DaemonApplicationRuntime<P extends DatabaseProvider = DatabaseP
   readonly workspaceMaintenance: ReturnType<typeof composeWorkspaceMaintenanceCommand>
   readonly intentModules: DaemonIntentModules
   readonly resourcePackageActivity: ResourcePackageApplyActivityQuery
+  /** RFC-616: the text-theme analysis queue the session's `process-insight` job works. */
+  readonly processInsights: ProviderAppComposition<P>['processInsights']
   readonly driveHumanGateContinuation: (input: {
     readonly taskId: string
     readonly continuationRef: string
@@ -971,6 +977,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     workspaceMaintenance,
     intentModules,
     resourcePackageActivity: http.resourcePackageApplyActivity,
+    processInsights: http.processInsights,
     // RFC-370 hosted acceptance: claiming while this process's parked driver
     // still drained its admitted work was an owner conflict that the worker
     // retried (and warned about) every second for as long as that work ran.

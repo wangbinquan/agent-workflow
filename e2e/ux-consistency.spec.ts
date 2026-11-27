@@ -434,7 +434,8 @@ test.describe('RFC-198 global UX browser matrix', () => {
     const sections = [
       // RFC-371 adds the immutable CNY token-pricing card beside the runtime registry.
       ['runtime', 2],
-      ['systemAgents', 6],
+      // RFC-616：6 → 7，多出来的一张是「过程主题分析」（运行时 + 触发方式）。
+      ['systemAgents', 7],
       ['limits', 3],
       ['recovery', 2],
       // RFC-311：GC 分区从 3 张涨到 5 张（+「保留期与清理」+「终态任务归档」），

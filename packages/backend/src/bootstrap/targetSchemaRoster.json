@@ -1058,6 +1058,18 @@
     "definition": "reused"
   },
   {
+    "table": "observation_insight_analyses",
+    "owner": "run-observability",
+    "sources": [],
+    "definition": "target"
+  },
+  {
+    "table": "observation_operations",
+    "owner": "run-observability",
+    "sources": [],
+    "definition": "target"
+  },
+  {
     "table": "observation_prices",
     "owner": "run-observability",
     "sources": ["observation_prices"],

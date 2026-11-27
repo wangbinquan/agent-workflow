@@ -227,8 +227,9 @@ describe('RFC-349 PostgreSQL provider backup', () => {
       sourceProvider: 'postgresql',
       sourceGenerationId: fixture.generationId,
       archiveRows: 0,
-      // RFC-602 adds 10 derived history index tables to the previous 234.
-      activeTableCount: 244,
+      // RFC-602 adds 10 derived history index tables to the previous 234;
+      // RFC-616 adds the two process-metrics tables of run observation.
+      activeTableCount: 246,
       archiveOnlyTableCount: 0,
     })
     const nativeSource = openSqliteLogicalSource({

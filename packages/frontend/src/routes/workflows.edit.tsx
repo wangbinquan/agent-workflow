@@ -3,7 +3,7 @@
 // every detail edit of the (initially empty) definition.
 
 import { ResourcePackageExportButton } from '@/components/ResourcePackageExportButton'
-import { ResourceActionList } from '@/components/ResourceActionList'
+import { ResourceActionItem, ResourceActionList } from '@/components/ResourceActionList'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -62,6 +62,7 @@ import {
 } from '@/components/workflow-editor/WorkflowDraftStatus'
 import { WorkflowStarterDialog } from '@/components/workflow-editor/WorkflowStarterDialog'
 import { ValidationPanel } from '@/components/workflow-editor/ValidationPanel'
+import { processMetricsLink } from '@/components/process-metrics/processSearch'
 export { partitionValidationIssues as partitionIssues } from '@/components/workflow-editor/ValidationPanel'
 import {
   useWorkflowEditorDraft,
@@ -320,6 +321,9 @@ export function WorkflowEditorLoaded({
   const canDelete = usePermission('workflows:delete')
   const canValidate = usePermission('workflows:execute')
   const canLaunch = usePermission('tasks:execute')
+  // RFC-616 —— 度量入口只给打得开运行观测页的人：与 lib/nav.ts 里 /observability
+  // 那一项同一个权限点。没有它的人点进去只会看到无权限页。
+  const canOpenMetrics = usePermission('tasks:read')
   const workspaceMode = useWorkflowEditorWorkspaceMode()
   const hasPaletteRail = workspaceHasPaletteRail(workspaceMode)
   const hasInspectorRail = workspaceHasInspectorRail(workspaceMode)
@@ -1253,6 +1257,18 @@ export function WorkflowEditorLoaded({
               disabled={unsafe || exactActionRef.current !== null}
               disabledReason={t('resourcePackage.saveBeforeExport')}
             />
+            {canOpenMetrics && (
+              <ResourceActionItem
+                label={t('processMetrics.entry')}
+                description={t('editor.metricsActionHint')}
+                onClick={() => {
+                  // 先收起动作弹窗：有未保存改动时离开会弹确认，两层弹窗不能叠在一起。
+                  setModalSurface('none')
+                  void navigate(processMetricsLink('workflow', workflowId))
+                }}
+                data-testid="workflow-process-metrics-entry"
+              />
+            )}
             {canUpdate && (
               <button
                 type="button"

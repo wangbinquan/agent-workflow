@@ -118,6 +118,7 @@ import {
   INBOUND_HANDLE_ID,
   RETURN_HANDLE_ID,
   type CanvasNodeData,
+  type CanvasNodeHeat,
   type CanvasSelection,
   type WorkflowCanvasSurface,
 } from './nodes/types'
@@ -329,6 +330,17 @@ export interface WorkflowCanvasProps {
    * this map rebuilds node data like `reviewNavs` / `clarifyNavs` do.
    */
   callNavs?: Record<string, CallNodeNavKind>
+  /**
+   * RFC-616 §11.3: per-node metric heat, keyed by workflow node id — `level`
+   * picks the `--viz-heat-<level>` fill and ink, `label` is the formatted metric
+   * value. When DEFINED (process-metrics canvas) a card with an entry gets
+   * `data-heat` plus one extra line showing the label, and a wrapper frame with
+   * an entry gets both on its header strip only; nodes absent from the map are
+   * untouched. Undefined (every other canvas) ⇒ no heat and a byte-for-byte
+   * unchanged canvas (golden-lock). Changing this map rebuilds node data the
+   * same way `nodeStatuses` / `questionCounts` do, so pass a memoized map.
+   */
+  nodeHeat?: Readonly<Record<string, CanvasNodeHeat>>
 }
 
 export function canShowEdgeInsertAffordance(
@@ -443,6 +455,7 @@ function CanvasInner({
   reviewNavs,
   clarifyNavs,
   callNavs,
+  nodeHeat,
   canUndo,
   canRedo,
   onUndo,
@@ -662,6 +675,7 @@ function CanvasInner({
         surface,
         workflowByRef,
         callNavs,
+        nodeHeat,
       ),
     ),
   )
@@ -708,6 +722,9 @@ function CanvasInner({
   // node-runs query stamps a childTaskId OR when the ACL-filtered children query
   // resolves (design D5/D9), both without touching the definition.
   const externalCallNavsRef = useRef(callNavs)
+  // RFC-616 §11.3: same shape for metric heat — the map changes when the
+  // process-metrics page switches metric or filter, definition unchanged.
+  const externalNodeHeatRef = useRef(nodeHeat)
   const externalValidationIssuesRef = useRef(validationIssues)
   const externalEdgeInsertEnabledRef = useRef(edgeInsertEnabled)
   const externalInlineActionsVisibleRef = useRef(inlineActionsVisible)
@@ -1114,6 +1131,9 @@ function CanvasInner({
     // (design-gate P1-3: without the dep, a visibility-only flip left the card's
     // hint/cursor stale while the click closure had already updated).
     const callNavsChanged = callNavs !== externalCallNavsRef.current
+    // RFC-616 §11.3: nodeHeat map change repaints the heat fill and label (same
+    // shape; like `callNavs` it is also a dependency of this effect).
+    const nodeHeatChanged = nodeHeat !== externalNodeHeatRef.current
     const validationChanged = validationIssues !== externalValidationIssuesRef.current
     const edgeInsertEnabledChanged = edgeInsertEnabled !== externalEdgeInsertEnabledRef.current
     const inlineActionsVisibilityChanged =
@@ -1132,6 +1152,7 @@ function CanvasInner({
       reviewNavsChanged ||
       clarifyNavsChanged ||
       callNavsChanged ||
+      nodeHeatChanged ||
       validationChanged ||
       edgeInsertEnabledChanged ||
       inlineActionsVisibilityChanged ||
@@ -1147,6 +1168,7 @@ function CanvasInner({
       externalReviewNavsRef.current = reviewNavs
       externalClarifyNavsRef.current = clarifyNavs
       externalCallNavsRef.current = callNavs
+      externalNodeHeatRef.current = nodeHeat
       externalValidationIssuesRef.current = validationIssues
       externalEdgeInsertEnabledRef.current = edgeInsertEnabled
       externalInlineActionsVisibleRef.current = inlineActionsVisible
@@ -1178,6 +1200,7 @@ function CanvasInner({
               surface,
               workflowByRef,
               callNavs,
+              nodeHeat,
             ),
             measured,
           ),
@@ -1231,6 +1254,8 @@ function CanvasInner({
     // this dep the effect never re-runs on a callNavs-only flip and the card's
     // hint/cursor desyncs from the click behavior.
     callNavs,
+    // RFC-616 §11.3: same reason — a nodeHeat-only change must re-run the effect.
+    nodeHeat,
     canvasLanguage,
     edgeInsertEnabled,
     editableEditor,
@@ -2042,6 +2067,7 @@ function CanvasInner({
             surface,
             workflowByRef,
             callNavs,
+            nodeHeat,
           ),
           measured,
         ),
@@ -2082,6 +2108,7 @@ function CanvasInner({
       handleAddInsideWrapper,
       handleQuestionBadgeClick,
       inactiveEdgeIdSet,
+      nodeHeat,
       nodeStatuses,
       onChange,
       questionCounts,
@@ -3680,6 +3707,10 @@ function toFlowNodes(
   // clarifyNavs) because every caller — including nine test files — passes these
   // positionally; inserting would silently reinterpret their arguments.
   callNavs?: Record<string, CallNodeNavKind>,
+  // RFC-616 §11.3: per-node metric heat. Appended for the same reason. When
+  // `nodeHeat` is undefined (every canvas but the process-metrics one) no node
+  // gets a `heat` (golden-lock — data byte-for-byte identical to before).
+  nodeHeat?: Readonly<Record<string, CanvasNodeHeat>>,
 ): Node[] {
   const loopBodyIds = new Set<string>()
   for (const n of definition.nodes) {
@@ -3752,6 +3783,16 @@ function toFlowNodes(
     if (callNavs !== undefined && (n.kind === 'call-workflow' || n.kind === 'call-workgroup')) {
       const nav = callNavs[n.id]
       if (nav !== undefined) data.callNav = nav
+    }
+    // RFC-616 §11.3: metric heat for the process-metrics canvas. Unlike the nav
+    // maps above it is not tied to a node kind — a card or a wrapper frame present
+    // in `nodeHeat` gets it, absent ⇒ unchanged. `Object.hasOwn` (not a bare index)
+    // because node ids are free text: an id such as `constructor` must not pick up
+    // an inherited member as its heat. Undefined map ⇒ no node ever gets it
+    // (golden-lock).
+    if (nodeHeat !== undefined && Object.hasOwn(nodeHeat, n.id)) {
+      const heat = nodeHeat[n.id]
+      if (heat !== undefined) data.heat = heat
     }
     if (loopBodyIds.has(n.id)) data.loopBody = true
     if (isWrapperKind(n.kind)) {
@@ -4332,6 +4373,8 @@ export const __testToFlowNodes = (
   // RFC-245: call-node click targets. Appended last for the same reason the
   // production signature appends it — existing tests pass through position 13.
   callNavs?: Record<string, CallNodeNavKind>,
+  // RFC-616 §11.3: metric heat, appended after callNavs for the same reason.
+  nodeHeat?: Readonly<Record<string, CanvasNodeHeat>>,
 ): Node[] => {
   const def: WorkflowDefinition = {
     $schema_version: WORKFLOW_SCHEMA_VERSION,
@@ -4356,6 +4399,7 @@ export const __testToFlowNodes = (
     surface,
     workflowByRef,
     callNavs,
+    nodeHeat,
   )
 }
 export const __testToFlowEdges = toFlowEdges

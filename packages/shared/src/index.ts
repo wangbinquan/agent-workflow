@@ -37,6 +37,10 @@ export * from './schemas/review'
 export * from './schemas/reviewCollab' // RFC-340
 export * from './schemas/runtime'
 export * from './schemas/observation'
+export * from './schemas/processMetrics' // RFC-616
+export * from './processCause' // RFC-616
+export * from './processHeat' // RFC-616
+export * from './workgroupHostRun' // RFC-616
 export * from './schemas/mcp'
 export * from './schemas/mcpProbe'
 export * from './schemas/mcpRuntimeTest' // RFC-238

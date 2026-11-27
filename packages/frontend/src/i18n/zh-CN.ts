@@ -13,6 +13,7 @@ import type {
 import { buildPermissionCatalogResources } from './permissionCatalog'
 import { observationPricingZh, type ObservationPricingMessages } from './observationPricing'
 import { runObservabilityZh, type RunObservabilityMessages } from './runObservability'
+import { processMetricsZh, type ProcessMetricsMessages } from './processMetrics'
 import { mindmapZh, type MindmapMessages } from './mindmap'
 import { markdownEditorZh, type MarkdownEditorMessages } from './markdownEditor'
 import { executionZh, type ExecutionMessages } from './execution'
@@ -27,6 +28,7 @@ export interface Resources {
   mindmap: MindmapMessages
   observationPricing: ObservationPricingMessages
   runObservability: RunObservabilityMessages
+  processMetrics: ProcessMetricsMessages
   permissions: ReturnType<typeof buildPermissionCatalogResources>
   tabBar: {
     scrollStart: string
@@ -2457,6 +2459,13 @@ export interface Resources {
     memoryDistillRuntimeHint: string
     changeNarrativeRuntimeLabel: string
     changeNarrativeRuntimeHint: string
+    // RFC-616 §9.4 — process metrics text-theme analysis: runtime + trigger mode.
+    processInsightRuntimeLabel: string
+    processInsightRuntimeHint: string
+    processInsightScheduleLabel: string
+    processInsightScheduleHint: string
+    processInsightScheduleManual: string
+    processInsightScheduleWeekly: string
     runtimeInherit: string
     // RFC-156 — "System agents" tab: per-card titles + one-line role hints for the
     // internal framework agents, plus the fusion card's own runtime field.
@@ -2469,6 +2478,8 @@ export interface Resources {
       mergeHint: string
       narrativeTitle: string
       narrativeHint: string
+      processInsightTitle: string
+      processInsightHint: string
       intentTitle: string
       intentHint: string
       intentRuntime: string
@@ -3339,6 +3350,8 @@ export interface Resources {
     renameActionHint: string
     aclActionHint: string
     deleteActionHint: string
+    /** RFC-616 — description of the "View metrics" action in the More dialog. */
+    metricsActionHint: string
     memberSave: string
     saveAll: string
     finishAddingBeforeSave: string
@@ -4480,6 +4493,8 @@ export interface Resources {
     renameActionHint: string
     aclActionHint: string
     deleteActionHint: string
+    /** RFC-616 — description of the "View metrics" action in the More dialog. */
+    metricsActionHint: string
     deleteTitle: string
     deleteDescription: string
     actionDraftChanged: string
@@ -6828,6 +6843,7 @@ export const zhCN: Resources = {
   mindmap: mindmapZh,
   observationPricing: observationPricingZh,
   runObservability: runObservabilityZh,
+  processMetrics: processMetricsZh,
   presence: {
     online: '在线',
     offline: '离线',
@@ -9609,6 +9625,13 @@ export const zhCN: Resources = {
     changeNarrativeRuntimeLabel: '变更导读运行时',
     changeNarrativeRuntimeHint:
       '任务「结构变更」页签生成 AI 导读所用的运行时 profile；留空则继承全局默认运行时。',
+    processInsightRuntimeLabel: '过程主题分析运行时',
+    processInsightRuntimeHint: '过程度量里的文本主题分析用哪个运行时；留空用默认运行时。',
+    processInsightScheduleLabel: '过程主题分析的触发方式',
+    processInsightScheduleHint:
+      '手动：在度量页点“分析”才运行。每周定时：每周为近 30 天内有新任务的工作流、工作组和数字员工各分析一次，消耗计入系统执行。',
+    processInsightScheduleManual: '手动',
+    processInsightScheduleWeekly: '每周定时',
     systemAgents: {
       commitPushTitle: '提交推送',
       commitPushHint: '自动提交时生成 commit message、修复被拒推送的内置 agent（RFC-075）。',
@@ -9618,6 +9641,9 @@ export const zhCN: Resources = {
       mergeHint: '按节点隔离合并回主干、遇真实三方冲突时解决冲突的内置 agent（RFC-130）。',
       narrativeTitle: '变更导读',
       narrativeHint: '为任务代码变更生成总述、分组一句话与推荐阅读顺序的内置 agent（RFC-239）。',
+      processInsightTitle: '过程主题分析',
+      processInsightHint:
+        '把过程度量里的评审意见、反问问答和人的介入内容归纳成主题的内置 agent（RFC-616）。',
       intentTitle: '意图构建',
       intentHint: '把自然语言目标转成工作流/工作组/代理/技能变更集的内置 agent（RFC-234）。',
       intentRuntime: '意图构建运行时',
@@ -10798,6 +10824,7 @@ export const zhCN: Resources = {
     renameActionHint: '修改工作组名称与描述。',
     aclActionHint: '查看可见性、成员与所有者。',
     deleteActionHint: '永久删除这个工作组。',
+    metricsActionHint: '查看这个工作组各轮次的时长、Token 消耗与人工介入。',
     memberSave: '保存成员',
     saveAll: '保存全部更改',
     finishAddingBeforeSave: '请先完成或清空当前新增成员草稿。',
@@ -12245,6 +12272,7 @@ export const zhCN: Resources = {
     renameActionHint: '修改工作流名称与描述。',
     aclActionHint: '查看可见性、成员与所有者。',
     deleteActionHint: '永久删除这个工作流。',
+    metricsActionHint: '查看这个工作流各阶段的时长、Token 消耗与人工介入。',
     deleteTitle: '删除工作流',
     deleteDescription: '删除版本 {{version}} 的 {{name}}？此操作无法撤销。',
     actionDraftChanged: '操作期间草稿发生了变化。请确认当前保存状态后重试。',

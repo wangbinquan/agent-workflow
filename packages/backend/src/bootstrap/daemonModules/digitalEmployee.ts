@@ -8,6 +8,7 @@ import {
   composeDigitalEmployeePlatformInventoryParticipant,
   composeDigitalEmployeeBootstrapReadsFor,
   composeDigitalEmployeeTaskCatalogSource,
+  createProcessEmployeeFacts,
   canManageCaseMembers,
   type DigitalEmployeeAclResourceType,
   type DigitalEmployeeRoutePersistence,
@@ -156,6 +157,16 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
   const { db, appHome, resources, repository, integration, taskExecution, log } = input
   const graphDeliveryTypePackage =
     composeGraphDeliveryLifecycleTypePackage(graphEmployeeTypePackage)
+  // RFC-616: the module and its process facts are handed the same registered types.
+  const typePackages = [
+    developmentEmployeeTypePackage,
+    graphEmployeeTypePackage,
+    graphDeliveryTypePackage,
+  ]
+  const typeCodecs = [
+    developmentEmployeeRuntimeCodec,
+    composeGraphDeliveryLifecycleRuntimeCodec(graphEmployeeRuntimeCodec),
+  ]
   const employeePrograms = input.adapters.employeePrograms
   const programToolSource = createArtifactProgramToolSource(employeePrograms)
   const executionContracts = composeExecutionContract({
@@ -353,11 +364,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     appHome,
     writerCutover,
     programArtifacts: employeePrograms,
-    typePackages: [
-      developmentEmployeeTypePackage,
-      graphEmployeeTypePackage,
-      graphDeliveryTypePackage,
-    ],
+    typePackages,
     typePackageDriftPolicy: input.typePackageDriftPolicy,
     platformTools,
     executionContracts,
@@ -379,10 +386,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     connectionCatalog: integration.developmentToolConnections,
     runtime: {
       eventCenter: integration.eventCenter.participant,
-      codecs: [
-        developmentEmployeeRuntimeCodec,
-        composeGraphDeliveryLifecycleRuntimeCodec(graphEmployeeRuntimeCodec),
-      ],
+      codecs: typeCodecs,
       detailProjectionParticipants: [caseDetailProjection, graph.detailProjection],
       reactionExecution,
       platformWorkItems: {
@@ -474,6 +478,8 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     activityOperations: composeDevelopmentActivityOperations(module.runtime.worker),
     routePersistence,
     reactionExecution,
+    // RFC-616: case, round and type facts offered to process metrics.
+    processFacts: createProcessEmployeeFacts(db, { typePackages, contextCodecs: typeCodecs }),
   })
 }
 export type DaemonDigitalEmployeeModules = ReturnType<typeof composeDaemonDigitalEmployeeModules>

@@ -28,6 +28,14 @@ import { composeRunObservation } from '@/modules/run-observability/composition/r
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import {
+  createProcessTaskFacts,
+  createProcessWorkgroupFacts,
+} from '@/modules/task-execution/composition/processFacts'
+import { composeProcessInsightRunner } from '@/modules/task-execution/composition/processInsightRunner'
+import { createProcessGateFacts } from '@/modules/collaboration/composition/processFacts'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/ownerIdentityQueries'
+import type { ProcessMetrics } from '@/modules/run-observability/composition/processMetrics'
+import {
   composeWebhookDeliveryReplay,
   composeWebhookIngressTransport,
 } from '@/modules/integration/composition/webhookIngress'
@@ -89,6 +97,7 @@ import {
 import {
   composeMcpProbeOperations,
   createAgentExecutionQueries,
+  createWorkflowExecutionQueries,
   mcpOperationCoordinator,
 } from '@/modules/resource-catalog/composition'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
@@ -455,13 +464,47 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     memories: memoryCatalog,
     tasks: taskExecutionProvider.overview,
   })
+  // RFC-616: process metrics read each owning context's facts through the platform contract; account names and
+  // workflow names are read live, and the text-theme analysis runs on the same system-agent family as narratives.
+  const processOwners = composeOwnerIdentityQueries(input.db)
+  const processWorkflows = createWorkflowExecutionQueries(input.db)
+  const observability = composeRunObservation({
+    db: input.db,
+    tasks: createTaskObservationFacts(input.db),
+    runtimes: runtimeManagement.observations,
+    process: {
+      tasks: createProcessTaskFacts(input.db),
+      workgroups: createProcessWorkgroupFacts(input.db),
+      gates: createProcessGateFacts(input.db, taskExecutionParticipants),
+      employees: digitalEmployeeModules.processFacts,
+      events: integrationModules.processSubjectEvents,
+      identities: {
+        identities: async (userIds) => [
+          ...(await processOwners.loadOwnerIdentities(userIds)).values(),
+        ],
+      },
+      workflowNames: {
+        names: async (workflowIds) =>
+          new Map((await processWorkflows.summaries(workflowIds)).map((row) => [row.id, row.name])),
+      },
+      runner: composeProcessInsightRunner({
+        registry: core.runtimeRegistry,
+        binding: narrativeSystemAgentBinding,
+        runtimeSelection: async () => {
+          const current = await configuration.read()
+          return {
+            runtimeName: current.processInsightRuntime ?? null,
+            defaultRuntime: current.defaultRuntime ?? null,
+          }
+        },
+      }),
+      schedule: async () => (await configuration.read()).processInsightSchedule ?? 'manual',
+      writable: () => core.sourceWriteWindow.writable(),
+    },
+  })
   const platformRoutes: ProviderAppCompositionInput<SelectedDaemonProviderCore<P>>['platform'] =
     Object.freeze({
-      observability: composeRunObservation({
-        db: input.db,
-        tasks: createTaskObservationFacts(input.db),
-        runtimes: runtimeManagement.observations,
-      }),
+      observability,
       config: Object.freeze({
         configuration: applicationConfiguration.composeCommands({
           runtimeRegistry:
@@ -743,6 +786,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
   return Object.freeze({
     composition,
     resourcePackageApplyActivity: resourcePackageBinding.applyActivity,
+    processInsights: observability.process.insights,
   })
 }
 
@@ -801,4 +845,6 @@ function composeConfigConcurrencyHotApply(
 export interface ProviderAppComposition<P extends DatabaseProvider> {
   readonly composition: ProviderAppCompositionInput<SelectedDaemonProviderCore<P>>
   readonly resourcePackageApplyActivity: ResourcePackageApplyActivityQuery
+  /** RFC-616: the queue of text-theme analyses, worked by the session's background job. */
+  readonly processInsights: ProcessMetrics['insights']
 }

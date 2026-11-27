@@ -40,4 +40,8 @@ export const developmentEmployeeTypePackage: EmployeeTypePackageRegistration = {
     const upgraded = upgradeLegacyDevelopmentProgram(request)
     return upgraded === null ? null : JSON.stringify(upgraded)
   },
+  // RFC-616: which work items are rework, so merged cases can be judged as passed first time or not.
+  describeProcessMetricsJson() {
+    return JSON.stringify(runtimePackage.describeProcessMetrics())
+  },
 }
