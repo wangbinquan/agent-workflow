@@ -8,16 +8,16 @@
 | # | 内容 | 依赖 | 主要位置 |
 | --- | --- | --- | --- |
 | RFC-626-T0 | 复核：design §3.2～§3.4 中标「调研」的结论逐项对源码复核一遍，与文档不符的先改文档再实现 | — | `design.md` |
-| RFC-626-T1 | 环境前置检查：结构识别提前、按有效数据量估算空间、`config.json` 合法性；拒绝时不留工件 | — | `system-operations/application/epochSwitch/autoUpgrade.ts`、`domain/epochSwitch/capacity.ts`、`platform/persistence/migration/freeze/capacity.ts` |
-| RFC-626-T2 | 源身份与轻量核对：内容身份各算一次，断言改用变更标记，标记不一致时回退重算；去掉三处纯重复 | — | `platform/persistence/migration/sqliteSourceReader.ts`、`postgresqlSourceReader.ts`、`freeze/sourceAccess.ts`、`offlineSourceUpgrade.ts` |
-| RFC-626-T3 | 自动模式单遍编排：`direct` 开关、前置计划、执行步顺序、实际结果计划与再批准、收尾只做一次 | T2 | `system-operations/application/epochSwitch/planner.ts`、`runner.ts`、`autoUpgrade.ts`、`infrastructure/epochSwitch/targetGeneration.ts`、`bootstrap/epochMigration.ts` |
+| RFC-626-T1 | 环境前置检查：挪到任何写入之前的只读检查（`config.json`、结构识别不数行、有效数据量估算空间、PostgreSQL 能否建库、旧版搬迁操作未完成）；拒绝时不写任何东西 | — | `system-operations/application/epochSwitch/autoUpgrade.ts`、`domain/epochSwitch/capacity.ts`、`platform/persistence/migration/freeze/capacity.ts` |
+| RFC-626-T2 | 源身份与轻量核对：内容身份各算一次，断言改用变更标记，标记不一致时回退重算；去掉三处纯重复；持久的冻结记录（发布顺序、重开、清理）；PostgreSQL 自动模式的 scratch 拷贝不跑业务不变量检查；旧库自带外键悬空行不再让冻结失败 | — | `platform/persistence/migration/sqliteSourceReader.ts`、`postgresqlSourceReader.ts`、`freeze/sourceAccess.ts`、`offlineSourceUpgrade.ts` |
+| RFC-626-T3 | 自动模式单遍编排：`direct` 开关、前置计划、执行步顺序、实际结果计划与再批准（评估与批准按批准摘要幂等复用）、收尾只做一次 | T2 | `system-operations/application/epochSwitch/planner.ts`、`runner.ts`、`autoUpgrade.ts`、`infrastructure/epochSwitch/targetGeneration.ts`、`bootstrap/epochMigration.ts` |
 | RFC-626-T4 | 转换引擎记账提速：排序键预计算、行摘要入暂存列、紧凑暂存编码、sink 免重算、规范化 JSON 键序缓存；暂存库摘要改定义并递增转换器版本 | — | `platform/persistence/migration/conversion/receipts.ts`、`engine.ts`、`staging.ts`、`platform/persistence/schema/canonical.ts`、`infrastructure/epochSwitch/conversionSink.ts` |
 | RFC-626-T5 | 内容盘点：单次序列化、遍历减少系统调用、目录前缀索引 | T2 | `platform/content/inventory/manifest.ts`、`freezeInventory.ts`、`databaseTrees.ts` |
 | RFC-626-T6 | 备份只做一份并直接取冻结副本，摘要在进程内复用；工件库登记与取回改用硬链接 | T3 | `platform/persistence/migration/freeze/backup.ts`、`infrastructure/epochSwitch/backupAdapter.ts`、`fileJournal.ts` |
 | RFC-626-T7 | PostgreSQL：拷贝按参数上限分批、装载批大小按库类型、单元元数据合并写、RFC-349 归档目录校验缓存 | T2 | `platform/persistence/migration/offlineSourceUpgrade.ts`、`target/loader.ts`、`infrastructure/epochSwitch/metaStore.ts`、`conversion/postgresqlArchiveSource.ts` |
-| RFC-626-T8 | 结束任务：引擎的发现过程与不动点、`settlers` 合同、三个模块的 settler、结束集合落盘与重放 | T4 | `conversion/engine.ts`、`conversion/rule.ts`、`conversion/readSource.ts`、`modules/task-execution/infrastructure/migration/`、`modules/collaboration/infrastructure/migration/`、`modules/system-operations/infrastructure/migration/` |
+| RFC-626-T8 | 结束任务：`prepareConversion` / `run` 拆分、`blockExecutable` 与 `settles.tasksOf`（内容规则与阻塞判定共用同一推导）、发现过程与不动点、`settlement` 合同（三个模块的 settler 与 task-execution 的级联扩展）、结束集合进入转换计划与重放 | T4 | `conversion/engine.ts`、`conversion/rule.ts`、`conversion/readSource.ts`、`modules/task-execution/infrastructure/migration/`、`modules/collaboration/infrastructure/migration/`、`modules/system-operations/infrastructure/migration/` |
 | RFC-626-T9 | 新结束原因：`shared` 常量、前端原因表与中英文案、数字员工视为停止 | — | `packages/shared/src/lifecycle.ts`、`packages/frontend/src/lib/task-failure.ts`、`i18n`、`modules/digital-employee/application/digitalEmployeeExecution.ts` |
-| RFC-626-T10 | 封存：收集器的行级封存、目标契约失败、装载拒绝回报与单元重试、收尾时悬空行处理与对账 | T4 | `conversion/receipts.ts`、`engine.ts`、`conversionSink.ts`、`target/finalize.ts`、`infrastructure/epochSwitch/validation.ts` |
+| RFC-626-T10 | 封存：收集器的行级封存、目标契约失败；装载拒绝的回报、单元重试与续做时按运行记录复现；收尾处置（记录、与删除同事务、幂等）与目标行数对账；回执、报告、追溯合并两阶段结果 | T4 | `conversion/receipts.ts`、`engine.ts`、`conversionSink.ts`、`target/finalize.ts`、`infrastructure/epochSwitch/validation.ts` |
 | RFC-626-T11 | 逐类保留处置：design §3.4 各行的规则改动（内容；技能的隔离、封存与操作记录了结，`skill_operations` / `skill_operation_locks` 并入技能规则；缓存仓库与按地址关联；定时任务停用；运行时默认值；融合与记忆；代码历史自动确认；代理引用；悬空引用；任务属主；旧任务书；事件族切换） | T0、T10 | 各模块 `infrastructure/migration/` 与 `platform/content/migration/`、`platform/persistence/migration/archives/` |
 | RFC-626-T12 | 报告：`ConversionSummary.resolutions`、计划文件字段、回执、完成日志、`db migration status` | T8、T10、T11 | `conversion/sink.ts`、`domain/epochSwitch/documents.ts`、`planDocument.ts`、`autoUpgrade.ts`、`status.ts` |
 | RFC-626-T13 | 内存与磁盘：表回执流式求摘要、来源到目标的去重计数入暂存库、清单只留一份 | T4、T5 | `conversion/engine.ts`、`staging.ts`、`content/inventory/manifest.ts` |
@@ -31,7 +31,13 @@
 ## 冲突面
 
 - `platform/persistence/migration/conversion/**` 与 `modules/system-operations/**/epochSwitch/**` 是 RFC-395 / RFC-398 的主体，
-  有源码文本守卫与清单（只读打开的允许清单、`tests/architecture` 的若干账本）。改动的文件若在账本里，同一提交内更新账本。
+  有源码文本守卫与清单。改动的文件若在账本里，同一提交内更新账本。设计门点名会被触及的：
+  - `tests/rfc398-wal-sidecar-open.test.ts` 的只读打开精确清单（T2 改动读取器的打开点）；
+  - `tests/architecture/rfc395-v2-coverage.test.ts` 的「每张表唯一规则归属」与通用复制表数量（T11 把两张技能操作表从
+    `conversion/generic/tables.ts` 移到技能规则，两处须同步）；
+  - `tests/rfc395-v2-core-staging.test.ts` 的 Unicode 顺序断言（T4 改暂存编码与摘要）；
+  - `tests/architecture/rfc395-v1-frozen-source.test.ts` 的冻结声明与文件摘要守卫——冻结的历史文件不能改，本 RFC 不碰它们；
+  - 「文件恰好声明这些名字」一类的清单（例如 RFC-508 的那一份）：新增顶层声明前先看有没有。
 - 57 个测试文件按现有定义重算转换摘要；T4 保持这些定义不变，暂存库摘要除外（相关用例随定义更新）。
 - RFC-294 的后续波次仍在搬迁文件；提交前逐个确认路径仍在原处，遇到同一函数被并发改动时先停下问用户。
 - `CONVERTER_VERSION` 递增会影响含该值的快照与种子，随 T14 一并更新。
@@ -54,7 +60,7 @@
 - [ ] 2 内容与技能缺失不拒绝：M3 数据自动升级成功，内容登记为不存在、缺目录的技能为隔离并列入报告；放回目录后恢复
 - [ ] 3 封存与其它处置：A4～A10 各一份旧库，结果与 proposal §5 一致
 - [ ] 3a 升级后能启动：每一份升级后的库都能启动服务并通过健康检查
-- [ ] 4 环境前置：三种情况 10 秒内退出，文案具体，无残留
+- [ ] 4 环境前置：四种情况 10 秒内退出，文案具体，家目录与 PostgreSQL 上无新增物；结构检查不做全表计数
 - [ ] 5 耗时：参考数据 SQLite ≤ 6 分钟、PostgreSQL ≤ 15 分钟；各步骤各出现一次
 - [ ] 6 资源：峰值内存 ≤ 4 GB；新增磁盘占用峰值 ≤ 8 GB、留存 ≤ 5 GB；前置检查给出的所需空间 ≤ 10 GB
 - [ ] 7 PostgreSQL `tasks` 1000 行、2000 行升级成功
@@ -62,5 +68,6 @@
 - [ ] 9 中断续做：三处位置
 - [ ] 10 人工流程既有用例全部通过
 - [ ] 11 发布版升级矩阵 L1 / L2 通过，CI 全绿
-- [ ] 设计门处置完成（design §9）
+- [x] 设计门第一轮处置完成（design §9.1：1 项 P0、8 项 P1、4 项 P2，全部采纳）
+- [ ] 设计门复核通过
 - [ ] 实现门处置完成
