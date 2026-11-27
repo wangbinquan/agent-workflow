@@ -35,3 +35,21 @@ artifact总数、plan/timing分母、完整平台名称、输出provenance的sou
 - [larger runners](https://docs.github.com/en/actions/concepts/runners/larger-runners)：组织Team/Enterprise资格与收费，不作为个人仓库的免配置替换。
 - [矩阵并发](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations)：max-parallel约束执行并发，不减少runner申请次数。
 - 本轮7run原始JSON、并发区间、官方capacity annotation与分析脚本保存在任务临时证据目录；来源run ID在proposal逐项列明。
+
+## 托管超时后的后端权重修正
+
+首轮新macOS拓扑通过，但既有后端第10片在同内容、普遍变慢条件下耗尽15分钟。修正更新`.github/backend-test-timings.json`及配套`.source.json`，并增加复用严格collector的手动多来源数据准备器及回归；不触及生产源码、业务测试或运行命令。采用完整成功6c92/run45846353277与d8385a/run45893530203的逐文件较大实测值，分别验证44份产物及各自精确source全集。最终投影到当前已提交3108文件，全部有测量且无removed；未提交在制文件不得混入数据分析。
+
+继续Bun1.4.3原生连续加权44片算法；以相同完整green文件成本对照新旧边界及预算敏感性，区分历史模型与hosted结果。每片文件内容与全集覆盖由原生分片语义保持，现有source完整性回归复用；集中验证检查新数据provenance、准确文件集合、原生边界与原44片/15分钟接线。最终仍由新exact-SHA完整CI验收，保留首轮失败与macOS retry证据，不直接重跑原失败job追绿。
+
+### 严格多来源数据准备器
+
+单源d838经跨green成本复核后暂缓，改为两个完整成功来源的逐文件最大值。新增手动数据准备CLI，复用现有collector读取完整raw artifact目录：先分别验证整个source run成功、实际source SHA workflow、success-only rerun upload规则、原44片与精确source tree测量全集，再允许进入组合。失败run/缺片/重复/外来路径/无效时长任一出现均拒绝，不从review摘要猜完整性。自动CI collector继续只输出单次真实测量，不自动发布组合权重。
+
+抽取现有backend collector的source读取为可复用函数，保留原CLI参数/输出语义；新CLI接受输出路径及明确的artifact目录/run ID对，至少两个不同成功run。纯组合器验证每份完整source数据与元信息，按目标已提交SHA的测试文件全集投影；每个值必须精确等于一个source的该文件测量，取最大值、相等时选run ID较大者，不依赖参数顺序。未被任何source测量的新文件仍不造权重，记录unmeasured并使用原Bun默认值；本候选3108文件全部有测量。旧来源中已移除的文件记录removed，不复活测试。
+
+组合输出保持Bun原生version1/files格式；配套source元数据明确aggregation=per-file-maximum、目标SHA、各完整来源原SHA/run/shards/files/总测量、每个文件选中的来源、合成估值总和及未知/移除清单，不冒充某一次完整run。数据输出只写指定审阅路径，root审阅后精确复制入库。
+
+回归覆盖两个完整source、输入顺序稳定/相等取较新、旧新文件集合、每个数值来源、无人工系数、missing/duplicate/invalid source与duration拒绝、失败source/不完整片继续由原严格collector拒绝；原单来源CLI必须保持兼容。全部新实现/测试写齐后集中执行相关范围，真实88份artifact CLI回放核验，独立功能门与新hosted结果仍必需。
+
+组合与来源读取回归加入现有`ci-backend-timing-refresh.test.ts`，不新增测试文件；因此修正候选的测试路径全集仍为3108，生成数据可以按当前已提交目标tree完成，无须为了权重生成拆分本地提交。新增CLI属于scripts/ci，不增加后端测试路径。

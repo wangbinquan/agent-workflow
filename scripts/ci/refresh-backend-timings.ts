@@ -14,6 +14,36 @@ export interface TimingShard {
   data: unknown
 }
 
+export interface BackendTimingProvenance {
+  sourceRun: number
+  sourceSha: string
+  sourceRepository: string
+  sourceWorkflowPath: string
+  finalRunAttempt: number
+  sourceShards: number
+  sourceFiles: number
+  measuredMilliseconds: number
+}
+
+export interface BackendTimingSource {
+  timings: BackendTimings
+  expectedFiles: readonly string[]
+  provenance: BackendTimingProvenance
+}
+
+export interface BackendTimingSourceRequest {
+  artifactsDirectory: string
+  runId: number
+  repository: string
+}
+
+export interface BackendTimingSourceReader {
+  readRun(repository: string, runId: number): unknown
+  readSourceFile(sourceSha: string, path: string): string
+  readSourceTests(sourceSha: string): readonly string[]
+  readShards(artifactsDirectory: string): readonly TimingShard[]
+}
+
 const backendTestPath = /^packages\/backend\/tests\/(?:[^/]+\/)*[^/]+\.(?:test|spec)\.ts$/
 
 function validPath(path: string): boolean {
@@ -25,6 +55,17 @@ function validPath(path: string): boolean {
   )
 }
 
+export function assertBackendTestPopulation(expectedFiles: readonly string[]): Set<string> {
+  if (!Array.isArray(expectedFiles)) throw new Error('Source test population must be an array')
+  const expected = new Set(expectedFiles)
+  if (expected.size === 0 || expected.size !== expectedFiles.length)
+    throw new Error('Source test population is empty or duplicated')
+  for (const path of expected)
+    if (typeof path !== 'string' || !validPath(path))
+      throw new Error(`Invalid source path: ${path}`)
+  return expected
+}
+
 /** The source tree, not today's working tree, defines the required measurement population. */
 export function mergeBackendTimings(
   shards: readonly TimingShard[],
@@ -33,10 +74,7 @@ export function mergeBackendTimings(
 ): BackendTimings {
   if (!Number.isInteger(shardCount) || shardCount < 1) throw new Error('Invalid shard count')
   if (shards.length !== shardCount) throw new Error(`Expected ${shardCount} timing shards`)
-  const expected = new Set(expectedFiles)
-  if (expected.size === 0 || expected.size !== expectedFiles.length)
-    throw new Error('Source test population is empty or duplicated')
-  for (const path of expected) if (!validPath(path)) throw new Error(`Invalid source path: ${path}`)
+  const expected = assertBackendTestPopulation(expectedFiles)
   const indices = new Set<number>()
   const files = new Map<string, number>()
   for (const { shard, data } of shards) {
@@ -130,6 +168,47 @@ export function assertSafeBackendTimingUploads(workflow: string, finalAttempt: n
     )
 }
 
+/** Every consumer reads the complete raw source before projecting or composing it. */
+export function readBackendTimingSource(
+  request: BackendTimingSourceRequest,
+  reader: BackendTimingSourceReader,
+): BackendTimingSource {
+  const { artifactsDirectory, runId, repository } = request
+  if (!Number.isSafeInteger(runId) || runId < 1)
+    throw new Error('Invalid backend timing source run ID')
+  const sourceRun = reader.readRun(repository, runId)
+  const sourceSha = assertSuccessfulTimingSource(sourceRun, repository, runId)
+  const finalRunAttempt = (sourceRun as { run_attempt: number }).run_attempt
+  const sourceDefinition = resolveCiWorkSource((path) => reader.readSourceFile(sourceSha, path))
+  const sourceWorkflow = sourceDefinition.workflow
+  assertSafeBackendTimingUploads(sourceWorkflow, finalRunAttempt)
+  const backendJob = sourceWorkflow
+    .split('\n  test-backend:')[1]
+    ?.split('\n  test-backend-postgresql:')[0]
+  const countText = backendJob?.match(/\n\s+shards: \[(\d+)\]/)?.[1]
+  if (!countText) throw new Error('Source backend shard matrix is missing')
+  const expectedFiles = [...reader.readSourceTests(sourceSha)]
+  const timings = mergeBackendTimings(
+    reader.readShards(artifactsDirectory),
+    expectedFiles,
+    Number(countText),
+  )
+  return {
+    timings,
+    expectedFiles,
+    provenance: {
+      sourceRun: runId,
+      sourceSha,
+      sourceRepository: repository,
+      sourceWorkflowPath: sourceDefinition.path,
+      finalRunAttempt,
+      sourceShards: Number(countText),
+      sourceFiles: Object.keys(timings.files).length,
+      measuredMilliseconds: Object.values(timings.files).reduce((sum, ms) => sum + ms, 0),
+    },
+  }
+}
+
 function command(program: string, args: string[]): string {
   const result = spawnSync(program, args, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })
   if (result.error) throw result.error
@@ -143,6 +222,37 @@ function treeTests(ref: string): string[] {
     .filter((path) => backendTestPath.test(path))
 }
 
+/** Capture the committed target once; later source reads must not follow a moving HEAD. */
+export function readBackendTimingTarget(): { targetSha: string; files: string[] } {
+  const targetSha = command('git', ['rev-parse', 'HEAD']).trim()
+  return { targetSha, files: treeTests(targetSha) }
+}
+
+export function loadBackendTimingSource(
+  artifactsDirectory: string,
+  runId: number,
+  repository: string,
+): BackendTimingSource {
+  return readBackendTimingSource(
+    { artifactsDirectory, runId, repository },
+    {
+      readRun: (repository, runId) =>
+        JSON.parse(command('gh', ['api', `repos/${repository}/actions/runs/${runId}`])) as unknown,
+      readSourceFile: (sourceSha, path) => command('git', ['show', `${sourceSha}:${path}`]),
+      readSourceTests: treeTests,
+      readShards: (directory) =>
+        readdirSync(directory, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory() && /^backend-test-timings-\d+$/.test(entry.name))
+          .map((entry) => ({
+            shard: Number(entry.name.slice('backend-test-timings-'.length)),
+            data: JSON.parse(
+              readFileSync(join(directory, entry.name, 'backend-test-timings.json'), 'utf8'),
+            ) as unknown,
+          })),
+    },
+  )
+}
+
 if (import.meta.main) {
   const [artifacts, runArg, output] = process.argv.slice(2)
   if (!artifacts || !runArg || !/^\d+$/.test(runArg) || !output)
@@ -151,41 +261,13 @@ if (import.meta.main) {
     )
   const repository = process.env.GITHUB_REPOSITORY ?? 'wangbinquan/agent-workflow'
   const runId = Number(runArg)
-  const sourceRun = JSON.parse(command('gh', ['api', `repos/${repository}/actions/runs/${runId}`]))
-  const sourceSha = assertSuccessfulTimingSource(sourceRun, repository, runId)
-  // The checked-out source workflow is authoritative for the expected matrix size.
-  const sourceDefinition = resolveCiWorkSource((path) =>
-    command('git', ['show', `${sourceSha}:${path}`]),
-  )
-  const sourceWorkflow = sourceDefinition.workflow
-  assertSafeBackendTimingUploads(sourceWorkflow, sourceRun.run_attempt)
-  const backendJob = sourceWorkflow
-    .split('\n  test-backend:')[1]
-    ?.split('\n  test-backend-postgresql:')[0]
-  const countText = backendJob?.match(/\n\s+shards: \[(\d+)\]/)?.[1]
-  if (!countText) throw new Error('Source backend shard matrix is missing')
-  const shards = readdirSync(artifacts, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && /^backend-test-timings-\d+$/.test(entry.name))
-    .map((entry) => ({
-      shard: Number(entry.name.slice('backend-test-timings-'.length)),
-      data: JSON.parse(
-        readFileSync(join(artifacts, entry.name, 'backend-test-timings.json'), 'utf8'),
-      ) as unknown,
-    }))
-  const merged = mergeBackendTimings(shards, treeTests(sourceSha), Number(countText))
-  const projected = projectBackendTimings(merged, treeTests('HEAD'))
+  const source = loadBackendTimingSource(artifacts, runId, repository)
+  const projected = projectBackendTimings(source.timings, treeTests('HEAD'))
   const destination = resolve(output)
   mkdirSync(dirname(destination), { recursive: true })
   writeFileSync(destination, `${JSON.stringify(projected.timings, null, 2)}\n`)
   const provenance = {
-    sourceRun: runId,
-    sourceSha,
-    sourceRepository: repository,
-    sourceWorkflowPath: sourceDefinition.path,
-    finalRunAttempt: sourceRun.run_attempt,
-    sourceShards: Number(countText),
-    sourceFiles: Object.keys(merged.files).length,
-    measuredMilliseconds: Object.values(merged.files).reduce((sum, ms) => sum + ms, 0),
+    ...source.provenance,
     unmeasured: projected.unmeasured,
     removed: projected.removed,
   }
