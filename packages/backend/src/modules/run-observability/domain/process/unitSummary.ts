@@ -192,6 +192,14 @@ export function timeSplitOf(numbers: readonly ProcessUnitNumbers[]): ProcessTime
 }
 
 /** Waiting ÷ lead time over succeeded units. */
+/**
+ * Some call behind these units had no price: their cost is a lower bound, and a cost of zero
+ * means "not priced", not "free". One rule for the data note of a summary and the rows of a listing.
+ */
+export function anyUnpriced(numbers: readonly ProcessUnitNumbers[]): boolean {
+  return numbers.some((item) => item.facts.usageTotals.unpricedCalls > 0)
+}
+
 export function waitShareOf(numbers: readonly ProcessUnitNumbers[]): number | null {
   const succeeded = succeededOf(numbers)
   return ratio(

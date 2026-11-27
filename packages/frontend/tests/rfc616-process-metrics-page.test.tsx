@@ -120,6 +120,7 @@ function subjectRow(over: Partial<ProcessSubjectRow>): ProcessSubjectRow {
     waitShare: 0.64,
     tokensPerUnit: 2_900_000,
     costNanoPerUnit: 41_200_000_000,
+    unpriced: false,
     interventionsPerUnit: 4.6,
     firstPassRate: 0.31,
     mode: null,
@@ -2322,5 +2323,96 @@ describe('RFC-616 process tab: findings of the visual pass', () => {
     expect(rule('.data-table .process-metrics__name')).toMatch(/min-width: \d+em/)
     // The list sits in the shared viewport, which is what scrolls.
     expect(row.closest('.table-viewport')).not.toBeNull()
+  })
+})
+
+// Found on a real installation with real runtime calls (2026-11-26): no price line was configured
+// there, which is how every installation starts, and every cost on these pages read "¥0.00". Run
+// observation's other tabs never let unpriced tokens read as free (`usageCost`): nothing priced is
+// "未定价", a part priced is "¥x 起". These pages now say the same.
+describe('RFC-616 process tab: a cost without a price', () => {
+  test('the listing says "unpriced" or "from", never a bare zero', async () => {
+    get(`${BASE}/subjects`, () => ({
+      body: subjectList({
+        items: [
+          subjectRow({ subjectId: 'wf-1', name: '没有定价', costNanoPerUnit: 0, unpriced: true }),
+          subjectRow({ subjectId: 'wf-2', name: '部分定价', unpriced: true }),
+          subjectRow({ subjectId: 'wf-3', name: '全部定价' }),
+          // Priced, and it really cost nothing.
+          subjectRow({ subjectId: 'wf-4', name: '免费模型', costNanoPerUnit: 0 }),
+        ],
+      }),
+    }))
+    mount('/observability?tab=process')
+    const table = await screen.findByRole('table', { name: '工作流的过程度量' })
+    const cell = (name: string) => {
+      const row = within(table)
+        .getAllByRole('row')
+        .find((candidate) => candidate.textContent?.startsWith(name))!
+      return within(row).getAllByRole('cell')[5]!.textContent
+    }
+    expect(cell('没有定价')).toBe('未定价')
+    expect(cell('部分定价')).toBe('¥41.20 起')
+    expect(cell('全部定价')).toBe('¥41.20')
+    expect(cell('免费模型')).toBe('¥0.00')
+  })
+
+  test('the overview tile, the cause table and a hint follow the note of the summary', async () => {
+    const template = workflowSummary()
+    get(`${BASE}/subjects/workflow/wf-1`, () => ({
+      body: workflowSummary({
+        note: { ...template.note, unpriced: true },
+        metrics: { ...template.metrics, costNanoPerUnit: { value: 0, baseline: null } },
+        causes: template.causes.map((slice) => ({
+          ...slice,
+          costNano: 0,
+          // One cause that used no tokens at all: it cost nothing, priced or not.
+          tokens: slice.cause === 'other-rerun' ? 0 : slice.tokens,
+        })),
+        hints: [
+          {
+            id: 'rework-cost',
+            severity: 'info',
+            target: 'overview',
+            params: { share: 0.29, tokens: 840_000, costNano: 0 },
+          },
+        ],
+      }),
+    }))
+    mount('/observability?tab=process&kind=workflow&subject=wf-1')
+    await screen.findByRole('heading', { name: '需求到合入', level: 2 })
+    expect(tileText('每任务 Token')).toContain('成本 未定价')
+    const causes = screen.getByRole('table', { name: 'Token 按执行原因' })
+    const rows = within(causes)
+      .getAllByRole('row')
+      .map((row) => row.textContent)
+    expect(rows[1]).toBe('首次执行1.45M未定价50%')
+    expect(rows[5]).toBe('其它重跑（连带、恢复续跑）0¥0.003%')
+    expect(screen.getByText('相当于每个任务约 840K Token、未定价。')).toBeTruthy()
+  })
+
+  test('a task row says it the same way, with the reason on hover', async () => {
+    get(`${BASE}/subjects/workflow/wf-1`, () => ({ body: workflowSummary() }))
+    get(`${BASE}/subjects/workflow/wf-1/units`, () => ({
+      body: unitPage({
+        items: [
+          unitRow({ unitId: 't-1', name: '没有定价的任务', costNano: 0, unpriced: true }),
+          unitRow({ unitId: 't-2', name: '部分定价的任务', unpriced: true }),
+          unitRow({ unitId: 't-3', name: '全部定价的任务' }),
+        ],
+      }),
+    }))
+    mount('/observability?tab=process&kind=workflow&subject=wf-1&view=units')
+    const table = await screen.findByRole('table', { name: '任务明细' })
+    const rowOf = (name: string) =>
+      within(table)
+        .getAllByRole('row')
+        .find((candidate) => candidate.textContent?.includes(name))!
+    expect(within(rowOf('没有定价的任务')).getByText('未定价').getAttribute('title')).toBe(
+      '部分 Token 没有价格，金额为已定价部分',
+    )
+    expect(within(rowOf('部分定价的任务')).getByText('¥33.80 起')).toBeTruthy()
+    expect(rowOf('全部定价的任务').textContent).toContain('¥33.80')
+    expect(rowOf('全部定价的任务').textContent).not.toContain('起')
   })
 })

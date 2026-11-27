@@ -586,6 +586,7 @@ describe('RFC-616 workgroup summary', () => {
       assignmentsPerUnit: 3,
       coordinationShare: 400 / 1_200,
       tokensPerUnit: 600,
+      unpriced: false,
     })
     const page = await queries.units(admin, 'workgroup', 'wg-1', { ...WINDOW, status: 'all' })
     expect(
@@ -1557,6 +1558,7 @@ describe('RFC-616 digital employee summary', () => {
       blockedRate: 2 / 6,
       firstPassRate: 1 / 2,
       tokensPerUnit: 980,
+      unpriced: false,
     })
     const page = await queries.units(admin, 'digital-employee', 'emp-1', {
       ...WINDOW,
@@ -1833,6 +1835,35 @@ describe('RFC-616 comparisons for workgroups and digital employees', () => {
       { revision: 4, units: 1 },
       { revision: 3, units: 5 },
     ])
+  })
+})
+
+// Found on a real installation (2026-11-26): with no price line configured every listing showed
+// "¥0.00". The rows of all three kinds carry the flag; the workflow row is in rfc616-process-queries.
+describe('RFC-616 a listing row whose cost rests on calls without a price', () => {
+  const unpriced = (seed: Partial<FakeProcessData>): Partial<FakeProcessData> => ({
+    ...seed,
+    usage: seed.usage!.map((row, index) =>
+      index === 0 ? { ...row, unpricedCalls: 1, costNano: 0 } : row,
+    ),
+  })
+
+  test('a workgroup', async () => {
+    const list = await queriesOf(unpriced(workgroupScenario())).subjects(admin, {
+      kind: 'workgroup',
+      from: 0,
+      to: 1_000 * H,
+    })
+    expect(list.items.map((row) => [row.subjectId, row.unpriced])).toEqual([['wg-1', true]])
+  })
+
+  test('a digital employee, through the host tasks of its rounds', async () => {
+    const list = await queriesOf(unpriced(employeeScenario())).subjects(admin, {
+      kind: 'digital-employee',
+      from: 0,
+      to: 1_000 * H,
+    })
+    expect(list.items.map((row) => [row.subjectId, row.unpriced])).toEqual([['emp-1', true]])
   })
 })
 

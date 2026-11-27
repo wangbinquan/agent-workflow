@@ -17,6 +17,7 @@ import { unitEnded, type ProcessUnitFacts } from '../../domain/process/model'
 import { statOf, sum } from '../../domain/process/stats'
 import type { StageTotals } from '../../domain/process/stageSummary'
 import {
+  anyUnpriced,
   causeSlicesOf,
   commonMetrics,
   interventionsOf,
@@ -60,7 +61,7 @@ export function dataNoteOf(
     unitsWithoutRuntime: ended.filter((item) => item.time.autoMs === null).length,
     runsWithoutCause: sum(numbers.map((item) => item.facts.runsWithoutCause)),
     usageLowerBound: numbers.some((item) => item.facts.usageTotals.incompleteCalls > 0),
-    unpriced: numbers.some((item) => item.facts.usageTotals.unpricedCalls > 0),
+    unpriced: anyUnpriced(numbers),
   }
 }
 

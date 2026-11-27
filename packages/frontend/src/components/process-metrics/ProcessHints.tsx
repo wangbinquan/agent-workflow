@@ -11,7 +11,7 @@ import type {
 import { Card } from '@/components/Card'
 import { EmptyState } from '@/components/EmptyState'
 import { StatusChip, type StatusChipKind } from '@/components/StatusChip'
-import { cost, decimal, duration, percent, tokens, type Translate } from './processFormat'
+import { decimal, duration, percent, pricedCost, tokens, type Translate } from './processFormat'
 import { stageNamesOf } from './processNames'
 import { viewOfHintTarget, type ProcessView } from './processSearch'
 
@@ -54,7 +54,7 @@ export function hintValues(
     units: String(params.units ?? '—'),
     current: String(params.current ?? 0),
     tokens: tokens(numberOf(params.tokens)),
-    cost: cost(numberOf(params.costNano)),
+    cost: pricedCost(numberOf(params.costNano), summary.note.unpriced, t),
     code: typeof params.code === 'string' ? params.code : '',
   }
 }

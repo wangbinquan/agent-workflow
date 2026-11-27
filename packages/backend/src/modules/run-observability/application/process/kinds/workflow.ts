@@ -25,6 +25,7 @@ import {
 import { stageRowsOf, stageTotalsOf } from '../../../domain/process/stageSummary'
 import { gateSpan, unionLength } from '../../../domain/process/timeline'
 import {
+  anyUnpriced,
   commonMetrics,
   timeSplitOf,
   waitShareOf,
@@ -251,6 +252,7 @@ export function workflowSubjectRows(
       waitShare: waitShareOf(items),
       tokensPerUnit: perUnitMetric(metrics, 'tokensPerUnit'),
       costNanoPerUnit: perUnitMetric(metrics, 'costNanoPerUnit'),
+      unpriced: anyUnpriced(items),
       interventionsPerUnit: perUnitMetric(metrics, 'interventionsPerUnit'),
       firstPassRate: perUnitMetric(metrics, 'firstPassRate'),
       mode: null,

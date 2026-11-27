@@ -24,12 +24,12 @@ import { TrendChart, type TrendChartPoint } from '@/components/TrendChart'
 import { ProcessHints } from './ProcessHints'
 import {
   DASH,
-  cost,
   count,
   decimal,
   duration,
   metricDelta,
   percent,
+  pricedCost,
   timeParts,
   tokens,
   type Translate,
@@ -133,7 +133,10 @@ function CauseTable({ summary }: { summary: ProcessSubjectSummary }) {
               <tr key={slice.cause}>
                 <th scope="row">{t(`processMetrics.cause.${slice.cause}`)}</th>
                 <td className="viz-num">{tokens(slice.tokens)}</td>
-                <td className="viz-num">{cost(slice.costNano)}</td>
+                <td className="viz-num">
+                  {/* A slice with no tokens cost nothing; one with tokens and no price is unpriced. */}
+                  {pricedCost(slice.costNano, summary.note.unpriced && slice.tokens > 0, t)}
+                </td>
                 <td className="viz-num">{percent(slice.durationShare)}</td>
               </tr>
             ))}
@@ -355,7 +358,9 @@ export function ProcessOverview(props: {
       key="tokens"
       label={t('processMetrics.tile.tokens', { per: t(`processMetrics.per.${summary.kind}`) })}
       value={tokens(value('tokensPerUnit'))}
-      detail={t('processMetrics.tile.tokensDetail', { cost: cost(value('costNanoPerUnit')) })}
+      detail={t('processMetrics.tile.tokensDetail', {
+        cost: pricedCost(value('costNanoPerUnit'), summary.note.unpriced, t),
+      })}
       delta={delta('tokensPerUnit')}
     />
   )

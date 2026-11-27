@@ -37,6 +37,7 @@ import {
 import { stageRowsOf, stageTotalsOf } from '../../../domain/process/stageSummary'
 import { mean, median, ratio, statOf, sum } from '../../../domain/process/stats'
 import {
+  anyUnpriced,
   commonMetrics,
   timeSplitOf,
   waitShareOf,
@@ -649,6 +650,7 @@ export function employeeSubjectRows(
       waitShare: waitShareOf(items),
       tokensPerUnit: metrics.tokensPerUnit ?? null,
       costNanoPerUnit: metrics.costNanoPerUnit ?? null,
+      unpriced: anyUnpriced(items),
       interventionsPerUnit: metrics.interventionsPerUnit ?? null,
       firstPassRate: metrics.firstPassRate ?? null,
       mode: null,

@@ -488,16 +488,17 @@ describeEachProvider('RFC-616 process metrics through the composed application',
     const summary = await get<ProcessWorkflowSummary>(
       `${BASE}/subjects/workflow/wf-first?${WINDOW}&tzOffset=0`,
     )
-    expect(summary.note).toMatchObject({ units: 2, unitsWithoutUsage: 0 })
+    // No price line exists, as on every new installation: the cost is flagged, not shown as free.
+    expect(summary.note).toMatchObject({ units: 2, unitsWithoutUsage: 0, unpriced: true })
     expect(summary.metrics.tokensPerUnit?.value).toBe(650)
     expect(summary.stages.find((row) => row.key === 'design')).toMatchObject({
       units: 2,
       tokensPerUnit: 650,
     })
     const list = await get<ProcessSubjectList>(`${BASE}/subjects?kind=workflow&${WINDOW}`)
-    expect(list.items.map((row) => [row.subjectId, row.units, row.tokensPerUnit])).toEqual([
-      ['wf-first', 2, 650],
-    ])
+    expect(
+      list.items.map((row) => [row.subjectId, row.units, row.tokensPerUnit, row.unpriced]),
+    ).toEqual([['wf-first', 2, 650, true]])
     // The same number the task page of run observation shows for each of them.
     const first = await get<ObservationTaskDetail>('/api/observability/tasks/t-first')
     const units = await get<ProcessUnitPage>(`${BASE}/subjects/workflow/wf-first/units?${WINDOW}`)

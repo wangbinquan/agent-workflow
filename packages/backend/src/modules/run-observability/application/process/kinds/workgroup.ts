@@ -47,6 +47,7 @@ import { systemStage, systemStageOf } from '../../../domain/process/stages'
 import { stageRowsOf, stageTotalsOf } from '../../../domain/process/stageSummary'
 import { apportion, mean, ratio, statOf, sum } from '../../../domain/process/stats'
 import {
+  anyUnpriced,
   commonMetrics,
   timeSplitOf,
   waitShareOf,
@@ -830,6 +831,7 @@ export function workgroupSubjectRows(
       waitShare: waitShareOf(items),
       tokensPerUnit: metrics.tokensPerUnit ?? null,
       costNanoPerUnit: metrics.costNanoPerUnit ?? null,
+      unpriced: anyUnpriced(items),
       interventionsPerUnit: metrics.interventionsPerUnit ?? null,
       firstPassRate: metrics.firstPassRate ?? null,
       // Rows are newest first: the listing shows the mode the group runs in now.

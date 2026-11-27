@@ -740,6 +740,8 @@ export interface ProcessSubjectRow {
   readonly waitShare: number | null
   readonly tokensPerUnit: number | null
   readonly costNanoPerUnit: number | null
+  /** Some calls behind the cost had no price: it is a lower bound, and zero means "not priced". */
+  readonly unpriced: boolean
   readonly interventionsPerUnit: number | null
   readonly firstPassRate: number | null
   /** Workgroup only. */

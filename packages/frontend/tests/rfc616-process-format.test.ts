@@ -43,6 +43,7 @@ import {
   coloredWaits,
   metricDelta,
   percent,
+  pricedCost,
   timeLegend,
   timeParts,
   tokens,
@@ -84,6 +85,21 @@ describe('RFC-616 number formats', () => {
     expect(durationSpread(stat(null), t)).toBe('—')
     // …and a real zero is a zero.
     expect([percent(0), decimal(0), tokens(0), count(0, 'zh-CN')]).toEqual(['0%', '0', '0', '0'])
+  })
+
+  // Run observation's rule for a cost (`usageCost`), found missing here on a real installation
+  // without price lines (2026-11-26): unpriced tokens never read as free.
+  test('a cost that rests on unpriced calls is "unpriced" or a lower bound, in both languages', () => {
+    expect(pricedCost(41_200_000_000, false, t)).toBe('¥41.20')
+    expect(pricedCost(0, false, t)).toBe('¥0.00')
+    expect(pricedCost(0, true, t)).toBe('未定价')
+    expect(pricedCost(41_200_000_000, true, t)).toBe('¥41.20 起')
+    expect(pricedCost(null, true, t)).toBe('—')
+    const en = i18n.getFixedT('en-US')
+    expect([pricedCost(0, true, en), pricedCost(41_200_000_000, true, en)]).toEqual([
+      'Unpriced',
+      'From ¥41.20',
+    ])
   })
 
   test('rates, small decimals and compact token counts', () => {

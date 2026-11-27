@@ -56,6 +56,23 @@ export function cost(nano: number | null | undefined): string {
   return nano === null || nano === undefined ? DASH : formatObservationCny(nano)
 }
 
+/**
+ * A cost that may rest on calls without a price, by run observation's own rule (`usageCost`):
+ * unpriced tokens never read as free. Nothing priced reads "unpriced"; a part priced reads as a
+ * lower bound ("from ¥x").
+ */
+export function pricedCost(
+  nano: number | null | undefined,
+  unpriced: boolean,
+  t: Translate,
+): string {
+  if (nano === null || nano === undefined) return DASH
+  if (!unpriced) return formatObservationCny(nano)
+  return nano === 0
+    ? t('runObservability.unpriced')
+    : t('runObservability.partialCost', { cost: formatObservationCny(nano) })
+}
+
 export function duration(ms: number | null | undefined, t: Translate): string {
   return ms === null || ms === undefined ? DASH : durationLabel(Math.round(ms), t)
 }

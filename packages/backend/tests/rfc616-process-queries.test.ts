@@ -661,6 +661,34 @@ describe('RFC-616 scope', () => {
     })
   })
 
+  // Found on a real installation (2026-11-26): no price line was configured, and the listing showed
+  // "¥0.00" for every workflow. A row now carries the flag the summary's data note already had.
+  test('a listing row says when its cost rests on calls without a price', async () => {
+    const priced = await queriesOf().queries.subjects(admin, {
+      kind: 'workflow',
+      from: 0,
+      to: 1_000 * H,
+    })
+    expect(priced.items.map((row) => [row.subjectId, row.unpriced])).toEqual([
+      ['wf-1', false],
+      ['wf-2', false],
+    ])
+
+    const seed = scenario()
+    seed.usage = seed.usage!.map((row) =>
+      row.taskId === 't2' ? { ...row, unpricedCalls: 1, costNano: 0 } : row,
+    )
+    const { queries } = queriesOf(seed)
+    const list = await queries.subjects(admin, { kind: 'workflow', from: 0, to: 1_000 * H })
+    // Only the workflow that t2 belongs to; the other one has no unpriced call.
+    expect(list.items.map((row) => [row.subjectId, row.unpriced])).toEqual([
+      ['wf-1', true],
+      ['wf-2', false],
+    ])
+    const summary = await queries.summary(admin, 'workflow', 'wf-1', WINDOW)
+    expect(summary.note.unpriced).toBe(true)
+  })
+
   test('a task called by such a task makes it count: the calls of the whole unit are its record', async () => {
     const seed = scenario()
     seed.usageSince = 10 * H + M

@@ -580,6 +580,7 @@ test("a digital employee: the overview and the type's own duty map, coloured by 
         waitShare: null,
         tokensPerUnit: 3_200_000,
         costNanoPerUnit: 41_000_000_000,
+        unpriced: false,
         interventionsPerUnit: null,
         firstPassRate: 0.5,
         mode: null,

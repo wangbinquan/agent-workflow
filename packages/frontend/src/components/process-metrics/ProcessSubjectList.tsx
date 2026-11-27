@@ -19,7 +19,15 @@ import { Segmented } from '@/components/Segmented'
 import { TableViewport } from '@/components/TableViewport'
 import type { ObservationWindow } from '@/components/observability/observationClient'
 import { PROCESS_QUERY, processApi } from './processClient'
-import { cost, count, decimal, duration, percent, tokens, type Translate } from './processFormat'
+import {
+  count,
+  decimal,
+  duration,
+  percent,
+  pricedCost,
+  tokens,
+  type Translate,
+} from './processFormat'
 
 interface Column {
   readonly key: string
@@ -37,7 +45,11 @@ const COLUMNS: Readonly<Record<ProcessSubjectKind, readonly Column[]>> = {
     { key: 'leadP50', numeric: true, render: (row, t) => duration(row.leadP50, t) },
     { key: 'waitShare', render: (row) => <MeterBar share={row.waitShare} /> },
     { key: 'tokensPerUnit', numeric: true, render: (row) => tokens(row.tokensPerUnit) },
-    { key: 'costPerUnit', numeric: true, render: (row) => cost(row.costNanoPerUnit) },
+    {
+      key: 'costPerUnit',
+      numeric: true,
+      render: (row, t) => pricedCost(row.costNanoPerUnit, row.unpriced, t),
+    },
     {
       key: 'interventions',
       numeric: true,
@@ -81,7 +93,11 @@ const COLUMNS: Readonly<Record<ProcessSubjectKind, readonly Column[]>> = {
     { key: 'mergeRate', numeric: true, render: (row) => percent(row.mergeRate) },
     { key: 'leadP50', numeric: true, render: (row, t) => duration(row.leadP50, t) },
     { key: 'tokensPerUnit', numeric: true, render: (row) => tokens(row.tokensPerUnit) },
-    { key: 'costPerUnit', numeric: true, render: (row) => cost(row.costNanoPerUnit) },
+    {
+      key: 'costPerUnit',
+      numeric: true,
+      render: (row, t) => pricedCost(row.costNanoPerUnit, row.unpriced, t),
+    },
     { key: 'firstPassRate', numeric: true, render: (row) => percent(row.firstPassRate) },
     { key: 'blockedRate', render: (row) => <MeterBar share={row.blockedRate} /> },
   ],

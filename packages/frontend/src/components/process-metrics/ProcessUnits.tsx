@@ -35,6 +35,7 @@ import {
   duration,
   labelText,
   coloredWaits,
+  pricedCost,
   timeLegend,
   timeParts,
   tokens,
@@ -371,13 +372,13 @@ export function ProcessUnits(props: {
       case 'cost':
         return (
           <>
-            {cost(row.costNano)}
             {row.unpriced ? (
-              <span className="muted" title={t('processMetrics.note.unpriced')}>
-                {' '}
-                +
+              <span title={t('runObservability.partialCostHint')}>
+                {pricedCost(row.costNano, true, t)}
               </span>
-            ) : null}
+            ) : (
+              cost(row.costNano)
+            )}
           </>
         )
       case 'reviewRounds':
