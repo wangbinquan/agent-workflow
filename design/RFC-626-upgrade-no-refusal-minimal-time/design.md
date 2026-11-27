@@ -47,11 +47,11 @@
 
 ```
 前置：  环境检查（秒级，不通过即退出，不留痕）
-计划：  冻结 → 前置计划（只有静态的表到规则映射，不读行）
+计划：  冻结 → 盘点 → 启动事实 → 前置计划（只有静态的表到规则映射，不读行）
 批准（自动）
-执行：  盘点 → 备份 → 启动事实
+执行：  重开冻结副本（常数时间）→ 备份 → 启动事实复核
         建新库 → [发现要结束的任务] → 转换并装载（转不过去的行封存） → 收尾（悬空行封存） → 校验
-        导出回执 → 生成实际结果的计划文件 → 批准（自动）→ 切换 → 自检
+        导出回执 → 生成实际结果的计划文件 → 有新增决定时再批准（自动）→ 切换 → 自检
 ```
 
 状态机（`discovered → planned → backed-up → quiescing → frozen → converting → validated → activation-prepared →
@@ -67,7 +67,7 @@ activated → verified → completed`）与每个阶段落盘的工件名不变�
 
 | 顺序 | 阻塞项的特征 | 自动处置 | 节 |
 | --- | --- | --- | --- |
-| 1 | 指向一个仍可继续的任务（`detail.executableTask`） | **结束该任务**，随后同一批行按「非可继续任务」的既有路径转换 | §3.2 |
+| 1 | 「任务可继续所以阻塞」的六处发出点（§3.2.1） | **结束该任务**，随后同一批行按「非可继续任务」的既有路径转换 | §3.2 |
 | 2 | 规则为它定义了保留办法（内容缺失、技能目录缺失、引用悬空等） | **保留**该行，缺的部分做标记或解除引用 | §3.4 |
 | 3 | 其余行级阻塞项，含目标库不接受的行 | **封存**该行 | §3.3 |
 | 4 | 表级 / 全局阻塞项 | 逐个定义（§3.4）；属于环境的在前置检查里报（§3.5） | |
@@ -75,21 +75,37 @@ activated → verified → completed`）与每个阶段落盘的工件名不变�
 每个决定都留记录：结束的任务、封存的行、标为缺失的内容各有一条迁移记录（`MigrationRecord`，kind `decision`）
 与对应的逐行处置（`RowDisposition`），进入升级报告（§3.7）。
 
-引擎输入增加两个字段（`conversion/plan.ts` 的 `ConversionInput`）：
+引擎输入增加一个字段（`conversion/plan.ts` 的 `ConversionInput`）：`resolution?: 'operator' | 'automatic'`，
+缺省 `operator`，行为与现在完全相同。
 
-```ts
-readonly resolution?: 'operator' | 'automatic'      // 缺省 operator：行为与现在完全相同
-readonly settlements?: readonly TaskSettlement[]    // 重放与续做时传入上一次得到的结束决定
-```
+转换计划（`ConversionPlanSection`）在自动模式下多两个字段：`resolution: 'automatic'` 与 `settlements`（§3.2 得到的结束集合，
+规范排序）。它们进入计划摘要，从而进入运行绑定（`ConversionRunBinding.planDigest`）；人工模式不写这两个字段，计划摘要与现在逐字节相同。
+`trace --replay` 从运行记录里的转换计划取回它们（`bootstrap/epochMigration.ts:290-303` 已是这样重建请求的）。
 
 `ConversionSummary` 增加 `resolutions`（本次转换做出的全部决定，按种类分组）。人工模式下恒为空。
+
+结束集合要在打开目标 sink 之前确定（运行行里登记的转换计划必须与引擎使用的一致，否则 `v3-run-plan-digest-mismatch`），
+所以引擎的入口拆成两步，暂存库在两步之间保持打开：
+
+```ts
+// conversion/engine.ts
+export async function prepareConversion(input: ConversionInput): Promise<PreparedConversion>
+export interface PreparedConversion {
+  readonly plan: ConversionPlanSection          // 自动模式下已含 settlements
+  run(sink: ConversionSink, observer?: ConversionObserver): Promise<ConversionSummary>
+  close(): void
+}
+// 既有入口保持：runConversion(input, sink) = prepare → run → close
+```
+
+`prepareConversion` 做暂存、建查找表，自动模式下再做发现（§3.2.2）；`run` 做其余部分。预演（dry run）与人工模式仍调用既有入口。
 
 ### 3.2 结束任务
 
 #### 3.2.1 哪些任务会被结束
 
 判定不另写一套规则，直接用转换规则自己的判断：**在该任务仍被当作可继续时，规则会不会为它发出阻塞项**。
-这类阻塞项的 `detail.executableTask.taskId` 等于阻塞项的 `taskId`（已核，`remediation.ts:6-17`）。来源共五处（已核 / 调研）：
+这样的发出点共六处（已核 / 调研），它们的共同形状是「任务可继续才阻塞，否则走不阻塞的路径」：
 
 | 来源 | 位置 | 情形 |
 | --- | --- | --- |
@@ -101,28 +117,50 @@ readonly settlements?: readonly TaskSettlement[]    // 重放与续做时传入�
 | 必需内容 | `platform/content/migration/receipts.ts:78-91` | 该任务的必需内容文件不在磁盘上（§3.4 第 1 行） |
 
 这些规则在任务**不可继续**时本来就走不阻塞的路径（保留为只读历史并登记限制）。所以把任务结束之后，同样的行按既有路径转换，
-转换规则的判断逻辑一行不改。
+转换规则的判断逻辑不改。
+
+六处里只有前两处在阻塞项的 `detail` 里带了 `executableTask`（`remediation.ts:6-17` 据此给出「结束或取消任务」的处理办法）；
+内容那一处带的是 `{evidence, resourceUses}`，所以不能靠 `detail` 的形状识别。为此给规则输出加一个方法，六处各改一个调用：
+
+```ts
+// conversion/rule.ts RuleOutput
+/** 「该任务可继续所以阻塞」。人工模式下等同 block(block)，输出逐字节不变。 */
+blockExecutable(task: { taskId: string; status: string }, block: ConversionBlock): void
+```
+
+自动模式下它不产生阻塞项：发现阶段（§3.2.2）把 `task.taskId` 记入结束集合；正式转换阶段到达它即为内部错误（§3.6）。
 
 #### 3.2.2 发现过程
 
 在暂存与查找表建好之后、打开目标 sink 之前，引擎做一轮**发现**（自动模式才有）：
 
-1. 找出**对任务状态敏感的规则与校验器**：声明的查找表（沿 `dependsOn` 传递）里有任何一个以 `tasks` 为来源的规则，以及认领 `tasks` 的规则。
-   这是静态可判的——规则只能通过声明过的查找表读到别的表（`conversion/lookups.ts:88-98` 的 `restrictLookups` 强制）。
+1. 取出**声明了会结束任务的规则与校验器**。规则与校验器各加一个可选声明：
+
+   ```ts
+   readonly settles?: {
+     /** 该行属于哪个任务。缺省读行上的 task_id（tasks 表读 id）；返回 undefined 表示从行本身判断不了。 */
+     taskOf?(row: SourceRow, lookup: LookupResolver): string | null | undefined
+   }
+   ```
+
+   没有声明 `settles` 的规则或校验器调用 `blockExecutable` 时，收集器抛内部错误（两种模式都抛），
+   所以漏声明会被既有用例直接发现。六处发出点所在的规则与校验器都加上声明；内容规则的 `taskOf` 复用它已有的
+   「行 → 所属任务」推导（`platform/content/migration/receipts.ts:30-49`）。
 2. 用丢弃输出的收集器把这些规则跑一遍，只跑**属于可继续任务的行**：按任务分组的规则只取可继续任务的组；
-   按块读取的规则只保留 `task_id` 属于可继续任务的行，行上没有 `task_id` 的规则整表跑。
-3. 收集 `executableTask` 阻塞项指向的任务，加入结束集合；再把这些任务的可取消子任务（`parent_task_id` 指向它且状态为
+   按块读取的规则只保留 `taskOf` 指向可继续任务的行；`taskOf` 返回 `undefined` 的行照常纳入，返回 `null`（不属于任何任务）的行跳过。
+3. 收集 `blockExecutable` 指向的任务，加入结束集合；再把这些任务的可取消子任务（`parent_task_id` 指向它且状态为
    `pending / running / awaiting_review / awaiting_human`）逐层加入，原因记为父任务级联。
-4. 对结束集合里的任务应用 §3.2.3 的改写，重建以受影响表为来源的查找表，回到第 2 步；直到没有新任务加入。
-   每一轮集合严格增大，上界是可继续任务的个数。
+4. 对结束集合里的任务应用 §3.2.3 的改写，重建来源包含被改写表的查找表（查找表的来源是声明过的，`conversion/lookups.ts:47`），
+   回到第 2 步；直到没有新任务加入。每一轮集合严格增大，上界是可继续任务的个数。
 
 发现只在可继续任务的行上运行规则，代价与可继续任务的数量成正比，与库的总行数无关。参考数据上预计 2 轮、数秒。
 
-正式转换时结束集合已固定。若正式转换里仍出现 `executableTask` 阻塞项，说明发现过程与正式转换看到了不同的输入，
+正式转换时结束集合已固定。若正式转换里仍到达 `blockExecutable`，说明发现过程与正式转换看到了不同的输入，
 属于内部不变量被破坏，以内部错误结束（§3.6），不做局部补救。
 
-结束集合随转换结果落盘（`runs/<runId>/frozen/settlements.json`）。进程中断后续做、`trace --replay` 重放时把它作为
-`settlements` 传回引擎；引擎先应用它，再照常做一遍发现并断言没有新增——同一份冻结数据得到同一个集合。
+结束集合写进转换计划（§3.1）。进程中断后续做时 `prepareConversion` 重新发现一遍——同一份冻结数据得到同一个集合、
+同一个计划摘要，与运行行里登记的一致；不一致即按既有路径报计划摘要不匹配。`trace --replay` 的请求里带着登记过的集合，
+引擎先应用它，再照常做一遍发现并断言没有新增。
 
 #### 3.2.3 结束时改什么
 
@@ -132,7 +170,7 @@ readonly settlements?: readonly TaskSettlement[]    // 重放与续做时传入�
 升级不能去改旧库，所以改写作用在**暂存行的解码值**上：行的原始证据（`canonical` / `raw`，回执里的来源摘要由它们计算）保持旧库原样，
 规则读到的 `values` 是改写后的值。
 
-改写由各模块以 `settlers` 贡献，引擎只负责在暂存时调用：
+改写由各模块以 `settlers` 贡献，引擎负责调用：发现阶段每确定一批任务，就对暂存库里这些任务的行重写一次解码值。
 
 ```ts
 export interface TaskSettler {
@@ -226,29 +264,33 @@ export interface TaskSettlement {
 
 ### 3.4 逐类处置表
 
-下表覆盖调研列出的全部行级、表级阻塞来源。「保留」类的具体改法在实现前由第二轮只读调研逐项给出目标结构的依据，
-结论补入本节（plan T0）。
+下表覆盖调研列出的全部行级、表级阻塞来源。标「已核」的处置我已对着规则与目标结构读过；第 3～7 行还在核对中（plan T0），
+设计门之前补齐。
 
 | # | 阻塞项 | 情形 | 自动处置 |
 | --- | --- | --- | --- |
-| 1 | `v2-content-required-missing` | 必需内容文件不在磁盘上，所属任务可继续 | 结束该任务（§3.2）；任务不可继续时规则已有路径：行保留、内容登记为缺失、任务登记限制（`platform/content/migration/receipts.ts:92-123`） |
-| 2 | `v2-content-lost-at-freeze`、`-bytes-unprovable`、`-task-unprovable`、`-catalog-metadata-missing`、`-object-conflict`、`-source-invalid` | 文件在升级期间变了、文件内容与登记的摘要不符、找不到所属任务等 | 保留行，内容标为不可用（待 T0 确认目标结构的表示）；无法表示时封存 |
+| 1 | `v2-content-required-missing` | 必需内容文件不在磁盘上，所属任务可继续 | 结束该任务（§3.2）。任务不可继续时规则已有路径（已核，`platform/content/migration/receipts.ts:92-123`、`convert.ts:102-117`）：行照常转换，内容引用保留，产物回执登记 `missing`（缺失原因与依据），任务登记限制 |
+| 2a | `v2-content-lost-at-freeze` | 盘点时在、读取时不在或已变 | 不阻塞，按缺失处理：引用保留，回执登记 `missing-at-freeze`；属于必需内容时并入第 1 行的路径 |
+| 2b | `v2-content-bytes-unprovable` | 磁盘上的内容与登记的大小或摘要不符（文件被人改过），或读取中途变化 | 不阻塞，按「登记的内容已不可得」处理：引用保留，回执登记缺失并写明依据（现有字节与登记不符）；磁盘上的文件不动。不把改过的内容当作登记的那份呈现。属于必需内容时并入第 1 行的路径 |
+| 2c | `v2-content-task-unprovable` | 必需内容缺失且找不到所属任务 | 走规则给「没有任务」的既有路径：记录决定，行照常转换（`receipts.ts:92-105`） |
+| 2d | `v2-content-catalog-metadata-missing`、`-object-conflict`、`-source-invalid`、`-required-null` | 内容目录条目缺大小与摘要、同一对象登记冲突、目录解码失败 | 封存该行（§3.3） |
 | 3 | `v2-boot-skill-*`、`v2-skill-*` | 技能目录或版本快照缺失、技能操作停在半途、目录与登记不一致 | 保留技能条目并标为内容不可用（待 T0）；无法表示时封存该技能，引用它的代理条目按第 9 行处理 |
 | 4 | `v2-boot-url-*`（缓存仓库与任务） | 同一地址对应多个缓存仓库、旧格式地址无法还原 | 任务保留其登记的地址、不关联缓存仓库（待 T0）；缓存仓库无法还原地址时封存 |
 | 5 | `v2-boot-schedule-*` | 定时任务的载荷、仓库、路径无法确认 | 保留并置为停用，登记原因（规则已有 `kept-disabled` 结果，待 T0 确认可覆盖全部原因） |
 | 6 | `v2-boot-runtime-config-unproven`、`-defaults-unmigrated` | 家目录 `config.json` 无法确认、其中的默认值没能并入运行时条目 | 运行时条目原样保留，登记默认值未带入（待 T0）；`config.json` 不是合法 JSON 属环境问题（§3.5） |
 | 7 | `v2-boot-fusion-source-unproven`、`v2-boot-fused-memory-unproven` | 技能融合 / 已融合记忆的来源无法确认 | 走规则已有的隔离（quarantine）结果（待 T0） |
-| 8 | `v2-code-history-unfinished`、`-package-blocked` | 已下线的旧代码工作里未完结的条目 | 自动确认归档：引擎在自动模式下为每个这样的行生成一条确认决定（确认人 `automatic-upgrade`，时间取升级时刻），规则照既有的已确认路径归档（`archives/codeHistory.ts:94,123`） |
-| 9 | `v2-agent-reference-shape`、`-name-unproven` | 代理的技能 / MCP / 插件引用形状无法确认 | 保留代理，去掉无法确认的引用条目并登记（待 T0）；不可行时封存 |
-| 10 | `v2-intent-artifact-undecodable`、`v2-bundle-artifact-undecodable` | 应用日志的产物无法解析且不在失败态 | 走规则给失败态的既有路径：行保留、产物清空、原文归档（待 T0） |
-| 11 | `v2-dangling-reference`（`users.created_by`、`task_collaborators.added_by`、`development_missions.reopened_from_mission_id`） | 引用了不存在的记录 | 解除引用（列可空时置空，沿用 `alignment/common.ts:57-74` 的既有做法，待 T0 确认可空）；不可空时封存 |
-| 12 | `v2-task-owner-dangling` | 任务属主用户不存在 | 改由系统用户持有并登记（待 T0 确认可见性后果）；不可行时封存该任务 |
-| 13 | `v2-writer-not-os-active`、`v2-writer-state-missing` | 已下线的旧任务书（legacy mission）尚未终结 | 封存未终结的旧任务书（及其从属行，经 §3.3 的悬空行处理），写入状态记为新流程已接管（待 T0 确认当前版本不会驱动它们） |
-| 14 | `v2-family-cutover-not-dispatchable` | 事件族的切换模式不是可分发 | 待 T0 判断按可分发转换是否会丢或重复投递；否则封存该行 |
-| 15 | `v2-required-seed-missing` | 系统用户或全局登录策略行被删 | 不阻塞，目标库自带种子行（待 T0 确认）；登记来源缺失 |
-| 16 | `v2-identity-sequence-invalid`、`v2-source-generation-invalid` | 序列值或代际记录异常 | 封存该行，序列高水位改按最大行号推导 |
-| 17 | `v2-run-sequence`、`v2-lease-reset-without-run`、`v2-clarify-task-facts-missing`、`v2-gate-task-facts-missing`、`v2-orphan-group`、`v2-intent-event-unique`、`v2-source-codec`、`v2-undecided-source-codec` | 违反旧库自身约束或无法解析的行 | 封存（§3.3）；任务的全部运行被封存时，该任务若可继续则在发现阶段被结束 |
-| 18 | `v2-task-workspace-preparation-in-flight`（未指向任务）、`v2-task-hosted-workspace-command-in-flight` | 准备操作停在进行中但没有对应任务；托管命令在途 | 前者走规则给「任务不存在」的既有路径（原文归档 + 记录，行照常复制）；后者只在托管形态出现，自动模式按封存处理 |
+| 8 | `v2-code-history-unfinished`、`-package-blocked` | 已下线的旧代码工作里未完结的条目 | 自动确认归档：自动模式下 `ctx.operatorDecisions` 对每个这样的行返回一条由引擎生成的确认决定（确认人 `automatic-upgrade`、时间取升级时刻、行摘要取当前行），规则照既有的已确认路径归档整表（已核，`archives/codeHistory.ts:92-99,123`、`archives/unfinishedWork.ts:71-110`）。生成的决定并入转换计划的 `operatorDecisions` |
+| 9 | `v2-agent-reference-shape`、`-name-unproven` | 代理的技能 / MCP / 插件 / 依赖引用里有无法确认的条目（不是数组、条目形状不对、只写了技能名没写编号） | 保留代理，跳过无法确认的那一条引用，逐条登记（已核：引用是逐条展开成引用行的，`resource-catalog/.../agentsRule.ts:59-125`；悬空的引用本来就照常保留并登记，`:158-170`，引用列没有外键）。整列不是数组时按空列表处理并登记 |
+| 10 | `v2-intent-artifact-undecodable`、`v2-bundle-artifact-undecodable` | 应用日志的产物无法解析且不在失败态 | 封存该日志行（§3.3）。规则已把原文写入归档（已核，`resource-catalog/.../bundleAppliesRule.ts:119-125,180-197`）；不照搬失败态「清空产物后保留」的路径，因为非失败态的日志可能被恢复流程当作可继续的应用 |
+| 11 | `v2-dangling-reference` | `users.created_by`、`development_missions.reopened_from_mission_id` 指向不存在的记录 | 解除引用：该列置空并登记，沿用既有的解除做法（已核：目标列可空，`identity-access/.../schema.ts:427`、`development-automation/.../schema.ts:1369`；做法见 `conversion/alignment/memories.ts:13-25`） |
+| 11b | `v2-dangling-reference` | `task_collaborators.added_by` 指向不存在的用户 | 目标列不可空（已核，`collaboration/.../schema.ts:786`）。协作者行保留，`added_by` 改为系统用户 `__system__` 并登记原值——不能因为「谁加的」查不到就让协作者失去成员资格 |
+| 12 | `v2-task-owner-dangling` | 任务属主用户不存在 | 任务保留，属主置空并登记（已核：目标列可空，`task-execution/.../schema.ts:1336`）。属主为空的任务只有资源管理员与协作者可见 |
+| 13 | `v2-writer-not-os-active`、`v2-writer-state-missing` | 旧任务书（v0.19.2 里称「旧 Mission」，由数字员工新流程逐步排空；`terminal_at` 为空即未终结）尚未终结 | 新版本的写入状态恒为「新流程已接管」、不再接纳旧任务书，也没有「排空中」这个状态可以带入（已核，`digital-employee/infrastructure/writerCutoverPersistence.ts:23-25`、`development-automation/application/writerCutoverGates.ts:1-4`、`development-automation/application/missionOperationHandlers.ts:199`）。未终结的旧任务书逐条封存，它的从属行经 §3.3 的悬空行处理一并封存（已核：带 `mission_id` 的表都在 development-automation 模块内）；写入状态记录为已接管并列出被封存的任务书。全局状态行缺失时同样按已接管处理并登记。封存后新版本的任务书驱动器找不到它们，不会在升级后继续推进几个月前的旧任务书。参考数据里旧任务书为 0 条 |
+| 14 | `v2-family-cutover-not-dispatchable` | 事件族的切换模式不是可分发 | 保留该行，按一次模式切换处理：`epoch` 加一、`changed_at` 取升级时刻、`change_ref` 记升级操作编号，并登记。投递只认「事件的生产代际等于该行的 `epoch`」的事件（已核，`platform/events/committed/deliveryPersistence.ts:80`），所以旧模式下记下的事件升级后不会被补投，新事件照常投递。v0.19.2 的生产代码从不改这个模式（已核：`changeCommittedEventCutover` 只有测试调用），参考数据 4 行全是可分发 |
+| 15 | `v2-required-seed-missing` | 系统用户 `__system__` 或全局登录策略行不在旧库里 | 不自动处置，归入 §3.6：这两行由迁移写入、任何发布版都依赖它们，缺失只可能是被人删除，旧版本自己也无法正常工作 |
+| 16 | `v2-identity-sequence-invalid`、`v2-source-generation-invalid` | 序列值或代际记录异常 | 封存该行；序列高水位改按最大行号推导（既有的 `max-row` 依据） |
+| 17 | `v2-run-sequence`、`v2-lease-reset-without-run`、`v2-clarify-task-facts-missing`、`v2-gate-task-facts-missing`、`v2-orphan-group`、`v2-intent-event-unique`、`v2-source-codec`、`v2-undecided-source-codec`、`v2-host-not-placeholder`、`v2-host-still-referenced`、`v2-workflow-definition-shape`、`v2-host-grant-deletion-blocked` | 违反旧库自身约束、无法解析或被手工改坏的行 | 封存（§3.3） |
+| 18 | `v2-task-workspace-preparation-in-flight`（未指向任务）、`v2-task-hosted-workspace-command-in-flight` | 准备操作停在进行中但没有对应任务；托管命令在途 | 前者走规则给「任务不存在」的既有路径（原文归档 + 记录，行照常复制，`task-execution/.../task/validators.ts:17-40`）；后者只在托管形态出现，自动模式按封存处理 |
 
 `v2-operator-decision-stale / -unused` 在自动模式下不会出现（决定由引擎针对当前行生成）。
 
@@ -261,7 +303,7 @@ export interface TaskSettlement {
 | --- | --- | --- |
 | 结构来自发布版 | 只读打开旧库，取目录、迁移日志与各表行数算指纹并识别（`supportedSources.ts` 的 `identifySource`；现在要等第一次整库摘要与拷贝之后） | 逐条列出多出、缺少、被改动的对象 |
 | 旧库可读且完整 | SQLite `quick_check` 与外键检查；PostgreSQL 连通与版本 | 失败的检查项 |
-| 磁盘空间 | 按**有效数据量**估算：SQLite 取（页数 − 空闲页数）× 页大小，而不是文件大小（现在取文件大小，`freeze/capacity.ts:29-33`，稀疏的库会被高估数十倍）；PostgreSQL 取 `pg_database_size`。所需 = 备份 1 份 + 工作副本 1 份 + 暂存 2 份 + 新库 1.5 份 + 内容清单（每个文件 250 字节计） | 需要多少、可用多少、在哪个目录 |
+| 磁盘空间 | 按**有效数据量** L 估算：SQLite 取（页数 − 空闲页数）× 页大小，而不是文件大小（现在取文件大小，`freeze/capacity.ts:29-33`）；PostgreSQL 取 `pg_database_size`。所需 = 冻结副本兼备份 1×L + 工作副本 1×L + 暂存 2×L + 新库 1.5×L（与操作目录同一文件系统时）+ 内容清单（每个文件按 250 字节）+ 10% 余量；工件库不能用硬链接的文件系统上另加 2×L。现行公式对参考数据给出 151.8 GB（当时可用 153.4 GB，只差 1.6 GB 就会被判为空间不足），实际新增占用峰值约 16 GB | 需要多少、可用多少、在哪个目录 |
 | PostgreSQL 目标库与 scratch 库 | 既有的 `provisioning.prepare`（RFC-398 §3），已在计划之前 | 既有文案 |
 | 旧版「搬到 PostgreSQL」操作未完成 | 既有判断（`autoUpgrade.ts:147-151`） | 既有文案 |
 | 另有人工迁移操作在进行 | 既有判断（`domain/epochSwitch/autoUpgrade.ts:86-95`） | 既有文案 |
@@ -336,25 +378,31 @@ PostgreSQL 的断言是回滚、重开快照事务并把整库重新量一遍（
 
 **计划步（`planEpochOperation`，direct）**：
 
-1. 冻结：打开旧库一次，取冻结副本，算内容身份，记下旧库文件的变更标记；补完 epoch-1 剩余迁移得到工作副本并算其内容身份。
-   沿用既有的缓存目录与绑定文件（`sourceAccess.ts:428-600`）。
-2. 生成前置计划：用 `planConversion` 得到静态的转换计划（表到规则的映射、拓扑、规则集摘要，不读任何行），
-   `restrictions` 为空、`blocks` 只可能含目标库层面的阻塞项、估算取 §3.5 的算法。不盘点内容，不预演。
-3. 落盘并进入 `planned`。自动会话批准它。
+1. 冻结（用冻结模式的源访问，`sourcePort.freeze`，而不是活库快照）：打开旧库一次，取冻结副本，算内容身份，
+   记下旧库文件的变更标记；补完 epoch-1 剩余迁移得到工作副本并算其内容身份。沿用既有的缓存目录与绑定文件
+   （`sourceAccess.ts:428-600`）。
+2. 盘点内容一次（§4.4），采集启动事实一次。
+3. 生成前置计划：用 `planConversion` 得到静态的转换计划（表到规则的映射、拓扑、规则集摘要，不读任何行）代替预演结果；
+   `restrictions` 为空，`blocks` 只可能含目标库层面的阻塞项，空间估算取 §3.5 的算法，`rehearsalMs` 为空。
+4. 落盘并进入 `planned`。自动会话批准它。
 
 **执行步（`runEpochSwitch`，direct）**：
 
-1. `planned`：跳过「活库上再冻结、盘点、备份」这一段（`runner.ts:318-346`）。
-2. 停写（已停止，立即返回）。
-3. 冻结：变更标记未变时直接重开计划步留下的冻结副本与工作副本，不重新拷贝、不重算摘要；写 `frozen/preflight.json`。
-4. 盘点内容一次（§4.4），写 `frozen/content-manifest.json`。
-5. 备份一次（§4.5）；依次保存 `backed-up → quiescing → frozen`，阶段顺序与人工模式相同。
-6. 采集启动事实一次，写 `frozen/boot-upgrade-facts.json`。跳过冻结后的预演与计划复核（`runner.ts:502-530`）。
-7. 建新库；转换并装载（自动处置，§3）；写 `summary.json` 与 `frozen/settlements.json`。
-8. 收尾一次、校验一次（`target.validate` 内部不再重复收尾，`targetGeneration.ts:200`，改为使用第一次的结果）。
-9. 导出回执，用实际结果生成计划文件并保存为 `validated`。它的批准摘要与前置计划不同（多了限制清单），
-   于是进入 `awaiting-approval`；自动会话评估后批准（既有的再批准路径，`autoUpgrade.ts:221-260`，每轮运行恰好一次）。
-10. 准备切换、切换、自检，同现在。
+1. `planned`：跳过「活库上再冻结、盘点、备份」这一段（`runner.ts:318-346`）。停写（已停止，立即返回）。
+2. 冻结：旧库的变更标记未变时直接重开计划步留下的冻结副本与工作副本，不重新拷贝、不重算摘要；写 `frozen/preflight.json`。
+3. 内容清单沿用计划步的那一份（计划文件记有它的路径与摘要，核对摘要后写成 `frozen/content-manifest.json`），不重新盘点。
+4. 备份一次（§4.5）；依次保存 `backed-up → quiescing → frozen`，阶段顺序与人工模式相同（三次日志保存连续发生）。
+5. 启动事实复核一次：与计划步的环境摘要不同则按既有路径新建一轮运行；相同则写 `frozen/boot-upgrade-facts.json`。
+   跳过冻结后的预演与计划复核（`runner.ts:502-530`）。
+6. `prepareConversion`（暂存、查找表、发现要结束的任务）；用得到的转换计划建新库并登记运行；转换并装载（自动处置，§3）；写 `summary.json`。
+7. 收尾一次、校验一次（`target.validate` 内部不再重复收尾，`targetGeneration.ts:197-202`，改为使用第一次的结果）。
+8. 导出回执，用实际结果生成计划文件并保存为 `validated`。有限制清单或自动决定时，它的批准摘要与前置计划不同，
+   于是进入 `awaiting-approval`，自动会话评估后批准（既有的再批准路径，`autoUpgrade.ts:221-260`，每轮运行至多一次）；
+   没有时批准摘要相同，直接继续。
+9. 准备切换、切换、自检，同现在。
+
+中途崩溃的窗口与现在同构：例如备份已建好但 `backed-up` 尚未保存时被杀，重启后仍在 `planned`，执行步重开副本、
+读到已有清单、`createBackup` 按既有逻辑认出目录里已有的匹配备份并复用（`freeze/backup.ts:107-122`）。
 
 转换结束仍有阻塞项（内部错误）时走既有的 `v3-conversion-blocked`，自动会话以错误结束。
 
@@ -388,7 +436,7 @@ PostgreSQL 的断言是回滚、重开快照事务并把整库重新量一遍（
 （不读文件内容）。参考数据上单纯遍历 82.8 万个文件约 36 秒（本机负载下实测）；现在一次盘点 215～370 秒，
 其余是前后 12 次整库摘要与多遍 168 MB 的序列化。改动：
 
-- 自动模式只盘点一次（§4.2）。
+- 自动模式只盘点一次（在计划步，执行步沿用，§4.2）。
 - 盘点前后的来源断言改用变更标记（§4.1）。
 - 清单在一次盘点里只做一遍规范化序列化：算摘要与写文件共用同一份文本；校验不再重新序列化。
 - 遍历时不再对每个条目先 `existsSync` 再 `statSync`，改用带类型的目录读取，文件只 `stat` 一次。
@@ -396,13 +444,20 @@ PostgreSQL 的断言是回滚、重开快照事务并把整库重新量一遍（
 
 清单的内容与摘要定义不变。
 
-### 4.5 备份
+### 4.5 备份与工件库
 
-自动模式只在冻结后做一份备份（现在是冻结前一份，冻结后核对两次、必要时重做）。备份目录的摘要在创建时算一次，
-同一进程内随回执传递，不再为核对而重读（现在创建后还要整份重读 4～6 遍，`backupAdapter.ts:76-86`、
-`runner.ts:436,440`、`session.ts:262-273`）。进程重启后的续做仍按既有逻辑核对一次。
-
-SQLite 备份仍用 `VACUUM INTO` 生成（内容与现在的最终备份相同）；备份与冻结副本的一致性由两者的内容身份相等保证，各算一次。
+- **备份只做一份。** 自动模式只在冻结后做一份备份（现在是冻结前一份，冻结后核对两次、必要时重做）。
+- **SQLite 备份直接取冻结副本。** 现在备份是对读取器的私有冻结副本再做一次 `VACUUM INTO`，然后两边各算一次整库摘要来确认相同
+  （`freeze/backup.ts:155-178`）。冻结副本本身就是旧库的一份 `VACUUM INTO` 拷贝，备份改为把它硬链接进备份目录
+  （不同文件系统时退回拷贝并比较文件摘要），内容身份沿用冻结时算出的那一个。
+- **工件库用硬链接。** 本地工件库现在把每个登记的文件先完整拷一份再算摘要（`infrastructure/epochSwitch/fileJournal.ts:192-203`，
+  文件系统支持写时复制时才是廉价的克隆），每次打开会话又把全部工件重算摘要并拷回原位（`:228-240`、
+  `application/epochSwitch/session.ts:262-273`）。工件库与工作文件在同一个操作目录下，改为：登记时硬链接进工件库；
+  取回时若目标位置已经是同一个 inode，直接返回，不重算、不拷贝。被登记的文件都是只写一次的（绑定文件靠改名原子替换，
+  替换后是新的 inode，不影响已登记的版本）。不支持硬链接时退回现有的拷贝路径。
+  这样在没有写时复制的文件系统（Linux 上常见的 ext4）上，不再为备份和工作副本各多占一份空间、多拷一遍。
+- 备份目录的摘要在创建时算一次，同一进程内随回执传递，不再为核对而重读（现在创建后还要整份重读 4～6 遍，
+  `backupAdapter.ts:76-86`、`runner.ts:436,440`）。进程重启后的续做仍按既有逻辑核对一次。
 
 ### 4.6 PostgreSQL
 
@@ -432,16 +487,20 @@ SQLite 备份仍用 `VACUUM INTO` 生成（内容与现在的最终备份相同�
 
 | 位置 | 变化 |
 | --- | --- |
-| `conversion/plan.ts` `ConversionInput` | 加 `resolution`、`settlements` |
+| `conversion/plan.ts` `ConversionInput` | 加 `resolution` |
+| `conversion/plan.ts` `ConversionPlanSection` | 自动模式下加 `resolution`、`settlements`（计入计划摘要） |
+| `conversion/engine.ts` | 新增 `prepareConversion`；`runConversion` / `executeConversion` 保持 |
 | `conversion/sink.ts` `ConversionSummary` | 加 `resolutions` |
 | `conversion/sink.ts` `ConversionSink.commitUnit` | 自动模式下可返回被拒的目标行，而不是记为装载阻塞 |
 | `conversion/rule.ts` `ConversionContribution` | 加 `settlers` |
+| `conversion/rule.ts` `ConversionRule`、`RowValidator` | 加可选声明 `settles` |
+| `conversion/rule.ts` `RuleOutput` | 加 `blockExecutable(task, block)` |
+| `conversion/rule.ts` `RuleContext` | 加 `resolution`，规则在有保留办法的阻塞点据此分支 |
 | `conversion/types.ts` | `MigrationRecord` 的 `decision` 新代码：`v2-task-settled-at-upgrade`、`v2-row-set-aside`、`v2-row-set-aside-dependent`；`CONVERTER_VERSION` 递增 |
 | 计划文件（`domain/epochSwitch/documents.ts`） | 加可选字段 `resolutions`，计入批准摘要；旧文件没有该字段仍可解析 |
 | 回执 | 加 `resolutions` |
 | `EpochSwitchDependencies` | 加 `direct` |
 | `packages/shared/src/lifecycle.ts` | 加结束原因 `ended by upgrade` |
-| 工件 | 新增 `runs/<runId>/frozen/settlements.json` |
 
 新库的表结构与 schema history 不变：封存用既有的 `aw_meta_migration_archives`，决定用既有的 `aw_meta_migration_records`，
 处置用既有的 `aw_meta_migration_row_dispositions`。
@@ -452,7 +511,7 @@ SQLite 备份仍用 `VACUUM INTO` 生成（内容与现在的最终备份相同�
 | --- | --- |
 | 前置检查不通过 | 拒绝，10 秒内退出；无运行工件、无新库 |
 | 冻结后、盘点或备份中进程被杀 | 再次启动续做；重开副本为常数时间 |
-| 转换中进程被杀 | 续做：重新发现（结果与落盘的结束集合相同）、已提交单元由 sink 跳过 |
+| 转换中进程被杀 | 续做：重新发现（结果与运行行里登记的转换计划相同）、已提交单元由 sink 跳过 |
 | 续做时旧库的变更标记变了 | 重算内容身份；相同则继续，不同则新建一轮运行 |
 | 发现与正式转换不一致 | 内部错误；工件保留 |
 | 单元装载反复被拒且无法对应到来源行 | 内部错误 |

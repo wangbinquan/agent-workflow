@@ -13,7 +13,7 @@
 | RFC-626-T3 | 自动模式单遍编排：`direct` 开关、前置计划、执行步顺序、实际结果计划与再批准、收尾只做一次 | T2 | `system-operations/application/epochSwitch/planner.ts`、`runner.ts`、`autoUpgrade.ts`、`infrastructure/epochSwitch/targetGeneration.ts`、`bootstrap/epochMigration.ts` |
 | RFC-626-T4 | 转换引擎记账提速：排序键预计算、行摘要入暂存列、紧凑暂存编码、sink 免重算、规范化 JSON 键序缓存；暂存库摘要改定义并递增转换器版本 | — | `platform/persistence/migration/conversion/receipts.ts`、`engine.ts`、`staging.ts`、`platform/persistence/schema/canonical.ts`、`infrastructure/epochSwitch/conversionSink.ts` |
 | RFC-626-T5 | 内容盘点：单次序列化、遍历减少系统调用、目录前缀索引 | T2 | `platform/content/inventory/manifest.ts`、`freezeInventory.ts`、`databaseTrees.ts` |
-| RFC-626-T6 | 备份只做一份，摘要在进程内复用 | T3 | `platform/persistence/migration/freeze/backup.ts`、`infrastructure/epochSwitch/backupAdapter.ts` |
+| RFC-626-T6 | 备份只做一份并直接取冻结副本，摘要在进程内复用；工件库登记与取回改用硬链接 | T3 | `platform/persistence/migration/freeze/backup.ts`、`infrastructure/epochSwitch/backupAdapter.ts`、`fileJournal.ts` |
 | RFC-626-T7 | PostgreSQL：拷贝按参数上限分批、装载批大小按库类型、单元元数据合并写、RFC-349 归档目录校验缓存 | T2 | `platform/persistence/migration/offlineSourceUpgrade.ts`、`target/loader.ts`、`infrastructure/epochSwitch/metaStore.ts`、`conversion/postgresqlArchiveSource.ts` |
 | RFC-626-T8 | 结束任务：引擎的发现过程与不动点、`settlers` 合同、三个模块的 settler、结束集合落盘与重放 | T4 | `conversion/engine.ts`、`conversion/rule.ts`、`conversion/readSource.ts`、`modules/task-execution/infrastructure/migration/`、`modules/collaboration/infrastructure/migration/`、`modules/system-operations/infrastructure/migration/` |
 | RFC-626-T9 | 新结束原因：`shared` 常量、前端原因表与中英文案、数字员工视为停止 | — | `packages/shared/src/lifecycle.ts`、`packages/frontend/src/lib/task-failure.ts`、`i18n`、`modules/digital-employee/application/digitalEmployeeExecution.ts` |
@@ -55,7 +55,7 @@
 - [ ] 3 封存：构造的坏行在归档里、业务表里没有、报告列出
 - [ ] 4 环境前置：三种情况 10 秒内退出，文案具体，无残留
 - [ ] 5 耗时：参考数据 SQLite ≤ 6 分钟、PostgreSQL ≤ 15 分钟；各步骤各出现一次
-- [ ] 6 资源：峰值内存 ≤ 4 GB、工作目录峰值 ≤ 5 GB
+- [ ] 6 资源：峰值内存 ≤ 4 GB；新增磁盘占用峰值 ≤ 8 GB、留存 ≤ 5 GB；前置检查给出的所需空间 ≤ 10 GB
 - [ ] 7 PostgreSQL `tasks` 1000 行、2000 行升级成功
 - [ ] 8 结果一致：映射预言全部通过；参考数据新旧实现逐表对比无差异（C1～C4 除外）
 - [ ] 9 中断续做：三处位置
