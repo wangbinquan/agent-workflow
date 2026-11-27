@@ -130,6 +130,44 @@ agent-workflow db migration complete <op> --json
 直接运行 `agent-workflow migrate` 或 `db migration auto` 时只有前两种行：它们在同一个进程里执行转换，
 单条语句执行期间打印不了东西。
 
+#### 升级前先处理未结束的旧任务
+
+计划阶段逐行判断旧数据能否转换。**仍未结束的任务（中断、等待评审、等待人工、运行中、排队），如果名下有早期
+版本留下的、没有信封随机数的运行**（2026 年 7 月中旬之前创建的任务普遍如此），会被判为阻断：升级在计划做完
+之后拒绝启动，逐个任务提示 `finish or cancel it in the current version, then re-plan`。已结束的任务不受影响，
+它们的旧运行按只读历史保留。
+
+计划阶段要先把整库转换试算一遍，所以这个拒绝来得很晚——有 1 GB 有效数据的库上是 20 分钟之后。升级前在
+**旧版本的库上**先查一遍（只读，旧服务运行中也可以查）：
+
+```sh
+sqlite3 "file:$HOME/.agent-workflow/db.sqlite?mode=ro" "
+  SELECT t.id, t.status, t.name FROM tasks t
+  WHERE t.status NOT IN ('done', 'failed', 'canceled')
+    AND EXISTS (SELECT 1 FROM node_runs r WHERE r.task_id = t.id AND r.envelope_nonce IS NULL);"
+```
+
+查到的任务在旧版本的界面里完成或取消，再停服务、换二进制。在一份真实的 v0.19.2 库上，这条查询列出的 37 个
+任务与升级计划给出的阻断任务完全相同。已经换了二进制才被拒绝时：源库没有被改动，换回旧二进制启动，处理完
+这些任务，再换新二进制启动（计划会重新做一遍）。
+
+#### 耗时与资源参考（2026-11-27 实测，SQLite，v0.19.2 → 当前 main）
+
+| 源库 | 有效数据 | 行数 | 运行文件 | 全程 | 峰值内存 | 完成后留在 `database-migrations/` 里 |
+| --- | --- | --- | --- | --- | --- | --- |
+| v0.19.2 新装的空库 | 4.6 MB | — | 0 | 约 1 分钟 | — | 48 MB |
+| 一份用了五个月的真实实例 | 1.07 GB（文件 23 GB，其余是空闲页） | 60.9 万 | 82.8 万 | **约 71 分钟** | **10.7 GB** | 6.5 GB（过程中峰值约 15 GB） |
+
+第二行的 71 分钟按回执里的阶段拆开：计划 20 分钟（冻结源库 5 分半、清点运行文件 3 分半、转换试算 11 分钟），
+执行 51 分钟（再冻结并清点 11 分钟、备份后第三次冻结并清点 11 分钟、转换 15 分钟、装载 13 分钟，校验与激活
+只要几秒）。同一份源库在一次升级里被完整冻结三遍、清点三遍、转换三遍，这是现在这套流程的做法，不是数据的
+问题。测试机是 10 核，后 30 分钟同时还有别的负载，空闲机器上估计在 60 分钟上下。
+
+据此估算维护窗口：耗时大致随有效数据量和 `runs/` 下的文件数线性增长，**每 1 GB 有效数据加 80 万个运行文件约
+一小时**；内存按有效数据的 8～10 倍预留，磁盘按 15 倍预留。有效数据量用
+`sqlite3 db.sqlite "select (page_count - freelist_count) * page_size from pragma_page_count, pragma_freelist_count, pragma_page_size"`
+查，不要看文件大小。升级结束后回执 `receipt.json` 的 `phaseTimings` 记有这一次各阶段的实际耗时。
+
 自动模式接受并记录 `restrictions`，每项以 WARN 输出；受限制的历史仍可查看，但相关重试／恢复
 可能不可用。`blocks` 和可确认项必须按指引人工处理，不会被自动确认。
 完成回执位于 `database-migrations/auto-upgrade/sessions/<operationId>/receipt.json`，记录源
