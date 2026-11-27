@@ -65,10 +65,15 @@ export interface R2TargetHarness extends R2Harness {
     options?: Partial<Omit<InstallHistoryHeadOptions, 'version'>>,
   ): Promise<void>
 }
-export function describeR2Providers(name: string, body: (harness: R2TargetHarness) => void): void {
+export function describeR2Providers(
+  name: string,
+  body: (harness: R2TargetHarness) => void,
+  initialFixtureKey?: () => Promise<string>,
+): void {
   for (const provider of resolveTestProviders(process.env))
     describe(`${name} [${provider}]`, () =>
-      describe('empty target generation', () => body(createR2TargetHarness(provider))))
+      describe('empty target generation', () =>
+        body(createR2TargetHarness(provider, initialFixtureKey))))
 }
 
 /** Existing application/target parity tests still own their application harness. */
@@ -82,6 +87,7 @@ export function withR2TargetHarness(
 
 function createR2TargetHarness(
   selection: DatabaseProvider | (() => DatabaseProvider),
+  initialFixtureKey?: () => Promise<string>,
 ): R2TargetHarness {
   let provider: DatabaseProvider = typeof selection === 'string' ? selection : undefined!
   let root: string
@@ -147,7 +153,7 @@ function createR2TargetHarness(
   }, 60_000)
   beforeEach(async () => {
     await initialize()
-    await generation.reset()
+    await generation.reset(await initialFixtureKey?.())
     cache = new HistoryCatalogCache(postgresqlCatalogLoader(artifacts))
   }, 60_000)
   afterEach(async () => {

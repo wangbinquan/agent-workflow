@@ -312,6 +312,15 @@ describe('RFC-376 committed report contract', () => {
   })
   test('two reads of the same committed source produce byte-identical reports despite working-tree changes', () => {
     const first = buildArchitectureReport(SOURCE)
+    // RFC-370 / RFC-624: retain every selected-corpus assertion without a third build.
+    expect(new Set(first.moduleSymbolOwners.map((entry) => entry.file)).size).toBeGreaterThan(1000)
+    const backend = SOURCE.units.filter((unit) => unit.path.startsWith('packages/backend/src/'))
+    const modules = backend.filter((unit) => unit.path.startsWith('packages/backend/src/modules/'))
+    expect(first.metrics.backendProductionFiles).toBe(backend.length)
+    expect(
+      first.moduleSymbolOwners.filter((entry) => entry.file.includes('/src/modules/')).length,
+    ).toBeGreaterThan(modules.length)
+    expect(first.sourceSha).toBe(SOURCE.sourceSha)
     const second = buildArchitectureReport(readReportSource(ROOT, SOURCE.sourceSha))
     expect(stableJson(first)).toBe(stableJson(second))
     expect(renderReportStatus(first)).toBe(renderReportStatus(second))

@@ -12,190 +12,26 @@
 // 各文件的行为由它们既有的用例覆盖（`process.test`、`lock.test`、`rfc254-platform-exec`、`rfc356-process-tree-quiesce`、`rfc396-windows-flat-process-group`、
 // `rfc213` 的备份与还原等），Windows 上的行为由 windows-platform 工作流覆盖。
 import { describe, expect, test } from 'bun:test'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import ts from 'typescript'
+import { RFC572_RULE } from './helpers/rfc624MigrationReferenceRules'
+import { resolveMigrationSpecifiers } from './helpers/rfc624MigrationSpecifiers'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const REPO = resolve(BACKEND, '..', '..')
 const SRC = join(BACKEND, 'src')
-const slash = (path: string) => path.split('\\').join('/')
 
 /** Old location (below `src`, no extension) → new location, with the names each file exported before the move and its imports. */
-const MOVED: ReadonlyArray<readonly [string, string, readonly string[], readonly string[]]> = [
-  [
-    'util/platformExec',
-    'platform/execution/local/platformExec',
-    [
-      'EXECUTABLE_SUFFIX_FOR_HOST',
-      'GIT_NULL_CONFIG_PATH',
-      'NULL_DEVICE_FOR_HOST',
-      'SEALED_SHELL_SUPPORTED',
-      'buildControlledPath',
-      'buildControlledPathForHost',
-      'buildScriptPath',
-      'controlledSystemPathEntries',
-      'disabledShellCommand',
-      'disabledShellCommandForHost',
-      'executableSuffix',
-      'isLexicallyInside',
-      'isLexicallyInsideForHost',
-      'nullDevice',
-      'pathListJoin',
-      'pathListJoinForHost',
-      'pathListSplit',
-      'pathListSplitForHost',
-      'platformHomeEnv',
-      'platformHomeEnvForHost',
-      'platformSpawnOptions',
-      'platformSpawnOptionsForHost',
-      'resolveGitToolDirectory',
-      'toPortableRelativePath',
-    ],
-    ['node:path'],
-  ],
-  [
-    'util/windowsJobObject',
-    'platform/execution/local/windowsJobObject',
-    [
-      'ProcessTreeOwnership',
-      'WIN32_JOB_LAYOUT',
-      'adoptProcessTree',
-      'processTreeOwnershipAvailable',
-      'processTreeOwnershipDiagnosis',
-      'resetKernel32CacheForTests',
-    ],
-    ['bun:ffi'],
-  ],
-  [
-    'util/process',
-    'platform/execution/local/process',
-    [
-      'DEFAULT_VERSION_PROBE_TIMEOUT_MS',
-      'KillTreeSignal',
-      'ProcessLivenessOptions',
-      'STALE_RUN_PID_MAX_AGE_MS',
-      'STALE_RUN_QUIESCE_BUDGET_MS',
-      'StaleRunKillOpts',
-      'StaleRunKillOutcome',
-      'TREE_QUIESCE_BUDGET_MS',
-      'TreeQuiesceLog',
-      'TreeQuiesceOutcome',
-      'VersionProbeOpts',
-      'VersionProbeResult',
-      'adoptSpawnedProcessTree',
-      'awaitProcessTreeQuiesced',
-      'detachedProcessGroup',
-      'isProcessAlive',
-      'isProcessTreeAlive',
-      'killProcessTree',
-      'killStaleRunProcessTree',
-      'pidCommandContainsBinary',
-      'pidCommandContainsLaunchIdentity',
-      'pidCommandLooksLikeAgentChild',
-      'processTreeOwnershipStatus',
-      'raceWithFallback',
-      'readStreamCapped',
-      'reapDetachedGroup',
-      'releaseProcessTreeOwnership',
-      'spawnVersionProbe',
-    ],
-    [
-      '@/platform/execution/local/platformExec',
-      '@/platform/execution/local/windowsJobObject',
-      '@/platform/logging/logger',
-    ],
-  ],
-  [
-    'util/lock',
-    'platform/execution/local/daemonLock',
-    [
-      'DaemonLockHeldError',
-      'Lock',
-      'acquireLock',
-      'adoptCurrentProcessLock',
-      'isProcessAlive',
-      'readPidFromLock',
-      'writePidFileForTest',
-    ],
-    ['./process', 'node:fs', 'node:path'],
-  ],
-  [
-    'util/spawnDiagnostics',
-    'platform/execution/local/spawnDiagnostics',
-    ['SpawnEnoentContext', 'SpawnEnoentProbes', 'explainSpawnEnoent', 'outputTail'],
-    ['node:fs', 'node:path'],
-  ],
-  [
-    'util/archive',
-    'platform/persistence/archive',
-    ['extractTarGz', 'resetTarProbeForTests', 'tarAvailable', 'tarBin', 'tarGz'],
-    ['@/platform/execution/local/platformExec', 'node:fs', 'node:path'],
-  ],
-]
-const OLD = new Set(MOVED.map(([old]) => old))
-
-function walk(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir).flatMap((name) => {
-    if (name === 'node_modules' || name === 'dist') return []
-    const path = join(dir, name)
-    return statSync(path).isDirectory()
-      ? walk(path)
-      : /\.(?:[cm]?tsx?|mjs)$/.test(name)
-        ? [path]
-        : []
-  })
-}
+const MOVED = RFC572_RULE.moved
+const OLD = new Set<string>(RFC572_RULE.oldPaths)
 
 /**
  * Every module specifier a file names — imports, re-exports, `import('…')` (types and calls), `require('…')` and
  * `mock.module('…')` — resolved to a path below `src` without its extension (null when it leaves `src` or is a package).
  */
 function resolvedSpecifiers(path: string, text: string): string[] {
-  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
-  const out: string[] = []
-  const add = (specifier: string) => {
-    const bare = specifier.replace(/\.(?:[cm]?tsx?|[cm]?js)$/, '')
-    const target = bare.startsWith('@/')
-      ? join(SRC, bare.slice(2))
-      : bare.startsWith('.')
-        ? resolve(dirname(path), bare)
-        : null
-    if (target === null) return
-    const below = slash(relative(SRC, target))
-    if (!below.startsWith('..')) out.push(below)
-  }
-  const visit = (node: ts.Node) => {
-    if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    )
-      add(node.moduleSpecifier.text)
-    if (
-      ts.isImportTypeNode(node) &&
-      ts.isLiteralTypeNode(node.argument) &&
-      ts.isStringLiteral(node.argument.literal)
-    )
-      add(node.argument.literal.text)
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression.getText(source)
-      const first = node.arguments[0]
-      if (
-        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          callee === 'require' ||
-          callee === 'mock.module' ||
-          callee === 'import.meta.resolve') &&
-        first !== undefined &&
-        ts.isStringLiteralLike(first)
-      )
-        add(first.text)
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(source)
-  return out
+  return resolveMigrationSpecifiers(SRC, path, text)
 }
 
 /** Names a file exports with an `export` modifier (functions, classes, consts, interfaces, type aliases). */
@@ -251,22 +87,7 @@ describe('RFC-572 —— 六个文件离开 util/', () => {
     }
   })
 
-  test('src / tests / scripts 的全部说明符不再解析到旧路径', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(join(REPO, 'scripts')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(6000)
-    expect(
-      files.flatMap((path) =>
-        resolvedSpecifiers(path, readFileSync(path, 'utf8'))
-          .filter((target) => OLD.has(target))
-          .map((target) => `${slash(relative(REPO, path))} -> ${target}`),
-      ),
-    ).toEqual([])
-  }, 240_000)
+  // RFC-624: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('负对照：别名、相对路径、带扩展名、动态 import、require、mock.module 与 import 类型都会被认出；新路径与包名不算', () => {
     const fromSrcRoot = join(SRC, 'main.ts')

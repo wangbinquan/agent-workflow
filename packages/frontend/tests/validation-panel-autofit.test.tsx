@@ -1,124 +1,115 @@
 // RFC-016 T9: ValidationPanel must surface an inline "Auto-fit" button
 // alongside any `wrapper-children-outside-bounds` warning, and clicking it
-// must invoke the onAutoFitWrapper callback with the wrapper id from the
-// issue's pointer. Locks both the visibility contract and the wire-up.
+// must invoke onAutoFitWrapper with the resolved wrapper id. RFC-624 replaces
+// the old MiniPanel copy with the real component, including strict targets and
+// the legacy pointer compatibility path. The route wire-up remains guarded.
 
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, test, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
-import '../src/i18n'
-// Import the partitionIssues pure helper to verify warning routing as well.
-// The route's local ValidationIssue type omits `pointer`; we widen the
-// fixture shape here because that's what the Auto-fit button reads.
-import { partitionIssues as _partitionIssues } from '../src/routes/workflows.edit'
-interface MiniIssue {
-  code: string
-  message: string
-  severity?: 'error' | 'warning'
-  pointer?: string
-}
-function partitionIssues(issues: MiniIssue[]): { errors: MiniIssue[]; warnings: MiniIssue[] } {
-  return _partitionIssues(
-    issues as unknown as Parameters<typeof _partitionIssues>[0],
-  ) as unknown as {
-    errors: MiniIssue[]
-    warnings: MiniIssue[]
-  }
-}
-
-afterEach(() => {
-  document.body.innerHTML = ''
-})
-
-// We render a minimal mock of the inline ValidationPanel structure. The
-// component itself is private to workflows.edit.tsx (not exported); locking
-// the rendering at the route level would drag in TanStack Router + the
-// whole query layer. The intent here is to lock the **mapping from warning
-// code → Auto-fit button + pointer wiring**, which is straightforward to
-// reproduce in isolation. The full integration is covered by the
-// source-level guard test below.
-function MiniPanel({
-  issues,
-  onAutoFitWrapper,
-}: {
-  issues: Array<{ code: string; message: string; severity?: 'error' | 'warning'; pointer?: string }>
-  onAutoFitWrapper?: (id: string) => void
-}) {
-  const { warnings } = partitionIssues(issues)
-  return (
-    <ul>
-      {warnings.map((i, idx) => (
-        <li key={`w-${idx}`}>
-          <code>{i.code}</code> — {i.message}
-          {i.code === 'wrapper-children-outside-bounds' &&
-          i.pointer !== undefined &&
-          onAutoFitWrapper !== undefined ? (
-            <button
-              type="button"
-              className="validation-panel__action"
-              onClick={() => onAutoFitWrapper(i.pointer as string)}
-            >
-              Auto-fit
-            </button>
-          ) : null}
-        </li>
-      ))}
-    </ul>
-  )
-}
+import { describe, expect, test, vi } from 'vitest'
+import { screen, fireEvent } from '@testing-library/react'
+import { renderValidationPanel } from './validation-panel.helpers'
 
 describe('ValidationPanel Auto-fit (RFC-016 T9)', () => {
-  test('renders an Auto-fit button next to wrapper-children-outside-bounds warnings', () => {
-    render(
-      <MiniPanel
-        issues={[
-          {
-            code: 'wrapper-children-outside-bounds',
-            message: "wrapper 'w1' contains inner node 'a1' positioned outside its visual bounds",
-            severity: 'warning',
-            pointer: 'w1',
-          },
-        ]}
-        onAutoFitWrapper={() => {}}
-      />,
+  test('renders an Auto-fit button next to wrapper-children-outside-bounds warnings', async () => {
+    await renderValidationPanel(
+      [
+        {
+          code: 'wrapper-children-outside-bounds',
+          message: "wrapper 'w1' contains inner node 'a1' positioned outside its visual bounds",
+          severity: 'warning',
+          pointer: 'w1',
+        },
+      ],
+      { onAutoFitWrapper: vi.fn() },
     )
-    expect(screen.getByText('Auto-fit')).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Auto-fit' })).toBeDefined()
   })
 
-  test('clicking Auto-fit invokes the callback with the wrapper id (pointer)', () => {
+  test('clicking Auto-fit invokes the callback with the wrapper id (pointer)', async () => {
     const spy = vi.fn()
-    render(
-      <MiniPanel
-        issues={[
-          {
-            code: 'wrapper-children-outside-bounds',
-            message: 'drift',
-            severity: 'warning',
-            pointer: 'w1',
-          },
-        ]}
-        onAutoFitWrapper={spy}
-      />,
+    await renderValidationPanel(
+      [
+        {
+          code: 'wrapper-children-outside-bounds',
+          message: 'drift',
+          severity: 'warning',
+          pointer: 'w1',
+        },
+      ],
+      { onAutoFitWrapper: spy },
     )
-    fireEvent.click(screen.getByText('Auto-fit'))
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-fit' }))
+    expect(spy).toHaveBeenCalledTimes(1)
     expect(spy).toHaveBeenCalledWith('w1')
   })
 
-  test('no Auto-fit button for unrelated warning codes (e.g. input-orphan-declared)', () => {
-    render(
-      <MiniPanel
-        issues={[
-          {
-            code: 'input-orphan-declared',
-            message: 'orphan key',
-            severity: 'warning',
-            pointer: 'k1',
-          },
-        ]}
-        onAutoFitWrapper={() => {}}
-      />,
+  test('no Auto-fit button for unrelated warning codes (e.g. input-orphan-declared)', async () => {
+    await renderValidationPanel(
+      [
+        {
+          code: 'input-orphan-declared',
+          message: 'orphan key',
+          severity: 'warning',
+          pointer: 'k1',
+        },
+      ],
+      { onAutoFitWrapper: vi.fn() },
     )
-    expect(screen.queryByText('Auto-fit')).toBeNull()
+    expect(screen.getByRole('button', { name: /input-orphan-declared/ })).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Auto-fit' })).toBeNull()
+  })
+
+  test('a strict node target takes precedence over a different legacy pointer', async () => {
+    const spy = vi.fn()
+    await renderValidationPanel(
+      [
+        {
+          code: 'wrapper-children-outside-bounds',
+          message: 'inner wrapper drift',
+          severity: 'warning',
+          pointer: 'w1',
+          target: { kind: 'node', nodeId: 'inner' },
+        },
+      ],
+      { onAutoFitWrapper: spy },
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-fit' }))
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledWith('inner')
+  })
+
+  test('a stale strict target does not fall back to a still-existing legacy pointer', async () => {
+    const spy = vi.fn()
+    const { onNavigate } = await renderValidationPanel(
+      [
+        {
+          code: 'wrapper-children-outside-bounds',
+          message: 'removed wrapper',
+          severity: 'warning',
+          pointer: 'w1',
+          target: { kind: 'node', nodeId: 'deleted-wrapper' },
+        },
+      ],
+      { onAutoFitWrapper: spy },
+    )
+    expect(screen.queryByRole('button', { name: 'Auto-fit' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /wrapper-children-outside-bounds/ }))
+    expect(onNavigate).not.toHaveBeenCalled()
+    expect(spy).not.toHaveBeenCalled()
+    expect(screen.getAllByText(/object changed/i).length).toBeGreaterThan(0)
+  })
+
+  test('a resolvable wrapper does not offer Auto-fit without a callback', async () => {
+    await renderValidationPanel([
+      {
+        code: 'wrapper-children-outside-bounds',
+        message: 'wrapper drift',
+        severity: 'warning',
+        pointer: 'w1',
+      },
+    ])
+    expect(screen.getByRole('button', { name: /wrapper-children-outside-bounds/ })).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Auto-fit' })).toBeNull()
   })
 })
 

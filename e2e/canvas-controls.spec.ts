@@ -11,32 +11,15 @@
 import { expect, test } from '@playwright/test'
 
 import { clickCanvasControl } from './canvas-controls'
-import { startDaemon, type DaemonHandle } from './harness'
 
 test.setTimeout(90_000)
-
-let daemon: DaemonHandle
-
-test.beforeAll(async () => {
-  daemon = await startDaemon()
-})
-
-test.afterAll(async () => {
-  if (daemon !== undefined) await daemon.stop()
-})
 
 test('RFC-319: clickCanvasControl names the element that covers a control instead of timing out', async ({
   page,
 }) => {
-  await page.addInitScript(
-    ({ url, tok }) => {
-      window.localStorage.setItem('agent-workflow.baseUrl', url)
-      window.localStorage.setItem('agent-workflow.token', tok)
-      window.localStorage.setItem('aw-language', 'en-US')
-    },
-    { url: daemon.baseUrl, tok: daemon.token },
-  )
-  await page.goto(`${daemon.baseUrl}/agents`)
+  // RFC-624: this helper reads browser geometry, not product state. Keep a real
+  // browser and the same positive/negative DOM inputs without starting a daemon.
+  await page.setContent('<!doctype html><html><body></body></html>')
 
   // 一个可点的目标，和一个盖在它上面、z-index 更高的浮层——就是两个绝对定位
   // 工具条撞车时的形状。

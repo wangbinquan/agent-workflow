@@ -215,19 +215,8 @@ describe('RFC-395 V3 migration entry boundary', () => {
   })
 })
 
-test('CLI converter is executable while content codecs and stores are runtime', () => {
-  const units = packageSrcUnits(resolve(import.meta.dir, '../../../..'), 'backend')
-  const runtime = executableReachability(units, EPOCH2_RUNTIME_ENTRIES).reachable
-  expect(runtime.has(BACKEND_PREFIX + 'platform/content/contentRefCodec.ts')).toBe(true)
-  expect(runtime.has(BACKEND_PREFIX + 'platform/content/contentStore.ts')).toBe(true)
-  const cli = executableReachability(units, [
-    BACKEND_PREFIX + 'bootstrap/epochMigrationEntry.ts',
-  ]).reachable
-  expect(cli.has(BACKEND_PREFIX + 'platform/persistence/migration/conversion/engine.ts')).toBe(true)
-  expect(
-    cli.has(BACKEND_PREFIX + 'modules/system-operations/application/epochSwitch/runner.ts'),
-  ).toBe(true)
-})
+// RFC-624: the identical four-assertion positive CLI/runtime smoke remains in
+// rfc395-v2-dormancy.test.ts. This file retains its distinct V3 negative rules.
 
 // AF-D18: deployment profiles execute before daemonStart and must be traversed.
 test('both deployment profile roots reject transitive migration imports', () => {

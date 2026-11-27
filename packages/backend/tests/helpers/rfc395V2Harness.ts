@@ -1,4 +1,4 @@
-import { describeV1Providers, type V1Harness } from './rfc395V1Harness'
+import { describeV1Providers, type V1FixtureOptions, type V1Harness } from './rfc395V1Harness'
 import { writeV2SourceRows } from './rfc395V2SourceRows'
 import { persistenceSchema } from '@/bootstrap/persistenceSchema'
 import type { ConversionInput } from '@/platform/persistence/migration/conversion/plan'
@@ -83,38 +83,45 @@ export interface V2Harness {
   ): Promise<ConversionInput>
 }
 /** V1 delegates to the canonical dual-provider harness and installs only frozen SQL/history plans. */
-export function describeV2Providers(name: string, body: (h: V2Harness) => void): void {
-  describeV1Providers(name, (h) =>
-    body({
-      sourceHarness: h,
-      install: h.install,
-      write: (table, rows) => writeV2SourceRows(h, table, rows),
-      async input(contributions, options = {}) {
-        const { fixtures, source = await h.source(), ...overrides } = options
-        const preflight = await source.preflight()
-        return {
-          source,
-          preflight,
-          target: persistenceSchema,
-          contributions: [...contributions, v2LookupFixtures(fixtures ?? {})],
-          content: emptyV2Content,
-          scratchRoot: join(h.operationRoot, 'v2-scratch'),
-          planTime: 123,
-          chunkLimit: 3,
-          targetGeneration: 'dbg_rfc395_v2_fixture',
-          candidateBuild: 'v2-core-a-fixture',
-          sourceBackupId: null,
-          contentManifestDigest: 'fixture:no-content',
-          sourceScope: [
-            ...new Set(
-              contributions.flatMap((contribution) =>
-                contribution.rules.flatMap((rule) => rule.claims),
+export function describeV2Providers(
+  name: string,
+  body: (h: V2Harness) => void,
+  options?: V1FixtureOptions,
+): void {
+  describeV1Providers(
+    name,
+    (h) =>
+      body({
+        sourceHarness: h,
+        install: h.install,
+        write: (table, rows) => writeV2SourceRows(h, table, rows),
+        async input(contributions, options = {}) {
+          const { fixtures, source = await h.source(), ...overrides } = options
+          const preflight = await source.preflight()
+          return {
+            source,
+            preflight,
+            target: persistenceSchema,
+            contributions: [...contributions, v2LookupFixtures(fixtures ?? {})],
+            content: emptyV2Content,
+            scratchRoot: join(h.operationRoot, 'v2-scratch'),
+            planTime: 123,
+            chunkLimit: 3,
+            targetGeneration: 'dbg_rfc395_v2_fixture',
+            candidateBuild: 'v2-core-a-fixture',
+            sourceBackupId: null,
+            contentManifestDigest: 'fixture:no-content',
+            sourceScope: [
+              ...new Set(
+                contributions.flatMap((contribution) =>
+                  contribution.rules.flatMap((rule) => rule.claims),
+                ),
               ),
-            ),
-          ],
-          ...overrides,
-        }
-      },
-    }),
+            ],
+            ...overrides,
+          }
+        },
+      }),
+    options,
   )
 }

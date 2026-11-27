@@ -11,97 +11,27 @@
 // 覆盖范围（C12）：① 覆盖 backend 的 `src`、`tests`、`scripts` 与仓库根 `scripts` 的全部 TS / MJS 文件；② 只读两个绑定；③ 只读两个 public 文件；④ 只读
 // `server.ts`。路由行为由既有用例覆盖（`rfc450-code-host-family-into-integration`、执行合同的路由用例与 `routes-inventory`）。
 import { describe, expect, test } from 'bun:test'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
+import { RFC577_RULE } from './helpers/rfc624MigrationReferenceRules'
+import { resolveMigrationSpecifiers } from './helpers/rfc624MigrationSpecifiers'
 
 const BACKEND = resolve(import.meta.dir, '..')
-const REPO = resolve(BACKEND, '..', '..')
+
 const SRC = join(BACKEND, 'src')
 const slash = (path: string) => path.split('\\').join('/')
 
 /** Old location → new location, owning module, mount function, and the public file plus the name it no longer offers. */
-const MOVED: ReadonlyArray<readonly [string, string, string, string, string, string]> = [
-  [
-    'routes/executionContracts',
-    'modules/execution-contract/inbound/http/executionContractRoutes',
-    'execution-contract',
-    'mountExecutionContractRoutes',
-    'modules/execution-contract/public/types',
-    'parseExecutionContractRef',
-  ],
-  [
-    'routes/codeHosts',
-    'modules/integration/inbound/http/codeHostRoutes',
-    'integration',
-    'mountCodeHostRoutes',
-    'modules/integration/public/types',
-    'CodeHostConnectionAdministration',
-  ],
-]
-const OLD = new Set(MOVED.map(([old]) => old))
-
-function walk(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir).flatMap((name) => {
-    if (name === 'node_modules' || name === 'dist') return []
-    const path = join(dir, name)
-    return statSync(path).isDirectory()
-      ? walk(path)
-      : /\.(?:[cm]?tsx?|mjs)$/.test(name)
-        ? [path]
-        : []
-  })
-}
+const MOVED = RFC577_RULE.moved
+const OLD = new Set<string>(RFC577_RULE.oldPaths)
 
 /**
  * Every module specifier a file names — imports, re-exports, `import('…')` (types and calls), `require('…')` and
  * `mock.module('…')` — resolved to a path below `src` without its extension (null when it leaves `src` or is a package).
  */
 function resolvedSpecifiers(path: string, text: string): string[] {
-  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
-  const out: string[] = []
-  const add = (specifier: string) => {
-    const bare = specifier.replace(/\.(?:[cm]?tsx?|[cm]?js)$/, '')
-    const target = bare.startsWith('@/')
-      ? join(SRC, bare.slice(2))
-      : bare.startsWith('.')
-        ? resolve(dirname(path), bare)
-        : null
-    if (target === null) return
-    const below = slash(relative(SRC, target))
-    if (!below.startsWith('..')) out.push(below)
-  }
-  const visit = (node: ts.Node) => {
-    if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    )
-      add(node.moduleSpecifier.text)
-    if (
-      ts.isImportTypeNode(node) &&
-      ts.isLiteralTypeNode(node.argument) &&
-      ts.isStringLiteral(node.argument.literal)
-    )
-      add(node.argument.literal.text)
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression.getText(source)
-      const first = node.arguments[0]
-      if (
-        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          callee === 'require' ||
-          callee === 'mock.module' ||
-          callee === 'import.meta.resolve') &&
-        first !== undefined &&
-        ts.isStringLiteralLike(first)
-      )
-        add(first.text)
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(source)
-  return out
+  return resolveMigrationSpecifiers(SRC, path, text)
 }
 
 /** Names a file exports with an `export` modifier (functions, classes, consts, interfaces, type aliases). */
@@ -190,22 +120,7 @@ describe('RFC-577 —— 两个绑定离开 routes/', () => {
     }
   })
 
-  test('src / tests / scripts 的全部说明符不再解析到旧路径', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(join(REPO, 'scripts')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(6000)
-    expect(
-      files.flatMap((path) =>
-        resolvedSpecifiers(path, readFileSync(path, 'utf8'))
-          .filter((target) => OLD.has(target))
-          .map((target) => `${slash(relative(REPO, path))} -> ${target}`),
-      ),
-    ).toEqual([])
-  }, 240_000)
+  // RFC-624: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('负对照：别名、相对路径、带扩展名与动态 import 都会被认出；新路径与别的路由不算', () => {
     expect(

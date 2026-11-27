@@ -22,6 +22,7 @@ export class Rfc395FixtureGeneration {
   private physical: FixtureDatabase | undefined
   private readonly templates = new Map<string, Buffer | FixtureDatabase>()
   private installed = false
+  private initialTemplate: { key: string; prepared: boolean } | undefined
   private stopping = false
   private pending: Promise<void> | undefined
 
@@ -41,6 +42,7 @@ export class Rfc395FixtureGeneration {
     readonly provider: DatabaseProvider,
     private readonly root: string,
     private readonly sourceUrl: string | undefined,
+    private readonly createDatabase = createRfc395FixtureDatabase,
   ) {}
 
   get sqlite(): Database {
@@ -78,17 +80,30 @@ export class Rfc395FixtureGeneration {
       cancelQueries: runtime.cancelQueries,
     }
   }
-  reset(): Promise<void> {
-    this.stopping = false
+  /** Opt in only when the first install key is known before allocating the generation. */
+  reset(initialTemplateKey?: string): Promise<void> {
     return this.run(async () => {
+      // A rejected overlapping reset must not clear another operation's cancellation.
+      this.stopping = false
       await this.disposeCurrent()
       this.assertRunning()
       this.installed = false
+      const cached =
+        initialTemplateKey === undefined ? undefined : this.templates.get(initialTemplateKey)
+      this.initialTemplate =
+        initialTemplateKey === undefined
+          ? undefined
+          : { key: initialTemplateKey, prepared: cached !== undefined }
       if (this.provider === 'sqlite') {
-        this.openSqlite(join(this.root, `${crypto.randomUUID()}.sqlite`))
+        const path = join(this.root, `${crypto.randomUUID()}.sqlite`)
+        if (Buffer.isBuffer(cached)) writeFileSync(path, cached)
+        this.openSqlite(path)
       } else {
         if (!this.sourceUrl) throw new Error('PostgreSQL fixture requires a test database URL')
-        this.physical = await createRfc395FixtureDatabase(this.sourceUrl)
+        this.physical = await this.createDatabase(
+          this.sourceUrl,
+          cached && !Buffer.isBuffer(cached) ? cached : undefined,
+        )
         this.assertRunning()
         this.openPostgresql()
       }
@@ -103,6 +118,16 @@ export class Rfc395FixtureGeneration {
   }
   private async installSnapshot(key: string, install: () => Promise<void>): Promise<void> {
     if (this.installed) return await install()
+    if (this.initialTemplate && key !== this.initialTemplate.key)
+      throw new Error(
+        `RFC-395 initial fixture key mismatch: expected ${this.initialTemplate.key}, received ${key}`,
+      )
+    if (this.initialTemplate?.prepared) {
+      this.assertRunning()
+      this.initialTemplate = undefined
+      this.installed = true
+      return
+    }
     const cached = this.templates.get(key)
     if (cached) {
       if (Buffer.isBuffer(cached)) {
@@ -113,7 +138,7 @@ export class Rfc395FixtureGeneration {
       } else {
         await this.disposeCurrent()
         this.assertRunning()
-        this.physical = await createRfc395FixtureDatabase(this.sourceUrl!, cached)
+        this.physical = await this.createDatabase(this.sourceUrl!, cached)
         this.assertRunning()
         this.openPostgresql()
       }
@@ -126,13 +151,14 @@ export class Rfc395FixtureGeneration {
         await this.runtime.close()
         this.runtimeValue = undefined
         try {
-          this.templates.set(key, await createRfc395FixtureDatabase(this.sourceUrl!, this.physical))
+          this.templates.set(key, await this.createDatabase(this.sourceUrl!, this.physical))
         } finally {
           if (!this.stopping) this.openPostgresql()
         }
       }
     }
     this.assertRunning()
+    this.initialTemplate = undefined
     this.installed = true
   }
   private async disposeCurrent(): Promise<void> {

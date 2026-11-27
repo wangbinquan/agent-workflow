@@ -4,10 +4,9 @@ import { expect, setDefaultTimeout, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { readCommittedArchitectureSource } from '../../../scripts/lib/committed-architecture-source'
-import { buildArchitectureReport, readReportSource } from './architecture/architectureReport'
 
-// The report scales with the committed corpus. After RFC-395 II-b (2026-10-26) one build took 50 s on
-// Ubuntu CI (29 s before) and 83 s on the macOS nightly (48 s before); allow 150 s.
+// Keep the original 150 s budget for committed-source loading. The independent
+// report builds and their population assertions now live in RFC-376.
 setDefaultTimeout(150_000)
 test('the explicit committed corpus and extra inputs come from the exact Git revision', () => {
   const root = resolve(import.meta.dir, '../../..')
@@ -37,17 +36,5 @@ test('the explicit committed corpus and extra inputs come from the exact Git rev
   )
 })
 
-test('the committed report counts the selected module corpus without consulting a live directory', () => {
-  const root = resolve(import.meta.dir, '../../..')
-  const selected = readReportSource(root, 'HEAD')
-  // Build from the explicit snapshot; no live directory is passed to the builder.
-  const report = buildArchitectureReport(selected)
-  expect(new Set(report.moduleSymbolOwners.map((entry) => entry.file)).size).toBeGreaterThan(1000)
-  const backend = selected.units.filter((unit) => unit.path.startsWith('packages/backend/src/'))
-  const modules = backend.filter((unit) => unit.path.startsWith('packages/backend/src/modules/'))
-  expect(report.metrics.backendProductionFiles).toBe(backend.length)
-  expect(
-    report.moduleSymbolOwners.filter((entry) => entry.file.includes('/src/modules/')).length,
-  ).toBeGreaterThan(modules.length)
-  expect(report.sourceSha).toBe(selected.sourceSha)
-})
+// RFC-624: the report population/source assertions now use RFC-376's first
+// independent report; its second build still proves reproducibility.

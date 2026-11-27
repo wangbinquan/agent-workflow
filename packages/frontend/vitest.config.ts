@@ -1,8 +1,17 @@
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
+
+// RFC-624: only these reviewed source guards need no DOM, React, or i18n setup.
+// Keep one exact list for inclusion and exclusion so every file runs once.
+const sourceGuardFiles = [
+  'tests/canvas-corner-theming-source.test.ts',
+  'tests/canvas-wrapper-styles.test.ts',
+  'tests/btn-variants-styles.test.ts',
+  'tests/tabs-modifier-styles.test.ts',
+]
 
 export default defineConfig({
   resolve: {
@@ -18,11 +27,6 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'happy-dom',
-    environmentOptions: {
-      happyDOM: { url: 'http://localhost/' },
-    },
-    setupFiles: ['./tests/setup.ts'],
     css: false,
     globals: false,
     // RFC-254: the windows-latest frontend job runs the SAME OS-agnostic
@@ -41,5 +45,30 @@ export default defineConfig({
     // 2327/2328 用例通过，被判死的那条没有任何时序反模式可修：天花板本身太低。
     testTimeout: 30000,
     hookTimeout: 30000,
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'source-guards',
+          environment: 'node',
+          include: sourceGuardFiles,
+          setupFiles: [],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'dom',
+          environment: 'happy-dom',
+          environmentOptions: {
+            happyDOM: { url: 'http://localhost/' },
+          },
+          // setupFiles arrays concatenate when extending a config, so keep
+          // the browser setup here rather than inheriting it in Node too.
+          setupFiles: ['./tests/setup.ts'],
+          exclude: [...configDefaults.exclude, ...sourceGuardFiles],
+        },
+      },
+    ],
   },
 })

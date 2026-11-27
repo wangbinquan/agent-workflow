@@ -37,7 +37,8 @@ import { initGitRepo, repoRemoteUrl } from './command'
 // Crash-recovery loop touches the database multiple times across daemon
 // restarts; default 90s timeout is enough but bump locally if the e2e box
 // is slow.
-test.describe.configure({ mode: 'serial' })
+// Every case owns its daemon/home. Keep file order, but retry only the failed case.
+test.describe.configure({ mode: 'default' })
 test.setTimeout(120_000)
 
 // Progress barriers (a status the task must reach) share one budget with this file's terminal waits. On Windows,

@@ -25,7 +25,8 @@ import { initGitRepo, repoRemoteUrl } from './command'
 
 // Each case rebuilds its own daemon + fixture repo + AGENT_WORKFLOW_HOME for
 // isolation. Serial mode is for port allocation hygiene only.
-test.describe.configure({ mode: 'serial' })
+// Every case owns its daemon/home. Keep file order, but retry only the failed case.
+test.describe.configure({ mode: 'default' })
 test.setTimeout(120_000)
 
 // ----------------------------------------------------------------------------

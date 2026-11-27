@@ -12,126 +12,27 @@
 // 三个文件的行为由既有用例覆盖（`log.test`、`rfc284-microhelpers` 的 hash 一条、`rfc285-b5-stale-code-unification`、各路由的错误映射用例等）。
 // W9-C 的语义改造（domain / application 错误去 HTTP status、经 `publicError.ts` 映射）不在 RFC-575。
 import { describe, expect, test } from 'bun:test'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import ts from 'typescript'
+import { RFC575_RULE } from './helpers/rfc624MigrationReferenceRules'
+import { resolveMigrationSpecifiers } from './helpers/rfc624MigrationSpecifiers'
 
 const BACKEND = resolve(import.meta.dir, '..')
-const REPO = resolve(BACKEND, '..', '..')
+
 const SRC = join(BACKEND, 'src')
-const slash = (path: string) => path.split('\\').join('/')
 
 /** Old location (below `src`, no extension) → new location, with the names each file exported before the move and its imports. */
-const MOVED: ReadonlyArray<readonly [string, string, readonly string[], readonly string[]]> = [
-  [
-    'util/errors',
-    'platform/errors/domainErrors',
-    [
-      'ConflictError',
-      'DomainError',
-      'ErrorPayload',
-      'ForbiddenError',
-      'GoneError',
-      'NotFoundError',
-      'SkillQuarantinedError',
-      'UnauthorizedError',
-      'ValidationError',
-      'diagnosticTextOf',
-      'errorHandler',
-      'staleConflictError',
-    ],
-    ['../logging/logger', 'drizzle-orm', 'hono', 'hono/utils/http-status'],
-  ],
-  [
-    'util/hash',
-    'platform/contracts/hash',
-    ['Sha256DigestBuilder', 'createSha256DigestBuilder', 'sha1Hex', 'sha256Hex'],
-    ['node:crypto'],
-  ],
-  [
-    'util/log',
-    'platform/logging/logger',
-    [
-      'LogLevel',
-      'Logger',
-      'configureLogger',
-      'createLogger',
-      'resetLoggerForTest',
-      'setLoggerStdoutWriterForTest',
-    ],
-    ['node:fs', 'node:path'],
-  ],
-]
-const OLD = new Set(MOVED.map(([old]) => old))
+const MOVED = RFC575_RULE.moved
+const OLD = new Set<string>(RFC575_RULE.oldPaths)
 /** What `util/` still holds after RFC-575 — nothing since RFC-619 (`util/` is gone). */
-const UTIL_REMAINDER: string[] = [
-  // RFC-593: git.ts moved into source-control's local infrastructure.
-  // RFC-617: fileTrust, win32Acl, gitHardening, gitRef, redact and safePath moved into platform.
-  // RFC-619: the git credential lease and its helper entry moved into platform/execution/local, the OIDC failure page next
-  // to its route in routes/.
-]
-
-function walk(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir).flatMap((name) => {
-    if (name === 'node_modules' || name === 'dist') return []
-    const path = join(dir, name)
-    return statSync(path).isDirectory()
-      ? walk(path)
-      : /\.(?:[cm]?tsx?|mjs)$/.test(name)
-        ? [path]
-        : []
-  })
-}
 
 /**
  * Every module specifier a file names — imports, re-exports, `import('…')` (types and calls), `require('…')` and
  * `mock.module('…')` — resolved to a path below `src` without its extension (null when it leaves `src` or is a package).
  */
 function resolvedSpecifiers(path: string, text: string): string[] {
-  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
-  const out: string[] = []
-  const add = (specifier: string) => {
-    const bare = specifier.replace(/\.(?:[cm]?tsx?|[cm]?js)$/, '')
-    const target = bare.startsWith('@/')
-      ? join(SRC, bare.slice(2))
-      : bare.startsWith('.')
-        ? resolve(dirname(path), bare)
-        : null
-    if (target === null) return
-    const below = slash(relative(SRC, target))
-    if (!below.startsWith('..')) out.push(below)
-  }
-  const visit = (node: ts.Node) => {
-    if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    )
-      add(node.moduleSpecifier.text)
-    if (
-      ts.isImportTypeNode(node) &&
-      ts.isLiteralTypeNode(node.argument) &&
-      ts.isStringLiteral(node.argument.literal)
-    )
-      add(node.argument.literal.text)
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression.getText(source)
-      const first = node.arguments[0]
-      if (
-        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          callee === 'require' ||
-          callee === 'mock.module' ||
-          callee === 'import.meta.resolve') &&
-        first !== undefined &&
-        ts.isStringLiteralLike(first)
-      )
-        add(first.text)
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(source)
-  return out
+  return resolveMigrationSpecifiers(SRC, path, text)
 }
 
 /** Names a file exports with an `export` modifier (functions, classes, consts, interfaces, type aliases). */
@@ -187,22 +88,7 @@ describe('RFC-575 —— 三个基础原语离开 util/', () => {
     }
   })
 
-  test('src / tests / scripts 的全部说明符不再解析到旧路径', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(join(REPO, 'scripts')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(6000)
-    expect(
-      files.flatMap((path) =>
-        resolvedSpecifiers(path, readFileSync(path, 'utf8'))
-          .filter((target) => OLD.has(target))
-          .map((target) => `${slash(relative(REPO, path))} -> ${target}`),
-      ),
-    ).toEqual([])
-  }, 240_000)
+  // RFC-624: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('负对照：别名、相对路径、带扩展名、动态 import、require、mock.module 与 import 类型都会被认出；新路径、余下的 util 文件与包名不算', () => {
     const fromSrcRoot = join(SRC, 'main.ts')
@@ -258,12 +144,4 @@ describe('RFC-575 —— 新位置的文件', () => {
   })
 })
 
-describe('RFC-575 —— util/ 只剩安全相邻的一族', () => {
-  test('util/ 的文件清单', () => {
-    // RFC-619: util/ itself is gone; an absent directory lists nothing.
-    const dir = join(SRC, 'util')
-    expect(
-      (existsSync(dir) ? readdirSync(dir) : []).filter((name) => name.endsWith('.ts')).sort(),
-    ).toEqual(UTIL_REMAINDER)
-  })
-})
+// RFC-624: the independent util/ inventory test also lives in the shared scanner suite.

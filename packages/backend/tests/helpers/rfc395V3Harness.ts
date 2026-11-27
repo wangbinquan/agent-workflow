@@ -30,6 +30,7 @@ import type {
 } from '@/platform/persistence/migration/run/types'
 import type { VersionedSourceReader } from '@/platform/persistence/migration/sourceTypes'
 import { describeV2Providers, type V2Harness } from './rfc395V2Harness'
+import type { V1FixtureOptions } from './rfc395V1Harness'
 import { integrationInput } from './rfc395V2/integration'
 import { seedFrozenPostgresqlSource } from './rfc395V3/sourceSeeds'
 import { migrationPostgresqlRuntime } from '@/platform/persistence/migration/freeze/postgresqlDatabases'
@@ -83,11 +84,19 @@ export interface V3Harness {
   ): Promise<ConversionInput>
 }
 
-export function describeV3Providers(name: string, body: (harness: V3Harness) => void): void {
-  describeV2Providers(name, (source) => {
-    describe('same-provider target', () =>
-      withV3Target(source, source.sourceHarness.provider, body))
-  })
+export function describeV3Providers(
+  name: string,
+  body: (harness: V3Harness) => void,
+  options?: V1FixtureOptions,
+): void {
+  describeV2Providers(
+    name,
+    (source) => {
+      describe('same-provider target', () =>
+        withV3Target(source, source.sourceHarness.provider, body))
+    },
+    options,
+  )
 }
 /** This lane requires both engines; explicit single-provider selections leave it to the dual lane. */
 export function describeV3CrossProvider(name: string, body: (harness: V3Harness) => void): void {

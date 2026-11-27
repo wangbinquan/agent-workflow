@@ -11,112 +11,26 @@
 // 既有的用例覆盖（`keyed-serial-queue`、`rfc271-zip-roundtrip`、`zip-fixed-mtime-timezone`、`zod4-contracts`、`rfc143` 的 semver 一条、
 // `rfc284-microhelpers` 的 monotonic 一条等）。
 import { describe, expect, test } from 'bun:test'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import ts from 'typescript'
+import { RFC571_RULE } from './helpers/rfc624MigrationReferenceRules'
+import { resolveMigrationSpecifiers } from './helpers/rfc624MigrationSpecifiers'
 
 const BACKEND = resolve(import.meta.dir, '..')
-const REPO = resolve(BACKEND, '..', '..')
+
 const SRC = join(BACKEND, 'src')
-const slash = (path: string) => path.split('\\').join('/')
 
 /** Old location (below `src`, no extension) → new location, with the names each file exported before the move. */
-const MOVED: ReadonlyArray<readonly [string, string, readonly string[], readonly string[]]> = [
-  ['util/semver', 'platform/contracts/semver', ['compareSemver', 'extractVersion'], []],
-  ['util/time', 'platform/contracts/monotonicNow', ['monotonicNow'], []],
-  ['util/keyedSerialQueue', 'platform/contracts/keyedSerialQueue', ['KeyedSerialQueue'], []],
-  [
-    'util/jsonDocument',
-    'platform/http/jsonDocument',
-    ['JsonDocument', 'jsonDocumentResponse', 'parseJsonDocument'],
-    [],
-  ],
-  [
-    'util/zodJsonSchema',
-    'platform/operations/zodJsonSchema',
-    ['toInputJsonSchema', 'withInputJsonSchema'],
-    ['zod'],
-  ],
-  [
-    'util/frontmatter',
-    'platform/content/frontmatter',
-    ['FrontmatterDoc', 'parseFrontmatter', 'stringifyFrontmatter'],
-    ['yaml'],
-  ],
-  ['util/zip', 'platform/content/zip', ['ZipFile', 'encodeZip'], ['fflate']],
-  ['util/version', 'platform/execution/version', ['BUILD_VERSION', 'appVersion'], []],
-  // The RFC-571 follow-up: the two leaves left behind at first.
-  [
-    'util/inFlight',
-    'platform/contracts/inFlight',
-    ['InFlightCoalescer', 'createInFlightCoalescer'],
-    [],
-  ],
-  ['util/sqlChunk', 'platform/persistence/sqlChunk', ['SQL_IN_CHUNK', 'chunkedAll'], []],
-]
-const OLD = new Set(MOVED.map(([old]) => old))
-
-function walk(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir).flatMap((name) => {
-    if (name === 'node_modules' || name === 'dist') return []
-    const path = join(dir, name)
-    return statSync(path).isDirectory()
-      ? walk(path)
-      : /\.(?:[cm]?tsx?|mjs)$/.test(name)
-        ? [path]
-        : []
-  })
-}
+const MOVED = RFC571_RULE.moved
+const OLD = new Set<string>(RFC571_RULE.oldPaths)
 
 /**
  * Every module specifier a file names — imports, re-exports, `import('…')` (types and calls), `require('…')` and
  * `mock.module('…')` — resolved to a path below `src` without its extension (null when it leaves `src` or is a package).
  */
 function resolvedSpecifiers(path: string, text: string): string[] {
-  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
-  const out: string[] = []
-  const add = (specifier: string) => {
-    const bare = specifier.replace(/\.(?:[cm]?tsx?|[cm]?js)$/, '')
-    const target = bare.startsWith('@/')
-      ? join(SRC, bare.slice(2))
-      : bare.startsWith('.')
-        ? resolve(dirname(path), bare)
-        : null
-    if (target === null) return
-    const below = slash(relative(SRC, target))
-    if (!below.startsWith('..')) out.push(below)
-  }
-  const visit = (node: ts.Node) => {
-    if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    )
-      add(node.moduleSpecifier.text)
-    if (
-      ts.isImportTypeNode(node) &&
-      ts.isLiteralTypeNode(node.argument) &&
-      ts.isStringLiteral(node.argument.literal)
-    )
-      add(node.argument.literal.text)
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression.getText(source)
-      const first = node.arguments[0]
-      if (
-        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          callee === 'require' ||
-          callee === 'mock.module' ||
-          callee === 'import.meta.resolve') &&
-        first !== undefined &&
-        ts.isStringLiteralLike(first)
-      )
-        add(first.text)
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(source)
-  return out
+  return resolveMigrationSpecifiers(SRC, path, text)
 }
 
 /** Names a file exports with an `export` modifier (functions, classes, consts, interfaces, type aliases). */
@@ -166,22 +80,7 @@ describe('RFC-571 —— 十个原语离开 util/', () => {
     }
   })
 
-  test('src / tests / scripts 的全部说明符不再解析到旧路径', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(join(REPO, 'scripts')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(6000)
-    expect(
-      files.flatMap((path) =>
-        resolvedSpecifiers(path, readFileSync(path, 'utf8'))
-          .filter((target) => OLD.has(target))
-          .map((target) => `${slash(relative(REPO, path))} -> ${target}`),
-      ),
-    ).toEqual([])
-  }, 240_000)
+  // RFC-624: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('负对照：别名、相对路径、带扩展名、动态 import、require、mock.module 与 import 类型都会被认出；新路径与包名不算', () => {
     const fromSrcRoot = join(SRC, 'main.ts')

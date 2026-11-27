@@ -1,3 +1,7 @@
+## 2026-11-26 RFC-624 第一批测试准备与重复执行优化（In Progress；`design/RFC-624-test-preparation-deduplication/`）
+
+用户已批准边界明确的第一批：数据库模板准备、重复扫描/报告、独立E2E重试及纯源码/真实组件测试优化；保持覆盖、隔离与原门禁，完整开发后集中验证并对比exact-SHA CI耗时。
+
 ## 2026-11-26 RFC-623 第三轮 CI：macOS runner 需求与完整计时分片（Done；`design/RFC-623-macos-ci-runner-demand/`）
 
 macOS E2E 4→3片、严格source拓扑兼容及双green逐文件实测max重平衡完成。097d41d6/run45921188560 首次attempt完整69/69成功，44后端/10E2E/13组required保持；总墙钟36m01s（run完成代理36m02s）。排队仍受外部容量影响，最慢mac等待14m51s，未宣称根治。collector正确拒绝含retry的E2E权重刷新。详见[实测验收](design/RFC-623-macos-ci-runner-demand/acceptance.md)，结论仅对应097d，不冒领后继共享提交。

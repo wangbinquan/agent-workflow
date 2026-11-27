@@ -15,17 +15,9 @@
 // `cli/status.ts`、`bootstrap/commandBootstraps.ts`、`main.ts` 与 system-operations 的两个文件，行为断言跑真实的命令与文件实现；⑤ 只读工作流文件。
 // 三个平台文件的行为由既有用例覆盖（`rfc356-workspace-reclaim`、`cli-embedded-migrations`、`rfc254-no-unref-deadline-guard` 与各读者的用例）。
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import {
-  existsSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import ts from 'typescript'
 import { composeStatusCommandDaemonRuntime } from '../src/bootstrap/commandBootstraps'
 import { statusCommand } from '../src/cli/status'
@@ -36,98 +28,25 @@ import {
 import type { DaemonRuntimeInfo } from '../src/modules/system-operations/public/types'
 import { writePidFileForTest } from '../src/platform/execution/local/daemonLock'
 import { Paths } from '../src/platform/configuration/installationPaths'
+import { RFC573_RULE, RFC573_DAEMON_INFO } from './helpers/rfc624MigrationReferenceRules'
+import { resolveMigrationSpecifiers } from './helpers/rfc624MigrationSpecifiers'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const REPO = resolve(BACKEND, '..', '..')
 const SRC = join(BACKEND, 'src')
-const slash = (path: string) => path.split('\\').join('/')
 
 /** Old location (below `src`, no extension) → new location, with the names each file exported before the move and its imports. */
-const MOVED: ReadonlyArray<readonly [string, string, readonly string[], readonly string[]]> = [
-  [
-    'util/timeoutSignal',
-    'platform/contracts/timeoutSignal',
-    ['TimeoutSignal', 'timeoutSignal'],
-    [],
-  ],
-  [
-    'util/fsReclaim',
-    'platform/workspace/local/fsReclaim',
-    ['DEFAULT_RECLAIM_DELAYS_MS', 'RemoveDirectoryWithRetryResult', 'removeDirectoryWithRetry'],
-    ['@/platform/logging/logger', 'node:fs', 'node:fs/promises'],
-  ],
-  [
-    'util/migrationsFolder',
-    'platform/persistence/migration/migrationsFolder',
-    ['ResolveMigrationsOptions', 'resolveMigrationsFolder', 'resolvePostgresqlMigrationsFolder'],
-    ['@/embed', '@/platform/configuration/installationPaths', 'node:fs', 'node:path'],
-  ],
-]
+const MOVED = RFC573_RULE.moved
 /** The fourth file did not move as a file: its one function joined the file implementation of the query port. */
-const DAEMON_INFO = 'util/daemonInfo'
-const OLD = new Set([...MOVED.map(([old]) => old), DAEMON_INFO])
-
-function walk(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir).flatMap((name) => {
-    if (name === 'node_modules' || name === 'dist') return []
-    const path = join(dir, name)
-    return statSync(path).isDirectory()
-      ? walk(path)
-      : /\.(?:[cm]?tsx?|mjs)$/.test(name)
-        ? [path]
-        : []
-  })
-}
+const DAEMON_INFO = RFC573_DAEMON_INFO
+const OLD = new Set<string>(RFC573_RULE.oldPaths)
 
 /**
  * Every module specifier a file names — imports, re-exports, `import('…')` (types and calls), `require('…')` and
  * `mock.module('…')` — resolved to a path below `src` without its extension (null when it leaves `src` or is a package).
  */
 function resolvedSpecifiers(path: string, text: string): string[] {
-  const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
-  const out: string[] = []
-  const add = (specifier: string) => {
-    const bare = specifier.replace(/\.(?:[cm]?tsx?|[cm]?js)$/, '')
-    const target = bare.startsWith('@/')
-      ? join(SRC, bare.slice(2))
-      : bare.startsWith('.')
-        ? resolve(dirname(path), bare)
-        : null
-    if (target === null) return
-    const below = slash(relative(SRC, target))
-    if (!below.startsWith('..')) out.push(below)
-  }
-  const visit = (node: ts.Node) => {
-    if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    )
-      add(node.moduleSpecifier.text)
-    if (
-      ts.isImportTypeNode(node) &&
-      ts.isLiteralTypeNode(node.argument) &&
-      ts.isStringLiteral(node.argument.literal)
-    )
-      add(node.argument.literal.text)
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression.getText(source)
-      const first = node.arguments[0]
-      if (
-        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          callee === 'require' ||
-          callee === 'mock.module' ||
-          callee === 'import.meta.resolve') &&
-        first !== undefined &&
-        ts.isStringLiteralLike(first)
-      )
-        add(first.text)
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(source)
-  return out
+  return resolveMigrationSpecifiers(SRC, path, text)
 }
 
 /** Names a file exports with an `export` modifier (functions, classes, consts, interfaces, type aliases). */
@@ -184,22 +103,7 @@ describe('RFC-573 —— 四个文件离开 util/', () => {
     expect(existsSync(join(SRC, `${DAEMON_INFO}.ts`))).toBe(false)
   })
 
-  test('src / tests / scripts 的全部说明符不再解析到旧路径', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(join(REPO, 'scripts')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(6000)
-    expect(
-      files.flatMap((path) =>
-        resolvedSpecifiers(path, readFileSync(path, 'utf8'))
-          .filter((target) => OLD.has(target))
-          .map((target) => `${slash(relative(REPO, path))} -> ${target}`),
-      ),
-    ).toEqual([])
-  }, 240_000)
+  // RFC-624: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('负对照：别名、相对路径、带扩展名、动态 import、require、mock.module 与 import 类型都会被认出；新路径与包名不算', () => {
     const fromSrcRoot = join(SRC, 'main.ts')

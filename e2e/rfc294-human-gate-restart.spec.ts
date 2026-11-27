@@ -18,7 +18,8 @@ import { join } from 'node:path'
 import { initGitRepo, repoRemoteUrl } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
 
-test.describe.configure({ mode: 'serial' })
+// Every case owns its daemon/home. Keep file order, but retry only the failed case.
+test.describe.configure({ mode: 'default' })
 test.setTimeout(150_000)
 
 interface TaskRow {
