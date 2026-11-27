@@ -123,9 +123,13 @@ test('the parent of the upgrade child announces the upgrade, relays through the 
   const text = readFileSync(join(import.meta.dir, '../src/bootstrap/autoUpgradeChild.ts'), 'utf8')
   expect(text).toContain("'[db migration] automatic database upgrade started: ")
   expect(text).toContain('const quiet = createQuietUpgradeNotice({ now: Date.now, write: line })')
-  expect(text).toContain('const quietTimer = setInterval(() => quiet.tick(), 5_000)')
+  expect(text).toContain('tick: () => quiet.tick(),')
   expect(text).toContain('quiet.relayed(value)')
-  expect(text).toContain('clearInterval(quietTimer)')
+  expect(text).toContain('quietTimer.stop()')
+  // The platform's fixed-rate timer, not a raw one: raw timer sites are a closed ledger
+  // (tests/architecture/rfc376-structural-guards.test.ts, `direct-setinterval-sites`).
+  expect(text).toContain("import { startInterval } from '@/platform/background/intervalTimer'")
+  expect(text).not.toContain('setInterval(')
   // One spawn, as before: the notice is the parent's own timer, not another process.
   expect(text.split('Bun.spawn(').length - 1).toBe(1)
 })

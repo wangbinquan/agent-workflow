@@ -1,6 +1,6 @@
 ## 2026-11-27 自动升级期间长时间没有输出时补存活提示（缺陷修复，不走 RFC）
 
-用户问“数据迁移的时候能不能打印迁移进度”。现状是有进度行，但不连续：在一份真实的 v0.19.2 库（1.07 GB 有效数据、82.8 万个运行文件）上实测，升级过程有 47 秒、176 秒、115 秒、120 秒四段完全没有输出——整库内容摘要、快照拷贝、完整性检查都是单条语句，内部无法报告，库越大越长；而 `docs/release-upgrade-rollback.md` 写的是“日志持续报告进度”。改动只在 `start` 等待升级子进程的那一侧（`bootstrap/autoUpgradeChild.ts`）：开始时打印一行说明，子进程连续 15 秒没有输出时打印一行 `still working (last reported: …)`，之后每 30 秒一行。转换流程本身没有改。手册补了三种日志行的说明。回归用例：`auto-upgrade-quiet-notice.test.ts`。本地：这条用例连同 spawn 计数、启动路径自动升级的相关用例共 6 个文件 53 条通过，后端 tsc 与 eslint 干净；主 CI 结论待本提交的 run。
+用户问“数据迁移的时候能不能打印迁移进度”。现状是有进度行，但不连续：在一份真实的 v0.19.2 库（1.07 GB 有效数据、82.8 万个运行文件）上实测，升级过程有 47 秒、176 秒、115 秒、120 秒四段完全没有输出——整库内容摘要、快照拷贝、完整性检查都是单条语句，内部无法报告，库越大越长；而 `docs/release-upgrade-rollback.md` 写的是“日志持续报告进度”。改动只在 `start` 等待升级子进程的那一侧（`bootstrap/autoUpgradeChild.ts`）：开始时打印一行说明，子进程连续 15 秒没有输出时打印一行 `still working (last reported: …)`，之后每 30 秒一行。转换流程本身没有改。手册补了三种日志行的说明。回归用例：`auto-upgrade-quiet-notice.test.ts`。本地：这条用例连同 spawn 计数、启动路径自动升级的相关用例共 6 个文件 53 条通过，后端 tsc 与 eslint 干净；主 CI 结论待本提交的 run。**更正（同日）**：`71d08e5ec` 里这个定时器是直接写的 `setInterval`，会撞裸定时器站点的账本守卫（`rfc376-structural-guards` 的 `direct-setinterval-sites`）；发现时该提交的 CI 尚未开始运行，随即改用平台的 `startInterval` 补推，后端架构守卫全量在本地复跑通过。教训记入 `docs/dev-gotchas.md`。
 
 ## 2026-11-27 RFC-616 Token 原因图：系统工作单列并按用途细分（发布后用户反馈；缺陷修复）
 

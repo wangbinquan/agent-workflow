@@ -1,6 +1,7 @@
 // Runtime-safe process boundary: no converter or migration application imports.
 import { resolve } from 'node:path'
 import { IS_EMBEDDED } from '@/embed'
+import { startInterval } from '@/platform/background/intervalTimer'
 import { createLogger } from '@/platform/logging/logger'
 import { platformSpawnOptionsForHost } from '@/platform/execution/local/platformExec'
 
@@ -95,7 +96,11 @@ export async function runAutoUpgradeChild(): Promise<void> {
       'The previous database is not modified. A large installation takes tens of minutes or more; progress follows.',
   )
   const quiet = createQuietUpgradeNotice({ now: Date.now, write: line })
-  const quietTimer = setInterval(() => quiet.tick(), 5_000)
+  const quietTimer = startInterval({
+    owner: 'bootstrap.auto-upgrade-quiet-notice',
+    everyMs: 5_000,
+    tick: () => quiet.tick(),
+  })
   const relay = async () => {
     const decoder = new TextDecoder()
     let pending = ''
@@ -131,7 +136,7 @@ export async function runAutoUpgradeChild(): Promise<void> {
       )
     }
   } finally {
-    clearInterval(quietTimer)
+    quietTimer.stop()
     process.off('SIGINT', interrupt)
     process.off('SIGTERM', terminate)
   }

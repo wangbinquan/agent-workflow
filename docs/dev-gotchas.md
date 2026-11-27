@@ -5953,6 +5953,47 @@ value, expected 1`）说明漂移不止在**路径**，还在**请求体形状**
 - 回归用例：`dev-reload-cli.test.ts`（真实 `--hot` 进程，保存一次源文件后 `.daemon.info` 的地址不变）、
   `dev-reload.test.ts`。
 
+## 在 `bun run dev` 的环境里跑真实任务时，别同时改后台源码（2026-11-27 实撞）
+
+- `bun run dev` 的后端是 `bun --hot`：`packages/backend/src` 或 `packages/shared/src` 里任何被入口引用的文件一保存，
+  就“停掉上一代、再起一代”。**正在执行的节点运行会被打断**（任务变成中断，要恢复或重试；数字员工的轮次会失败或受阻），
+  已经花掉的模型调用白费。测试文件、`docs/`、`design/` 不在入口的引用链上，改它们不会重载；前端源码走 Vite 的
+  HMR，也不会重载后端。
+- 做法：要在这种环境里验证真实任务，先把后台代码改完，再发起任务；任务在跑的时候只改测试和文档。不得不改后台
+  源码时，先等所有任务停在等待人或已结束的状态。
+- 盯任务的脚本要容忍后端短暂连不上：重载的几秒里请求会 `ECONNREFUSED`。本次一个只捕获 HTTP 错误的轮询脚本在
+  重载时直接退出，随后“七分钟没有变化”的结论其实只观察了 30 秒。**轮询脚本每条输出都带时间戳，结论以时间戳
+  为准，不以“大概过了多久”为准。**
+
+## 本机 GitLab 是明文 HTTP 时，数字员工推送报“could not read Password”（2026-11-27 实撞）
+
+- **症状**：数字员工在“提交 MR”受阻，原因是 `repository-push-authentication-failed · fatal: could not read
+  Password for 'http://***@127.0.0.1:8929': terminal prompts disabled`。代码平台连接已配置，“测试连接”通过。
+- **原因**：仓库地址是 `http://` 时，只有代码平台连接上配了覆盖这个地址的**传输映射**（`transportMappings`，
+  其中 `httpBaseUrl` 以 `http://` 开头），平台才把它当作自己托管的端点、用平台令牌推送
+  （`packages/shared/src/repository-transport.ts` 的 `resolveManagedRepositoryHttpEndpoint`）。没有映射时走不带
+  凭据的旧路径，git 于是去问本机的凭据配置。报错里出现“Password”而不是“Username”，是因为本机全局 git 配置
+  恰好给这个主机设了用户名（`git config --global --get-regexp 'credential\..*8929'` 可以看到），与平台无关。
+- **修法**：`PUT /api/code-hosts/gitlab` 时带上
+  `transportMappings: [{ sshHost, sshPort, httpBaseUrl: 'http://<host>:<port>' }]`（设置页的代码平台里也能填），
+  然后在事项上点“恢复”。`https://` 的代码平台不需要这一步。
+
+## 生产代码里不要直接写 `setInterval`：裸定时器站点有账本守卫（2026-11-27 实撞）
+
+- 要一个固定周期的定时器，用 `platform/background/intervalTimer.ts` 的 `startInterval({ owner, everyMs, tick })`
+  （RFC-529），停用 `stop()`。后台维护类的周期任务用 `startMaintenanceTicker`。
+- 直接写 `setInterval(` 会同时撞两条**扫描整棵源码树**的守卫：`tests/architecture/rfc376-structural-guards.test.ts`
+  的 `direct-setinterval-sites` 账本（逐站点登记，只降不升），以及 `rfc317-stale-assertion-invariants.test.ts`
+  第 ⑥ 条。
+- 这类守卫不引用被改的文件名，“只跑引用了我改的文件的用例”发现不了：本次给升级子进程的转发加了一个裸定时器，
+  相关用例 53 条全过就推了，推完才想起去查。**改了生产代码，推之前把 `tests/architecture/` 整个目录跑一遍**
+  （本机分 4 组约 10 分钟），比等一小时 CI 再回来修便宜得多。
+
+## zsh 里别把变量叫 `GID`、`UID`（2026-11-27 实撞）
+
+本机的 shell 是 zsh，`GID`、`UID`、`EGID`、`EUID` 是整数型的特殊参数。`GID=$(…取一个 ULID…)` 会被当成算术
+表达式求值，报 `bad math expression: operator expected`，整条命令不执行。脚本里的临时变量换个名字。
+
 ## mock IdP 重启后所有 OIDC 登录失败：`kid` 不变 + 长寿 JWKS 缓存（2026-08-22 实测）
 
 `bun dev` 的开发登录服务（`packages/system-mocks/src/dev-auth`）第一次跑通后，**重启这个
