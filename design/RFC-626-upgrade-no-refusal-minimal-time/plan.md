@@ -7,7 +7,7 @@
 
 | # | 内容 | 依赖 | 主要位置 |
 | --- | --- | --- | --- |
-| RFC-626-T0 | 第二轮只读调研收口：design §3.4 中标「待 T0」的各行，逐项确认目标结构能否表示保留后的状态、当前版本遇到该状态的行为，把结论写回 §3.4。设计门之前完成 | — | `design.md` |
+| RFC-626-T0 | 复核：design §3.2～§3.4 中标「调研」的结论逐项对源码复核一遍，与文档不符的先改文档再实现 | — | `design.md` |
 | RFC-626-T1 | 环境前置检查：结构识别提前、按有效数据量估算空间、`config.json` 合法性；拒绝时不留工件 | — | `system-operations/application/epochSwitch/autoUpgrade.ts`、`domain/epochSwitch/capacity.ts`、`platform/persistence/migration/freeze/capacity.ts` |
 | RFC-626-T2 | 源身份与轻量核对：内容身份各算一次，断言改用变更标记，标记不一致时回退重算；去掉三处纯重复 | — | `platform/persistence/migration/sqliteSourceReader.ts`、`postgresqlSourceReader.ts`、`freeze/sourceAccess.ts`、`offlineSourceUpgrade.ts` |
 | RFC-626-T3 | 自动模式单遍编排：`direct` 开关、前置计划、执行步顺序、实际结果计划与再批准、收尾只做一次 | T2 | `system-operations/application/epochSwitch/planner.ts`、`runner.ts`、`autoUpgrade.ts`、`infrastructure/epochSwitch/targetGeneration.ts`、`bootstrap/epochMigration.ts` |
@@ -18,10 +18,10 @@
 | RFC-626-T8 | 结束任务：引擎的发现过程与不动点、`settlers` 合同、三个模块的 settler、结束集合落盘与重放 | T4 | `conversion/engine.ts`、`conversion/rule.ts`、`conversion/readSource.ts`、`modules/task-execution/infrastructure/migration/`、`modules/collaboration/infrastructure/migration/`、`modules/system-operations/infrastructure/migration/` |
 | RFC-626-T9 | 新结束原因：`shared` 常量、前端原因表与中英文案、数字员工视为停止 | — | `packages/shared/src/lifecycle.ts`、`packages/frontend/src/lib/task-failure.ts`、`i18n`、`modules/digital-employee/application/digitalEmployeeExecution.ts` |
 | RFC-626-T10 | 封存：收集器的行级封存、目标契约失败、装载拒绝回报与单元重试、收尾时悬空行处理与对账 | T4 | `conversion/receipts.ts`、`engine.ts`、`conversionSink.ts`、`target/finalize.ts`、`infrastructure/epochSwitch/validation.ts` |
-| RFC-626-T11 | 逐类保留处置：design §3.4 各行的规则改动（内容、技能、缓存仓库、定时任务、运行时、融合与记忆、代码历史自动确认、代理引用、应用日志、悬空引用、任务属主、旧任务书、事件族切换、种子） | T0、T10 | 各模块 `infrastructure/migration/` 与 `platform/content/migration/`、`platform/persistence/migration/archives/` |
+| RFC-626-T11 | 逐类保留处置：design §3.4 各行的规则改动（内容；技能的隔离、封存与操作记录了结，`skill_operations` / `skill_operation_locks` 并入技能规则；缓存仓库与按地址关联；定时任务停用；运行时默认值；融合与记忆；代码历史自动确认；代理引用；悬空引用；任务属主；旧任务书；事件族切换） | T0、T10 | 各模块 `infrastructure/migration/` 与 `platform/content/migration/`、`platform/persistence/migration/archives/` |
 | RFC-626-T12 | 报告：`ConversionSummary.resolutions`、计划文件字段、回执、完成日志、`db migration status` | T8、T10、T11 | `conversion/sink.ts`、`domain/epochSwitch/documents.ts`、`planDocument.ts`、`autoUpgrade.ts`、`status.ts` |
 | RFC-626-T13 | 内存与磁盘：表回执流式求摘要、来源到目标的去重计数入暂存库、清单只留一份 | T4、T5 | `conversion/engine.ts`、`staging.ts`、`content/inventory/manifest.ts` |
-| RFC-626-T14 | 发布版升级矩阵：新增种子（遗留未结束任务、内容缺失、封存样例）与对应的映射预言条目；既有预言不变 | T8、T10、T11 | `scripts/release-upgrade/`、`packages/backend/tests/` 下 RFC-398 矩阵 |
+| RFC-626-T14 | 发布版升级矩阵：为每一类处置各加一份种子（遗留未结束任务、内容与技能目录缺失、技能操作停在半途、封存样例、停用的定时任务、地址读不出的缓存仓库）与对应的映射预言条目，升级后真实启动服务；既有预言不变 | T8、T10、T11 | `scripts/release-upgrade/`、`packages/backend/tests/` 下 RFC-398 矩阵 |
 | RFC-626-T15 | 文档：升级回滚手册、踩坑记录、RFC-395 / RFC-398 的修订指针 | 全部 | `docs/release-upgrade-rollback.md`、`docs/dev-gotchas.md`、`design/RFC-395-…/migration.md`、`design/RFC-398-…/proposal.md` |
 | RFC-626-T16 | 集中验证与实测：全部新旧用例、参考数据 SQLite 与 PostgreSQL、M1 原始数据、新旧实现逐表对比、三处中断续做 | T1～T15 | — |
 | RFC-626-T17 | 实现门（只审功能）与 CI | T16 | — |
@@ -51,13 +51,14 @@
 （集中验证后逐项填写证据）
 
 - [ ] 1 不拒绝：M1 原始数据自动升级成功，37 个任务为已取消并带原因，其余任务状态不变，等评审的正常任务能继续
-- [ ] 2 内容缺失不拒绝：M3 数据自动升级成功，27 处内容标为不存在并列入报告
-- [ ] 3 封存：构造的坏行在归档里、业务表里没有、报告列出
+- [ ] 2 内容与技能缺失不拒绝：M3 数据自动升级成功，内容登记为不存在、缺目录的技能为隔离并列入报告；放回目录后恢复
+- [ ] 3 封存与其它处置：A4～A10 各一份旧库，结果与 proposal §5 一致
+- [ ] 3a 升级后能启动：每一份升级后的库都能启动服务并通过健康检查
 - [ ] 4 环境前置：三种情况 10 秒内退出，文案具体，无残留
 - [ ] 5 耗时：参考数据 SQLite ≤ 6 分钟、PostgreSQL ≤ 15 分钟；各步骤各出现一次
 - [ ] 6 资源：峰值内存 ≤ 4 GB；新增磁盘占用峰值 ≤ 8 GB、留存 ≤ 5 GB；前置检查给出的所需空间 ≤ 10 GB
 - [ ] 7 PostgreSQL `tasks` 1000 行、2000 行升级成功
-- [ ] 8 结果一致：映射预言全部通过；参考数据新旧实现逐表对比无差异（C1～C4 除外）
+- [ ] 8 结果一致：映射预言全部通过；参考数据新旧实现逐表对比无差异（proposal §5 A 组除外）
 - [ ] 9 中断续做：三处位置
 - [ ] 10 人工流程既有用例全部通过
 - [ ] 11 发布版升级矩阵 L1 / L2 通过，CI 全绿

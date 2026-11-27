@@ -174,10 +174,13 @@ blockExecutable(task: { taskId: string; status: string }, block: ConversionBlock
 
 ```ts
 export interface TaskSettler {
-  readonly table: string
-  /** 取该行所属任务的列；`tasks` 表用 'id'。 */
-  readonly taskColumn: string
-  settle(values: DecodedSourceRow, ctx: { settlement: TaskSettlement; planTime: number }): DecodedSourceRow | null  // null = 不改
+  /** 本模块在结束任务时要读写的表，及各表里指向任务的列（`tasks` 表是 'id'）。 */
+  readonly tables: readonly { readonly table: string; readonly taskColumn: string }[]
+  /** 输入是该任务在上述各表里的全部暂存行；返回要改写的行及其新的解码值。 */
+  settle(
+    rows: ReadonlyMap<string, readonly SourceRow[]>,
+    ctx: { readonly settlement: TaskSettlement; readonly planTime: number },
+  ): readonly { readonly table: string; readonly key: EncodedKey; readonly values: DecodedSourceRow }[]
 }
 export interface TaskSettlement {
   readonly taskId: string
@@ -188,15 +191,17 @@ export interface TaskSettlement {
 }
 ```
 
-| 表 | 贡献模块 | 条件 | 改写 | 对应的取消行为 |
-| --- | --- | --- | --- | --- |
-| `tasks` | task-execution | 该任务 | `status='canceled'`；`finished_at` 为空则取升级时刻；`error_summary` 为结束原因（§3.2.4）；`error_message` 为原因代码 | `childTaskLifecycleParticipant.ts:858-884` |
-| `node_runs` | task-execution | 状态为 `pending / running / awaiting_review / awaiting_human` | `status='canceled'`、`finished_at`=升级时刻、`error_message`=原因代码 | 同上 `:888-898` 与门清扫 `humanGatePersistenceParticipant.ts:30-71` |
-| `task_execution_intents` | task-execution | 状态为 `pending / claimed` | `state='canceled'`、`failure_code`=原因代码、`completed_at` 与 `updated_at`=升级时刻 | `taskExecutionIntentTerminalSequence.ts` |
-| `task_execution_owners` | task-execution | `state='claimed'` | `state='revoked'`、`revision+1`、`recovery_code='terminal-control-cancel'`、`updated_at`=升级时刻 | `:817-838` |
-| `task_execution_lineage_operation_records` | task-execution | 绑定该任务且处于已授权重放 | 改为需要操作者，清空授权字段 | 同一终结序列（调研，实现前复核列名） |
-| `clarify_rounds` | collaboration | `status='awaiting_human'` | 跨任务澄清轮 `status='abandoned'`、`abandoned_at`=升级时刻；其余 `status='canceled'` | `humanGateTerminalSweep.ts:49-80`、`domain/clarifyAnswers.ts:210-219` |
-| `lifecycle_alerts` | system-operations | `resolved_at` 为空 | `resolved_at`=升级时刻 | 取消本身不做这一步（见下） |
+一个 settler 一次拿到该任务在本模块各表里的行，因为有的改写要跨表判断（下表第 5 行）。
+
+| # | 表 | 贡献模块 | 条件 | 改写 | 对应的取消行为（已核） |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `tasks` | task-execution | 该任务 | `status='canceled'`；`finished_at` 取升级时刻；`error_summary`、`error_message` 为结束原因（§3.2.4） | `childTaskLifecycleParticipant.ts:858-884` |
+| 2 | `node_runs` | task-execution | 状态为 `pending / running / awaiting_review / awaiting_human` | `status='canceled'`、`finished_at`=升级时刻；`error_message`：原状态为 `awaiting_human` 的记 `task-canceled`（与门清扫给澄清中间节点盖的原因相同，澄清页据此显示封闭原因），其余记结束原因代码 | `:888-898`；`humanGatePersistenceParticipant.ts:31-71` |
+| 3 | `task_execution_intents` | task-execution | 状态为 `pending / claimed` | `state='canceled'`、`failure_code`=原因代码、`completed_at` 与 `updated_at`=升级时刻 | `taskExecutionIntentTerminalSequence.ts:20-51` |
+| 4 | `task_execution_owners` | task-execution | `state='claimed'` | `state='revoked'`、`revision` 加一、`recovery_code='terminal-control-cancel'`、`updated_at`=升级时刻 | `childTaskLifecycleParticipant.ts:821-843` |
+| 5 | `task_execution_lineage_operation_records` | task-execution | `record_kind='replay-decision'`、`decision_state='actor-replay-authorized'` 且 `bound_intent_id` 是第 3 行改写的意图之一 | `decision_state='requires-actor'`；`replay_authorization_id`、`authorization_scope_json`、`actor_user_id`、`authorization_source`、`bound_intent_id` 置空；`record_revision` 加一；`updated_at`=升级时刻 | `taskExecutionIntentTerminalSequence.ts:62-98` |
+| 6 | `clarify_rounds` | collaboration | `status='awaiting_human'` | `kind='cross'` 的 `status='abandoned'`、`abandoned_at`=升级时刻；其余 `status='canceled'` | `humanGateTerminalSweep.ts:42-58`、`domain/clarifyAnswers.ts:209-219` |
+| 7 | `lifecycle_alerts` | system-operations | `resolved_at` 为空 | `resolved_at`=升级时刻 | 取消本身不做这一步（见下） |
 
 三点说明：
 
@@ -259,13 +264,26 @@ export interface TaskSettlement {
 （读出整行、写归档与 `v2-row-set-aside-dependent` 记录、删除），再查一遍，直到没有悬空行；轮数上界是外键链的深度。
 之后照常加外键约束或打开外键检查。被移走的行记入校验报告，供与回执里的来源计数对账。
 
+**旧库里本来就悬空的行**：冻结时的完整性检查现在把「旧库存在外键悬空行」当作失败（`rawSourceReader.ts:161-168`，
+离线补迁移之后还会再查一次，`offlineSourceUpgrade.ts:84`），整次升级以来源不可用结束，且没有可执行的处理办法。
+自动模式下这一项不再判失败，只记录数量；这些行照常转换，随后由上面的悬空行处理封存。`quick_check` 不通过仍然是失败（库文件损坏）。
+
+没有外键的逻辑引用（例如代理对技能的引用）不在悬空行处理之内：这类引用在产品里本来就允许指向已不存在的对象，
+使用时明确报错（调研）。
+
 封存只用于两类情况：数据本身已经不自洽（旧库里就悬空、无法解析、违反旧库自己的约束），或 §3.4 列为封存的已下线功能遗留。
 正常使用留下的状态都有保留办法（§3.2、§3.4）。
 
+**升级后的服务必须能启动。** 阻塞项此前顺带保证了一件事：新版本启动时那些「失败即不启动」的步骤
+（`bootstrap/daemonLifecycleProgram.ts:24-63` 里策略为 `fail-closed` 的各步）不会遇到没见过的状态。
+改成自动处置之后，这个保证要由处置本身给出：结束任务等价于一次取消（§3.2.3），产品对已取消任务的各种状态都处理过；
+保留类的每一行都落在目标结构与产品已有的状态上（§3.4 逐行给出依据）；带操作日志的对象在处置时一并了结它的操作记录（§3.4 第 3c 行）。
+验证上，发布版升级矩阵为每一类处置各备一份种子，升级后真实启动服务并通过健康检查（§7）。
+
 ### 3.4 逐类处置表
 
-下表覆盖调研列出的全部行级、表级阻塞来源。标「已核」的处置我已对着规则与目标结构读过；第 3～7 行还在核对中（plan T0），
-设计门之前补齐。
+下表覆盖调研列出的全部行级、表级阻塞来源。标「已核」的我对着规则与目标结构读过；标「调研」的来自只读调研，
+实现时逐项复核（plan T0）。选处置的原则：能照旧版本自己的处理方式带过去的，照它的方式；新库能表示的保留；其余封存。
 
 | # | 阻塞项 | 情形 | 自动处置 |
 | --- | --- | --- | --- |
@@ -274,11 +292,15 @@ export interface TaskSettlement {
 | 2b | `v2-content-bytes-unprovable` | 磁盘上的内容与登记的大小或摘要不符（文件被人改过），或读取中途变化 | 不阻塞，按「登记的内容已不可得」处理：引用保留，回执登记缺失并写明依据（现有字节与登记不符）；磁盘上的文件不动。不把改过的内容当作登记的那份呈现。属于必需内容时并入第 1 行的路径 |
 | 2c | `v2-content-task-unprovable` | 必需内容缺失且找不到所属任务 | 走规则给「没有任务」的既有路径：记录决定，行照常转换（`receipts.ts:92-105`） |
 | 2d | `v2-content-catalog-metadata-missing`、`-object-conflict`、`-source-invalid`、`-required-null` | 内容目录条目缺大小与摘要、同一对象登记冲突、目录解码失败 | 封存该行（§3.3） |
-| 3 | `v2-boot-skill-*`、`v2-skill-*` | 技能目录或版本快照缺失、技能操作停在半途、目录与登记不一致 | 保留技能条目并标为内容不可用（待 T0）；无法表示时封存该技能，引用它的代理条目按第 9 行处理 |
-| 4 | `v2-boot-url-*`（缓存仓库与任务） | 同一地址对应多个缓存仓库、旧格式地址无法还原 | 任务保留其登记的地址、不关联缓存仓库（待 T0）；缓存仓库无法还原地址时封存 |
-| 5 | `v2-boot-schedule-*` | 定时任务的载荷、仓库、路径无法确认 | 保留并置为停用，登记原因（规则已有 `kept-disabled` 结果，待 T0 确认可覆盖全部原因） |
-| 6 | `v2-boot-runtime-config-unproven`、`-defaults-unmigrated` | 家目录 `config.json` 无法确认、其中的默认值没能并入运行时条目 | 运行时条目原样保留，登记默认值未带入（待 T0）；`config.json` 不是合法 JSON 属环境问题（§3.5） |
-| 7 | `v2-boot-fusion-source-unproven`、`v2-boot-fused-memory-unproven` | 技能融合 / 已融合记忆的来源无法确认 | 走规则已有的隔离（quarantine）结果（待 T0） |
+| 3a | `v2-boot-skill-main-missing`、`-snapshot-missing`、`-snapshot-hash-conflict`、`-authority-conflict`、`-path-identity`、`-root-conflict`、`-ownership-conflict`、`-tree-invalid`、`-file-path-invalid`、`-content-unavailable`、两个 `-reference-missing` | 技能的目录或版本快照缺失、被改动、与登记不一致 | **保留并隔离**：技能行与各版本行照常转换，`version_state='quarantined'`，内容引用指向实际找到的位置（找不到则指向规范位置，技能行可为空），不生成内容对象，逐行登记 `v2-boot-skill-kept-unavailable`。这与 v0.19.2 启动时对这类技能的处理相同（置为隔离，调研），目标结构已有该状态（已核，`resource-catalog/.../schema.ts:1247-1251`）。新版本每次启动都会重新核对隔离的技能，目录恢复完整即自动恢复可用（调研，`resource-catalog/infrastructure/legacy/skillBootVerify.ts:339-364`）。内容引用只能为空或合法的技能路径引用，否则会让全部代理的保存失败（调研，`agentResourceInventory.ts:84-91`） |
+| 3b | `v2-boot-skill-husk-references`、`-reservation-unsettled`、`-orphan-version` | 从未发布成功的空壳技能（没有内容也没有版本）、没有技能行的版本行 | **封存**，沿用规则对空壳技能的既有做法（`skillBootRules.ts:148-186`）。留着它只会永久占住名字且永远通不过核对 |
+| 3c | `v2-boot-skill-operation-unsettled`、`-operation-residue` | 旧服务被强行终止时技能的创建、保存、删除、导入停在半途 | 按该操作的恢复方向处置（纯函数，`legacy/skillOpRecovery.ts:48-60`，调研）：尚未落库的创建按 3b 封存，其余按 3a 隔离。**同时必须了结操作记录**：凡被本表处置（隔离或封存）的技能，它的 `skill_operations` 行以 `active=0` 转换，`skill_operation_locks` 行封存。否则新版本启动时的技能操作恢复步骤会因「操作没有对应的技能行」等不一致而拒绝启动（已核：该步骤失败即不启动，`bootstrap/daemonLifecycleProgram.ts:35`；判定见 `resource-catalog/infrastructure/skillCatalogBootAdapter.ts:93-179`）。为此这两张表从通用复制改为技能规则的组成员（按 `skill_id` / `locked_skill_id`），随技能一组处置 |
+| 3d | 其余 `v2-boot-skill-*`（采集到的事实与冻结的行自相矛盾）、`v2-skill-*`（只出现在没有本地磁盘的部署形态） | 程序内部不一致，不是数据状态 | 归入 §3.6 |
+| 4 | `v2-boot-url-*` | 缓存仓库的地址无法还原（密钥缺失或换过、旧格式地址损坏） | **缓存仓库照常转换**，地址列保持旧库原样并登记 `v2-boot-url-kept-unreadable`（目标列可空，已核，`source-control/.../schema.ts:20-21`）。**任务、挂载、定时任务按地址哈希关联缓存仓库，不再受该仓库地址能否还原影响**——旧版本启动时就是这样关联的（调研），于是任务规则里的这处阻塞不复存在（已核它现在会让整个任务什么都不产出，`task-execution/.../task/rule.ts:106-125`）。同一地址对应多个缓存仓库的分支不可达：地址哈希在旧库与新库都有唯一约束（已核，`epoch1/definitions.ts:7148`）。产品对读不出地址的缓存仓库显示为地址不可用、拒绝刷新（调研） |
+| 5 | `v2-boot-schedule-*` | 定时任务的载荷无法解析、字段类型不对、本地路径无法探测 | **保留并停用**：行照常转换，载荷逐字节不变，`enabled=false`、`next_run_at` 置空、`last_error` 写明原因（git 无法探测时沿用旧版本的 `rfc165-local-path-retired: <路径>`），登记 `v2-boot-schedule-kept-disabled-invalid`。目标列允许（载荷是纯文本，调研）。详情页会显示迁移错误与最后错误，手动运行明确失败（调研，`integration/application/scheduledTasks.ts:180-218,882-899`） |
+| 6a | `v2-boot-runtime-defaults-unmigrated` | 家目录 `config.json` 里还留着旧的默认值键，而没有运行时条目带着这些值 | **照常转换运行时条目**（含二进制路径的继承），登记 `v2-boot-runtime-defaults-not-carried` 并列入报告；去掉运行时表为空时的表级阻塞。这些键旧版本运行时本来就不读，只在启动时检查（调研）；新版本启动不再做这项检查（已核，`runtime-management/application/runtimeRegistryBoot.ts:14-23`） |
+| 6b | `v2-boot-runtime-config-unproven` | `config.json` 读不了或不是合法 JSON | 环境问题，前置检查里报（§3.5）；旧版本遇到这样的文件同样无法启动（调研） |
+| 7 | `v2-boot-fusion-source-unproven`、`v2-boot-fused-memory-unproven` | 技能融合所依据的版本行无法解析 | 走规则已有的隔离结果：融合记为来源已隔离、未完成的融合记为失败，已融合的记忆指向隔离标记（`knowledge-evolution/.../fusionProvenanceRule.ts:137-165`、`memory/.../legacyBootMemoryRule.ts:52-60`，调研）。两条规则必须一起改 |
 | 8 | `v2-code-history-unfinished`、`-package-blocked` | 已下线的旧代码工作里未完结的条目 | 自动确认归档：自动模式下 `ctx.operatorDecisions` 对每个这样的行返回一条由引擎生成的确认决定（确认人 `automatic-upgrade`、时间取升级时刻、行摘要取当前行），规则照既有的已确认路径归档整表（已核，`archives/codeHistory.ts:92-99,123`、`archives/unfinishedWork.ts:71-110`）。生成的决定并入转换计划的 `operatorDecisions` |
 | 9 | `v2-agent-reference-shape`、`-name-unproven` | 代理的技能 / MCP / 插件 / 依赖引用里有无法确认的条目（不是数组、条目形状不对、只写了技能名没写编号） | 保留代理，跳过无法确认的那一条引用，逐条登记（已核：引用是逐条展开成引用行的，`resource-catalog/.../agentsRule.ts:59-125`；悬空的引用本来就照常保留并登记，`:158-170`，引用列没有外键）。整列不是数组时按空列表处理并登记 |
 | 10 | `v2-intent-artifact-undecodable`、`v2-bundle-artifact-undecodable` | 应用日志的产物无法解析且不在失败态 | 封存该日志行（§3.3）。规则已把原文写入归档（已核，`resource-catalog/.../bundleAppliesRule.ts:119-125,180-197`）；不照搬失败态「清空产物后保留」的路径，因为非失败态的日志可能被恢复流程当作可继续的应用 |
@@ -302,7 +324,7 @@ export interface TaskSettlement {
 | 检查 | 做法 | 文案包含 |
 | --- | --- | --- |
 | 结构来自发布版 | 只读打开旧库，取目录、迁移日志与各表行数算指纹并识别（`supportedSources.ts` 的 `identifySource`；现在要等第一次整库摘要与拷贝之后） | 逐条列出多出、缺少、被改动的对象 |
-| 旧库可读且完整 | SQLite `quick_check` 与外键检查；PostgreSQL 连通与版本 | 失败的检查项 |
+| 旧库可打开 | 只读打开并读出目录；PostgreSQL 连通与版本。完整性检查（`quick_check`）仍在冻结时做一次，耗时随库大小增长，不属于秒级检查；不通过即库文件已损坏，以错误结束 | 失败的检查项 |
 | 磁盘空间 | 按**有效数据量** L 估算：SQLite 取（页数 − 空闲页数）× 页大小，而不是文件大小（现在取文件大小，`freeze/capacity.ts:29-33`）；PostgreSQL 取 `pg_database_size`。所需 = 冻结副本兼备份 1×L + 工作副本 1×L + 暂存 2×L + 新库 1.5×L（与操作目录同一文件系统时）+ 内容清单（每个文件按 250 字节）+ 10% 余量；工件库不能用硬链接的文件系统上另加 2×L。现行公式对参考数据给出 151.8 GB（当时可用 153.4 GB，只差 1.6 GB 就会被判为空间不足），实际新增占用峰值约 16 GB | 需要多少、可用多少、在哪个目录 |
 | PostgreSQL 目标库与 scratch 库 | 既有的 `provisioning.prepare`（RFC-398 §3），已在计划之前 | 既有文案 |
 | 旧版「搬到 PostgreSQL」操作未完成 | 既有判断（`autoUpgrade.ts:147-151`） | 既有文案 |
@@ -318,8 +340,11 @@ export interface TaskSettlement {
 - 转换器内部不变量被破坏（`ConversionContractError` 中与来源数据无关的那些、发现与正式转换不一致、目标行对应不到来源行）。
 - 来源数据违反旧库自身的类型约束到无法建立查找表的程度（任务状态不在枚举内、主键不是文本、主键重复等，调研列出 5 处抛错点）。
   这些状态无法由发布版写出，且数据库自己的约束会拒绝它们；出现即视同库损坏。
+- 系统用户 `__system__` 或全局登录策略行不在旧库里（§3.4 第 15 行）。
+- 升级过程中采集到的事实与冻结的数据自相矛盾（技能、地址、融合的各种 `*-fact-missing`、`*-source-changed`、
+  `frozen-*-mismatch`）：只在采集与转换之间数据或文件被改动时出现，重试即可。
 - 环境在升级中途变化（磁盘写满、PostgreSQL 断连、有程序改了旧库）。
-- 新库没通过自检：自动撤回，之后启动需 `db migration auto --retry`（proposal C6）。
+- 新库没通过自检：自动撤回，之后启动需 `db migration auto --retry`（proposal §5 B2）。
 
 错误信息除原因外附带操作编号与工件目录，便于据此定位。
 
@@ -352,7 +377,7 @@ PostgreSQL 的断言是回滚、重开快照事务并把整库重新量一遍（
 
 改为两种证据，各用在该用的地方：
 
-- **内容身份**（整库内容摘要，定义不变，`rawSourceReader.ts:154-185`）：每份数据只算一次。
+- **内容身份**（整库内容摘要，定义不变，`rawSourceReader.ts:127-160`）：每份数据只算一次。
   冻结副本算一次，作为旧库在这次升级里的身份（水位）；工作副本补完迁移后算一次，作为转换输入的身份。
 - **变更标记**：用来回答「自从算过身份之后它变没变」。
   - 旧库文件（SQLite）：数据库文件与 `-wal` 文件各自的大小与修改时间，加数据库文件头里的变更计数。
@@ -532,6 +557,8 @@ PostgreSQL 的断言是回滚、重开快照事务并把整库重新量一遍（
 - 封存：无法解析的行、悬空引用、目标约束拒绝、装载拒绝各一例；悬空行处理的多层级联；归档内容与原行逐字节相同；
   报告条目齐全。
 - §3.4 每一行一例（保留类断言目标行的标记，封存类断言归档）。
+- 升级后可启动：发布版升级矩阵为结束任务、隔离技能（含操作停在半途）、封存、停用定时任务、地址读不出的缓存仓库各备一份种子，
+  升级后真实启动服务、通过健康检查，并各做一个代表性操作（打开被结束的任务、用引用了隔离技能的代理发起任务得到明确报错等）。
 - 人工模式不变：同样的数据在 `resolution` 缺省时产生与现在逐字节相同的阻塞项与计划（既有用例不改即通过）。
 - 环境前置：磁盘不足、结构含多余对象、`config.json` 非法，各断言 10 秒内退出、文案、无残留；空间估算对稀疏库按有效数据量。
 - 新原因的前端显示与数字员工「视为停止」。
