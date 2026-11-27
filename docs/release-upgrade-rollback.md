@@ -115,6 +115,21 @@ agent-workflow db migration complete <op> --json
 `migrate` 也调用同一自动编排。大库请安排维护窗口，转换期间没有 HTTP 监听，日志持续报告进度。
 中断后再 `start` 会续做同一自动会话；若父进程消失而子进程尚在迁移，新启动会等待它完成。
 
+升级期间日志里能看到三种行（标准错误与 daemon 日志里都有）：
+
+- 开始时一行 `[db migration] automatic database upgrade started: …`；
+- 进度行 `[db migration] <阶段>: <细节> [<已处理>/<总数> <单位>] (<秒>s elapsed)`：阶段边界立即打印，
+  循环内同一阶段至多每 3 秒一行。阶段依次是 `freeze`（冻结并快照源库）、`offline-upgrade`（把快照补到
+  旧结构的最后一个版本）、`content-capture`（清点运行文件）、`conversion`（逐表转换）、`backup`、`load`、
+  `validation`、`activation`；计划与执行各走一遍前四个阶段，所以它们会出现两轮；
+- 存活行 `[db migration] still working (last reported: …): no new output for …, … since the upgrade started`：
+  整库内容摘要、快照拷贝、完整性检查都是单条语句，执行期间无法从内部报告，库越大这段沉默越长
+  （1 GB 有效数据的库上实测最长约 3 分钟）。`start` 进程在升级子进程连续 15 秒没有输出时打印这一行，
+  之后每 30 秒一行，直到有新的进度。看到它说明升级还在进行，不是卡死。
+
+直接运行 `agent-workflow migrate` 或 `db migration auto` 时只有前两种行：它们在同一个进程里执行转换，
+单条语句执行期间打印不了东西。
+
 自动模式接受并记录 `restrictions`，每项以 WARN 输出；受限制的历史仍可查看，但相关重试／恢复
 可能不可用。`blocks` 和可确认项必须按指引人工处理，不会被自动确认。
 完成回执位于 `database-migrations/auto-upgrade/sessions/<operationId>/receipt.json`，记录源
