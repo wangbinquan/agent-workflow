@@ -16,7 +16,12 @@ import {
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import { DomainError } from '@/platform/errors/domainErrors'
-import { acquireLock, isProcessAlive, readPidFromLock } from '@/platform/execution/local/daemonLock'
+import {
+  acquireLock,
+  isProcessAlive,
+  readLivePidFromLock,
+  type readPidFromLock,
+} from '@/platform/execution/local/daemonLock'
 import type { AdminRestoreCoordinatorPort } from '../application/ports/adminRestoreCoordinator'
 import type { RestoreArtifactPathResolver } from './restoreArtifactIngress'
 import { settleEpochSwitchBeforePointerReplacement } from './epochSwitch/pointerReplacement'
@@ -195,7 +200,7 @@ export function createPostgresqlAdminRestoreCoordinator(
     },
 
     async activateLocal(artifactRef) {
-      const readPid = input.readPid ?? readPidFromLock
+      const readPid = input.readPid ?? readLivePidFromLock
       const processAlive = input.processAlive ?? isProcessAlive
       const pid = readPid(input.lockPath)
       if (pid !== null && processAlive(pid)) return { status: 'daemon-running', pid }

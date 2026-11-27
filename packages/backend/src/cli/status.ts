@@ -2,7 +2,7 @@
 
 import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
 import type { DaemonRuntimeInfo } from '@/modules/system-operations/public/types'
-import { isProcessAlive, readPidFromLock } from '@/platform/execution/local/daemonLock'
+import { isDaemonLockOwnerAlive, readDaemonLockOwner } from '@/platform/execution/local/daemonLock'
 import { Paths } from '@/platform/configuration/installationPaths'
 
 export interface HealthReport {
@@ -28,9 +28,10 @@ export interface StatusResult {
  * bootstrap composes — the same one `GET /api/daemon` reads through.
  */
 export async function statusCommand(daemonRuntime: DaemonRuntimeQueries): Promise<StatusResult> {
-  const pid = readPidFromLock(Paths.lock)
-  if (pid === null) return { state: 'not-running' }
-  if (!isProcessAlive(pid)) return { state: 'stale-lock', pid }
+  const owner = readDaemonLockOwner(Paths.lock)
+  if (owner === null) return { state: 'not-running' }
+  const { pid } = owner
+  if (!isDaemonLockOwnerAlive(owner)) return { state: 'stale-lock', pid }
 
   // info file missing/garbled → undefined; still report 'running' via PID.
   const info: DaemonRuntimeInfo | undefined = (await daemonRuntime.readCurrent()) ?? undefined

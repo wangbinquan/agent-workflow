@@ -731,7 +731,7 @@ test('RFC-319 OPS-014: daemon 在跑时 db compact 拒绝执行，并且一页�
       '前提不成立：造不出空洞页，后面「有没有真的 VACUUM」就无从判定',
     ).toBeGreaterThan(100)
 
-    const livePid = readFileSync(join(home, '.daemon.lock'), 'utf8').trim()
+    const livePid = readFileSync(join(home, '.daemon.lock'), 'utf8').split(/\r?\n/)[0]!.trim()
     const refused = runCli(home, ['db', 'compact'])
 
     expect(

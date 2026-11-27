@@ -41,7 +41,7 @@ test('native PID file and recovery digest retain the exact standalone representa
   const f = fixture()
   const lease = await f.provider.acquire()
   leases.push(lease)
-  expect(readFileSync(f.lockPath, 'utf8')).toBe(String(process.pid))
+  expect(readFileSync(f.lockPath, 'utf8').split('\n')[0]).toBe(String(process.pid))
   expect(lease.diagnostics).toEqual({ pid: process.pid, lock: f.lockPath })
   const receipt = await lease.recoveryAuthority({
     daemonGeneration: 'original-generation',
@@ -71,8 +71,10 @@ test('explicit dev handoff still adopts the current process lock and reports tha
   const successor = await f.provider.acquire()
   leases.push(successor)
   expect(successor.diagnostics).toEqual(old.diagnostics)
-  expect(readFileSync(f.lockPath, 'utf8')).toBe(String(process.pid))
+  expect(readFileSync(f.lockPath, 'utf8').split('\n')[0]).toBe(String(process.pid))
   expect(f.messages).toEqual(['adopted current-process lock for Bun watch generation'])
+  old.releaseOnExit()
+  expect(existsSync(f.lockPath)).toBe(true)
   await successor.release()
   expect(existsSync(f.lockPath)).toBe(false)
 }, 20_000)

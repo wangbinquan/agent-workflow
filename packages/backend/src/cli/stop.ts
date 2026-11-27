@@ -21,7 +21,11 @@ import {
   removeControlFile,
   requestShutdown,
 } from '@/platform/execution/local/controlListener'
-import { isProcessAlive, readPidFromLock } from '@/platform/execution/local/daemonLock'
+import {
+  isDaemonLockOwnerAlive,
+  readDaemonLockOwner,
+  sameDaemonLockOwner,
+} from '@/platform/execution/local/daemonLock'
 import { Paths } from '@/platform/configuration/installationPaths'
 
 export interface StopOptions {
@@ -46,15 +50,19 @@ export interface StopResult {
 export async function stopCommand(opts: StopOptions = {}): Promise<StopResult> {
   const platform = opts.platform ?? process.platform
   const lockPath = Paths.lock
-  const pid = readPidFromLock(lockPath)
+  const owner = readDaemonLockOwner(lockPath)
+  const pid = owner?.pid ?? null
 
   if (pid === null) {
     return { status: 'not-running', message: 'no daemon lock found (not running)' }
   }
 
-  if (!isProcessAlive(pid)) {
+  if (owner && !isDaemonLockOwnerAlive(owner)) {
+    if (!sameDaemonLockOwner(owner, readDaemonLockOwner(lockPath)) && existsSync(lockPath)) {
+      throw new Error(`daemon lock changed while checking PID ${pid}; no process was stopped`)
+    }
     try {
-      unlinkSync(lockPath)
+      if (sameDaemonLockOwner(owner, readDaemonLockOwner(lockPath))) unlinkSync(lockPath)
     } catch {
       /* race; ignore */
     }
@@ -92,7 +100,13 @@ export async function stopCommand(opts: StopOptions = {}): Promise<StopResult> {
 
   // The drain did not finish in time. On Windows there is one more thing to
   // try, and the result must be labelled honestly either way.
-  if (platform === 'win32' && hardKill(pid, platform)) {
+  if (
+    platform === 'win32' &&
+    owner &&
+    sameDaemonLockOwner(owner, readDaemonLockOwner(lockPath)) &&
+    isDaemonLockOwnerAlive(owner) &&
+    hardKill(pid, platform)
+  ) {
     removeControlFile(Paths.controlFile)
     return {
       status: 'forced',

@@ -17,7 +17,12 @@ import {
   type SqlitePostRestoreRecovery,
   validateBackupForStage,
 } from '@/platform/persistence/sqlite/systemProviderRestore'
-import { acquireLock, isProcessAlive, readPidFromLock } from '@/platform/execution/local/daemonLock'
+import {
+  acquireLock,
+  isProcessAlive,
+  readLivePidFromLock,
+  type readPidFromLock,
+} from '@/platform/execution/local/daemonLock'
 import type { AdminBackupCoordinatorPort } from '../application/ports/adminBackupCoordinator'
 import { SCHEDULED_BACKUP_REQUEST } from '../domain/backup'
 import type { AdminRestoreCoordinatorPort } from '../application/ports/adminRestoreCoordinator'
@@ -50,7 +55,7 @@ const DEFAULT_MECHANISMS: LegacySystemOperationMechanisms = {
   readPendingRestore,
   listFailedRestores,
   clearPendingRestore,
-  readPidFromLock,
+  readPidFromLock: readLivePidFromLock,
   isProcessAlive,
   acquireLock,
   restoreBackup,

@@ -302,8 +302,53 @@ function isPortCollisionError(error: unknown): boolean {
  */
 const closedDaemonChildren = new WeakSet<DaemonChild>()
 
-function trackChildClose(child: DaemonChild): void {
-  child.once('close', () => closedDaemonChildren.add(child))
+interface DaemonProcessObservation {
+  pid: number | undefined
+  spawnedAt: string
+  closedAt?: string
+  exitCode?: number | null
+  signal?: NodeJS.Signals | null
+}
+const daemonObservations = new WeakMap<
+  DaemonChild,
+  {
+    home: string
+    current: DaemonProcessObservation
+    previous?: DaemonProcessObservation
+  }
+>()
+const lastDaemonByHome = new Map<string, DaemonProcessObservation>()
+
+function trackChildClose(child: DaemonChild, home?: string): void {
+  if (home) {
+    const current = { pid: child.pid, spawnedAt: new Date().toISOString() }
+    const previous = lastDaemonByHome.get(home)
+    daemonObservations.set(child, { home, current, ...(previous ? { previous } : {}) })
+    lastDaemonByHome.set(home, current)
+  }
+  child.once('close', (code, signal) => {
+    closedDaemonChildren.add(child)
+    const observed = daemonObservations.get(child)
+    if (observed)
+      Object.assign(observed.current, {
+        closedAt: new Date().toISOString(),
+        exitCode: code,
+        signal,
+      })
+  })
+}
+
+/** Preserve actual spawn/close observations and the lock at failure, without altering lifecycle. */
+function daemonLifecycleDiagnostics(child: DaemonChild): string {
+  const observed = daemonObservations.get(child)
+  if (!observed) return ''
+  let lockOwner: string | null = null
+  try {
+    lockOwner = readFileSync(join(observed.home, '.daemon.lock'), 'utf8').slice(0, 2048)
+  } catch {
+    /* absent */
+  }
+  return `\n  daemon lifecycle: ${JSON.stringify({ ...observed, lockOwner })}`
 }
 
 async function waitForChildExit(child: DaemonChild, timeoutMs: number): Promise<void> {
@@ -320,7 +365,11 @@ async function waitForChildExit(child: DaemonChild, timeoutMs: number): Promise<
     const timer = setTimeout(() => {
       settled = true
       child.off('close', finish)
-      rejectExit(new Error(`e2e/harness: daemon ${child.pid} did not close within ${timeoutMs}ms`))
+      rejectExit(
+        new Error(
+          `e2e/harness: daemon ${child.pid} did not close within ${timeoutMs}ms${daemonLifecycleDiagnostics(child)}`,
+        ),
+      )
     }, timeoutMs)
     child.once('close', finish)
     if (closedDaemonChildren.has(child)) finish()
@@ -368,7 +417,9 @@ async function signalChildAndWait(
       if (timers.fallback !== undefined) clearTimeout(timers.fallback)
       if (timers.hardStop !== undefined) clearTimeout(timers.hardStop)
       child.off('close', finish)
-      rejectExit(error)
+      rejectExit(
+        new Error(`${error.message}${daemonLifecycleDiagnostics(child)}`, { cause: error }),
+      )
     }
 
     // Node's exit event precedes stdio disposal. Restarting the same home
@@ -404,6 +455,7 @@ async function signalChildAndWait(
 
 function removeOwnedHome(home: string, keepHome: boolean): void {
   if (keepHome) return
+  lastDaemonByHome.delete(home)
   try {
     rmSync(home, { recursive: true, force: true })
   } catch {
@@ -496,7 +548,7 @@ async function waitForDaemonReady(
       rejectReady(
         new Error(
           `e2e/harness: timed out after ${readyTimeoutMs / 1_000}s waiting for daemon ready line\n` +
-            `  stdout so far:\n${outputTail.stdout}\n  stderr so far:\n${outputTail.stderr}`,
+            `  stdout so far:\n${outputTail.stdout}\n  stderr so far:\n${outputTail.stderr}${daemonLifecycleDiagnostics(child)}`,
         ),
       )
     }, readyTimeoutMs)
@@ -522,14 +574,17 @@ async function waitForDaemonReady(
       rejectReady(
         new Error(
           `e2e/harness: daemon closed with code ${code ?? 'null'} signal ${signal ?? 'null'} before printing ready line\n` +
-            `  stdout: ${outputTail.stdout}\n  stderr: ${outputTail.stderr}`,
+            `  stdout: ${outputTail.stdout}\n  stderr: ${outputTail.stderr}${daemonLifecycleDiagnostics(child)}`,
         ),
       )
     }
     const onError = (error: Error): void => {
       cleanup()
       rejectReady(
-        new Error(`e2e/harness: failed to spawn daemon: ${error.message}`, { cause: error }),
+        new Error(
+          `e2e/harness: failed to spawn daemon: ${error.message}${daemonLifecycleDiagnostics(child)}`,
+          { cause: error },
+        ),
       )
     }
     const cleanup = (): void => {
@@ -748,7 +803,7 @@ async function startDaemonWithPortAllocator(
           stdio: ['ignore', 'pipe', 'pipe'],
         },
       )
-      trackChildClose(attemptChild)
+      trackChildClose(attemptChild, home)
       child = attemptChild
 
       try {

@@ -14,7 +14,7 @@ import { liveSqlitePath } from './storage'
 //     退出码由 `packages/backend/src/main.ts:71-80` 决定（只有 timeout / forced 非零）。
 //   * `status` 的三态与 running 那一档的排版 → `packages/backend/src/cli/status.ts:22-84`。
 //   * 单实例锁的拒绝文案 → `packages/backend/src/cli/start.ts:322-329`；
-//     锁文件本身（`.daemon.lock`，内容就是 PID）→ `packages/backend/src/platform/execution/local/daemonLock.ts:47-95`
+//     锁文件本身（`.daemon.lock`，首行是 PID）→ `packages/backend/src/platform/execution/local/daemonLock.ts:47-95`
 //     与 `packages/backend/src/platform/configuration/installationPaths.ts`（`Paths.lock` / `daemonInfo` / `controlFile`）。
 //   * `/health` 的载荷字段 → `packages/backend/src/routes/health.ts:36-68`。
 //
@@ -99,7 +99,7 @@ function controlFilePath(home: string): string {
 }
 
 function readLockPid(home: string): string {
-  return readFileSync(lockPath(home), 'utf8').trim()
+  return readFileSync(lockPath(home), 'utf8').split(/\r?\n/)[0]!.trim()
 }
 
 /** `status` 的 running 排版是「两空格 + 标签 + 冒号 + 对齐空格 + 值」，只取值。 */

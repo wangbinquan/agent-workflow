@@ -1,5 +1,5 @@
 import {
-  readPidFromLock,
+  readLivePidFromLock,
   acquireLock,
   isProcessAlive,
   type Lock,
@@ -27,7 +27,7 @@ export function createLocalEpochQuiesce(input: {
 }): QuiescePort {
   const now = input.now ?? Date.now
   const protocol: EpochStopProtocol = input.protocol ?? {
-    pid: () => readPidFromLock(input.lockPath),
+    pid: () => readLivePidFromLock(input.lockPath),
     alive: isProcessAlive,
     async request(pid, timeoutMs) {
       if ((input.platform ?? process.platform) !== 'win32') {
@@ -118,7 +118,12 @@ export function createLocalEpochQuiesce(input: {
     },
     async assertHeld(op) {
       if (input.sessionLock) return input.sessionLock.assertHeld()
-      if (!held || held.op !== op || protocol.pid() !== held.lock.pid)
+      if (
+        !held ||
+        held.op !== op ||
+        held.lock.isHeld?.() === false ||
+        protocol.pid() !== held.lock.pid
+      )
         throw new EpochSwitchError('v3-daemon-lock-lost', { category: 'owner-conflict' })
     },
   }

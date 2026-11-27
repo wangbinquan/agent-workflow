@@ -687,7 +687,7 @@ test('RFC-319 OPS-019: restore 默认只打印计划——daemon 在跑时拒绝
     const survivor = `rfc319-survivor-${Date.now().toString(36)}`
     await createAgent(daemon, survivor)
     const tarball = await takeBackup(daemon)
-    const livePid = readFileSync(join(home, '.daemon.lock'), 'utf8').trim()
+    const livePid = readFileSync(join(home, '.daemon.lock'), 'utf8').split(/\r?\n/)[0]!.trim()
     expect(livePid, '在跑的 daemon 没把 PID 写进锁文件 —— 后面「是谁占着」无从谈起').toMatch(
       /^\d+$/,
     )

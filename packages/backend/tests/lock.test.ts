@@ -27,7 +27,7 @@ describe('flock (PID-file)', () => {
     try {
       expect(lock.pid).toBe(process.pid)
       expect(existsSync(lockPath)).toBe(true)
-      expect(readFileSync(lockPath, 'utf-8').trim()).toBe(String(process.pid))
+      expect(readFileSync(lockPath, 'utf-8').split('\n')[0]).toBe(String(process.pid))
     } finally {
       lock.release()
     }
@@ -56,6 +56,9 @@ describe('flock (PID-file)', () => {
       const replacementGeneration = adoptCurrentProcessLock(lockPath)
       expect(replacementGeneration.pid).toBe(process.pid)
       expect(replacementGeneration.path).toBe(lockPath)
+      firstGeneration.release()
+      expect(existsSync(lockPath)).toBe(true)
+      expect(replacementGeneration.isHeld?.()).toBe(true)
       replacementGeneration.release()
       expect(existsSync(lockPath)).toBe(false)
     } finally {

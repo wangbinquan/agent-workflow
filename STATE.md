@@ -1,3 +1,7 @@
+## 2026-11-26 RFC-625 第二批 CI：Windows 进程身份与不可变准备复用（In Progress；`design/RFC-625-ci-process-identity-and-manifest-reuse/`）
+
+用户已授权本批完整CI实测。Windows进程创建身份/接管token、job内不可变manifest复用及三份完整green计时max权重已实现，原覆盖/隔离/预算保持。集中验证修复PG延迟配置与Windows触发清单问题；共享源码持续变化使本地跨进程命中结果受限，完整结论待干净提交的主CI与Windows原生CI。详情见设计与plan。
+
 ## 2026-11-26 RFC-624 第一批测试准备与重复执行优化（Done；`design/RFC-624-test-preparation-deduplication/`）
 
 第一批与固定key修正已发布，240ee338 / CI45939395356首次69/69通过；覆盖、隔离、44后端片、E2E 3/3/4与13组required保持。相对79085123，总墙钟80m58s→34m25s，累计runner585.25→559.20分钟；排队影响显著，不全归因于代码。受影响后端成本1174.553→1089.644秒，Q3仍+3.9%、后端max仍+20秒。Windows一条恢复case触发原retry1后通过，仅失败case重跑；collector按原标准拒绝E2E权重刷新，锁冲突根因未定。详见[实测验收](design/RFC-624-test-preparation-deduplication/acceptance.md)，结论只绑定240代码，后继收口为纯文档。

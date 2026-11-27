@@ -21,6 +21,59 @@ import { harnessTestApi, type DaemonHandle, type SpawnOptions } from '../../../e
 
 const fixtureRoots: string[] = []
 
+test('restart failure reports the previous close, new PID and retained lock owner', async () => {
+  const { root, binary } = createFixture(`
+const fs = require('node:fs')
+const path = require('node:path')
+const home = process.env.AGENT_WORKFLOW_HOME
+const lock = path.join(home, '.daemon.lock')
+if (fs.existsSync(lock)) {
+  process.stderr.write('fixture restart refused retained owner\\n')
+  process.exit(1)
+}
+fs.writeFileSync(lock, process.pid + '\\n' + JSON.stringify({version: 1, token: 'fixture-owner'}) + '\\n')
+process.stdout.write('agent-workflow ready — open this URL in your browser:\\n')
+process.stdout.write('  http://127.0.0.1:' + process.argv.at(-1) + '/?token=ABC123\\n')
+setInterval(() => {}, 1000)
+`)
+  const home = join(root, 'restart-home')
+  const first = await startDaemonForTest({ binary, home })
+  try {
+    await first.killChild('SIGKILL')
+    let failed: unknown
+    try {
+      await startDaemonForTest({ binary, home })
+    } catch (error) {
+      failed = error
+    }
+    expect(failed).toBeInstanceOf(Error)
+    const message = (failed as Error).message
+    expect(message).toContain('fixture restart refused retained owner')
+    const encoded = message.split('  daemon lifecycle: ')[1]!.split('\n')[0]!
+    const observed = JSON.parse(encoded) as {
+      home: string
+      current: { pid: number; spawnedAt: string; closedAt: string }
+      previous: { pid: number; closedAt: string }
+      lockOwner: string
+    }
+    expect(observed.home).toBe(home)
+    expect(observed.previous.pid).toBe(first.pid)
+    expect(Date.parse(observed.previous.closedAt)).toBeLessThanOrEqual(
+      Date.parse(observed.current.spawnedAt),
+    )
+    expect(Number.isInteger(observed.current.pid)).toBe(true)
+    expect(Date.parse(observed.current.closedAt)).toBeGreaterThanOrEqual(
+      Date.parse(observed.current.spawnedAt),
+    )
+    expect(observed.lockOwner).toBe(
+      `${first.pid}\n${JSON.stringify({ version: 1, token: 'fixture-owner' })}\n`,
+    )
+    expect(readFileSync(join(home, '.daemon.lock'), 'utf8')).toBe(observed.lockOwner)
+  } finally {
+    await first.stop()
+  }
+})
+
 // RFC-254 T28b — the harness now resolves ONE compiled stub instead of taking a
 // path per call, and it refuses to start when that artifact is missing OR is
 // not executable. These tests never launch a real daemon, so rather than

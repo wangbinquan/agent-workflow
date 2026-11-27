@@ -27,6 +27,11 @@ on:
   push:
     branches: [main]
     paths:
+      - 'packages/backend/src/platform/execution/local/windowsProcessIdentity.ts'
+      - 'packages/backend/src/platform/execution/local/daemonLock.ts'
+      - 'packages/backend/src/modules/system-operations/infrastructure/local/autoUpgradeSessionLock.ts'
+      - 'packages/backend/tests/rfc625-daemon-process-identity.test.ts'
+      - 'packages/backend/tests/lock.test.ts'
       - 'packages/backend/src/modules/source-control/infrastructure/local/gitRepository.ts'
       - 'packages/backend/src/platform/workspace/local/fsReclaim.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/assembly.ts'
@@ -488,6 +493,11 @@ on:
     # git, gitHardening were watched on push only), and the existing guard only
     # checks push ⊇ pull_request, so it structurally cannot see the reverse.
     paths:
+      - 'packages/backend/src/platform/execution/local/windowsProcessIdentity.ts'
+      - 'packages/backend/src/platform/execution/local/daemonLock.ts'
+      - 'packages/backend/src/modules/system-operations/infrastructure/local/autoUpgradeSessionLock.ts'
+      - 'packages/backend/tests/rfc625-daemon-process-identity.test.ts'
+      - 'packages/backend/tests/lock.test.ts'
       - 'packages/backend/src/modules/source-control/infrastructure/local/gitRepository.ts'
       - 'packages/backend/src/platform/workspace/local/fsReclaim.ts'
       - 'packages/backend/src/modules/task-execution/engine/kernel/assembly.ts'
@@ -976,6 +986,9 @@ jobs:
       # what proves the injected model matches the actual one.
       # RFC-363 AC-8: native Git/FS restart evidence for both SC preparation
       # and Task upload artifacts, using the real file-backed SQLite journal.
+      - name: RFC-625 daemon process identity and lock ownership
+        run: bun test --isolate packages/backend/tests/rfc625-daemon-process-identity.test.ts packages/backend/tests/lock.test.ts
+
       - name: RFC-363 workspace preparation and upload crash recovery
         run: bun test --isolate packages/backend/tests/rfc363-preparation-process-recovery.test.ts packages/backend/tests/rfc363-task-workspace-process-recovery.test.ts
 

@@ -7,11 +7,8 @@ import { join } from 'node:path'
 import { describeR2Providers, type R2Harness } from './rfc395R2Harness'
 import { loadFrozenEpoch1History } from '@/platform/persistence/migration/epoch1/bundle'
 import { frozenEpoch1Contract } from '@/platform/persistence/migration/epoch1/contract'
-import {
-  loadSupportedSourceManifest,
-  compileEpoch1PostgresqlCatalog,
-  type SupportedSourceManifest,
-} from '@/platform/persistence/migration/supportedSources'
+import type { SupportedSourceManifest } from '@/platform/persistence/migration/supportedSources'
+import { prepareRfc395SourceManifest } from './rfc395SourceManifestFixture'
 import { collectSourceFingerprint } from '@/platform/persistence/migration/sourceCatalog'
 import {
   applyFrozenSqliteMigrations,
@@ -36,8 +33,6 @@ import { vacuumSqliteInto } from '@/platform/persistence/migration/legacy/sqlite
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
 import type { PostgresqlMigrationVersion } from '@/platform/persistence/migration/legacy/postgresqlMigrationSequence'
 import type { SourceFingerprint } from '@/platform/persistence/migration/sourceTypes'
-import { readPostgresqlMajor } from '@/platform/persistence/schema/history/catalog'
-import { postgresqlHistoryConnection } from '@/platform/persistence/schema/history/connection'
 import { pinnedSnapshotReader } from '@/platform/persistence/migration/freeze/liveSnapshot'
 
 const sourceManifests = new Map<string, Promise<SupportedSourceManifest>>()
@@ -133,36 +128,24 @@ export function describeV1Providers(
       })
       let manifest: Promise<SupportedSourceManifest> | undefined
       const getManifest = () =>
-        (manifest ??= (async () => {
-          const history = await loadFrozenEpoch1History()
-          const major =
-            provider === 'postgresql'
-              ? await readPostgresqlMajor(postgresqlHistoryConnection(h.referencePool))
-              : 0
-          const key = `${provider}:${history.chainDigest}:${major}`
-          let pending = sourceManifests.get(key)
-          if (!pending) {
-            pending = loadSupportedSourceManifest(
-              provider === 'sqlite'
-                ? {}
-                : {
-                    async postgresqlCatalog(version) {
-                      const connection = await h.referencePool.reserve()
-                      try {
-                        return await compileEpoch1PostgresqlCatalog(connection, version)
-                      } finally {
-                        connection.release()
-                      }
-                    },
-                  },
-            ).catch((error: unknown) => {
-              sourceManifests.delete(key)
-              throw error
-            })
-            sourceManifests.set(key, pending)
-          }
-          return await pending
-        })())
+        (manifest ??= prepareRfc395SourceManifest({
+          provider,
+          referencePool: provider === 'postgresql' ? h.referencePool : undefined,
+          build(original, { history, postgresqlMajor, cacheKey }) {
+            // Preserve existing in-isolate preparation reuse, including cache-disabled runs.
+            // Enabled materializations deserialize separate graphs rather than exposing this value.
+            const key = cacheKey ?? `${provider}:${history.chainDigest}:${postgresqlMajor}`
+            let pending = sourceManifests.get(key)
+            if (!pending) {
+              pending = original().catch((error: unknown) => {
+                sourceManifests.delete(key)
+                throw error
+              })
+              sourceManifests.set(key, pending)
+            }
+            return pending
+          },
+        }))
       // Compile every supported source once, outside Bun's default 5s test budget.
       beforeAll(async () => {
         await getManifest()

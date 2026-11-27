@@ -2,8 +2,10 @@ import {
   acquireLock,
   adoptCurrentProcessLock,
   DaemonLockHeldError,
+  readDaemonLockOwner,
   type Lock,
 } from '@/platform/execution/local/daemonLock'
+import { readWindowsProcessIdentity } from '@/platform/execution/local/windowsProcessIdentity'
 import { readControlFile, requestShutdown } from '@/platform/execution/local/controlListener'
 import { sha256Hex } from '@/platform/contracts/hash'
 import type { DaemonStartupLeasePort } from '../../application/ports/daemonStartupLease'
@@ -128,7 +130,13 @@ export function createNativeDaemonStartupLease(
         )
       } catch (err) {
         if (err instanceof DaemonLockHeldError) {
-          log.error('another daemon is already running', { pid: err.pid, lock: err.lockPath })
+          log.error('another daemon is already running', {
+            pid: err.pid,
+            lock: err.lockPath,
+            owner: readDaemonLockOwner(err.lockPath),
+            replacementPid: process.pid,
+            replacementIdentity: readWindowsProcessIdentity(process.pid),
+          })
           console.error(
             `agent-workflow: another daemon is already running (PID ${err.pid})\n` +
               `  lock file: ${err.lockPath}\n` +

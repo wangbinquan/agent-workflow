@@ -12,7 +12,12 @@ import {
   acquireLock,
   adoptCurrentProcessLock,
   readPidFromLock,
-  isProcessAlive,
+  readDaemonLockOwner,
+  isDaemonLockOwnerAlive,
+  sameDaemonLockOwner,
+  createCurrentProcessLockOwner,
+  serializeDaemonLockOwner,
+  type DaemonLockOwner,
   DaemonLockHeldError,
   type Lock,
 } from '@/platform/execution/local/daemonLock'
@@ -31,6 +36,7 @@ export function createAutoUpgradeSessionLock(input: {
   let own: Lock | null = null
   let acquired = false
   let parent: number | null = null
+  let parentOwner: DaemonLockOwner | null = null
   let operationId: string | null = null
   let monitor: { stop(): void } | undefined
   let takingOver: Promise<void> | null = null
@@ -42,11 +48,12 @@ export function createAutoUpgradeSessionLock(input: {
       false,
     )
   const takeover = async () => {
-    if (own || parent === null || isProcessAlive(parent)) return
+    if (own || parent === null || (parentOwner && isDaemonLockOwnerAlive(parentOwner))) return
     await autoUpgradeTestCheckpoint('parent-gone')
     for (;;) {
-      const pid = readPidFromLock(lockPath)
-      if (pid === process.pid) {
+      const owner = readDaemonLockOwner(lockPath)
+      const pid = owner?.pid ?? null
+      if (pid === process.pid && owner && isDaemonLockOwnerAlive(owner)) {
         own = adoptCurrentProcessLock(lockPath)
         const active = liveAutoUpgrade(input.appHome)
         if (active && active.pid !== process.pid) {
@@ -57,11 +64,11 @@ export function createAutoUpgradeSessionLock(input: {
         }
         return
       }
-      if (pid === null ? !existsSync(lockPath) : !isProcessAlive(pid)) {
+      if (owner === null ? !existsSync(lockPath) : !isDaemonLockOwnerAlive(owner)) {
         const temporary = `${lockPath}.${process.pid}.${crypto.randomUUID()}.tmp`
         const fd = openSync(temporary, 'wx')
         try {
-          writeFileSync(fd, String(process.pid))
+          writeFileSync(fd, serializeDaemonLockOwner(createCurrentProcessLockOwner()))
           fsyncSync(fd)
         } finally {
           closeSync(fd)
@@ -70,8 +77,8 @@ export function createAutoUpgradeSessionLock(input: {
           await autoUpgradeTestCheckpoint('takeover-before-rename')
           // Re-read after any suspension. Fully written temporary file + rename never exposes
           // an empty PID. Every contender rechecks active.json immediately after acquisition.
-          const current = readPidFromLock(lockPath)
-          if (current === null ? existsSync(lockPath) : isProcessAlive(current)) continue
+          const current = readDaemonLockOwner(lockPath)
+          if (current === null ? existsSync(lockPath) : isDaemonLockOwnerAlive(current)) continue
           renameSync(temporary, lockPath)
           syncEpochDirectory(input.appHome)
         } finally {
@@ -111,13 +118,14 @@ export function createAutoUpgradeSessionLock(input: {
         if (input.delegation !== undefined) {
           parent = Number(input.delegation)
           writeActive() // The child publishes its liveness before checking delegation.
+          parentOwner = readDaemonLockOwner(lockPath)
           if (
             !/^\d+$/.test(input.delegation) ||
             !Number.isSafeInteger(parent) ||
             parent <= 0 ||
             String(parent) !== input.delegation ||
             process.ppid !== parent ||
-            readPidFromLock(lockPath) !== parent
+            parentOwner?.pid !== parent
           ) {
             if (readActiveAutoUpgrade(input.appHome)?.pid === process.pid) unlinkSync(activePath)
             throw new Error('auto-upgrade-lock-delegation-invalid')
@@ -161,8 +169,10 @@ export function createAutoUpgradeSessionLock(input: {
       await ensure()
       if (
         own
-          ? readPidFromLock(lockPath) !== process.pid
-          : parent === null || !isProcessAlive(parent) || readPidFromLock(lockPath) !== parent
+          ? own.isHeld?.() === false || readPidFromLock(lockPath) !== process.pid
+          : parentOwner === null ||
+            !isDaemonLockOwnerAlive(parentOwner) ||
+            !sameDaemonLockOwner(parentOwner, readDaemonLockOwner(lockPath))
       )
         throw new Error('auto-upgrade-session-lock-lost')
     },

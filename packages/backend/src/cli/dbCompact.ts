@@ -20,8 +20,7 @@ import {
   currentSqlitePath,
 } from '@/platform/persistence/databaseProviderRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { isProcessAlive } from '@/platform/execution/local/process'
-import { readPidFromLock } from '@/platform/execution/local/daemonLock'
+import { readLivePidFromLock } from '@/platform/execution/local/daemonLock'
 import { Paths } from '@/platform/configuration/installationPaths'
 
 export interface DbCompactResult {
@@ -34,8 +33,8 @@ function mib(bytes: number): string {
 }
 
 export function dbCompactCommand(contract: LogicalSchemaContract): DbCompactResult {
-  const pid = readPidFromLock(Paths.lock)
-  if (pid !== null && isProcessAlive(pid)) {
+  const pid = readLivePidFromLock(Paths.lock)
+  if (pid !== null) {
     return {
       status: 'daemon-running',
       output:

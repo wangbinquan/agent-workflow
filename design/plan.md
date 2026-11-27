@@ -655,6 +655,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-622](./RFC-622-source-control-binders-into-application/proposal.md) | source-control 的候选与提交绑定器迁入 application（RFC-294 S10 余项）：`bindChangeCandidateParticipant` / `bindCandidateDeliveryParticipant` / `bindRepositoryCommitParticipant` 决定由托管操作宿主还是本进程执行用例，属用例编排，原样迁入 `application/`，模块根照旧转出；`composition/repositoryCommit.ts` 删除；`composition-control-flow-source-control` 4 → 0。无用户可见变化。 | Done |
 | [RFC-623](./RFC-623-macos-ci-runner-demand/proposal.md) | 第三轮CI：macOS E2E 4→3，完整clean reporter权重与source拓扑兼容；保持测试全集、arm64、20分钟及13组严格门禁 | Done；097d41d6 CI 69/69；[实测验收](./RFC-623-macos-ci-runner-demand/acceptance.md) |
 | [RFC-624](./RFC-624-test-preparation-deduplication/proposal.md) | 第一批测试准备与重复执行优化；保持场景、隔离、双provider/平台和原门禁，完整CI实测验收 | Done；240ee338 CI 69/69；[实测验收](./RFC-624-test-preparation-deduplication/acceptance.md) |
+| [RFC-625](./RFC-625-ci-process-identity-and-manifest-reuse/proposal.md) | 第二批CI：Windows进程创建身份、job内不可变manifest复用及44片保守实测权重；保持覆盖、隔离和原门禁 | In Progress；用户已授权实施 |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`
