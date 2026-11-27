@@ -270,6 +270,17 @@ export interface ProcessCauseSlice {
   readonly durationShare: number | null
 }
 
+/**
+ * Mean tokens of one unit spent by the platform's own model calls, by what the
+ * call was for. The slices add up to the `system` cause slice, largest first.
+ */
+export interface ProcessSystemWorkSlice {
+  /** A `ProcessSystemWorkKind`, or the kind a call was recorded with when the list does not name it. */
+  readonly kind: string
+  readonly tokens: number
+  readonly costNano: number
+}
+
 export interface ProcessInterventions {
   /** Closed, non-void human gate rounds per unit, by kind. */
   readonly gates: readonly { readonly kind: ProcessGateKind; readonly perUnit: number }[]
@@ -659,6 +670,8 @@ interface ProcessSummaryBase {
   readonly metrics: Readonly<Partial<Record<ProcessMetricId, ProcessCompared>>>
   readonly time: ProcessTimeSplit
   readonly causes: readonly ProcessCauseSlice[]
+  /** What the `system` slice of `causes` was spent on. */
+  readonly systemWork: readonly ProcessSystemWorkSlice[]
   readonly interventions: ProcessInterventions
   readonly trend: readonly ProcessTrendPoint[]
   readonly stability: ProcessStability

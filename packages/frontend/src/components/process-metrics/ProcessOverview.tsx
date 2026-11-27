@@ -3,11 +3,13 @@
 // first few improvement hints.
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import type {
-  ProcessCauseGroup,
-  ProcessMetricId,
-  ProcessSubjectSummary,
-  ProcessTrendPoint,
+import { Link } from '@tanstack/react-router'
+import {
+  PROCESS_SYSTEM_WORK_KINDS,
+  type ProcessCauseGroup,
+  type ProcessMetricId,
+  type ProcessSubjectSummary,
+  type ProcessTrendPoint,
 } from '@agent-workflow/shared'
 import { Card } from '@/components/Card'
 import { EmptyState } from '@/components/EmptyState'
@@ -74,36 +76,67 @@ const CAUSE_FILL: Readonly<Record<ProcessCauseGroup, VizFill>> = {
   'review-rework': 'cat-2',
   'clarify-rerun': 'cat-3',
   'auto-retry': 'cat-4',
-  // Folded into one muted part on the bar; the table under it lists each.
+  // Reruns nobody asked for by name are usually a sliver: the muted fill.
   'other-rerun': 'other',
-  system: 'other',
+  // The platform's own calls are a part of their own. On real installations they are a large
+  // one (memory extraction took 13–55% of a task's tokens), which one muted "everything else"
+  // part hid behind a name nobody could act on.
+  system: 'cat-5',
 }
 
-/** Tokens by why the execution ran: four causes get a colour, the rest is one muted part. */
+/** Tokens by why the execution ran: one part per cause, in the order the summary lists them. */
 export function causeParts(summary: ProcessSubjectSummary, t: Translate): SegmentedBarPart[] {
-  const parts: SegmentedBarPart[] = []
-  let rest = 0
-  for (const slice of summary.causes) {
-    if (CAUSE_FILL[slice.cause] === 'other') {
-      rest += slice.tokens
-      continue
-    }
-    parts.push({
-      key: slice.cause,
-      label: t(`processMetrics.cause.${slice.cause}`),
-      amount: slice.tokens,
-      valueText: tokens(slice.tokens),
-      fill: CAUSE_FILL[slice.cause],
-    })
-  }
-  parts.push({
-    key: 'rest',
-    label: t('processMetrics.cause.rest'),
-    amount: rest,
-    valueText: tokens(rest),
-    fill: 'other',
-  })
-  return parts
+  return summary.causes.map((slice) => ({
+    key: slice.cause,
+    label: t(`processMetrics.cause.${slice.cause}`),
+    amount: slice.tokens,
+    valueText: tokens(slice.tokens),
+    fill: CAUSE_FILL[slice.cause],
+  }))
+}
+
+/** The product name of a kind of system work; a kind the page does not name is shown as recorded. */
+export function systemWorkLabel(kind: string, t: Translate): string {
+  return (PROCESS_SYSTEM_WORK_KINDS as readonly string[]).includes(kind)
+    ? t(`processMetrics.cause.systemKind.${kind}`)
+    : kind
+}
+
+/**
+ * What the two causes mean whose names do not say it, and where system work can be changed.
+ * Shown only for a cause that spent tokens: a zero needs no explanation.
+ */
+function CauseNotes({ summary }: { summary: ProcessSubjectSummary }) {
+  const { t } = useTranslation()
+  const spent = (cause: ProcessCauseGroup) =>
+    (summary.causes.find((slice) => slice.cause === cause)?.tokens ?? 0) > 0
+  const other = spent('other-rerun')
+  const system = spent('system')
+  if (!other && !system) return null
+  return (
+    <div className="process-metrics__cause-notes" data-testid="process-cause-notes">
+      {other ? (
+        <p className="muted process-metrics__note">{t('processMetrics.cause.note.otherRerun')}</p>
+      ) : null}
+      {system ? (
+        <>
+          <p className="muted process-metrics__note">
+            {t('processMetrics.cause.note.system', {
+              kinds: summary.systemWork
+                .map((slice) => `${systemWorkLabel(slice.kind, t)} ${tokens(slice.tokens)}`)
+                .join(t('processMetrics.listSeparator')),
+            })}
+          </p>
+          <p className="muted process-metrics__note">
+            {t('processMetrics.cause.note.systemTune')}{' '}
+            <Link to="/settings" search={{ tab: 'systemAgents' }} className="link">
+              {t('processMetrics.cause.note.settingsLink')}
+            </Link>
+          </p>
+        </>
+      ) : null}
+    </div>
+  )
 }
 
 function CauseTable({ summary }: { summary: ProcessSubjectSummary }) {
@@ -129,7 +162,7 @@ function CauseTable({ summary }: { summary: ProcessSubjectSummary }) {
             </tr>
           </thead>
           <tbody>
-            {summary.causes.map((slice) => (
+            {summary.causes.flatMap((slice) => [
               <tr key={slice.cause}>
                 <th scope="row">{t(`processMetrics.cause.${slice.cause}`)}</th>
                 <td className="viz-num">{tokens(slice.tokens)}</td>
@@ -138,8 +171,23 @@ function CauseTable({ summary }: { summary: ProcessSubjectSummary }) {
                   {pricedCost(slice.costNano, summary.note.unpriced && slice.tokens > 0, t)}
                 </td>
                 <td className="viz-num">{percent(slice.durationShare)}</td>
-              </tr>
-            ))}
+              </tr>,
+              // What the system slice was spent on, as rows of their own under it.
+              ...(slice.cause === 'system'
+                ? summary.systemWork.map((work) => (
+                    <tr key={`system:${work.kind}`}>
+                      <th scope="row" className="process-metrics__indent">
+                        {systemWorkLabel(work.kind, t)}
+                      </th>
+                      <td className="viz-num">{tokens(work.tokens)}</td>
+                      <td className="viz-num">
+                        {pricedCost(work.costNano, summary.note.unpriced && work.tokens > 0, t)}
+                      </td>
+                      <td className="viz-num">{DASH}</td>
+                    </tr>
+                  ))
+                : []),
+            ])}
           </tbody>
         </table>
       </TableViewport>
@@ -432,6 +480,7 @@ export function ProcessOverview(props: {
       parts={causeParts(summary, t)}
       empty={t('processMetrics.cause.empty')}
     >
+      <CauseNotes summary={summary} />
       <CauseTable summary={summary} />
     </SplitCard>
   )

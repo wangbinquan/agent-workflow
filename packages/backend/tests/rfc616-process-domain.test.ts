@@ -7,7 +7,9 @@
 // rounds only count as waiting time), the per-stage aggregation and the token
 // split that must add up to the headline number.
 import { describe, expect, test } from 'bun:test'
-import type { WorkflowDefinition } from '@agent-workflow/shared'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { PROCESS_SYSTEM_WORK_KINDS, type WorkflowDefinition } from '@agent-workflow/shared'
 import {
   classifyExecutions,
   classifyFailureCodes,
@@ -46,6 +48,7 @@ import {
   commonMetrics,
   interventionsOf,
   stabilityOf,
+  systemWorkOf,
   timeSplitOf,
   trendOf,
   unitCounts,
@@ -809,6 +812,92 @@ describe('RFC-616 unit numbers', () => {
     expect(slices.find((item) => item.cause === 'review-rework')!.durationShare).toBe(100 / 500)
     expect(other.durationShare).toBe(100 / 500)
     expect(slices.reduce((sum, item) => sum + (item.durationShare ?? 0), 0)).toBeCloseTo(1)
+  })
+
+  // "System work" alone says neither what ran nor where to change it: on real tasks it was 13–55%
+  // of the tokens, all memory extraction, shown as part of one unnamed "other reruns and system
+  // work" (user report, 2026-11-27). The summary now lists what the slice was spent on.
+  test('system work is listed by what it was for, largest first, and adds up to the system slice exactly', () => {
+    const system = (systemKind: string | undefined, tokens: number) => ({
+      stageKey: 'system:other',
+      cause: 'system' as const,
+      ...(systemKind === undefined ? {} : { systemKind }),
+      tokens,
+      costNano: tokens * 3,
+    })
+    const first = { stageKey: 'design', cause: 'first' as const, tokens: 100, costNano: 300 }
+    const list = numbers([
+      facts({
+        unit: unit({ id: 'a' }),
+        usage: [first, system('memory-distill', 40), system('commit-push', 7)],
+        usageTotals: usage(147, 441),
+      }),
+      facts({
+        unit: unit({ id: 'b' }),
+        // Two slices of one kind on different stages are one kind; a slice without a kind is "other".
+        usage: [
+          first,
+          system('memory-distill', 21),
+          { ...system('memory-distill', 10), stageKey: 'design' },
+          system(undefined, 3),
+        ],
+        usageTotals: usage(134, 402),
+      }),
+      facts({ unit: unit({ id: 'c' }), usage: [first], usageTotals: usage(100, 300) }),
+      // Not ended: in no token statistic, so not in this one either.
+      facts({
+        unit: unit({ id: 'd', status: 'active', endedAt: null }),
+        usage: [system('merge-resolve', 9_000)],
+        usageTotals: usage(9_000, 27_000),
+      }),
+    ])
+    const causes = causeSlicesOf(list)
+    const slice = causes.find((item) => item.cause === 'system')!
+    // 81 system tokens over three sampled units.
+    expect(slice.tokens).toBe(27)
+    const work = systemWorkOf(list, causes)
+    expect(work.map((item) => item.kind)).toEqual(['memory-distill', 'commit-push', 'other'])
+    expect(work.reduce((sum, item) => sum + item.tokens, 0)).toBe(slice.tokens)
+    expect(work.reduce((sum, item) => sum + item.costNano, 0)).toBe(slice.costNano)
+    // 71 : 7 : 3 of the 27, rounded so that they still add up.
+    expect(work.map((item) => item.tokens)).toEqual([24, 2, 1])
+  })
+
+  test('the kinds the page names are the kinds the platform records its own calls with', () => {
+    // The page names a kind by a string. If a recorder renames its kind, the tokens are still
+    // listed (under the raw kind) but lose their product name and the hint where to change them.
+    const source = (path: string) => readFileSync(join(import.meta.dir, '../src', path), 'utf8')
+    const recorded = [
+      ['modules/memory/application/distill/memoryDistiller.ts', "kind: 'memory-distill',"],
+      ['modules/workspace-insight/application/changeNarrative.ts', "kind: 'change-narrative',"],
+      [
+        'modules/task-execution/infrastructure/clarifyFollowupGeneration.ts',
+        "kind: 'clarify-followup',",
+      ],
+      [
+        'modules/run-observability/application/process/sources.ts',
+        "export const CLARIFY_FOLLOWUP_KIND = 'clarify-followup'",
+      ],
+    ] as const
+    for (const [path, fragment] of recorded) expect(source(path), path).toContain(fragment)
+    for (const kind of ['memory-distill', 'change-narrative', 'clarify-followup'] as const)
+      expect(PROCESS_SYSTEM_WORK_KINDS).toContain(kind)
+    // A call tied to a task is recorded through one place, which stores the demand's kind.
+    expect(source('modules/task-execution/composition/systemAgentObservations.ts')).toContain(
+      'systemKind: demand?.kind ?? request.feature,',
+    )
+  })
+
+  test('no system tokens: nothing to list', () => {
+    const list = numbers([
+      facts({
+        unit: unit({ id: 'a' }),
+        usage: [{ stageKey: 'design', cause: 'first', tokens: 10, costNano: 30 }],
+        usageTotals: usage(10, 30),
+      }),
+    ])
+    expect(systemWorkOf(list, causeSlicesOf(list))).toEqual([])
+    expect(systemWorkOf([], causeSlicesOf([]))).toEqual([])
   })
 
   test('interventions per unit and stability', () => {

@@ -19,6 +19,7 @@ export type VizFill =
   | 'cat-2'
   | 'cat-3'
   | 'cat-4'
+  | 'cat-5'
   | 'other'
   | 'ord-1'
   | 'ord-2'

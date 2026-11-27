@@ -18,11 +18,14 @@ import {
   PROCESS_METRIC_BETTER,
   PROCESS_METRIC_IDS,
   PROCESS_OPERATION_ACTIONS,
+  PROCESS_SYSTEM_WORK_KINDS,
   ProcessSummaryQuerySchema,
   ProcessUnitsQuerySchema,
   RERUN_CAUSES,
   processCauseOf,
   processRankBins,
+  processSystemWorkOfCall,
+  processSystemWorkOfRerunCause,
 } from '../src'
 
 describe('RFC-616 execution causes', () => {
@@ -99,6 +102,36 @@ describe('RFC-616 execution causes', () => {
     expect(PROCESS_CAUSE_GROUP_OF.cascade).toBe('other-rerun')
     expect(PROCESS_CAUSE_GROUP_OF.recovery).toBe('other-rerun')
     expect(PROCESS_CAUSE_GROUPS).toHaveLength(6)
+  })
+})
+
+// "System work" used to be one unnamed part of the token split (folded with "other reruns" into
+// "其它重跑与系统工作"). On real tasks it was 13–55% of the tokens, all of it memory extraction,
+// and the page said neither what it was nor where to change it (user report, 2026-11-27). Every
+// system slice now says what it was for.
+describe('RFC-616 kinds of system work', () => {
+  test("the platform's own sessions inside a task are told apart by their rerun cause", () => {
+    expect(processSystemWorkOfRerunCause('commit-push-session')).toBe('commit-push')
+    expect(processSystemWorkOfRerunCause('merge-resolve')).toBe('merge-resolve')
+    // Every rerun cause classified as system work has a kind of its own.
+    for (const cause of RERUN_CAUSES)
+      if (PROCESS_CAUSE_OF[cause] === 'system')
+        expect(processSystemWorkOfRerunCause(cause), cause).not.toBe('other')
+    for (const cause of [null, undefined, '', 'initial', 'toString'])
+      expect(processSystemWorkOfRerunCause(cause)).toBe('other')
+  })
+
+  test('a system call keeps the kind it was recorded with; without one it is "other"', () => {
+    expect(processSystemWorkOfCall('memory-distill')).toBe('memory-distill')
+    // A kind this build does not name is not hidden behind "other".
+    expect(processSystemWorkOfCall('a-kind-added-later')).toBe('a-kind-added-later')
+    for (const kind of [null, undefined, '']) expect(processSystemWorkOfCall(kind)).toBe('other')
+  })
+
+  test('the kinds the page names: no duplicates, and both session kinds are among them', () => {
+    expect(new Set(PROCESS_SYSTEM_WORK_KINDS).size).toBe(PROCESS_SYSTEM_WORK_KINDS.length)
+    for (const kind of ['commit-push', 'merge-resolve', 'other'] as const)
+      expect(PROCESS_SYSTEM_WORK_KINDS).toContain(kind)
   })
 })
 

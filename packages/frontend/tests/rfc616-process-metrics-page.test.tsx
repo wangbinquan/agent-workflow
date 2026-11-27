@@ -233,6 +233,12 @@ const base = {
     { cause: 'other-rerun' as const, tokens: 60_000, costNano: 800_000_000, durationShare: 0.03 },
     { cause: 'system' as const, tokens: 50_000, costNano: 700_000_000, durationShare: null },
   ],
+  // What the system slice was spent on; the last kind is one this build has no name for.
+  systemWork: [
+    { kind: 'memory-distill', tokens: 38_000, costNano: 530_000_000 },
+    { kind: 'commit-push', tokens: 9_000, costNano: 130_000_000 },
+    { kind: 'a-kind-added-later', tokens: 3_000, costNano: 40_000_000 },
+  ],
   interventions: {
     gates: [
       { kind: 'review' as const, perUnit: 2.7 },
@@ -1038,20 +1044,41 @@ describe('RFC-616 process tab: a workflow', () => {
       '等待反问回答: 2 小时 13 分 · 23%',
       '排队与中断: 47 分钟 · 8%',
     ])
-    // Four causes get a colour; other reruns and system work are one muted part…
+    // Every cause is a part of its own. Regression (user report, 2026-11-27): other reruns and
+    // system work used to be one muted part called "其它重跑与系统工作" — on real tasks the largest
+    // part of the bar, with a name that said neither what it was nor where to change it.
     const tokens = screen.getByRole('group', { name: 'Token 花在哪里' })
-    expect(
-      within(tokens)
-        .getAllByRole('button')
-        .map((part) => part.getAttribute('aria-label')),
-    ).toEqual([
+    const causeBar = within(tokens).getAllByRole('button')
+    expect(causeBar.map((part) => part.getAttribute('aria-label'))).toEqual([
       '首次执行: 1.45M · 50%',
       '评审返工: 840K · 29%',
       '反问后续跑: 330K · 11%',
       '失败重试: 170K · 6%',
-      '其它重跑与系统工作: 110K · 4%',
+      '其它重跑（连带、恢复续跑）: 60K · 2%',
+      '系统工作: 50K · 2%',
     ])
-    // …and the table under the bar lists every cause on its own.
+    // System work has a colour of its own; only the reruns nobody asked for by name stay muted.
+    expect(causeBar.map((part) => part.className.replace('segbar__seg ', ''))).toEqual([
+      'viz-fill--cat-1',
+      'viz-fill--cat-2',
+      'viz-fill--cat-3',
+      'viz-fill--cat-4',
+      'viz-fill--other',
+      'viz-fill--cat-5',
+    ])
+    expect(screen.queryByText(/其它重跑与系统工作/)).toBeNull()
+    // Under the legend: what the two causes are, what the system work was, and where to change it.
+    const notes = screen.getByTestId('process-cause-notes')
+    expect([...notes.querySelectorAll('p')].map((line) => line.textContent)).toEqual([
+      '其它重跑：上游节点重跑后，下游的旧结果作废被重新派发；以及手动重试、任务中断恢复后的再次执行。',
+      // A kind the page has no name for is shown as recorded, never hidden.
+      '系统工作：平台自己发起的模型调用，不是节点在执行。这里是：记忆提取 38K、提交推送 9K、a-kind-added-later 3K。',
+      '这些内置 Agent 用哪个运行时、记忆提取对哪些任务和事件生效，都在“设置 › 系统 Agent”里调整。 打开系统 Agent 设置',
+    ])
+    expect(
+      within(notes).getByRole('link', { name: '打开系统 Agent 设置' }).getAttribute('href'),
+    ).toBe('/settings?tab=systemAgents')
+    // The table under the bar lists every cause, and under system work what it was spent on.
     const causes = screen.getByRole('table', { name: 'Token 按执行原因' })
     expect(
       within(causes)
@@ -1065,6 +1092,9 @@ describe('RFC-616 process tab: a workflow', () => {
       '失败重试170K¥2.006%',
       '其它重跑（连带、恢复续跑）60K¥0.803%',
       '系统工作50K¥0.70—',
+      '记忆提取38K¥0.53—',
+      '提交推送9K¥0.13—',
+      'a-kind-added-later3K¥0.04—',
     ])
 
     expect(tileValue('自动重试')).toBe('21')
@@ -2369,6 +2399,7 @@ describe('RFC-616 process tab: a cost without a price', () => {
           // One cause that used no tokens at all: it cost nothing, priced or not.
           tokens: slice.cause === 'other-rerun' ? 0 : slice.tokens,
         })),
+        systemWork: template.systemWork.map((slice) => ({ ...slice, costNano: 0 })),
         hints: [
           {
             id: 'rework-cost',
@@ -2388,7 +2419,34 @@ describe('RFC-616 process tab: a cost without a price', () => {
       .map((row) => row.textContent)
     expect(rows[1]).toBe('首次执行1.45M未定价50%')
     expect(rows[5]).toBe('其它重跑（连带、恢复续跑）0¥0.003%')
+    // What system work was spent on follows the same rule as its cause.
+    expect(rows[7]).toBe('记忆提取38K未定价—')
     expect(screen.getByText('相当于每个任务约 840K Token、未定价。')).toBeTruthy()
+    // A cause that spent nothing gets no note: only system work is explained here.
+    const notes = screen.getByTestId('process-cause-notes')
+    expect(notes.textContent).not.toContain('其它重跑：')
+    expect(notes.textContent).toContain('系统工作：')
+  })
+
+  test('with no other reruns and no system work the token card explains nothing', async () => {
+    const template = workflowSummary()
+    get(`${BASE}/subjects/workflow/wf-1`, () => ({
+      body: workflowSummary({
+        causes: template.causes.map((slice) =>
+          slice.cause === 'other-rerun' || slice.cause === 'system'
+            ? { ...slice, tokens: 0, costNano: 0 }
+            : slice,
+        ),
+        systemWork: [],
+      }),
+    }))
+    mount('/observability?tab=process&kind=workflow&subject=wf-1')
+    await screen.findByRole('heading', { name: '需求到合入', level: 2 })
+    expect(screen.getByRole('group', { name: 'Token 花在哪里' })).toBeTruthy()
+    expect(screen.queryByTestId('process-cause-notes')).toBeNull()
+    const rows = within(screen.getByRole('table', { name: 'Token 按执行原因' })).getAllByRole('row')
+    // The header and the six causes: no row under system work.
+    expect(rows).toHaveLength(7)
   })
 
   test('a task row says it the same way, with the reason on hover', async () => {

@@ -94,7 +94,7 @@
 
   /* RFC-616 — chart tokens, shared by every chart component (MetricTile,
      SegmentedBar, MeterBar, ColumnChart, TrendChart, HeatScale, the canvas and
-     duty-map heat). Four categorical hues in a fixed order, one muted fill for
+     duty-map heat). Five categorical hues in a fixed order, one muted fill for
      "everything else", three ordered steps of one hue, five heat steps of one
      hue, each with the ink that reads on it at 4.5:1 or better (a share printed
      inside a part of a bar is small text). The set was checked with the
@@ -105,11 +105,13 @@
   --viz-cat-2: #f47230;
   --viz-cat-3: #00b894;
   --viz-cat-4: #f2a600;
+  --viz-cat-5: #ee7fac;
   --viz-other: #b4b9c2;
   --viz-cat-1-ink: #0b0b0b;
   --viz-cat-2-ink: #0b0b0b;
   --viz-cat-3-ink: #0b0b0b;
   --viz-cat-4-ink: #0b0b0b;
+  --viz-cat-5-ink: #0b0b0b;
   --viz-other-ink: #0b0b0b;
   --viz-ord-1: #84b9f3;
   --viz-ord-2: #257de0;
@@ -3201,11 +3203,13 @@
   --viz-cat-2: #e76624;
   --viz-cat-3: #00a888;
   --viz-cat-4: #d28e05;
+  --viz-cat-5: #e24d8b;
   --viz-other: #5a6270;
   --viz-cat-1-ink: #0b0b0b;
   --viz-cat-2-ink: #0b0b0b;
   --viz-cat-3-ink: #0b0b0b;
   --viz-cat-4-ink: #0b0b0b;
+  --viz-cat-5-ink: #0b0b0b;
   --viz-other-ink: #ffffff;
   --viz-ord-1: #1757ac;
   --viz-ord-2: #338ced;
@@ -3263,11 +3267,13 @@
     --viz-cat-2: #e76624;
     --viz-cat-3: #00a888;
     --viz-cat-4: #d28e05;
+    --viz-cat-5: #e24d8b;
     --viz-other: #5a6270;
     --viz-cat-1-ink: #0b0b0b;
     --viz-cat-2-ink: #0b0b0b;
     --viz-cat-3-ink: #0b0b0b;
     --viz-cat-4-ink: #0b0b0b;
+    --viz-cat-5-ink: #0b0b0b;
     --viz-other-ink: #ffffff;
     --viz-ord-1: #1757ac;
     --viz-ord-2: #338ced;
@@ -29983,6 +29989,10 @@ button.status-chip {
   background: var(--viz-cat-4);
   color: var(--viz-cat-4-ink);
 }
+.viz-fill--cat-5 {
+  background: var(--viz-cat-5);
+  color: var(--viz-cat-5-ink);
+}
 .viz-fill--other {
   background: var(--viz-other);
   color: var(--viz-other-ink);
@@ -30387,6 +30397,12 @@ button.status-chip {
 .process-metrics__note {
   margin: 0;
   font-size: var(--font-sm);
+}
+/* Under the legend of the token causes: what the two causes mean whose names do not say it. */
+.process-metrics__cause-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 .process-metrics__subtitle {
   margin: 0;

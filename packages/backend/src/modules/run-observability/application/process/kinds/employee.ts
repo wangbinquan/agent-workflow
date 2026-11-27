@@ -7,6 +7,7 @@
 import {
   PROCESS_UNATTRIBUTED_STAGE,
   classifyTerminalKind,
+  processSystemWorkOfCall,
   type ProcessEmployeeCycle,
   type ProcessEmployeeOutcomes,
   type ProcessEmployeeSummary,
@@ -307,12 +308,15 @@ export async function loadEmployeeUnits(
             tokens: totals.tokens - systemTokens,
             costNano: totals.costNano - systemCostNano,
           })
-          slices.push({
-            stageKey: round.workItemRef,
-            cause: 'system',
-            tokens: systemTokens,
-            costNano: systemCostNano,
-          })
+          for (const row of system) {
+            slices.push({
+              stageKey: round.workItemRef,
+              cause: 'system',
+              systemKind: processSystemWorkOfCall(row.systemKind),
+              tokens: row.tokens,
+              costNano: row.costNano,
+            })
+          }
           const inherited = taskId !== host.taskId
           for (const gate of bundle.gates.get(taskId) ?? []) {
             if (!inherited) gateRuns.add(gate.gateNodeRunId)

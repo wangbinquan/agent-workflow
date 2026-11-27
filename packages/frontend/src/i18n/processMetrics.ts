@@ -244,8 +244,25 @@ export const processMetricsZh = {
     'auto-retry': '失败重试',
     'other-rerun': '其它重跑（连带、恢复续跑）',
     system: '系统工作',
-    rest: '其它重跑与系统工作',
     col: { cause: '原因', tokens: 'Token', cost: '成本', durationShare: '占执行时长' },
+    // 这两类光看名字不知道是什么、该去哪里调：有消耗时在图下面各说一句。
+    note: {
+      otherRerun:
+        '其它重跑：上游节点重跑后，下游的旧结果作废被重新派发；以及手动重试、任务中断恢复后的再次执行。',
+      system: '系统工作：平台自己发起的模型调用，不是节点在执行。这里是：{{kinds}}。',
+      systemTune:
+        '这些内置 Agent 用哪个运行时、记忆提取对哪些任务和事件生效，都在“设置 › 系统 Agent”里调整。',
+      settingsLink: '打开系统 Agent 设置',
+    },
+    // 与“设置 › 系统 Agent”里的卡片同名，方便对上。
+    systemKind: {
+      'memory-distill': '记忆提取',
+      'clarify-followup': '分支追问',
+      'change-narrative': '变更导读',
+      'commit-push': '提交推送',
+      'merge-resolve': '合并冲突解决',
+      other: '未标明用途',
+    },
   },
   actor: {
     subtitle: '平均每个{{unit}} {{tokens}} Token，按谁在消耗拆分',
@@ -1073,8 +1090,24 @@ export const processMetricsEn: ProcessMetricsMessages = {
     'auto-retry': 'Retry after failure',
     'other-rerun': 'Other reruns (cascade, recovery)',
     system: 'System work',
-    rest: 'Other reruns and system work',
     col: { cause: 'Cause', tokens: 'Tokens', cost: 'Cost', durationShare: 'Share of run time' },
+    note: {
+      otherRerun:
+        'Other reruns: a downstream node dispatched again after its upstream reran, and executions after a manual retry or after an interrupted task resumed.',
+      system:
+        'System work: model calls the platform makes itself, not a node executing. Here: {{kinds}}.',
+      systemTune:
+        'Which runtime these built-in agents use, and which tasks and events memory extraction covers, is set under Settings › System agents.',
+      settingsLink: 'Open system agent settings',
+    },
+    systemKind: {
+      'memory-distill': 'Memory extraction',
+      'clarify-followup': 'Follow-up questions',
+      'change-narrative': 'Change walkthrough',
+      'commit-push': 'Commit and push',
+      'merge-resolve': 'Merge conflict resolution',
+      other: 'No recorded purpose',
+    },
   },
   actor: {
     subtitle: 'Mean {{tokens}} tokens per {{unit}}, by who spent them',

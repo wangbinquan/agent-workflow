@@ -473,6 +473,7 @@ function employeeSummary(
     counts: { total: 8, succeeded: 6, failed: 1, canceled: 0, active: 1 },
     time: { sampleUnits: 0, leadMs: null, autoMs: 0, waits: [], otherMs: 0 },
     causes: [],
+    systemWork: [],
     interventions: { gates: [], manualRetriesPerUnit: 0, operationsPerUnit: 0 },
     trend: [],
     stability: {

@@ -110,6 +110,8 @@ export interface ProcessGateRound {
 export interface ProcessUsageSlice {
   readonly stageKey: string
   readonly cause: ProcessCause
+  /** For a `system` slice: what the platform was doing (`processSystemWorkOf…`). */
+  readonly systemKind?: string
   readonly tokens: number
   readonly costNano: number
 }

@@ -378,6 +378,17 @@ describe('RFC-616 workflow summary', () => {
     expect(summary.causes.reduce((sum, slice) => sum + slice.tokens, 0)).toBe(
       summary.metrics.tokensPerUnit!.value!,
     )
+    // What the system slice was spent on. Regression: usage slices are merged by stage and
+    // cause, and the merge rebuilt each slice without its kind — every kind arrived as `other`
+    // (found on real tasks, 2026-11-27). The platform's own session is named by its rerun cause,
+    // a recorded kind is kept as recorded, and a child task's system work counts with its parent.
+    expect(summary.systemWork.map((slice) => [slice.kind, slice.tokens])).toEqual([
+      ['memory-distiller', 15],
+      ['commit-push', 10],
+      ['change-narrative', 5],
+    ])
+    const system = summary.causes.find((slice) => slice.cause === 'system')!
+    expect(summary.systemWork.reduce((sum, slice) => sum + slice.costNano, 0)).toBe(system.costNano)
   })
 
   test('interventions, stability, origins, revisions and the data note', async () => {

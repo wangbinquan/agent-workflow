@@ -18,6 +18,7 @@ import {
   type ProcessInterventions,
   type ProcessMetricId,
   type ProcessStability,
+  type ProcessSystemWorkSlice,
   type ProcessTimeSplit,
   type ProcessTrendPoint,
   type ProcessUnitCounts,
@@ -37,6 +38,8 @@ export interface ProcessUnitNumbers {
     ProcessCause,
     { readonly tokens: number; readonly costNano: number }
   >
+  /** The `system` tokens by what the platform was doing. */
+  readonly systemTokens: ReadonlyMap<string, { readonly tokens: number; readonly costNano: number }>
   readonly causeActiveMs: ReadonlyMap<ProcessCause, number>
   /** Closed, non-void gate rounds by kind. */
   readonly gateRounds: ReadonlyMap<ProcessGateKind, number>
@@ -52,11 +55,19 @@ export interface ProcessUnitNumbers {
 
 export function unitNumbers(facts: ProcessUnitFacts, now: number): ProcessUnitNumbers {
   const causeTokens = new Map<ProcessCause, { tokens: number; costNano: number }>()
+  const systemTokens = new Map<string, { tokens: number; costNano: number }>()
   for (const slice of facts.usage) {
     const previous = causeTokens.get(slice.cause)
     causeTokens.set(slice.cause, {
       tokens: (previous?.tokens ?? 0) + slice.tokens,
       costNano: (previous?.costNano ?? 0) + slice.costNano,
+    })
+    if (slice.cause !== 'system') continue
+    const kind = slice.systemKind ?? 'other'
+    const sameKind = systemTokens.get(kind)
+    systemTokens.set(kind, {
+      tokens: (sameKind?.tokens ?? 0) + slice.tokens,
+      costNano: (sameKind?.costNano ?? 0) + slice.costNano,
     })
   }
   const causeActiveMs = new Map<ProcessCause, number>()
@@ -104,6 +115,7 @@ export function unitNumbers(facts: ProcessUnitFacts, now: number): ProcessUnitNu
     time: splitUnitTime(facts.unit, facts.gates, now),
     tokenSample: unitEnded(facts.unit) && facts.hasUsageRecord,
     causeTokens,
+    systemTokens,
     causeActiveMs,
     gateRounds,
     operations,
@@ -247,6 +259,45 @@ export function causeSlicesOf(numbers: readonly ProcessUnitNumbers[]): ProcessCa
     costNano: costParts[index]!,
     durationShare: ratio(active.get(cause) ?? 0, activeTotal),
   }))
+}
+
+/**
+ * What the `system` slice was spent on, largest first. Its rounded mean is apportioned over
+ * the kinds, so they add up to the slice exactly.
+ *
+ * "System work" by itself says neither what ran nor where to change it. On real installations
+ * it is mostly memory extraction, which took 13–55% of a task's tokens (2026-11-26) — a share
+ * nobody can act on while it is folded into one unnamed part.
+ */
+export function systemWorkOf(
+  numbers: readonly ProcessUnitNumbers[],
+  causes: readonly ProcessCauseSlice[],
+): ProcessSystemWorkSlice[] {
+  const system = causes.find((slice) => slice.cause === 'system')
+  const totals = new Map<string, { tokens: number; costNano: number }>()
+  for (const item of tokenSampleOf(numbers)) {
+    for (const [kind, value] of item.systemTokens) {
+      const previous = totals.get(kind)
+      totals.set(kind, {
+        tokens: (previous?.tokens ?? 0) + value.tokens,
+        costNano: (previous?.costNano ?? 0) + value.costNano,
+      })
+    }
+  }
+  // Sorted before apportioning: equal remainders resolve by position.
+  const kinds = [...totals.keys()].sort()
+  const tokenParts = apportion(
+    system?.tokens ?? 0,
+    kinds.map((kind) => totals.get(kind)!.tokens),
+  )
+  const costParts = apportion(
+    system?.costNano ?? 0,
+    kinds.map((kind) => totals.get(kind)!.costNano),
+  )
+  return kinds
+    .map((kind, index) => ({ kind, tokens: tokenParts[index]!, costNano: costParts[index]! }))
+    .filter((slice) => slice.tokens > 0 || slice.costNano > 0)
+    .sort((a, b) => b.tokens - a.tokens || b.costNano - a.costNano || a.kind.localeCompare(b.kind))
 }
 
 export function interventionsOf(numbers: readonly ProcessUnitNumbers[]): ProcessInterventions {

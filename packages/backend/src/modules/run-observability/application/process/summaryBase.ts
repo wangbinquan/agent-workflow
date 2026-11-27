@@ -22,6 +22,7 @@ import {
   commonMetrics,
   interventionsOf,
   stabilityOf,
+  systemWorkOf,
   timeSplitOf,
   trendOf,
   unitCounts,
@@ -95,6 +96,7 @@ export function baseSummary(
   const metrics: MetricValues = { ...commonMetrics(current), ...extras.metrics }
   const baselineMetrics: MetricValues | null =
     baseline === null ? null : { ...commonMetrics(baseline), ...(extras.baselineMetrics ?? {}) }
+  const causes = causeSlicesOf(current)
   return {
     asOf: frame.asOf,
     from: frame.from,
@@ -112,7 +114,8 @@ export function baseSummary(
     counts: unitCounts(current),
     metrics: comparedMetrics(metrics, baselineMetrics),
     time: timeSplitOf(current),
-    causes: causeSlicesOf(current),
+    causes,
+    systemWork: systemWorkOf(current, causes),
     interventions: interventionsOf(current),
     trend: trendOf(current, frame.from, frame.to, frame.tzOffset),
     stability: stabilityOf(current),

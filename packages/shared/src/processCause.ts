@@ -95,6 +95,45 @@ export const PROCESS_CAUSE_GROUP_OF = {
 } as const satisfies Record<ProcessCause, ProcessCauseGroup>
 
 /**
+ * What a `system` slice was for. "System work" alone tells a reader neither what
+ * ran nor where to change it, so the page lists it by kind.
+ *
+ * The first three are the kinds the platform's own model calls are recorded with
+ * when they belong to a task (`observation_calls.system_kind`); the next two are
+ * the platform's own sessions inside a task, told apart by the rerun cause their
+ * row was minted with. A call recorded with a kind this list does not name keeps
+ * its recorded kind, so nothing is hidden behind "other".
+ */
+export const PROCESS_SYSTEM_WORK_KINDS = [
+  'memory-distill',
+  'clarify-followup',
+  'change-narrative',
+  'commit-push',
+  'merge-resolve',
+  'other',
+] as const
+export type ProcessSystemWorkKind = (typeof PROCESS_SYSTEM_WORK_KINDS)[number]
+
+const SYSTEM_WORK_OF_RERUN_CAUSE = {
+  'commit-push-session': 'commit-push',
+  'merge-resolve': 'merge-resolve',
+} as const satisfies Partial<Record<RerunCause, ProcessSystemWorkKind>>
+
+/** The kind of a `system` execution that is a node run. */
+export function processSystemWorkOfRerunCause(
+  rerunCause: string | null | undefined,
+): ProcessSystemWorkKind {
+  return rerunCause != null && Object.hasOwn(SYSTEM_WORK_OF_RERUN_CAUSE, rerunCause)
+    ? SYSTEM_WORK_OF_RERUN_CAUSE[rerunCause as keyof typeof SYSTEM_WORK_OF_RERUN_CAUSE]
+    : 'other'
+}
+
+/** The kind of a `system` call: the kind it was recorded with, `other` when it carries none. */
+export function processSystemWorkOfCall(systemKind: string | null | undefined): string {
+  return systemKind == null || systemKind === '' ? 'other' : systemKind
+}
+
+/**
  * Classify a raw rerun cause. A missing cause (rows written before causes were
  * recorded) counts as a first execution; an unknown string (a cause this build
  * does not know) is treated the same way rather than dropped.

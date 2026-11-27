@@ -537,7 +537,7 @@ describe('chart styles', () => {
 
   test('chart tokens exist for the light theme, the dark theme and the system-dark fallback', () => {
     const tokens = [
-      ...[1, 2, 3, 4].flatMap((step) => [`--viz-cat-${step}`, `--viz-cat-${step}-ink`]),
+      ...[1, 2, 3, 4, 5].flatMap((step) => [`--viz-cat-${step}`, `--viz-cat-${step}-ink`]),
       '--viz-other',
       '--viz-other-ink',
       ...[1, 2, 3].flatMap((step) => [`--viz-ord-${step}`, `--viz-ord-${step}-ink`]),
@@ -567,7 +567,7 @@ describe('chart styles', () => {
     const declared = (token: string) =>
       [...css.matchAll(new RegExp(`${token}:\\s*(#[0-9a-f]{6});`, 'g'))].map((match) => match[1]!)
     const fills = [
-      ...[1, 2, 3, 4].map((step) => `--viz-cat-${step}`),
+      ...[1, 2, 3, 4, 5].map((step) => `--viz-cat-${step}`),
       '--viz-other',
       ...[1, 2, 3].map((step) => `--viz-ord-${step}`),
       ...[1, 2, 3, 4, 5].map((step) => `--viz-heat-${step}`),

@@ -2,7 +2,12 @@
 // workgroup units are both tasks; they differ only in how a node run maps to a
 // stage, which the caller supplies.
 
-import { PROCESS_UNATTRIBUTED_STAGE, type ProcessCause } from '@agent-workflow/shared'
+import {
+  PROCESS_UNATTRIBUTED_STAGE,
+  processSystemWorkOfCall,
+  processSystemWorkOfRerunCause,
+  type ProcessCause,
+} from '@agent-workflow/shared'
 import type {
   ProcessNodeRunRow,
   ProcessTaskGateRoundRow,
@@ -96,15 +101,17 @@ function gateOf(
   }
 }
 
+/** One slice per (stage, cause, kind of system work): what a system slice was for survives the merge. */
 function mergeSlices(slices: readonly ProcessUsageSlice[]): ProcessUsageSlice[] {
   const merged = new Map<string, ProcessUsageSlice>()
   for (const slice of slices) {
     if (slice.tokens === 0 && slice.costNano === 0) continue
-    const key = `${slice.stageKey}\u0000${slice.cause}`
+    const key = `${slice.stageKey}\u0000${slice.cause}\u0000${slice.systemKind ?? ''}`
     const previous = merged.get(key)
     merged.set(key, {
       stageKey: slice.stageKey,
       cause: slice.cause,
+      ...(slice.systemKind === undefined ? {} : { systemKind: slice.systemKind }),
       tokens: (previous?.tokens ?? 0) + slice.tokens,
       costNano: (previous?.costNano ?? 0) + slice.costNano,
     })
@@ -241,14 +248,20 @@ export function taskUnitFacts(input: TaskUnitInput): ProcessUnitFacts {
         slices.push({
           stageKey: run === undefined ? SYSTEM_OTHER_STAGE : stageOfRun(run),
           cause: 'system',
+          systemKind: processSystemWorkOfCall(row.systemKind),
           tokens: row.tokens,
           costNano: row.costNano,
         })
         continue
       }
+      const cause = (run === undefined ? null : causeOfRun(run)) ?? 'first'
       slices.push({
         stageKey: run === undefined ? PROCESS_UNATTRIBUTED_STAGE : stageOfRun(run),
-        cause: (run === undefined ? null : causeOfRun(run)) ?? 'first',
+        cause,
+        // The platform's own session inside the task (commit and push, merge resolution).
+        ...(cause === 'system'
+          ? { systemKind: processSystemWorkOfRerunCause(run?.rerunCause) }
+          : {}),
         tokens: row.tokens,
         costNano: row.costNano,
       })
@@ -264,6 +277,7 @@ export function taskUnitFacts(input: TaskUnitInput): ProcessUnitFacts {
       slices.push({
         stageKey: round?.stageKey ?? SYSTEM_OTHER_STAGE,
         cause: 'system',
+        systemKind: CLARIFY_FOLLOWUP_KIND,
         tokens: call.tokens,
         costNano: call.costNano,
       })
@@ -277,9 +291,18 @@ export function taskUnitFacts(input: TaskUnitInput): ProcessUnitFacts {
         descendant.callNodeRunId === null ? undefined : runById.get(descendant.callNodeRunId)
       const callCause = (callRun === undefined ? null : causeOfRun(callRun)) ?? 'first'
       for (const row of bundle.usage.get(descendant.taskId) ?? []) {
+        const cause = row.purpose === 'system' ? 'system' : callCause
         slices.push({
           stageKey,
-          cause: row.purpose === 'system' ? 'system' : callCause,
+          cause,
+          ...(cause === 'system'
+            ? {
+                systemKind:
+                  row.purpose === 'system'
+                    ? processSystemWorkOfCall(row.systemKind)
+                    : processSystemWorkOfRerunCause(callRun?.rerunCause),
+              }
+            : {}),
           tokens: row.tokens,
           costNano: row.costNano,
         })

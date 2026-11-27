@@ -1378,13 +1378,19 @@ describe('RFC-616 digital employee summary', () => {
     const seed = employeeScenario()
     seed.usage = [
       ...seed.usage!,
-      usageRow({ taskId: 'h-k1-i', purpose: 'system', systemKind: 'memory-distiller', tokens: 50 }),
+      usageRow({ taskId: 'h-k1-i', purpose: 'system', systemKind: 'memory-distill', tokens: 35 }),
+      usageRow({ taskId: 'h-k1-i', purpose: 'system', systemKind: 'change-narrative', tokens: 15 }),
     ]
     const summary = await summaryFor(seed)
     const tokens = Object.fromEntries(summary.causes.map((slice) => [slice.cause, slice.tokens]))
     // Per ended case: 1,050 + 3,900 over five.
     expect(summary.metrics.tokensPerUnit!.value).toBe(990)
     expect(tokens.system).toBe(10)
+    // …and the split says what the platform was doing for the tool run.
+    expect(summary.systemWork.map((slice) => [slice.kind, slice.tokens])).toEqual([
+      ['memory-distill', 7],
+      ['change-narrative', 3],
+    ])
     expect(Object.values(tokens).reduce((total, value) => total + value, 0)).toBe(990)
     // The work item still carries all of it: the platform worked for that work item.
     expect(summary.workItems.find((item) => item.key === 'implement')!.tokensPerUnit).toBe(
