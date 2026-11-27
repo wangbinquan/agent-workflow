@@ -221,7 +221,13 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
       return graphPlatformTools.isPlatformTool(id) || legacyPlatformTools.isPlatformTool(id)
     },
     resolveCompatibleRevisionJson(...args) {
-      return legacyPlatformTools.resolveCompatibleRevisionJson?.(...args) ?? null
+      // RFC-628: graph tools map their own upgrade successors (type-v2 → type-v3), like the
+      // listing and revision reads above; everything else stays with the generated catalog.
+      return (
+        graphPlatformTools.resolveCompatibleRevisionJson?.(...args) ??
+        legacyPlatformTools.resolveCompatibleRevisionJson?.(...args) ??
+        null
+      )
     },
   }
   const writerCutover = composeDigitalEmployeeWriterCutoverFor(db, input.writerInstallation)

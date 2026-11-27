@@ -14,6 +14,7 @@ import { canonicalDigest } from '../domain/canonicalJson'
 import { gateCountsAsPass, pipelineEvidenceManifestV1Schema } from '../domain/pipelineManifest'
 import {
   usesMinimalMergeRequestToolContracts,
+  usesPreemptionSafeReviewReplies,
   usesTargetAwareMergeRequestPipeline,
 } from '../domain/mergeRequestLifecycle'
 import type { AutomationWorkspaceEffectsFactory } from './ports/automationWorkspaceEffects'
@@ -251,6 +252,20 @@ function isTargetAwarePipelinePlan(plan: DevelopmentReactionPlan): boolean {
 
 function usesMinimalToolContracts(plan: DevelopmentReactionPlan): boolean {
   return usesMinimalMergeRequestToolContracts(plan.employeeTypeRef)
+}
+
+/** RFC-628: publish-mr records the published review commit and reply-feedback replies from it. */
+function usesPreemptionSafeReplies(plan: DevelopmentReactionPlan): boolean {
+  return usesPreemptionSafeReviewReplies(plan.employeeTypeRef)
+}
+
+/** The reaction output schema bounds a summary to 5,000 UTF-16 code units. */
+const PLATFORM_SUMMARY_MAX_LENGTH = 5_000
+
+function boundedSummary(summary: string): string {
+  return summary.length <= PLATFORM_SUMMARY_MAX_LENGTH
+    ? summary
+    : `${summary.slice(0, PLATFORM_SUMMARY_MAX_LENGTH - 1)}…`
 }
 
 function issueOf(contexts: readonly Context[]) {
@@ -537,6 +552,11 @@ export interface DevelopmentEmployeePlatformWorkItemsInput {
                 readonly createdAt: string | null
               }[]
             }[]
+            /**
+             * RFC-628: present only when the thread list was not read in full (truncated response
+             * or unparseable body); a thread missing from such a list may still exist.
+             */
+            readonly reviewThreadsIncomplete?: true
           }
         }
       | { readonly ok: false; readonly code: string; readonly detail: string }
@@ -1256,6 +1276,36 @@ export function createDevelopmentEmployeePlatformWorkItems(
             summary: `回复修复结果前刷新线程失败：${live.code} · ${live.detail}`,
           })
         }
+        const preemptionSafe = usesPreemptionSafeReplies(plan)
+        // RFC-628: observe-mr can route back here after a preemption, by which time the MR may
+        // have been merged or closed. A terminal MR receives no more platform writes; leaving the
+        // ledger untouched lets the following observe-mr settle the terminal state.
+        if (preemptionSafe && live.snapshot.state !== 'opened') {
+          return output({
+            summary:
+              live.snapshot.state === 'merged'
+                ? 'MR 已合入，不再回复修复结果'
+                : 'MR 已关闭，不再回复修复结果',
+          })
+        }
+        // RFC-628: a thread absent from an incomplete list (truncated or unparseable response) may
+        // still exist, so absence proves nothing. Such a list is read the way frozen revisions read
+        // every list: no row is removed as deleted and each unanswered row is posted. Waiting
+        // instead would never reply on an MR whose list is always too long to read in full.
+        const threadListIncomplete =
+          preemptionSafe && live.snapshot.reviewThreadsIncomplete === true
+        // RFC-628: the reply names the commit recorded when the repair was published (or judged,
+        // for a reply-only round), not the head at reply time. A retry after a preemption or a
+        // block therefore derives the same marker even when someone pushed in between, so threads
+        // that already received the reply only get their receipt recorded.
+        const replyCommitSha = preemptionSafe
+          ? (resolution.publishedHeadSha ?? mergeRequest.headSha)
+          : mergeRequest.headSha
+        const liveThreadRefs = new Set(
+          live.snapshot.reviewThreads.map((thread) => thread.threadRef),
+        )
+        const deletedThreadRefs: string[] = []
+        let postedCount = 0
         const nextThreads = []
         for (const thread of resolution.threads) {
           if (thread.finalReply !== null) {
@@ -1265,12 +1315,19 @@ export function createDevelopmentEmployeePlatformWorkItems(
           if (thread.disposition === null || thread.replyBody === null) {
             return output({ status: 'blocked', summary: `线程 ${thread.threadRef} 缺少处理说明` })
           }
+          // RFC-628: a deleted discussion can never be answered and never comes back in MR facts;
+          // blocking on it would stall the Case forever. Other send failures still block, because
+          // the reply port reports a single failure code that cannot tell transient from permanent.
+          if (preemptionSafe && !threadListIncomplete && !liveThreadRefs.has(thread.threadRef)) {
+            deletedThreadRefs.push(thread.threadRef)
+            continue
+          }
           const marker = reviewReplyMarker({
             caseId: plan.caseRef.id,
             phase: 'resolved',
             threadRef: thread.threadRef,
             revision: thread.revision,
-            commitSha: mergeRequest.headSha,
+            commitSha: replyCommitSha,
           })
           const existing = live.snapshot.reviewThreads
             .find((candidate) => candidate.threadRef === thread.threadRef)
@@ -1284,7 +1341,7 @@ export function createDevelopmentEmployeePlatformWorkItems(
           }
           const body =
             thread.disposition === 'addressed'
-              ? `已在提交 ${mergeRequest.headSha.slice(0, 12)} 中处理。\n\n${thread.replyBody}`
+              ? `已在提交 ${replyCommitSha.slice(0, 12)} 中处理。\n\n${thread.replyBody}`
               : `该意见需要人工决策，数字员工已暂停自动处理。\n\n${thread.replyBody}`
           const replied = await input.mrEffects.reply(mergeRequest.repositoryRef, {
             mrRef: mergeRequest.providerMrRef,
@@ -1298,22 +1355,44 @@ export function createDevelopmentEmployeePlatformWorkItems(
               summary: `回复检视修复结果失败：${replied.code} · ${replied.detail}`,
             })
           }
+          postedCount += 1
           nextThreads.push({ ...thread, finalReply: { marker, noteRef: replied.noteRef } })
         }
+        const repliedSummary = `已把 ${nextThreads.length} 条检视处理说明回复到原线程`
         return output({
-          summary: `已把 ${nextThreads.length} 条检视处理说明回复到原线程`,
+          // The removed rows stay in the Context revision history; the summary names them.
+          summary: threadListIncomplete
+            ? `MR 检视线程列表没有读全（响应被截断或无法解析），本轮没有核对线程是否已被删除、是否已有回复；共回复 ${postedCount} 条检视处理说明`
+            : deletedThreadRefs.length === 0
+              ? repliedSummary
+              : boundedSummary(
+                  `${repliedSummary}；另有 ${deletedThreadRefs.length} 条线程已删除，未回复：${deletedThreadRefs.join('、')}`,
+                ),
           contextPatches: [
             contextPatch({
               current: currentResolution,
               contextTypeId: 'development.review-resolution',
               lifecycleState: 'terminal',
-              state: reviewResolutionContextSchema.parse({
-                ...resolution,
-                status: 'replied',
-                publishedHeadSha: mergeRequest.headSha,
-                commitSha: mergeRequest.headSha,
-                threads: nextThreads,
-              }),
+              // RFC-628: when every remaining row was deleted there is nothing left to reply to;
+              // the empty ledger must stay collected and unpublished (its schema requires that),
+              // and the next collection makes it active again.
+              state: reviewResolutionContextSchema.parse(
+                nextThreads.length === 0 && deletedThreadRefs.length > 0
+                  ? {
+                      ...resolution,
+                      status: 'collected',
+                      publishedHeadSha: null,
+                      commitSha: null,
+                      threads: [],
+                    }
+                  : {
+                      ...resolution,
+                      status: 'replied',
+                      publishedHeadSha: replyCommitSha,
+                      commitSha: replyCommitSha,
+                      threads: nextThreads,
+                    },
+              ),
             }),
           ],
           effectSuggestions: ['code-host.merge-request.reply'],
@@ -1835,6 +1914,38 @@ export function createDevelopmentEmployeePlatformWorkItems(
           headSha: mrState.headSha,
           targetSha: targetAwarePipeline ? mrState.targetSha : null,
         })
+        // RFC-628: record that a prepared review repair is now published, so its reply survives a
+        // preempting event (observe-mr replies from the ledger) and names this commit. Only a
+        // candidate grown from the ledger's source head can contain that repair: a rebuilt
+        // workspace advances the baseline and has dropped the uncommitted repair, and then no
+        // reply may claim it was handled. A ledger that is already published (a reply-only round
+        // followed by another publication) keeps the commit it was judged against.
+        const currentResolution = usesPreemptionSafeReplies(plan)
+          ? contexts.find((context) => context.typeId === 'development.review-resolution')
+          : undefined
+        const preparedResolution =
+          currentResolution === undefined
+            ? null
+            : reviewResolutionContextSchema.parse(
+                JSON.parse(currentResolution.stateJson) as unknown,
+              )
+        const publishedResolutionPatch =
+          currentResolution !== undefined &&
+          preparedResolution !== null &&
+          preparedResolution.status === 'prepared' &&
+          preparedResolution.publishedHeadSha === null &&
+          candidate.baselineSha === preparedResolution.sourceHeadSha
+            ? contextPatch({
+                current: currentResolution,
+                contextTypeId: 'development.review-resolution',
+                lifecycleState: currentResolution.lifecycleState,
+                state: reviewResolutionContextSchema.parse({
+                  ...preparedResolution,
+                  publishedHeadSha: committed.commitSha,
+                }),
+                artifactRefs: currentResolution.artifactRefs,
+              })
+            : null
         return output({
           summary: ensured.mr.created === true ? '已提交并创建 MR' : '已提交并更新 MR',
           contextPatches: [
@@ -1850,6 +1961,7 @@ export function createDevelopmentEmployeePlatformWorkItems(
               state: mrState,
             }),
             ...(pipelinePatch === null ? [] : [pipelinePatch]),
+            ...(publishedResolutionPatch === null ? [] : [publishedResolutionPatch]),
           ],
           effectSuggestions: [
             'source-control.commit',

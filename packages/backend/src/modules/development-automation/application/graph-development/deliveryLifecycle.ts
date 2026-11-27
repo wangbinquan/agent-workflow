@@ -1,4 +1,5 @@
-// RFC-509 — graph@2 merge-request delivery: the employee type package composed on top of graph@1 and its runtime codec.
+// RFC-509 — graph merge-request delivery (graph@2 onwards): the employee type package composed on top of graph@1 and its
+// runtime codec.
 import { z } from 'zod'
 import type {
   EmployeeTypeCollaborationCodec,
@@ -48,7 +49,10 @@ const coreDescriptorSchema = z
   })
   .passthrough()
 
-export const GRAPH_DELIVERY_EMPLOYEE_TYPE = { typeId: 'graph-development', revision: 2 } as const
+// RFC-628: revision 3 carries the shared MR care that delivers review replies after a preemption.
+export const GRAPH_DELIVERY_EMPLOYEE_TYPE = { typeId: 'graph-development', revision: 3 } as const
+/** The first revision that delivers through a merge request; graph@2 Cases keep that mode. */
+const GRAPH_MR_DELIVERY_FIRST_REVISION = 2
 
 export type GraphDeliveryLifecycleRuntimeCodec = RuntimeCodec
 
@@ -177,7 +181,7 @@ export function createGraphDeliveryLifecycleRuntimeCodec(core: RuntimeCodec): Ru
     const result = core.buildInitialCaseJson(json)
     if (
       request.employeeTypeRef?.typeId !== GRAPH_DELIVERY_EMPLOYEE_TYPE.typeId ||
-      request.employeeTypeRef.revision < GRAPH_DELIVERY_EMPLOYEE_TYPE.revision
+      request.employeeTypeRef.revision < GRAPH_MR_DELIVERY_FIRST_REVISION
     )
       return result
     const launch = launchSchema.parse(JSON.parse(result))
@@ -272,7 +276,7 @@ export function createGraphDeliveryLifecycleRuntimeCodec(core: RuntimeCodec): Ru
         })
         .passthrough()
         .parse(JSON.parse(json))
-      if (request.employeeTypeRef.revision < GRAPH_DELIVERY_EMPLOYEE_TYPE.revision)
+      if (request.employeeTypeRef.revision < GRAPH_MR_DELIVERY_FIRST_REVISION)
         return core.buildInvokedCaseJson(json)
       const delegated = launchSchema.parse(JSON.parse(shared.buildInvokedCaseJson(json)))
       const issue = issueHandlingContextSchema.parse(JSON.parse(delegated.primaryContextJson))

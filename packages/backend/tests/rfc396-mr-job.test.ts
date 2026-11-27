@@ -36,7 +36,7 @@ function catalog(missing: readonly string[] = []): DigitalEmployeePlatformToolCa
       const typeRef = JSON.parse(typeRefJson)
       if (
         typeRef.typeId !== 'graph-development' ||
-        typeRef.revision !== 2 ||
+        typeRef.revision !== 3 ||
         missing.includes(item)
       )
         return '[]'
@@ -86,7 +86,7 @@ describe('graph MR job defaults', () => {
     const jobs = buildGraphDeliveryJobs({ catalog: catalog() })
     expect(jobs.defaultJob.id).toBe(GRAPH_MR_JOB_ID)
     const content = employeeJobTemplateContentSchema.parse(jobs.defaultJob.content)
-    expect(content.typeRef).toEqual({ typeId: 'graph-development', revision: 2 })
+    expect(content.typeRef).toEqual({ typeId: 'graph-development', revision: 3 })
     expect(content.defaultToolBindings.map((binding) => binding.workItemRef)).toEqual(basicItems)
     expect(
       content.defaultToolBindings.every((binding) => binding.registrationRef.revision === 7),
@@ -142,7 +142,7 @@ describe('graph MR job defaults', () => {
       }).violations,
     ).toEqual([expect.objectContaining({ code: 'required-lane-adapter-binding-missing' })])
     const url = new URL(jobs.configurationHref, 'http://localhost')
-    expect(url.pathname).toBe('/digital-employees/graph-development%402')
+    expect(url.pathname).toBe('/digital-employees/graph-development%403')
     expect(url.searchParams.get('view')).toBe('jobs')
     expect(url.searchParams.get('jobTemplateId')).toBe(GRAPH_MR_PIPELINE_JOB_ID)
     expect(url.searchParams.get('workItem')).toBe('collect-pipeline')

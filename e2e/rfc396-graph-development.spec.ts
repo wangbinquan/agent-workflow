@@ -6,6 +6,12 @@
 import { expect, test, type Page } from '@playwright/test'
 import { SYSTEM_MOCK_CODE_HOST_TOKEN, SystemMockClient } from '@agent-workflow/system-mocks'
 import { startDaemon, type DaemonHandle } from './harness'
+import {
+  GRAPH_DEVELOPMENT_TYPE,
+  GRAPH_DEVELOPMENT_TYPE_REF,
+  GRAPH_MR_JOB_ID,
+  GRAPH_MR_PIPELINE_JOB_ID,
+} from './graph-development-type-ref'
 import { clarifyQuestionSetKey, clarifyAnswerBasis } from '../packages/shared/src/clarifyMindmap'
 import type { ClarifyAnswer, ClarifyQuestion } from '../packages/shared/src/schemas/clarify'
 import type { GraphDesignDocument } from '../packages/shared/src/schemas/graphDesign'
@@ -21,7 +27,7 @@ let employeeId: string
 let repositoryId: string
 let repositoryUrl: string
 let defaultJob: { id: string; name: string; revision: number }
-const typeRef = 'graph-development@2'
+const typeRef = GRAPH_DEVELOPMENT_TYPE_REF
 const tag = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const projectPath = `rfc396/graph-${tag}`
 async function api<T>(path: string, body?: unknown, method?: string): Promise<T> {
@@ -75,10 +81,9 @@ test.beforeAll(async () => {
       `/api/digital-employee-types/${typeRef}/job-templates`,
     )
   ).items
-  const job = jobs.find((row) => row.id === 'platform:graph-development:job:mr-v1')
+  const job = jobs.find((row) => row.id === GRAPH_MR_JOB_ID)
   expect(job?.publishedRevision).toBeGreaterThan(0)
-  if (!job || job.publishedRevision === null)
-    throw new Error('graph@2 MR default job is unavailable')
+  if (!job || job.publishedRevision === null) throw new Error('graph MR default job is unavailable')
   defaultJob = { id: job.id, name: job.name, revision: job.publishedRevision }
   // The other scenarios share an API fixture; booking creates its own employee in the browser.
   employeeId = (
@@ -701,7 +706,7 @@ async function journey(
   const published = await caseProjection()
   expect(published.case).toMatchObject({
     id: caseId,
-    typeRef: { typeId: 'graph-development', revision: 2 },
+    typeRef: GRAPH_DEVELOPMENT_TYPE,
     terminalKind: null,
   })
   expect(['active', 'waiting']).toContain(published.case.state)
@@ -754,7 +759,7 @@ async function journey(
       (url) =>
         decodeURIComponent(url.pathname) === `/digital-employees/${typeRef}` &&
         url.searchParams.get('view') === 'jobs' &&
-        url.searchParams.get('jobTemplateId') === 'platform:graph-development:job:mr-ci-v1' &&
+        url.searchParams.get('jobTemplateId') === GRAPH_MR_PIPELINE_JOB_ID &&
         url.searchParams.get('workItem') === 'collect-pipeline',
     )
     await expect(page.getByTestId('employee-job-template-editor')).toBeVisible()

@@ -56,8 +56,8 @@ async function seedCase(
     employeeId: 'employee-1',
     employeeRevision: 1,
     typeId: 'development',
-    // Fresh application installs the current builtin development@11 package.
-    typeRevision: 11,
+    // Fresh application installs the current builtin development@12 package.
+    typeRevision: 12,
     primaryContextId: `context-${id}`,
     executionPolicyRevision: 1,
     ownerUserId,

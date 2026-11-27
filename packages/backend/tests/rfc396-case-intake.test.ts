@@ -7,6 +7,8 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createGraphCaseIntake } from '@/modules/development-automation/application/graph-development/caseIntake'
 import { GRAPH_EVENT_SOURCE } from '@/modules/development-automation/application/graph-development/employeeType'
+import { GRAPH_MR_JOB_ID } from '@/modules/development-automation/composition/graphDeliveryJob'
+import { GRAPH_DELIVERY_EMPLOYEE_TYPE } from '@/modules/development-automation/composition/graphDeliveryLifecycle'
 import { describeEachProvider } from './helpers/eachProvider'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
 import { memoryGraphArtifacts } from './helpers/graphDesign'
@@ -27,9 +29,11 @@ describeEachProvider('RFC-396 durable Case work requests', (harness) => {
     await module.maintenance.ready()
     await f.employee.initializeGraph()
     await f.employeeInput.integration.eventCenter.initialize()
-    const typeRef = { typeId: 'graph-development', revision: 2 }
+    // The current build executes only the newest graph revision; a fresh database registers no
+    // older one, so the job and employee follow the built-in constants (RFC-628 moved them to @3).
+    const typeRef = GRAPH_DELIVERY_EMPLOYEE_TYPE
     const job = (await module.queries.listJobTemplates(typeRef)).find(
-      (candidate) => candidate.id === 'platform:graph-development:job:mr-v1',
+      (candidate) => candidate.id === GRAPH_MR_JOB_ID,
     )!
     const employee = await module.commands.createEmployee({
       typeRef,

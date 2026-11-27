@@ -29,6 +29,7 @@ import {
   composeGraphDeliveryLifecycleTypePackage,
   GRAPH_DELIVERY_EMPLOYEE_TYPE,
 } from '@/modules/development-automation/composition/graphDeliveryLifecycle'
+import { GRAPH_MR_JOB_ID } from '@/modules/development-automation/composition/graphDeliveryJob'
 import { employeeTypePackageDescriptorSchema } from '@/modules/digital-employee/domain/model'
 import { createRuntimePersistence } from '@/modules/digital-employee/infrastructure/runtimeStore'
 import { createEventStore } from '@/modules/event-center/infrastructure/eventStore'
@@ -400,7 +401,7 @@ describeEachProvider('RFC-396 MR catalog and runtime wiring', (harness) => {
     await f.employee.initializeGraph()
     await f.employeeInput.integration.eventCenter.initialize()
     const jobs = await f.employee.module.queries.listJobTemplates(GRAPH_DELIVERY_EMPLOYEE_TYPE)
-    const job = jobs.find((item) => item.id === 'platform:graph-development:job:mr-v1')!
+    const job = jobs.find((item) => item.id === GRAPH_MR_JOB_ID)!
     expect(job.publishedRevision).not.toBeNull()
     const employee = await f.employee.module.commands.createEmployee({
       typeRef: GRAPH_DELIVERY_EMPLOYEE_TYPE,

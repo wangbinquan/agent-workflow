@@ -39,12 +39,15 @@ function withoutComments(source: string): string {
 /**
  * A string that starts with a pinned development revision, or a constant holding
  * the bare type id — the parts a reference gets hand-built from (`TYPE_ID` +
- * `TYPE_REVISION = 10` was the 2026-10-12 shape).
+ * `TYPE_REVISION = 10` was the 2026-10-12 shape). RFC-628 adds the page URL
+ * `/digital-employees/development%40<N>`: three visual-regression scenes kept
+ * visiting `development%4011` because the quote did not sit next to the type id.
  */
 function hardCodedRevisions(code: string): string[] {
   return [
     ...code.matchAll(/['"`]development(?:@|%40)\d+/g),
     ...code.matchAll(/\bconst\s+[A-Z_][A-Z0-9_]*\s*=\s*['"`]development['"`]/g),
+    ...code.matchAll(/\/digital-employees\/development%40\d+/g),
   ].map((match) => match[0])
 }
 
@@ -85,5 +88,11 @@ describe('e2e specs follow the current built-in development type', () => {
           .join('\n'),
       ),
     ).toEqual(["'development@10", '`development%4011', "const TYPE_ID = 'development'"])
+    // RFC-628: the employee page URL with an encoded revision is a pinned reference too.
+    expect(
+      hardCodedRevisions(
+        "await page.goto(baseUrl + '/digital-employees/development%4011?view=toolbox')",
+      ),
+    ).toEqual(['/digital-employees/development%4011'])
   })
 })

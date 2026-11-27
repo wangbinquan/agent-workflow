@@ -53,6 +53,9 @@ export function createDevelopmentMrFacts(deps: DevelopmentMrFactsDependencies) {
             path: thread.path,
             messages: thread.messages,
           })),
+          // RFC-628: carried only when the list is incomplete, so a thread missing from it is not
+          // taken for a deleted one; a complete read keeps exactly the shape it always had.
+          ...(result.threadsIncomplete === true ? { reviewThreadsIncomplete: true as const } : {}),
         },
       }
     },

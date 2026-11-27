@@ -77,6 +77,8 @@ const NEW_FILES: Readonly<
       'recordSchema',
       'coreDescriptorSchema',
       'GRAPH_DELIVERY_EMPLOYEE_TYPE',
+      // RFC-628: graph@3 keeps graph@2's MR delivery mode through this module-private bound.
+      'GRAPH_MR_DELIVERY_FIRST_REVISION',
       'GraphDeliveryLifecycleRuntimeCodec',
       'createGraphDeliveryLifecycleTypePackage',
       'typeRefSchema',
@@ -578,7 +580,7 @@ describe('RFC-509 ① 清单里的名字只在各自的位置声明', () => {
           )
           .map(corpusPath)
           .sort()
-      expect(LISTED).toHaveLength(27)
+      expect(LISTED).toHaveLength(28)
       for (const [location, name] of LISTED)
         expect([name, declaring(name)]).toEqual([name, [`packages/backend/src/${location}.ts`]])
     },

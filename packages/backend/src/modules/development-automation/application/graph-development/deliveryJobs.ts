@@ -1,10 +1,13 @@
-// RFC-509 — the two built-in graph@2 job templates (merge-request delivery and full merge-request care), tools taken from the loaded catalog.
+// RFC-509 — the two built-in graph MR job templates (merge-request delivery and full merge-request care), tools taken from the loaded catalog.
 import { z } from 'zod'
 import type { DigitalEmployeePlatformToolCatalogParticipant } from '@/modules/digital-employee/public/types'
 import { GRAPH_DELIVERY_EMPLOYEE_TYPE } from './deliveryLifecycle'
 
-export const GRAPH_MR_JOB_ID = 'platform:graph-development:job:mr-v1'
-export const GRAPH_MR_PIPELINE_JOB_ID = 'platform:graph-development:job:mr-ci-v1'
+// RFC-628: built-in jobs are seeded by id and content, and their content follows the current
+// type revision (graph@3), so each revision needs its own ids. The graph@2 rows (mr-v1,
+// mr-ci-v1) stay as history; jobs still referenced by employees migrate under their own names.
+export const GRAPH_MR_JOB_ID = 'platform:graph-development:job:mr-v2'
+export const GRAPH_MR_PIPELINE_JOB_ID = 'platform:graph-development:job:mr-ci-v2'
 const exactRef = z.object({ id: z.string().min(1), revision: z.number().int().positive() }).strict()
 const routeSchema = z
   .object({
@@ -122,7 +125,7 @@ export function buildGraphDeliveryJobs(input: {
   const pipelineAdapterRef = input.pipelineAdapterRef
     ? exactRef.parse(input.pipelineAdapterRef)
     : null
-  const configurationHref = `/digital-employees/${encodeURIComponent('graph-development@2')}?${new URLSearchParams(
+  const configurationHref = `/digital-employees/${encodeURIComponent(`${typeRef.typeId}@${typeRef.revision}`)}?${new URLSearchParams(
     {
       view: 'jobs',
       jobTemplateId: GRAPH_MR_PIPELINE_JOB_ID,
@@ -132,7 +135,9 @@ export function buildGraphDeliveryJobs(input: {
   return {
     defaultJob: {
       id: GRAPH_MR_JOB_ID,
-      name: '图驱动研发 · MR 交付与看护',
+      // RFC-628: names are unique per owner, type and type revision. A graph@2 built-in job that
+      // employees still use migrates to graph@3 under its original name before this is seeded.
+      name: '图驱动研发 · MR 交付与看护（v2）',
       content: {
         ...base,
         description:
@@ -141,7 +146,7 @@ export function buildGraphDeliveryJobs(input: {
     },
     pipelineJobDraft: {
       id: GRAPH_MR_PIPELINE_JOB_ID,
-      name: '图驱动研发 · 完整 MR 看护（配置流水线连接）',
+      name: '图驱动研发 · 完整 MR 看护（v2，配置流水线连接）',
       content: {
         ...base,
         description: pipelineAdapterRef

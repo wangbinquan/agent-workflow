@@ -58,7 +58,18 @@ export interface MrFactsSnapshot {
 }
 
 export type MrFactsResult =
-  | { readonly ok: true; readonly snapshot: MrFactsSnapshot }
+  | {
+      readonly ok: true
+      readonly snapshot: MrFactsSnapshot
+      /**
+       * RFC-628: present only when the thread list was not read in full (the response was
+       * truncated, or its body did not parse as a thread array). `snapshot.threads` keeps exactly
+       * what the collector has always produced in that case; the mark lets a caller tell "the
+       * thread is gone" from "the list is incomplete". It sits beside the snapshot, not in it,
+       * because callers digest the snapshot object as it is.
+       */
+      readonly threadsIncomplete?: true
+    }
   | {
       readonly ok: false
       readonly code:
@@ -279,7 +290,7 @@ async function collectThreads(
   trustPlatformSelfMarkers: boolean,
   verifiedPlatformLogin: string | null,
 ): Promise<
-  | { readonly ok: true; readonly threads: MrThreadFact[] }
+  | { readonly ok: true; readonly threads: MrThreadFact[]; readonly complete: boolean }
   | {
       readonly ok: false
       readonly code: 'mr-facts-lookup-failed' | 'mr-facts-threads-truncated'
@@ -307,8 +318,14 @@ async function collectThreads(
     }
   }
 
+  // RFC-628: a truncated body (the bounded reader appends a marker, so it never parses) or one
+  // that is not a thread array still yields the empty list it always did; only the mark is new.
+  const listedTruncated = listed.truncated === true
+  const listedComplete = (parsed: unknown) => !listedTruncated && Array.isArray(parsed)
+
   if (deps.provider === 'gitlab') {
-    const discussions = parseJson<GitlabDiscussion[]>(listed.body) ?? []
+    const parsedDiscussions = parseJson<GitlabDiscussion[]>(listed.body)
+    const discussions = parsedDiscussions ?? []
     if (discussions.length >= THREAD_PAGE_LIMIT) {
       return {
         ok: false,
@@ -351,10 +368,11 @@ async function collectThreads(
           messages,
         }
       })
-    return { ok: true, threads }
+    return { ok: true, threads, complete: listedComplete(parsedDiscussions) }
   }
 
-  const comments = parseJson<GithubReviewComment[]>(listed.body) ?? []
+  const parsedComments = parseJson<GithubReviewComment[]>(listed.body)
+  const comments = parsedComments ?? []
   if (comments.length >= THREAD_PAGE_LIMIT) {
     return {
       ok: false,
@@ -396,7 +414,7 @@ async function collectThreads(
       messages,
     }
   })
-  return { ok: true, threads }
+  return { ok: true, threads, complete: listedComplete(parsedComments) }
 }
 
 interface GitlabApprovalSummary {
@@ -538,7 +556,7 @@ export async function collectMergeRequestFacts(
     mergedAt: gitlab?.merged_at ?? github?.merged_at ?? null,
     threads: threads.threads,
   }
-  return { ok: true, snapshot }
+  return threads.complete ? { ok: true, snapshot } : { ok: true, snapshot, threadsIncomplete: true }
 }
 
 // ------------------------------------------------------------------- reply

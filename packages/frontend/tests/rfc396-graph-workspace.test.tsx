@@ -733,7 +733,7 @@ test.each(['missing', 'initial-pending'] as const)(
     expect(within(pipeline).getByText(/已有工作保持启动时的配置/)).toBeTruthy()
     const configure = within(pipeline).getByRole('link', { name: '配置 CI 看护岗位' })
     expect(configure.getAttribute('href')).toBe(
-      '/digital-employees/graph-development%402?view=jobs&jobTemplateId=platform%3Agraph-development%3Ajob%3Amr-ci-v1&workItem=collect-pipeline',
+      '/digital-employees/graph-development%403?view=jobs&jobTemplateId=platform%3Agraph-development%3Ajob%3Amr-ci-v2&workItem=collect-pipeline',
     )
     expect(configure.closest('details')).toBeNull()
     expect(within(pipeline).queryByText('CI 流水线 · 等待结果')).toBeNull()

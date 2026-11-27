@@ -657,6 +657,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-624](./RFC-624-test-preparation-deduplication/proposal.md) | 第一批测试准备与重复执行优化；保持场景、隔离、双provider/平台和原门禁，完整CI实测验收 | Done；240ee338 CI 69/69；[实测验收](./RFC-624-test-preparation-deduplication/acceptance.md) |
 | [RFC-625](./RFC-625-ci-process-identity-and-manifest-reuse/proposal.md) | 第二批CI：Windows进程创建身份、job内不可变manifest复用及44片保守实测权重；保持覆盖、隔离和原门禁 | Done；033后继69/69，Q3/V2成本下降；排队、P95及未明超时风险保留 |
 | [RFC-626](./RFC-626-upgrade-no-refusal-minimal-time/proposal.md) | 升级必达与最短耗时：自动升级（v0.19.2 及更早 → 当前版本）不再因数据内容拒绝——接不上的未结束任务自动结束为已取消、文件缺失的记录保留并标为不存在、转不过去的行封存并列出；环境前置条件在数秒内报出；自动模式改为单遍（冻结、盘点、备份、转换各一次）并去掉转换引擎的重复记账。参考数据 SQLite 70 分 50 秒 → 目标 6 分钟内，PostgreSQL 目标 15 分钟内；修复 PostgreSQL `tasks` 达 937 行即无法升级的缺陷 | In Progress；用户 2026-11-27 批准并要求完整实现 |
+| [RFC-628](./RFC-628-employee-reply-after-preemption/proposal.md) | 数字员工被事件抢占后丢失「回复检视意见」：修复提交推送之后、回复发出之前到来抢占事件（最常见的是员工自己的推送引起的 MR 生命周期事件）时，回复不再丢失——「关注 MR 状态」结算时先把上一轮做完：按检视处理台账续办回复（修复已发布）或回到提交（未发布且头提交未变），回复完毕后才汇总新意见；审批进行中时同样先续办；`development` 升 `@12`、`graph-development` 升 `@3`；进行中的交办钉在旧修订号上不受影响 | In Progress；用户 2026-11-27 指示立项并完整交付；实现、集中验证与实现门（subagent，通过）已完成，待 CI |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

@@ -200,13 +200,13 @@ describeEachProvider('RFC-396 registered graph resources and legacy compatibilit
       const jobs = await f.employee.module.queries.listJobTemplates(typeRef)
       const mrJobs = await f.employee.module.queries.listJobTemplates({
         typeId: 'graph-development',
-        revision: 2,
+        revision: 3,
       })
       expect(
-        mrJobs.find((job) => job.id === 'platform:graph-development:job:mr-v1')?.publishedRevision,
+        mrJobs.find((job) => job.id === 'platform:graph-development:job:mr-v2')?.publishedRevision,
       ).toBe(1)
       expect(
-        mrJobs.find((job) => job.id === 'platform:graph-development:job:mr-ci-v1')
+        mrJobs.find((job) => job.id === 'platform:graph-development:job:mr-ci-v2')
           ?.publishedRevision,
       ).toBeNull()
       for (const item of [
@@ -220,7 +220,7 @@ describeEachProvider('RFC-396 registered graph resources and legacy compatibilit
       ]) {
         const available = JSON.parse(
           f.employee.platformTools.listJson(
-            JSON.stringify({ typeId: 'graph-development', revision: 2 }),
+            JSON.stringify({ typeId: 'graph-development', revision: 3 }),
             item,
           ),
         )

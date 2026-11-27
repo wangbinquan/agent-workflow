@@ -113,7 +113,7 @@ describe('employee type package digest guard', () => {
       expect((await store.getTypePackage(descriptor.typeRef))?.descriptorDigest).toBe(currentDigest)
     })
 
-    test('a frozen development@1 registration upgrades by appending development@11', async () => {
+    test('a frozen development@1 registration upgrades by appending development@12', async () => {
       const store = newStore(harness.db)
       const previous = structuredClone(descriptor)
       previous.typeRef.revision = 1
@@ -127,16 +127,16 @@ describe('employee type package digest guard', () => {
       await store.ensureTypePackage(record(currentDigest))
 
       expect((await store.listTypePackages()).map((entry) => entry.descriptor.typeRef)).toEqual([
-        { typeId: 'development', revision: 11 },
+        { typeId: 'development', revision: 12 },
         { typeId: 'development', revision: 1 },
       ])
     })
 
-    test('the changed builtin appends v11 and preserves the exact immutable v10 registration', async () => {
+    test('the changed builtin appends v12 and preserves the exact immutable v11 registration', async () => {
       const store = newStore(harness.db),
         frozen = structuredClone(descriptor)
-      expect(descriptor.typeRef).toEqual({ typeId: 'development', revision: 11 })
-      frozen.typeRef.revision = 10
+      expect(descriptor.typeRef).toEqual({ typeId: 'development', revision: 12 })
+      frozen.typeRef.revision = 11
       frozen.description = { 'zh-CN': '原登记内容', 'en-US': 'Original registered content' }
       const oldDigest = packageDigest(frozen)
       await store.ensureTypePackage({
@@ -157,7 +157,7 @@ describe('employee type package digest guard', () => {
       expect((await store.getTypePackage(descriptor.typeRef))?.descriptorDigest).toBe(currentDigest)
       expect(
         (await store.listTypePackages()).map((value) => value.descriptor.typeRef.revision),
-      ).toEqual([11, 10])
+      ).toEqual([12, 11])
     })
 
     test('a historical task can still read its exact frozen responsibility map', async () => {

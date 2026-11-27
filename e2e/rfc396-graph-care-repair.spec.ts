@@ -12,6 +12,11 @@ import {
 } from '@agent-workflow/system-mocks'
 import { defaultSystemMockToolPath, startDaemon, type DaemonHandle } from './harness'
 import { attachWindowsProfileDiagnostic } from './rfc396-windows-profile-diagnostic'
+import {
+  GRAPH_DEVELOPMENT_TYPE,
+  GRAPH_DEVELOPMENT_TYPE_REF,
+  GRAPH_MR_JOB_ID,
+} from './graph-development-type-ref'
 import { clarifyAnswerBasis, clarifyQuestionSetKey } from '../packages/shared/src/clarifyMindmap'
 import type { ClarifyQuestion } from '../packages/shared/src/schemas/clarify'
 import type {
@@ -31,7 +36,7 @@ async function retainProfileDiagnostic(name: string, data: { body: Buffer; conte
 // Windows CI ran the care journey for 5.4 min (first attempt) and 4.2 min (retry) in run 40461800472,
 // against a 300 s limit; the external-observation waits below also need room there.
 test.setTimeout(600_000)
-const typeRef = 'graph-development@2'
+const typeRef = GRAPH_DEVELOPMENT_TYPE_REF
 const tag = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const projectPath = `rfc396/graph-care-${tag}`
 const testRef = 'graph-result.test.cjs#graph-result-test'
@@ -321,7 +326,7 @@ test.beforeAll(async () => {
       }
     }[]
   }>(`/api/digital-employee-types/${typeRef}/job-templates`)
-  const baseJob = jobs.items.find((job) => job.id === 'platform:graph-development:job:mr-v1')
+  const baseJob = jobs.items.find((job) => job.id === GRAPH_MR_JOB_ID)
   expect(baseJob).toBeTruthy()
   const job = await api<{ id: string }>(`/api/digital-employee-types/${typeRef}/job-templates`, {
     name: `Graph care configured before launch ${tag}`,
@@ -675,7 +680,7 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
   const repaired = await caseProjection()
   expect(repaired.case).toMatchObject({
     id: caseId,
-    typeRef: { typeId: 'graph-development', revision: 2 },
+    typeRef: GRAPH_DEVELOPMENT_TYPE,
     terminalKind: null,
   })
   expect(repaired.detail.delivery).toMatchObject({

@@ -46,7 +46,7 @@ export function GraphDesignDelivery({
       {zh
         ? '仅凭空记录无法判断是否配置或启动了 CI。需要 CI 看护时，请核对岗位的企业流水线连接。配置后用该岗位新建工作；已有工作保持启动时的配置。'
         : 'An empty record does not establish whether CI is configured or has started. For CI care, check the job’s pipeline connection and start new work with the configured job. Existing work retains the configuration it started with.'}{' '}
-      <a href="/digital-employees/graph-development%402?view=jobs&jobTemplateId=platform%3Agraph-development%3Ajob%3Amr-ci-v1&workItem=collect-pipeline">
+      <a href="/digital-employees/graph-development%403?view=jobs&jobTemplateId=platform%3Agraph-development%3Ajob%3Amr-ci-v2&workItem=collect-pipeline">
         {ended
           ? zh
             ? '为后续工作配置 CI 看护岗位'

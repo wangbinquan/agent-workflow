@@ -133,14 +133,14 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
         expect(afterBoot).toEqual({
           development: 1,
           'graph-development@1': 1,
-          'graph-development@2': 1,
+          'graph-development@3': 1,
         })
         // Preserve the former-wiring control for each registered type: a second
         // module initializes every revision twice; shared HTTP reuses each boot instance.
         expect(initializations).toEqual({
           development: former ? 2 : 1,
           'graph-development@1': former ? 2 : 1,
-          'graph-development@2': former ? 2 : 1,
+          'graph-development@3': former ? 2 : 1,
         })
         expect(http.module === session.module).toBe(!former)
         expect(http.activityOperations === session.activityOperations).toBe(!former)

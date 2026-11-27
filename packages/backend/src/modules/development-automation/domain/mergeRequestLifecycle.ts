@@ -52,3 +52,17 @@ export function usesMinimalMergeRequestToolContracts(
     (typeRef?.typeId === 'graph-development' && typeRef.revision >= 2)
   )
 }
+
+/**
+ * RFC-628: replies prepared before a preemption are delivered from observe-mr.
+ * Earlier revisions keep their frozen behaviour: a preempting event drops the
+ * pending reply, and the ledger only records the published commit on reply.
+ */
+export function usesPreemptionSafeReviewReplies(
+  typeRef: MergeRequestLifecycleTypeRef | null | undefined,
+): boolean {
+  return (
+    (typeRef?.typeId === 'development' && typeRef.revision >= 12) ||
+    (typeRef?.typeId === 'graph-development' && typeRef.revision >= 3)
+  )
+}

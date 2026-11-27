@@ -218,7 +218,7 @@ describe('RFC-396 graph MR type composition', () => {
     expect(JSON.parse(graphEmployeeTypePackage.descriptorJson).typeRef.revision).toBe(1)
     expect(JSON.parse(developmentEmployeeTypePackage.descriptorJson).typeRef).toEqual({
       typeId: 'development',
-      revision: 11,
+      revision: 12,
     })
     expect(
       mergeRequestLifecycleDescriptor.eventTypes.every(
@@ -402,8 +402,16 @@ describe('RFC-396 graph MR type composition', () => {
     expect(settlement('repair-feedback', contexts, { deliveryContent }).nextWorkItemRef).toBe(
       'prepare-change',
     )
+    // RFC-628: from graph@3 on, publish-mr replies only when it marked the prepared repair as
+    // published (the candidate grew from the ledger's source head); an unmarked prepared ledger
+    // may describe a repair lost with a rebuilt workspace and must not be answered "handled".
+    const publishedResolution = context('development.review-resolution', {
+      ...(JSON.parse(reviewResolution('prepared').stateJson) as Record<string, unknown>),
+      publishedHeadSha: headSha,
+    })
+    expect(settlement('publish-mr', [publishedResolution]).nextWorkItemRef).toBe('reply-feedback')
     expect(settlement('publish-mr', [reviewResolution('prepared')]).nextWorkItemRef).toBe(
-      'reply-feedback',
+      'observe-mr',
     )
     expect(settlement('publish-mr', []).nextWorkItemRef).toBe('observe-mr')
   })

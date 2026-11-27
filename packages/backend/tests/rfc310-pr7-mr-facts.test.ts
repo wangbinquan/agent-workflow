@@ -307,6 +307,73 @@ describe('rfc310 pr7 — GitLab discussion taxonomy', () => {
   })
 })
 
+// RFC-628 implementation-gate P2-1: a truncated or unparseable thread list used to look exactly like
+// "no threads"; the reply step of development@12 / graph-development@3 then took every unanswered
+// thread for deleted. The collector now marks such a read (and only such a read) beside the snapshot;
+// ok, the empty thread array and every other snapshot field stay as they were.
+for (const provider of ['gitlab', 'github'] as const) {
+  describe(`RFC-628 — an incomplete ${provider} thread list is marked, nothing else changes`, () => {
+    test('truncated and unparseable list bodies are marked incomplete; a complete read is unmarked', async () => {
+      const projectPath = `rfc628/${provider}-thread-list-mark`
+      const project = await suite.client.seedCodeHost({
+        provider,
+        projectPath,
+        title: 'thread list baseline',
+        baseFiles: { 'src/a.ts': 'export const a = 1\n' },
+        headFiles: { 'src/a.ts': 'export const a = 2\n' },
+      })
+      await suite.client.mutateCodeHost({
+        kind: 'add-review-comment',
+        provider,
+        projectPath,
+        body: 'please rename this variable',
+        actor: { username: 'alice' },
+      })
+      const mrRef = String(project.number)
+      const listPath =
+        provider === 'gitlab' ? /\/discussions(?:\?|$)/ : /\/pulls\/\d+\/comments(?:\?|$)/
+      const oversized =
+        provider === 'gitlab'
+          ? [
+              {
+                id: 'big',
+                notes: [{ id: 1, body: 'x'.repeat(300_000), author: { username: 'a' } }],
+              },
+            ]
+          : [{ id: 1, body: 'x'.repeat(300_000), user: { login: 'a' } }]
+      const withListBody = (body: string) =>
+        connectionFor(provider, projectPath, async (url, init) => {
+          const path = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url
+          if (init?.method !== 'POST' && listPath.test(path)) {
+            return new Response(body, {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            })
+          }
+          return await fetch(url as string, init)
+        })
+
+      const complete = await collectMergeRequestFacts(connectionFor(provider, projectPath), mrRef)
+      expect(complete.ok).toBe(true)
+      if (!complete.ok) return
+      expect('threadsIncomplete' in complete).toBe(false)
+      expect(complete.snapshot.threads).toHaveLength(1)
+
+      for (const body of ['not json', 'null', JSON.stringify(oversized)]) {
+        const incomplete = await collectMergeRequestFacts(withListBody(body), mrRef)
+        expect(incomplete.ok).toBe(true)
+        if (!incomplete.ok) continue
+        expect(incomplete.threadsIncomplete).toBe(true)
+        // The collector's thread array for such a read is unchanged: empty.
+        expect(incomplete.snapshot.threads).toEqual([])
+        expect({ ...incomplete.snapshot, threads: complete.snapshot.threads }).toEqual(
+          complete.snapshot,
+        )
+      }
+    })
+  })
+}
+
 describe('rfc310 pr7 — no merge/approve/resolve reachability (T84 pairing)', () => {
   test('facts/reply source never references resolving or merging actions', () => {
     const roots = [

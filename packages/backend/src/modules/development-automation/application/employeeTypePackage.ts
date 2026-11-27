@@ -33,8 +33,10 @@ import {
 import {
   isMergeRequestLifecycleWorkItem,
   usesMinimalMergeRequestToolContracts,
+  usesPreemptionSafeReviewReplies,
   usesTargetAwareMergeRequestPipeline,
 } from '../domain/mergeRequestLifecycle'
+import { pendingReviewFollowUp } from '../domain/reviewResolutionFollowUp'
 import { describeProcessMetrics, projectHumanFeedbackJson } from './employeeProcessMetrics'
 
 type EmployeeTypeRuntimeCodec = EmployeeTypeContextCodec &
@@ -101,7 +103,7 @@ const triggerContract = (
     description: text(zh, en),
   })),
 })
-const typeRef = { typeId: 'development', revision: 11 } as const
+const typeRef = { typeId: 'development', revision: 12 } as const
 const fixtureSuiteRef = { id: 'builtin:development-work-contract-fixtures', revision: 1 } as const
 const runtimeEmployeeTypeRefSchema = z
   .object({ typeId: z.string().min(1), revision: z.number().int().positive() })
@@ -2295,12 +2297,16 @@ export const runtimePackage = {
           completionStandard: contracts[4]!.completionStandard,
           nodeKind: 'system',
           toolRoleGroups: [],
+          // RFC-628: reply-feedback and prepare-change let observe-mr finish a review round whose
+          // next step was preempted; older revisions keep their frozen successor list.
           nextWorkItemRefs: [
             'classify-feedback',
             'collect-pipeline',
             'repair-conflict',
             'prepare-approval',
             'evaluate-ready',
+            'reply-feedback',
+            'prepare-change',
           ],
         },
         {
@@ -2569,7 +2575,9 @@ export const runtimePackage = {
           completionStandard: contracts[17]!.completionStandard,
           nodeKind: 'system',
           toolRoleGroups: [],
-          nextWorkItemRefs: ['observe-mr'],
+          // RFC-628: while the approval is still pending, a preempted review reply or an
+          // uncommitted review repair is finished first instead of waiting with it.
+          nextWorkItemRefs: ['observe-mr', 'reply-feedback', 'prepare-change'],
         },
         {
           workItemRef: 'evaluate-ready',
@@ -4636,6 +4644,13 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         request.workItemRef === 'repair-feedback' &&
         isDirectV2Result &&
         typeof directResult.data.directResult.commitMessage !== 'string'
+      // RFC-628: a reply-only round publishes nothing, so the MR head it was judged against is
+      // already the commit its reply refers to. Recording it as published lets observe-mr deliver
+      // the reply when a preempting event took its place. Older revisions always record null.
+      const preparedReviewPublishedHeadSha =
+        replyOnlyReviewResult && usesPreemptionSafeReviewReplies(request.employeeTypeRef)
+          ? (inputState('development.merge-request', mergeRequestContextSchema)?.headSha ?? null)
+          : null
       if (deliveryWorkItems.has(request.workItemRef) && !replyOnlyReviewResult) {
         if (
           parsedOutput.contextPatches.some(
@@ -4764,7 +4779,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           reviewResolutionContextSchema.parse({
             ...current,
             status: 'prepared',
-            publishedHeadSha: null,
+            publishedHeadSha: preparedReviewPublishedHeadSha,
             commitSha: null,
             threads: preparedThreads,
           }),
@@ -4949,7 +4964,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           expected.some((key, index) => actual[index] !== key) ||
           proposed.mergeRequestRef !== current.mergeRequestRef ||
           proposed.sourceHeadSha !== current.sourceHeadSha ||
-          proposed.publishedHeadSha !== null ||
+          proposed.publishedHeadSha !== preparedReviewPublishedHeadSha ||
           proposed.commitSha !== null ||
           proposed.threads.some((thread, index) => {
             const currentThread = retainedCurrentThreads[index]
@@ -5171,12 +5186,44 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     }
     let caseState: 'active' | 'waiting' | 'blocked' | 'terminal' = 'active'
     let terminalKind: string | null = null
+    // RFC-628: every new continuation below is gated by the frozen successor list, so a Case
+    // pinned to an older revision (whose list lacks these successors) settles exactly as before.
+    const allowedNext = (workItemRef: string): boolean =>
+      request.allowedNextWorkItemRefs.includes(workItemRef)
+    // classify/acknowledge/repair/reply-feedback form one optional lane (care-review) that is
+    // enabled or disabled as a whole, so the reply item stands for the whole review lane.
+    const reviewLaneEnabled = capabilityEnabled('reply-feedback')
     if (output.status === 'blocked') {
       caseState = 'blocked'
       nextWorkItemRef = null
     } else if (output.status === 'needs-input') {
       caseState = 'waiting'
       nextWorkItemRef = null
+      // RFC-628: a pending (or temporarily unobservable) approval does not need the Case to idle
+      // with a preempted review reply or an uncommitted review repair; finish that first. Neither
+      // touches the approval: the following observe-mr finds the current head's approval as usual.
+      if (
+        request.workItemRef === 'observe-approval' &&
+        reviewLaneEnabled &&
+        (allowedNext('reply-feedback') || allowedNext('prepare-change'))
+      ) {
+        const mergeRequest = mergeRequestContextSchema
+          .nullable()
+          .parse(proposedState('development.merge-request'))
+        const followUp =
+          mergeRequest === null
+            ? null
+            : pendingReviewFollowUp({
+                ledger: reviewResolutionContextSchema
+                  .nullable()
+                  .parse(proposedState('development.review-resolution')),
+                mergeRequestHeadSha: mergeRequest.headSha,
+              })
+        if (followUp !== null && allowedNext(followUp)) {
+          caseState = 'active'
+          nextWorkItemRef = followUp
+        }
+      }
     } else if (request.workItemRef === 'collect-pipeline') {
       const pipeline = pipelineContextSchema.nullable().parse(proposedState('development.pipeline'))
       if (pipeline?.status === 'pending') {
@@ -5228,7 +5275,16 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
       const reviewResolution = reviewResolutionContextSchema
         .nullable()
         .parse(proposedState('development.review-resolution'))
-      nextWorkItemRef = reviewResolution?.status === 'prepared' ? 'reply-feedback' : 'observe-mr'
+      // RFC-628: the successor set did not change, so only the revision tells the rules apart.
+      // publish-mr marks the ledger published only when this candidate grew from the ledger's
+      // source head; otherwise the review repair may have been lost with a rebuilt workspace and
+      // replying "handled in commit …" would be false.
+      nextWorkItemRef =
+        reviewResolution?.status === 'prepared' &&
+        (!usesPreemptionSafeReviewReplies(request.employeeTypeRef) ||
+          reviewResolution.publishedHeadSha !== null)
+          ? 'reply-feedback'
+          : 'observe-mr'
     } else if (request.workItemRef === 'repair-pipeline') {
       const current = contexts.find((context) => context.typeId === 'development.problem-set')
       if (current === undefined) throw new Error('pipeline repair has no problem-set context')
@@ -5387,18 +5443,43 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
             approval?.mergeRequestRef === mergeRequest.mergeRequestRef &&
             approval.headSha === mergeRequest.headSha
           const currentHeadApproved = currentHeadApproval && approval.status === 'approved'
-          if (
-            triggeringEventTypeId === 'development.review-updated' &&
-            capabilityEnabled('classify-feedback') &&
-            hasNewReviewFeedback
-          ) {
-            nextWorkItemRef = 'classify-feedback'
+          // RFC-628: a preempting event overwrote the Case's single next-step pointer, so the
+          // ledger is the only record of an unfinished review round. Finish it before anything
+          // new: freeze an uncommitted repair (before conflict repair, which rebuilds the
+          // workspace and would drop it), then repair a conflict (only this event announces it,
+          // and a push re-announces a conflict that persists), then deliver a prepared reply
+          // (replying moves no head, so it must not consume the only conflict event), and only
+          // then collect new feedback. Older successor lists lack reply-feedback and
+          // prepare-change, which leaves exactly the original, event-exclusive review/conflict
+          // branches.
+          const followUp = pendingReviewFollowUp({
+            ledger: priorReviewResolution,
+            mergeRequestHeadSha: mergeRequest.headSha,
+          })
+          if (followUp === 'prepare-change' && allowedNext('prepare-change') && reviewLaneEnabled) {
+            nextWorkItemRef = 'prepare-change'
           } else if (
             triggeringEventTypeId === 'development.conflict-updated' &&
             capabilityEnabled('repair-conflict') &&
             mergeRequest.mergeableState === 'conflict'
           ) {
             nextWorkItemRef = 'repair-conflict'
+          } else if (
+            followUp === 'reply-feedback' &&
+            allowedNext('reply-feedback') &&
+            reviewLaneEnabled
+          ) {
+            nextWorkItemRef = 'reply-feedback'
+          } else if (
+            capabilityEnabled('classify-feedback') &&
+            hasNewReviewFeedback &&
+            // RFC-628: the review event that announced this feedback may have been consumed by a
+            // follow-up above, and the observer does not re-send unchanged facts; on the new
+            // revision any observe-mr round (continuation or another event) picks it up.
+            (triggeringEventTypeId === 'development.review-updated' ||
+              allowedNext('reply-feedback'))
+          ) {
+            nextWorkItemRef = 'classify-feedback'
           } else {
             nextWorkItemRef =
               approvalRequired &&
@@ -5414,6 +5495,12 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         caseState = 'waiting'
         nextWorkItemRef = null
       }
+    } else if (request.workItemRef === 'observe-approval' && allowedNext('observe-mr')) {
+      // RFC-628: with several successors the single-successor default no longer applies. An
+      // approved observation always returns to observe-mr, which performs any pending follow-up;
+      // frozen lists that name observe-mr only get the same result the default produced, and the
+      // revision-1 list (collect-pipeline) never enters this branch.
+      nextWorkItemRef = 'observe-mr'
     } else if (request.allowedNextWorkItemRefs.length === 0) {
       caseState = 'waiting'
       nextWorkItemRef = null

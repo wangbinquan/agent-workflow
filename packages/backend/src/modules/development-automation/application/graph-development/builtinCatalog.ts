@@ -73,6 +73,21 @@ export function createGraphBuiltinCatalog(input: GraphBuiltinCatalogInput) {
       selection: 'selectable',
     }
   }
+  function revisionJson(
+    ref: { id: string; revision: number },
+    value: NonNullable<typeof records>[number],
+  ) {
+    const full = record(value)
+    return canonicalJson({
+      ref,
+      content: full.content,
+      contentDigest: graphDigest(full.content),
+      validationReceipt: full.validationReceipt,
+      state: 'published',
+      publishedAt: value.revision,
+      publishedBy: null,
+    })
+  }
   const catalog: DigitalEmployeePlatformToolCatalogParticipant & { load(): Promise<void> } = {
     load() {
       return (loading ??= (async () => {
@@ -141,21 +156,25 @@ export function createGraphBuiltinCatalog(input: GraphBuiltinCatalogInput) {
           label: '根据批准依据生成代码与测试',
           historical: true,
         })
+        // Each MR-delivery type revision binds its own exact tool registrations over the same
+        // implementations (RFC-628 added graph@3); the older registrations stay resolvable for
+        // the employees and jobs frozen on them.
+        const advertised = records.filter((value) => !value.historical)
         records.push(
-          ...records
-            .filter((value) => !value.historical)
-            .map((value) => ({
+          ...[2, 3].flatMap((typeRevision) =>
+            advertised.map((value) => ({
               ...value,
-              id: value.id.replace(prefix, `${prefix}type-v2:`),
-              typeRevision: 2,
+              id: value.id.replace(prefix, `${prefix}type-v${typeRevision}:`),
+              typeRevision,
             })),
+          ),
         )
       })())
     },
     listJson(refJson, item) {
       const ref = JSON.parse(refJson) as { typeId: string; revision: number }
       return canonicalJson(
-        ref.typeId === GRAPH_EMPLOYEE_TYPE.typeId && [1, 2].includes(ref.revision)
+        ref.typeId === GRAPH_EMPLOYEE_TYPE.typeId && [1, 2, 3].includes(ref.revision)
           ? current()
               .filter(
                 (value) =>
@@ -173,20 +192,31 @@ export function createGraphBuiltinCatalog(input: GraphBuiltinCatalogInput) {
         (value) => value.id === ref.id && value.revision === ref.revision,
       )
       if (!value) return null
-      const full = record(value)
-      return canonicalJson({
-        ref,
-        content: full.content,
-        contentDigest: graphDigest(full.content),
-        validationReceipt: full.validationReceipt,
-        state: 'published',
-        publishedAt: value.revision,
-        publishedBy: null,
-      })
+      return revisionJson(ref, value)
     },
     isPlatformTool: (id) => id.startsWith(prefix),
-    resolveCompatibleRevisionJson() {
-      return null
+    resolveCompatibleRevisionJson(sourceRefJson, targetTypeRefJson, workItemRef) {
+      // RFC-628: graph@2 employees and jobs bind `type-v2:` tools. Automatic upgrade to graph@3
+      // needs their graph@3 registration of the same tool and work item, or they would stay on
+      // graph@2 and could not start new work. Only that one step is mapped.
+      const source = JSON.parse(sourceRefJson) as { id: string; revision: number }
+      const target = JSON.parse(targetTypeRefJson) as { typeId: string; revision: number }
+      const sourcePrefix = `${prefix}type-v2:`
+      if (
+        target.typeId !== GRAPH_EMPLOYEE_TYPE.typeId ||
+        target.revision !== 3 ||
+        !source.id.startsWith(sourcePrefix)
+      )
+        return null
+      const successorId = `${prefix}type-v3:${source.id.slice(sourcePrefix.length)}`
+      const value = current().find(
+        (value) =>
+          value.id === successorId &&
+          value.item === workItemRef &&
+          !value.historical &&
+          value.typeRevision === 3,
+      )
+      return value ? revisionJson({ id: value.id, revision: value.revision }, value) : null
     },
   }
   return Object.freeze(catalog)

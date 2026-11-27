@@ -51,7 +51,12 @@ export interface DevelopmentMrFactsSourcePort {
     mrRef: string,
     options: { readonly selfMarker: string },
   ): Promise<
-    | { readonly ok: true; readonly snapshot: DevelopmentMrFactsSnapshot }
+    | {
+        readonly ok: true
+        readonly snapshot: DevelopmentMrFactsSnapshot
+        /** RFC-628: present only when the thread list was not read in full (integration's mark). */
+        readonly threadsIncomplete?: true
+      }
     | { readonly ok: false; readonly code: string; readonly detail: string }
   >
 }
