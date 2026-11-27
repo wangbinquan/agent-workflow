@@ -8,6 +8,8 @@
 
 `Rfc395FixtureGeneration.reset()`无参数行为保持：创建独立可用空库，后续native/runtime访问、原install语义不变。增加显式initialTemplateKey：已有模板时直接创建独立clone，未命中走原冷路径；记录预备key，首次install必须匹配声明，热命中只消费预备状态，不重复drop/clone。同例后续install继续在当前库执行升级callback。错误key拒绝，不静默套用其他版本。
 
+明确initialSourceVersion的key resolver在单个describe/file实例内惰性只求取固定key一次，缓存进行中Promise/成功key，失败后可重试；每次install仍执行原frozenFixture/冻结文件完整校验，不能复用这份校验结果。不同实例不共享key，不引入跨文件manifest缓存。
+
 仅Q3PhaseBoundary固定head路径opt-in，经V3/V2/V1/R2传递明确的初始版本/key resolver。其它harness保持无参数reset，不引入异步getter或通用lazy runtime代理。每例独立physical DB，template只读；SQLite行为和两provider保持。原pending/cancel/drain/session close/drop顺序及真实SQL错误/锁释放回归保留，并增加冷/热、错误key、空库与二次安装对照。构造器可注入真实database factory用于观察与屏障控制，默认仍是原native provider实现；回归实际执行CREATE/DROP和SQL，不替换结果。重叠reset在pending检查之后才恢复stopping，避免清除正在进行的取消；晚到clone先接管后检查取消，确保cleanup能删除。
 
 ## 相同静态语料与报告

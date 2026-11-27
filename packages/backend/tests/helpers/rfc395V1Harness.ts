@@ -46,6 +46,30 @@ export interface V1FixtureOptions {
   readonly initialSourceVersion?: 'head' | 'pre-seq' | 'root'
 }
 
+/** Cache only the declared allocation key; every installation still admits the source afresh. */
+export function createV1FixtureResolver<T>(
+  initialVersion: V1FixtureOptions['initialSourceVersion'],
+  loadFixture: (which: NonNullable<V1FixtureOptions['initialSourceVersion']>) => Promise<{
+    key: string
+    version: T
+  }>,
+) {
+  let initialKey: Promise<string> | undefined
+  return {
+    initialKey:
+      initialVersion === undefined
+        ? undefined
+        : () =>
+            (initialKey ??= loadFixture(initialVersion)
+              .then(({ key }) => key)
+              .catch((error: unknown) => {
+                initialKey = undefined
+                throw error
+              })),
+    forInstall: loadFixture,
+  }
+}
+
 async function frozenFixture(which: 'head' | 'pre-seq' | 'root') {
   const history = await loadFrozenEpoch1History()
   // pre-seq: the version just before RFC-374 added node_runs.seq; later heads move the tail.
@@ -88,6 +112,7 @@ export function describeV1Providers(
   body: (h: V1Harness) => void,
   options: V1FixtureOptions = {},
 ): void {
+  const fixtures = createV1FixtureResolver(options.initialSourceVersion, frozenFixture)
   describeR2Providers(
     name,
     (h) => {
@@ -187,7 +212,7 @@ export function describeV1Providers(
         manifest: getManifest,
         async install(which = 'head') {
           await getManifest()
-          const { version, key } = await frozenFixture(which)
+          const { version, key } = await fixtures.forInstall(which)
           await h.installFixture(key, async () => {
             if (h.provider === 'sqlite')
               await installFrozenSqlite(h.sqlite, version.sqliteMigrations.length)
@@ -331,8 +356,6 @@ export function describeV1Providers(
       }
       body(extended)
     },
-    options.initialSourceVersion === undefined
-      ? undefined
-      : async () => (await frozenFixture(options.initialSourceVersion!)).key,
+    fixtures.initialKey,
   )
 }

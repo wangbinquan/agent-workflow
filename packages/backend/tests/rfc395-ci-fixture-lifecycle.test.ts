@@ -7,10 +7,94 @@ import { join } from 'node:path'
 import { SQL } from 'bun'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 import { Rfc395FixtureGeneration } from './helpers/rfc395FixtureGeneration'
+import { createV1FixtureResolver } from './helpers/rfc395V1Harness'
 import {
   createRfc395FixtureDatabase,
   type FixtureDatabase,
 } from './helpers/rfc395FixturePostgresql'
+
+describe('RFC-624 initial allocation keys and installation admission', () => {
+  test('the initial key is lazy and repeated or concurrent requests share one verified result', async () => {
+    let reads = 0
+    let release!: (value: { key: string; version: number }) => void
+    const pending = new Promise<{ key: string; version: number }>((resolve) => {
+      release = resolve
+    })
+    const resolver = createV1FixtureResolver('head', () => {
+      reads++
+      return pending
+    })
+    expect(reads).toBe(0)
+    const first = resolver.initialKey!()
+    const concurrent = resolver.initialKey!()
+    expect(concurrent).toBe(first)
+    expect(reads).toBe(1)
+    release({ key: 'verified-head', version: 1 })
+    expect(await first).toBe('verified-head')
+    expect(await concurrent).toBe('verified-head')
+    expect(await resolver.initialKey!()).toBe('verified-head')
+    expect(reads).toBe(1)
+  })
+
+  test('separate suite instances never share their initial key cache', async () => {
+    let reads = 0
+    const load = async () => ({ key: `verified-${++reads}`, version: reads })
+    const first = createV1FixtureResolver('head', load)
+    const second = createV1FixtureResolver('head', load)
+    expect(await first.initialKey!()).toBe('verified-1')
+    expect(await second.initialKey!()).toBe('verified-2')
+    expect(await first.initialKey!()).toBe('verified-1')
+    expect(reads).toBe(2)
+  })
+
+  test('a rejected initial lookup is shared while pending and retried on the next request', async () => {
+    let reads = 0
+    const resolver = createV1FixtureResolver('root', async (which) => {
+      reads++
+      if (reads === 1) throw new Error('source verification failed')
+      return { key: `verified-${which}`, version: reads }
+    })
+    const first = resolver.initialKey!()
+    const concurrent = resolver.initialKey!()
+    expect(concurrent).toBe(first)
+    await expect(first).rejects.toThrow('source verification failed')
+    await expect(concurrent).rejects.toThrow('source verification failed')
+    expect(reads).toBe(1)
+    expect(await resolver.initialKey!()).toBe('verified-root')
+    expect(await resolver.initialKey!()).toBe('verified-root')
+    expect(reads).toBe(2)
+  })
+
+  test('every install re-verifies its requested version even after the initial key is cached', async () => {
+    const versions: string[] = []
+    const resolver = createV1FixtureResolver('head', async (which) => {
+      versions.push(which)
+      if (versions.length === 3) throw new Error('changed source rejected at installation')
+      return { key: `verified-${which}`, version: versions.length }
+    })
+    expect(await resolver.initialKey!()).toBe('verified-head')
+    expect(await resolver.forInstall('head')).toEqual({ key: 'verified-head', version: 2 })
+    await expect(resolver.forInstall('head')).rejects.toThrow(
+      'changed source rejected at installation',
+    )
+    expect(await resolver.forInstall('pre-seq')).toEqual({ key: 'verified-pre-seq', version: 4 })
+    expect(await resolver.initialKey!()).toBe('verified-head')
+    expect(versions).toEqual(['head', 'head', 'head', 'pre-seq'])
+  })
+
+  test('the default harness never resolves an initial key and still verifies every install', async () => {
+    const versions: string[] = []
+    const resolver = createV1FixtureResolver(undefined, async (which) => {
+      versions.push(which)
+      return { key: `verified-${which}`, version: versions.length }
+    })
+    expect(resolver.initialKey).toBeUndefined()
+    expect(versions).toEqual([])
+    expect(await resolver.forInstall('head')).toEqual({ key: 'verified-head', version: 1 })
+    expect(await resolver.forInstall('root')).toEqual({ key: 'verified-root', version: 2 })
+    expect(versions).toEqual(['head', 'root'])
+  })
+})
 
 const urlEnv = resolvePostgresqlTestUrlEnv(process.env)
 const sourceUrl = urlEnv ? process.env[urlEnv] : undefined
