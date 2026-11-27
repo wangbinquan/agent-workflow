@@ -1,6 +1,6 @@
-## 2026-11-26 RFC-623 第三轮 CI：macOS runner 需求与完整计时分片（In Progress；`design/RFC-623-macos-ci-runner-demand/`）
+## 2026-11-26 RFC-623 第三轮 CI：macOS runner 需求与完整计时分片（Done；`design/RFC-623-macos-ci-runner-demand/`）
 
-用户已授权择优实施。macOS E2E 4→3片并更新完整clean reporter权重；全部测试exact-once、arm64、4workers、原20分钟与13组门禁保持。source topology严格兼容历史3/4/4与新3/3/4；实测区分领取等待、执行与总墙钟。先完整开发与用例，再集中验证和exact-SHA CI。详见本RFC三件套。
+macOS E2E 4→3片、严格source拓扑兼容及双green逐文件实测max重平衡完成。097d41d6/run45921188560 首次attempt完整69/69成功，44后端/10E2E/13组required保持；总墙钟36m01s（run完成代理36m02s）。排队仍受外部容量影响，最慢mac等待14m51s，未宣称根治。collector正确拒绝含retry的E2E权重刷新。详见[实测验收](design/RFC-623-macos-ci-runner-demand/acceptance.md)，结论仅对应097d，不冒领后继共享提交。
 
 ## 2026-11-26 RFC-622 source-control 的候选与提交绑定器迁入 application（Done；`design/RFC-622-source-control-binders-into-application/`）
 
@@ -17451,6 +17451,7 @@ M5 打磨       [12/12 ✅]  M5 完工 — 单二进制 / i18n / 暗色 / 备份
 
 | ID | 标题 | 关键产出 |
 | --- | --- | --- |
+| RFC-623 | 第三轮CI：降低macOS runner需求与后端长尾 | macOS E2E4→3，完整测试与原预算/门禁保持；097d41d6主CI69/69、严格collector验收；[同口径实测及限制](design/RFC-623-macos-ci-runner-demand/acceptance.md)。 |
 | RFC-378 | 脑图澄清主动思考与决定复核 | 完整实现与用例、独立功能门、393ecaea3 CI 49/49、单机/托管真实旅程及原始最终文档；[逐项证据](design/RFC-378-mindmap-decision-review/acceptance.md)。 |
 | RFC-370 | CrewStation 完整托管部署 | 单机与托管同一业务路径（P1 → M0～M3 → v3 V1～V13 → v4 V14～V21），本机 CS 上逐级实机验收，最终正式 AW `v0.6.30`（`8e5c57a21`）与独立服务 rfc042 `v0.2.9`；验收中发现的 AW / CS 缺陷均已修复并补回归用例，附属 CS RFC-040 / 042 / 043 Done；[逐项证据](design/RFC-370-crewstation-hosted-deployment/status.md)。 |
 

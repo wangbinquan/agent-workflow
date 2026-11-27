@@ -1,12 +1,12 @@
 # RFC-623 实施与验收
 
-状态：In Progress，2026-11-26。用户已授权择优实施，无新增付费资源或账户设置变更。
+状态：Done，2026-11-26。用户已授权择优实施，无新增付费资源或账户设置变更。
 
 - [x] T1：复核7轮真实队列、官方方案、原失败annotation及容量边界。
 - [x] T2：选择三片与完整reporter权重，完成离线容量与1.5倍敏感性分析；落档设计。
 - [x] T3：完整实现矩阵、权重、source topology兼容及所有回归。
 - [x] T4：集中相关验证、静态检查与独立功能复核。
-- [ ] T5：精确路径发布，跟踪exact-SHA hosted CI与collector；核验完整覆盖及实际耗时。
+- [x] T5：精确路径发布，跟踪exact-SHA hosted CI与collector；核验完整覆盖及实际耗时。
 
 本轮不修改生产代码、测试case timeout、平台/provider/coverage或13组required标准。69物理job和10E2E产物是完整新拓扑，不是减少测试集合。
 
@@ -26,7 +26,7 @@
 
 - [x] T5a：首轮exact-SHA完整跟踪与失败归因；代码/测试同blob、整片约19%变慢，未发现本轮业务缺陷。
 - [x] T5b：严格复核6c92与d838两个完整green来源，逐文件取真实较大值重平衡，保持44片/15分钟，独立复核数据来源与边界。
-- [ ] T5c：发布数据修正，完整hosted与实际新拓扑collector验收；首轮失败保留。
+- [x] T5c：发布数据修正，完整hosted与实际新拓扑collector验收；首轮失败保留。
 
 单源d838候选在交叉成本中出现949.332s片，独立复核暂缓实施；其数据本身完整但不能签稳定余量。采用两个完整green逐文件max的最终设计；新增严格数据准备器与回归，完成后集中验证，不将离线模型或首轮E2E通过代签整个CI。
 
@@ -37,3 +37,7 @@
 相关9文件136项测试通过、0失败、2721断言（isolate/randomize、seed62326、coverage）；相关TypeScript依赖闭包、ESLint、Prettier、全workflow actionlint均通过。没有运行重复全量本地gate；数据来源交叉复核、原单源CLI兼容性及独立功能实现门另记，hosted仍待验收。
 
 独立功能实现门PASS，无P1/P2；两数据文件与CLI输出逐字节一致，88原始来源逐值复算及44原生分片边界审计通过。原单源CLI对d838真实44份输入的回放exit0，两输出均与旧review artifact逐字节一致。后端44片/15分钟、三平台、coverage/provider与13门禁均未修改。
+
+## 最终验收
+
+097d41d6/run45921188560 首次attempt完整69/69 success，44后端、10E2E及13组required全成功；到最后job36m01s（run完成代理36m02s）。对应collector45924638197成功，后端3108源文件完整，E2E对合法retry样本中性skip。全部同口径指标、覆盖人口、首轮失败及后继共享HEAD边界见[验收记录](./acceptance.md)。RFC-623 Done；不替后继并发业务提交签署CI结论。
