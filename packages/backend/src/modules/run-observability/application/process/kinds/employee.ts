@@ -26,6 +26,7 @@ import { gateDurationsOf, reviewSummaryOf } from '../../../domain/process/gateSu
 import { hintsOf } from '../../../domain/process/hints'
 import {
   NO_USAGE,
+  usageRecorded,
   type ProcessExecution,
   type ProcessGateRound,
   type ProcessStage,
@@ -397,7 +398,7 @@ export async function loadEmployeeUnits(
       gates,
       usage: slices.filter((slice) => slice.tokens > 0 || slice.costNano > 0),
       usageTotals,
-      hasUsageRecord: usageSince !== null && unit.startedAt >= usageSince,
+      hasUsageRecord: usageRecorded(unit.startedAt, usageTotals, usageSince),
       operations: [
         ...(operations.get(row.caseId) ?? []),
         ...[...gateRuns].flatMap((runId) => bundle.runOperations.get(runId) ?? []),

@@ -157,7 +157,8 @@ export const processMetricsZh = {
   },
   note: {
     title: '数据说明：',
-    withoutUsage: '有 {{count}} 个{{unit}}开始于最早的调用记录之前，不进 Token 统计。',
+    withoutUsage:
+      '有 {{count}} 个{{unit}}开始于最早的调用记录之前，自己也没有调用记录，不进 Token 统计。',
     withoutRuntime: '有 {{count}} 个{{unit}}没有运行时长记录，不进时间拆分。',
     withoutCause: '有 {{count}} 次执行没有记录原因，按首次执行计。',
     usageLowerBound: '部分调用的用量不完整，Token 合计是下界。',
@@ -985,7 +986,7 @@ export const processMetricsEn: ProcessMetricsMessages = {
   note: {
     title: 'About the data:',
     withoutUsage:
-      '{{count}} {{unit}}(s) started before the first recorded call and are left out of token statistics.',
+      '{{count}} {{unit}}(s) started before the first recorded call and have no recorded call of their own; they are left out of token statistics.',
     withoutRuntime:
       '{{count}} {{unit}}(s) have no running-time record and are left out of the time split.',
     withoutCause: '{{count}} executions have no recorded cause and count as first executions.',

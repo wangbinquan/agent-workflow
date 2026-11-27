@@ -189,7 +189,10 @@ export interface ProcessDataNote {
   /** More units exist than the limit; only the newest were aggregated. */
   readonly partial: boolean
   readonly unitLimit: number
-  /** Ended units that started before the first recorded runtime call: no token statistics. */
+  /**
+   * Ended units with no recorded call of their own that started before the first recorded
+   * runtime call: no token statistics.
+   */
   readonly unitsWithoutUsage: number
   /** Ended units with no running-time record (very old tasks): no time split. */
   readonly unitsWithoutRuntime: number

@@ -1192,7 +1192,9 @@ describe('RFC-616 process tab: a workflow', () => {
     await screen.findByRole('heading', { name: '需求到合入', level: 2 })
     expect(screen.getByText(/符合条件的任务超过 2000 个，统计只包含最近的 2000 个/)).toBeTruthy()
     const note = screen.getByText(/^数据说明：/).textContent
-    expect(note).toContain('有 2 个任务开始于最早的调用记录之前，不进 Token 统计。')
+    expect(note).toContain(
+      '有 2 个任务开始于最早的调用记录之前，自己也没有调用记录，不进 Token 统计。',
+    )
     expect(note).toContain('有 1 个任务没有运行时长记录，不进时间拆分。')
     expect(note).toContain('有 9 次执行没有记录原因，按首次执行计。')
     expect(note).toContain('部分调用的用量不完整，Token 合计是下界。')

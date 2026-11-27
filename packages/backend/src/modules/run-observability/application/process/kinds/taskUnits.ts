@@ -16,6 +16,7 @@ import {
 } from '../../../domain/process/causes'
 import {
   NO_USAGE,
+  usageRecorded,
   type ProcessFailureCode,
   type ProcessGateRound,
   type ProcessOperation,
@@ -301,7 +302,7 @@ export function taskUnitFacts(input: TaskUnitInput): ProcessUnitFacts {
     gates,
     usage: mergeSlices(slices),
     usageTotals,
-    hasUsageRecord: input.usageSince !== null && unit.startedAt >= input.usageSince,
+    hasUsageRecord: usageRecorded(unit.startedAt, usageTotals, input.usageSince),
     operations,
     manualRetries: Math.max(classified.manualRetries, retryOperations),
     failedWrappers: wrappers.filter(

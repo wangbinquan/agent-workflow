@@ -1290,6 +1290,43 @@ describe('RFC-616 digital employee summary', () => {
     ])
   })
 
+  // Regression (2026-11-26): the first assignments of an installation showed no tokens, because
+  // an assignment starts before the calls of its own tool runs do.
+  test('an assignment whose tool runs made the oldest recorded calls is in the token sample; one with no call before them is not', async () => {
+    const summary = await summaryFor({
+      // The oldest call on record belongs to k1's first round, a minute after k1 was created.
+      usageSince: 10 * H + M,
+      manifests: new Map([['development@11', manifest]]),
+      cases: [
+        { row: caseRow({ caseId: 'k1', createdAt: 10 * H, terminalAt: 20 * H }) },
+        // Ended before any call was recorded, and left none.
+        { row: caseRow({ caseId: 'k0', createdAt: 8 * H, terminalAt: 9 * H }) },
+      ],
+      rounds: [
+        round({
+          caseId: 'k1',
+          roundId: 'k1-i',
+          workItemRef: 'implement',
+          createdAt: 10 * H,
+          settledAt: 12 * H,
+        }),
+        round({
+          caseId: 'k0',
+          roundId: 'k0-i',
+          workItemRef: 'implement',
+          createdAt: 8 * H,
+          settledAt: 9 * H,
+        }),
+      ],
+      metering: [{ caseId: 'k1', roundId: 'k1-i', durationMs: 2 * H, totalTokens: 1_000 }],
+      hostTasks: [{ roundId: 'k1-i', taskId: 'h-k1-i' }],
+      usage: [usageRow({ taskId: 'h-k1-i', tokens: 1_000 })],
+    })
+    expect(summary.counts).toMatchObject({ total: 2, succeeded: 2 })
+    expect(summary.note).toMatchObject({ unitsWithoutUsage: 1 })
+    expect(summary.metrics.tokensPerUnit!.value).toBe(1_000)
+  })
+
   test('work items: rounds, attempts, tokens and which ones are rework', async () => {
     const summary = await summaryFor()
     expect(summary.regions.map((region) => region.regionId)).toEqual(['delivery', 'care'])

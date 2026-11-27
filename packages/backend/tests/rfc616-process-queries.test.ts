@@ -620,6 +620,8 @@ describe('RFC-616 scope', () => {
   test('units before the first recorded call and units without a running-time record are counted apart', async () => {
     const seed = scenario()
     seed.usageSince = 25 * H
+    // t1 ran before calls were recorded: neither it nor the task it called left any.
+    seed.usage = seed.usage!.filter((row) => row.taskId !== 't1' && row.taskId !== 'c1')
     seed.tasks![0] = { kind: 'workflow', row: { ...seed.tasks![0]!.row, autoMs: null } }
     const { queries } = queriesOf(seed)
     const summary = await queries.summary(admin, 'workflow', 'wf-1', WINDOW)
@@ -627,6 +629,48 @@ describe('RFC-616 scope', () => {
     expect(summary.note).toMatchObject({ unitsWithoutUsage: 1, unitsWithoutRuntime: 1 })
     expect(summary.metrics.tokensPerUnit!.value).toBe(200)
     expect(summary.time.sampleUnits).toBe(0)
+  })
+
+  // Regression (2026-11-26, a freshly installed database): the first tasks of an installation
+  // showed no tokens. Their own calls are the oldest on record and start after the tasks do, so
+  // "started before the oldest recorded call" was true of exactly the tasks that had records.
+  test('a task whose own calls are the oldest on record is in the token sample', async () => {
+    const seed = scenario()
+    // t1 started at 10 h; its first call, the oldest one there is, a minute later.
+    seed.usageSince = 10 * H + M
+    const { queries } = queriesOf(seed)
+    const summary = (await queries.summary(
+      admin,
+      'workflow',
+      'wf-1',
+      WINDOW,
+    )) as ProcessWorkflowSummary
+    expect(summary.note).toMatchObject({ unitsWithoutUsage: 0 })
+    // Both ended tasks: t1 with the task it called (2,410) and t2 (200).
+    expect(summary.metrics.tokensPerUnit!.value).toBe(1_305)
+    expect(stageOf(summary, 'design').tokensPerUnit).toBe(875)
+  })
+
+  test('the listing counts such a task too: it reads call totals, not node runs', async () => {
+    const seed = scenario()
+    seed.usageSince = 10 * H + M
+    const { queries } = queriesOf(seed)
+    const list = await queries.subjects(admin, { kind: 'workflow', from: 0, to: 1_000 * H })
+    expect(list.items.find((row) => row.subjectId === 'wf-1')).toMatchObject({
+      tokensPerUnit: 1_305,
+    })
+  })
+
+  test('a task called by such a task makes it count: the calls of the whole unit are its record', async () => {
+    const seed = scenario()
+    seed.usageSince = 10 * H + M
+    // Only the called task c1 left calls; t1 itself made none.
+    seed.usage = seed.usage!.filter((row) => row.taskId !== 't1')
+    const { queries } = queriesOf(seed)
+    const summary = await queries.summary(admin, 'workflow', 'wf-1', WINDOW)
+    expect(summary.note).toMatchObject({ unitsWithoutUsage: 0 })
+    // t1 through c1 (410) and t2 (200).
+    expect(summary.metrics.tokensPerUnit!.value).toBe(305)
   })
 })
 

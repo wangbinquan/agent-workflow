@@ -12,7 +12,9 @@
 //     of their own tasks only and no per-person detail;
 //   - an operation a person performs on a real observed route leaves a row in the
 //     operations ledger and shows up in the numbers (a sink attached to the wrong
-//     application, or a write window read backwards, passes every other test).
+//     application, or a write window read backwards, passes every other test);
+//   - the first tasks of an installation keep their tokens, with calls that start
+//     after their tasks as a real runtime's do.
 import { expect, test } from 'bun:test'
 import {
   WORKFLOW_SCHEMA_VERSION,
@@ -205,12 +207,12 @@ async function seed(db: PersistenceDb) {
 }
 
 describeEachProvider('RFC-616 process metrics through the composed application', (harness) => {
-  async function open() {
+  /** The composed application over a database that holds nothing yet. */
+  async function openEmpty() {
     const application = await openTestApplication(harness.applicationBinding, {
       token: DAEMON_TOKEN,
       dbVersion: 1,
     })
-    const people = await seed(harness.db)
     const get = async <T>(path: string, token = DAEMON_TOKEN): Promise<T> => {
       const response = await application.app.request(path, {
         headers: { Authorization: `Bearer ${token}` },
@@ -218,7 +220,13 @@ describeEachProvider('RFC-616 process metrics through the composed application',
       expect([path, response.status]).toEqual([path, 200])
       return (await response.json()) as T
     }
-    return { application, get, ...people }
+    return { application, get }
+  }
+
+  async function open() {
+    const opened = await openEmpty()
+    const people = await seed(harness.db)
+    return { ...opened, ...people }
   }
 
   test('one task shows the same tokens and cost on the process pages as on its run-observation page', async () => {
@@ -405,6 +413,98 @@ describeEachProvider('RFC-616 process metrics through the composed application',
     // Four ended tasks, one recorded operation among them.
     expect(summary.interventions.operationsPerUnit).toBe(1 / 4)
     expect(summary.metrics.interventionsPerUnit?.value).toBe(1 / 4)
+  })
+
+  // Regression (2026-11-26, found on a freshly installed database running real tasks): the first
+  // two tasks ever run showed "—" for tokens on the process pages while the task page of run
+  // observation showed them. A task's own calls start after the task does, so the tasks that made
+  // the oldest calls on record all "started before the oldest recorded call". The other RFC-616
+  // tests could not see it: their fixtures start a call in the same millisecond as its task.
+  test('the first tasks of an installation keep their tokens: their own calls are the oldest on record', async () => {
+    const { get } = await openEmpty()
+    const db = harness.db
+    await workflowFixture(db, { id: 'wf-first', name: 'first flow', definition: DEFINITION })
+    const calls = composeRunObservationCalls(db)
+    // Two tasks launched within the same second; each spawns its runtime a second after it starts.
+    for (const [id, offset, tokens] of [
+      ['t-first', 0, 1_000],
+      ['t-second', 400, 300],
+    ] as const) {
+      await taskFixture(db, {
+        id,
+        name: `task ${id}`,
+        workflowId: 'wf-first',
+        workflowSnapshot: DEFINITION,
+        repoPath: '/tmp/never-read',
+        worktreePath: '/tmp/never-read',
+        baseBranch: 'main',
+        branch: `agent-workflow/${id}`,
+        inputs: '{}',
+        status: 'done',
+        startedAt: T0 + offset,
+        finishedAt: T0 + HOUR,
+        runningMs: 30 * MINUTE,
+      })
+      await nodeRunFixture(db, {
+        id: `r-${id}`,
+        taskId: id,
+        nodeId: 'design',
+        status: 'done',
+        startedAt: T0 + offset + 900,
+        finishedAt: T0 + 20 * MINUTE,
+      })
+      await calls.accept({
+        id: `c-${id}`,
+        purpose: 'task',
+        taskId: id,
+        nodeRunId: `r-${id}`,
+        systemKind: null,
+        agentId: null,
+        agentName: 'assembled-agent',
+        runtimeId: null,
+        runtimeName: null,
+        protocol: 'opencode',
+        startedAt: T0 + offset + 1_000,
+      })
+      await calls.finish(`c-${id}`, {
+        status: 'done',
+        endedAt: T0 + 20 * MINUTE,
+        usage: {
+          state: 'complete',
+          models: [
+            {
+              model: 'assembled-model',
+              input: tokens,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              reasoning: 0,
+            },
+          ],
+        },
+      })
+    }
+
+    const summary = await get<ProcessWorkflowSummary>(
+      `${BASE}/subjects/workflow/wf-first?${WINDOW}&tzOffset=0`,
+    )
+    expect(summary.note).toMatchObject({ units: 2, unitsWithoutUsage: 0 })
+    expect(summary.metrics.tokensPerUnit?.value).toBe(650)
+    expect(summary.stages.find((row) => row.key === 'design')).toMatchObject({
+      units: 2,
+      tokensPerUnit: 650,
+    })
+    const list = await get<ProcessSubjectList>(`${BASE}/subjects?kind=workflow&${WINDOW}`)
+    expect(list.items.map((row) => [row.subjectId, row.units, row.tokensPerUnit])).toEqual([
+      ['wf-first', 2, 650],
+    ])
+    // The same number the task page of run observation shows for each of them.
+    const first = await get<ObservationTaskDetail>('/api/observability/tasks/t-first')
+    const units = await get<ProcessUnitPage>(`${BASE}/subjects/workflow/wf-first/units?${WINDOW}`)
+    expect(units.items.map((row) => [row.unitId, row.tokens])).toEqual([
+      ['t-second', 300],
+      ['t-first', tokensOf(first.usage)],
+    ])
   })
 
   test('asking for a text-theme analysis of a subject with nothing written answers "empty" and queues nothing', async () => {

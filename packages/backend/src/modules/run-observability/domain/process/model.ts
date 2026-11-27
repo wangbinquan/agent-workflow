@@ -131,6 +131,22 @@ export const NO_USAGE: ProcessUsageTotals = {
   unpricedCalls: 0,
 }
 
+/**
+ * Whether a unit's usage is on record. `usageSince` is the start of the oldest recorded call —
+ * the only trace of when recording began. A unit that started at or after it ran while calls were
+ * being recorded. A unit's own calls start after the unit does, so the units that made the oldest
+ * calls (the first tasks of an installation) start before `usageSince` by construction: they are
+ * judged by having a recorded call of their own. What is left out is a unit with no recorded call
+ * that started before the oldest one: nothing says whether it used nothing or predates recording.
+ */
+export function usageRecorded(
+  startedAt: number,
+  usage: ProcessUsageTotals,
+  usageSince: number | null,
+): boolean {
+  return usage.calls > 0 || (usageSince !== null && startedAt >= usageSince)
+}
+
 /** Something a person did, recorded by the route registry. */
 export interface ProcessOperation {
   readonly action: ProcessOperationAction
@@ -159,7 +175,7 @@ export interface ProcessUnitFacts {
   readonly gates: readonly ProcessGateRound[]
   readonly usage: readonly ProcessUsageSlice[]
   readonly usageTotals: ProcessUsageTotals
-  /** false: the unit started before the first recorded runtime call. */
+  /** false: no call of the unit is on record and it started before the first recorded call (`usageRecorded`). */
   readonly hasUsageRecord: boolean
   readonly operations: readonly ProcessOperation[]
   /** Manual retries: placeholders in the ledger, or recorded retry operations where those are more. */

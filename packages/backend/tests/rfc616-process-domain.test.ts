@@ -26,6 +26,7 @@ import {
 } from '@/modules/run-observability/domain/process/gateSummary'
 import {
   NO_USAGE,
+  usageRecorded,
   type ProcessExecution,
   type ProcessGateRound,
   type ProcessOperation,
@@ -1465,5 +1466,30 @@ describe('RFC-616 comparison', () => {
   test('the previous window has the same length and ends where this one starts', () => {
     expect(previousWindow(100, 130)).toEqual({ from: 70, to: 100 })
     expect(previousWindow(10, 50)).toEqual({ from: 0, to: 10 })
+  })
+})
+
+// Found on a freshly installed database (2026-11-26): the first two tasks ever run showed no
+// tokens although every one of their calls was recorded. The rule compared a task's start with
+// the start of the oldest recorded call, and a task's own first call always starts after the task.
+describe('RFC-616 whether a unit has a usage record', () => {
+  const calls = (count: number) => ({ ...NO_USAGE, calls: count, tokens: count * 100 })
+
+  test('a unit that started at or after the oldest recorded call has one, with or without calls', () => {
+    expect(usageRecorded(50, NO_USAGE, 50)).toBe(true)
+    expect(usageRecorded(51, calls(2), 50)).toBe(true)
+  })
+
+  test('a unit that started before the oldest recorded call has one when a call of its own is on record', () => {
+    // The first task of an installation: its call is the oldest one, a second after it started.
+    expect(usageRecorded(49, calls(1), 50)).toBe(true)
+  })
+
+  test('a unit with no recorded call that started before the oldest one has none', () => {
+    expect(usageRecorded(49, NO_USAGE, 50)).toBe(false)
+  })
+
+  test('with no call recorded at all, no unit has one', () => {
+    expect(usageRecorded(49, NO_USAGE, null)).toBe(false)
   })
 })
