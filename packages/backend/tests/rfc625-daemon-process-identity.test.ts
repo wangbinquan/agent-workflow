@@ -208,6 +208,11 @@ describe('Windows process query handle discipline', () => {
       state: 'unknown',
     })
     expect(readWindowsProcessIdentity(15, null)).toEqual({ state: 'unknown' })
+    // Import-time platform binding remains unavailable on POSIX; invalid PIDs never query it.
+    if (process.platform !== 'win32')
+      expect(readWindowsProcessIdentity(process.pid)).toEqual({ state: 'unknown' })
+    for (const pid of [0, -1, 1.5, 0x100000000, Number.NaN])
+      expect(readWindowsProcessIdentity(pid)).toEqual({ state: 'unknown' })
     expect(closed).toBe(0)
   })
 
@@ -252,6 +257,8 @@ describe.skipIf(process.platform !== 'win32')('native Windows process incarnatio
   test('the current process identity is stable and is published in its lock', () => {
     const identity = readWindowsProcessIdentity(process.pid)
     expect(identity.state).toBe('running')
+    // A per-call unavailable adapter must not replace the immutable native binding.
+    expect(readWindowsProcessIdentity(process.pid, null)).toEqual({ state: 'unknown' })
     expect(readWindowsProcessIdentity(process.pid)).toEqual(identity)
     const f = fixture(),
       lock = acquireLock(f.path)

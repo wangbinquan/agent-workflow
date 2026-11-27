@@ -134,16 +134,26 @@ export const RFC572_MOVED: ReadonlyArray<
   [
     'util/lock',
     'platform/execution/local/daemonLock',
+    // RFC-625 adds the shared owner snapshot/token API while retaining every original lock export.
+    // Its only new dependencies are the sibling Windows identity adapter and node's UUID primitive.
     [
       'DaemonLockHeldError',
+      'DaemonLockOwner',
       'Lock',
       'acquireLock',
       'adoptCurrentProcessLock',
+      'createCurrentProcessLockOwner',
+      'isDaemonLockOwnerAlive',
       'isProcessAlive',
+      'parseDaemonLockOwner',
+      'readDaemonLockOwner',
+      'readLivePidFromLock',
       'readPidFromLock',
+      'sameDaemonLockOwner',
+      'serializeDaemonLockOwner',
       'writePidFileForTest',
     ],
-    ['./process', 'node:fs', 'node:path'],
+    ['./process', './windowsProcessIdentity', 'node:crypto', 'node:fs', 'node:path'],
   ],
   [
     'util/spawnDiagnostics',

@@ -93,6 +93,9 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // The activation-frame and compiled Bun target/output relay regressions require
   // a real Windows kernel; the latter also requires a compiled artifact.
   'packages/backend/tests/rfc328-process-preactivation.test.ts#skipIf': 2,
+  // RFC-625: GetProcessTimes/WaitForSingleObject need a real Windows kernel; windows-platform.yml
+  // explicitly runs all four native cases in this suite. Its platform-neutral cases run everywhere.
+  'packages/backend/tests/rfc625-daemon-process-identity.test.ts#skipIf': 1,
   'packages/backend/tests/rfc135-runtimes-status.test.ts#skipIf': 2,
   // The live icacls/whoami round-trip requires a Windows kernel.
   'packages/backend/tests/rfc254-win32-acl-integration.test.ts#skipIf': 1,

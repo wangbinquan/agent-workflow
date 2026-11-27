@@ -24,6 +24,14 @@ release记录本次完整owner快照，只在当前内容仍属于它时释放�
 
 原E2E三case、原kill/restart顺序、锁回收生产路径、150秒预算及重试保持；补旧child PID/close、新spawn PID与锁owner快照诊断，遇到未知问题保留可归因证据。测试不得直接删锁、增加sleep或重试来换通过。原事故的PID复用归因只有出现直接证据后才能确认。
 
+### 2.3 Hosted 架构守卫后的不可变绑定修正
+
+81a78c2 的 backend2 捕获新增 `nativeApi` 顶层 `let` 未登记。RFC546 例外已达 28 条上限，本 RFC 不增加例外、不提高上限，也不改变扫描器。API 仅封装 kernel32 固定函数，不保存 PID、进程查询 handle 或业务状态，因此改为模块导入时一次调用 `createNativeApi()`，结果由 `const` 保存，非空适配器用 `Object.freeze` 冻结；不保留可重配的模块状态或将其隐藏进闭包。
+
+非 Windows 仍在 `dlopen` 前返回 null，Windows FFI 初始化异常仍被捕获并得到 null；原首次加载失败也会永久缓存 null，因此没有移除既有重试能力。唯一初始化时序变化是 Windows kernel32 符号绑定从第一次身份查询提前到模块导入；不在导入时打开目标进程，全部查询 handle 和 FILETIME 缓冲区仍是调用局部值。显式 API 实参仍只影响当次调用，不能替换默认绑定。构建不新增依赖，启动成本未实测，不宣称提前初始化零成本。
+
+原 15 项身份回归（其中 4 项 Windows native）保持，既有用例补非法 PID、非 Windows 默认 unknown，以及显式 null 后默认 native 身份不变的行为断言。集中复验原 RFC546 完整守卫、身份/锁相关用例；真实 Windows 与编译后启动仍由新候选的 hosted CI 验证。
+
 ## 3. Q3/V2 不可变 manifest 复用
 
 保留所有原test文件及--isolate，复用已设置的AW_TEST_FIXTURE_CACHE_DIR，缓存只活在一个CI job临时目录，不上传Actions cache、不跨run持久化。现有sourceManifests模块Map继续只缓存不可变值；不缓存连接、数据库、provider runtime、reader、operationRoot或cleanup。

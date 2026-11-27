@@ -24,10 +24,8 @@ export interface WindowsProcessIdentityApi {
   close(handle: WindowsProcessHandle): void
 }
 
-let nativeApi: WindowsProcessIdentityApi | null | undefined
-function loadApi(): WindowsProcessIdentityApi | null {
+function createNativeApi(): WindowsProcessIdentityApi | null {
   if (process.platform !== 'win32') return null
-  if (nativeApi !== undefined) return nativeApi
   try {
     const { symbols } = dlopen('kernel32.dll', {
       OpenProcess: { args: ['u32', 'i32', 'u32'], returns: 'ptr' },
@@ -36,7 +34,7 @@ function loadApi(): WindowsProcessIdentityApi | null {
       GetProcessTimes: { args: ['ptr', 'ptr', 'ptr', 'ptr', 'ptr'], returns: 'i32' },
       CloseHandle: { args: ['ptr'], returns: 'i32' },
     })
-    nativeApi = {
+    return Object.freeze<WindowsProcessIdentityApi>({
       // QUERY_LIMITED_INFORMATION | SYNCHRONIZE; all queries use this one handle.
       open: (pid) => symbols.OpenProcess(0x1000 | 0x100000, 0, pid),
       lastError: () => symbols.GetLastError(),
@@ -58,17 +56,19 @@ function loadApi(): WindowsProcessIdentityApi | null {
       close: (handle) => {
         symbols.CloseHandle(handle)
       },
-    }
+    })
   } catch {
-    nativeApi = null
+    return null
   }
-  return nativeApi
 }
+
+// Bind immutable kernel32 functions once at import; queried PIDs and handles stay call-local.
+const nativeApi = createNativeApi()
 
 /** Unknown is not evidence that an owner exited. No floating-point FILETIME conversion. */
 export function readWindowsProcessIdentity(
   pid: number,
-  api: WindowsProcessIdentityApi | null = loadApi(),
+  api: WindowsProcessIdentityApi | null = nativeApi,
 ): WindowsProcessIdentity {
   if (!Number.isSafeInteger(pid) || pid <= 0 || pid > 0xffffffff || !api)
     return { state: 'unknown' }

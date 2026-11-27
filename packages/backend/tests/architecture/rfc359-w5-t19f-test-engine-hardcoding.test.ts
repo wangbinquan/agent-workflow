@@ -101,6 +101,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'helpers/rfc370SqliteAffectedRowsCases.ts: 1', // sqlite-only-primitive
   'helpers/rfc395FixtureGeneration.ts: 1', // real-file-database; moved from rfc395R2Harness.ts (CI round 1 fixture snapshots)
   'helpers/rfc395Q1Parity/fixture.ts: 1', // real-file-database
+  // RFC-625: SQLite version/source_id/compile_options identify the SQLite prefixes in both providers' complete manifests.
+  // This intrinsic runtime probe makes no single-provider business assertion; keep its exact construction count visible.
+  'helpers/rfc395SourceManifestFixture.ts: 1', // existing new Database classification
   'helpers/rfc395V3/sourceSeeds.ts: 1', // real-file-database; PGX-B frozen SQLite seed oracle for real PostgreSQL installs
   'helpers/rfc395V3Harness.ts: 1', // real-file-database
   // RFC-398 design §2.2 / §7.6: persistent epoch-1 WAL home shared with killed/restarted child processes; the paired PG process fixture is separate.
