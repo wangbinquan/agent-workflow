@@ -4,7 +4,7 @@ import { YAML } from 'bun'
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { assertSuccessfulTimingSource } from './refresh-backend-timings'
+import { assertSuccessfulTimingSource, E2E_CI_TIMING_SOURCES } from './refresh-backend-timings'
 import { resolveCiWorkSource } from './workflow-source'
 import {
   e2ePlatform,
@@ -326,7 +326,7 @@ if (import.meta.main) {
   const run: unknown = JSON.parse(
     command('gh', ['api', `repos/${repository}/actions/runs/${runId}`]),
   )
-  const sourceSha = assertSuccessfulTimingSource(run, repository, runId)
+  const sourceSha = assertSuccessfulTimingSource(run, repository, runId, E2E_CI_TIMING_SOURCES)
   const sourceDefinition = resolveCiWorkSource((path) =>
     command('git', ['show', `${sourceSha}:${path}`]),
   )

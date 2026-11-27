@@ -1,0 +1,168 @@
+# RFC-627: nightly complete backend dual-engine (SQLite + PostgreSQL 17) + coverage sweep.
+# Runs daily at 02:00 UTC (clear of all other nightlies from 03:30–10:17 UTC) and on demand
+# via workflow_dispatch, owning Codecov coverage uploads and full dual-engine timing weights.
+
+name: backend-full-nightly
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-backend-full:
+    name: Backend full dual-engine + coverage (shard ${{ matrix.shard }}/${{ matrix.shards }})
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+          ]
+        shards: [44]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Start PostgreSQL
+        id: postgres
+        shell: bash
+        run: bash .github/scripts/ci-postgresql-service.sh start awtest
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Cache bun package downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install current opencode (diagnostic compatibility coverage)
+        if: matrix.shard == 1
+        shell: bash
+        run: |
+          bun install -g opencode-ai@latest
+          export PATH="$HOME/.bun/bin:$PATH"
+          opencode --version
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Prepare job-local immutable test fixture cache
+        shell: bash
+        run: echo "AW_TEST_FIXTURE_CACHE_DIR=$RUNNER_TEMP/aw-test-fixtures" >> "$GITHUB_ENV"
+
+      - name: Derive reproducible backend test seed
+        shell: bash
+        run: |
+          seed=$(( (GITHUB_RUN_NUMBER * 10 + MATRIX_SHARD) % 2147483647 ))
+          if (( seed == 0 )); then seed=1; fi
+          echo "BUN_TEST_SEED=$seed" >> "$GITHUB_ENV"
+          echo "Backend test seed: $seed"
+        env:
+          MATRIX_SHARD: ${{ matrix.shard }}
+
+      - name: Assert the PostgreSQL service is reachable
+        shell: bash
+        run: |
+          cat > pg-probe.mjs <<'PROBE'
+          import { SQL } from 'bun'
+          const sql = new SQL(process.env.AW_TEST_POSTGRESQL_URL)
+          const rows = await sql`select 1 as ok`
+          if (rows[0]?.ok !== 1) {
+            console.error('postgres did not answer', rows)
+            process.exit(1)
+          }
+          console.log('postgres reachable')
+          await sql.close()
+          PROBE
+          bun pg-probe.mjs
+          rm -f pg-probe.mjs
+        env:
+          AW_TEST_POSTGRESQL_URL: postgresql://postgres:postgres@127.0.0.1:5432/awtest
+
+      - name: Test backend (full dual-engine + coverage)
+        shell: bash
+        run: bun scripts/ci/run-backend-shard.ts --tier=all --shard=${{ matrix.shard }}/${{ matrix.shards }} --seed="$BUN_TEST_SEED" --timings-out="$RUNNER_TEMP/backend-full-timings.json" --coverage
+        env:
+          AW_TEST_POSTGRESQL_URL: postgresql://postgres:postgres@127.0.0.1:5432/awtest
+          RUN_GIT_NETWORK: '1'
+          RUN_CHAOS: '1'
+
+      - name: Upload backend coverage to Codecov (nightly full shards)
+        uses: codecov/codecov-action@v6
+        with:
+          files: ./coverage/lcov.info
+          flags: backend-shard-${{ matrix.shard }}
+          name: backend-coverage-shard-${{ matrix.shard }}
+          fail_ci_if_error: false
+          disable_search: true
+
+      - name: Upload measured backend test timings (nightly full shards)
+        if: success()
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: backend-full-timings-${{ matrix.shard }}
+          path: ${{ runner.temp }}/backend-full-timings.json
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 14
+
+      - name: Stop PostgreSQL
+        if: always() && steps.postgres.outcome != '' && steps.postgres.outcome != 'skipped'
+        shell: bash
+        run: bash .github/scripts/ci-postgresql-service.sh stop

@@ -69,6 +69,78 @@ describe('design link scope', () => {
     ])
       expect(designLinkRange('push', event)).toBeNull()
     expect(designLinkRange('workflow_dispatch', payload)).toBeNull()
+
+    // RFC-627: explicit baseShaOverride uses event-specific immutable head commits,
+    // never GitHub's synthetic pull_request merge commit (`headSha`).
+    const overrideBase = 'c'.repeat(40)
+    const syntheticMergeSha = 'd'.repeat(40)
+    expect(
+      designLinkRange('push', payload, {
+        baseShaOverride: overrideBase,
+        headSha: syntheticMergeSha,
+      }),
+    ).toEqual({ base: overrideBase, head })
+    expect(designLinkRange('push', {}, { baseShaOverride: overrideBase, headSha: head })).toEqual({
+      base: overrideBase,
+      head,
+    })
+    expect(
+      designLinkRange(
+        'pull_request',
+        { pull_request: { base: { sha: base }, head: { sha: head } } },
+        { baseShaOverride: overrideBase, headSha: syntheticMergeSha },
+      ),
+    ).toEqual({ base: overrideBase, head })
+    expect(
+      designLinkRange('pull_request', {}, { baseShaOverride: overrideBase, headSha: head }),
+    ).toBeNull()
+    expect(
+      designLinkRange('workflow_dispatch', {}, { baseShaOverride: overrideBase, headSha: head }),
+    ).toEqual({ base: overrideBase, head })
+    expect(
+      designLinkRange('schedule', payload, { baseShaOverride: overrideBase, headSha: head }),
+    ).toBeNull()
+    for (const badOverride of ['not-a-sha', '0'.repeat(40), '--all', 'short']) {
+      expect(() =>
+        designLinkRange('push', payload, { baseShaOverride: badOverride, headSha: head }),
+      ).toThrow('Invalid AW_DESIGN_LINKS_BASE_SHA')
+    }
+  })
+
+  test('AW_DESIGN_LINKS_BASE_SHA=ALL forces a complete sweep without git diff, while valid SHA overrides compare from it', () => {
+    const allRepo = repository()
+    const allSelection = selectDesignLinkFiles({
+      eventName: 'push',
+      payload,
+      baseShaOverride: 'ALL',
+      headSha: head,
+      git: allRepo.git,
+    })
+    expect(allSelection.files).toEqual(docs)
+    expect(allSelection.reason).toContain('AW_DESIGN_LINKS_BASE_SHA=ALL')
+    expect(allRepo.calls).toHaveLength(1)
+
+    const overrideBase = 'c'.repeat(40)
+    const prRepo = repository({ changed: ['design/a.md'] })
+    const prSelection = selectDesignLinkFiles({
+      eventName: 'pull_request',
+      payload: { pull_request: { base: { sha: base }, head: { sha: head } } },
+      baseShaOverride: overrideBase,
+      headSha: 'd'.repeat(40),
+      git: prRepo.git,
+    })
+    expect(prSelection.files).toEqual(['design/a.md'])
+    expect(prRepo.calls).toContainEqual([
+      'diff',
+      '--name-only',
+      '--find-renames',
+      '--diff-filter=ACMRT',
+      '-z',
+      overrideBase,
+      head,
+      '--',
+      'design',
+    ])
   })
 
   test('checks surviving changed Markdown, including rename destinations, and excludes deletions and other scopes', () => {
@@ -200,15 +272,21 @@ describe('design link scope', () => {
 })
 
 describe('design link workflow wiring', () => {
-  test('main always checks local links, then changed external links; nightly retains the complete sweep', () => {
+  test('main docs, docs-fast-gate and nightly all enforce local links and expected external link scopes', () => {
     const root = resolve(import.meta.dir, '../../..')
+    const entry = parse(readFileSync(resolve(root, '.github/workflows/ci.yml'), 'utf8'))
     const main = parse(readFileSync(resolve(root, '.github/workflows/ci-work.yml'), 'utf8'))
     const nightly = parse(
       readFileSync(resolve(root, '.github/workflows/design-links-nightly.yml'), 'utf8'),
     )
-    for (const [job, all] of [
-      [main.jobs.docs, false],
-      [nightly.jobs['design-links'], true],
+    for (const [job, all, expectedBaseEnv] of [
+      [main.jobs.docs, false, '${{ inputs.links_base_sha }}'],
+      [
+        entry.jobs['docs-fast-gate'],
+        false,
+        "${{ needs['detect-changes'].outputs.links_base_sha }}",
+      ],
+      [nightly.jobs['design-links'], true, undefined],
     ] as const) {
       const localIndex = job.steps.findIndex(
         (step: { uses?: string }) => step.uses === 'lycheeverse/lychee-action@v2',
@@ -226,6 +304,9 @@ describe('design link workflow wiring', () => {
       )
       expect(externalIndex).toBeGreaterThan(localIndex)
       expect(job.steps[externalIndex].env.GITHUB_TOKEN).toBe('${{ secrets.GITHUB_TOKEN }}')
+      if (expectedBaseEnv !== undefined) {
+        expect(job.steps[externalIndex].env.AW_DESIGN_LINKS_BASE_SHA).toBe(expectedBaseEnv)
+      }
       expect(job.steps[externalIndex]['continue-on-error']).toBeUndefined()
       expect(job['continue-on-error']).toBeUndefined()
     }

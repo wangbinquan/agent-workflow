@@ -26,8 +26,26 @@ function commit(value: unknown): value is string {
 }
 
 /** Use the event's immutable endpoints, never a moving branch name or guessed parent. */
-export function designLinkRange(eventName: string, payload: unknown): DesignLinkRange | null {
+export function designLinkRange(
+  eventName: string,
+  payload: unknown,
+  options?: { baseShaOverride?: string; headSha?: string },
+): DesignLinkRange | null {
   const event = record(payload)
+  const override = options?.baseShaOverride
+  if (override !== undefined && override !== '') {
+    if (!commit(override)) throw new Error(`Invalid AW_DESIGN_LINKS_BASE_SHA: ${override}`)
+    let head: unknown
+    if (eventName === 'pull_request') {
+      // Never use GitHub's synthetic merge commit (`GITHUB_SHA`) on pull_request events.
+      head = record(record(event.pull_request).head).sha
+    } else if (eventName === 'push') {
+      head = commit(event.after) ? event.after : options?.headSha
+    } else if (eventName === 'workflow_dispatch') {
+      head = options?.headSha
+    }
+    return commit(head) ? { base: override, head } : null
+  }
   let base: unknown
   let head: unknown
   if (eventName === 'push') {
@@ -70,6 +88,8 @@ export function selectDesignLinkFiles(options: {
   eventName: string
   payload: unknown
   all?: boolean
+  baseShaOverride?: string
+  headSha?: string
   git: LinkCheckGit
 }): { files: string[]; reason: string } {
   const listed = options.git(['ls-files', '-z', '--', 'design'])
@@ -77,7 +97,15 @@ export function selectDesignLinkFiles(options: {
   const allFiles = designMarkdownPaths(listed.stdout)
   if (allFiles.length === 0) throw new Error('No tracked design Markdown found')
   if (options.all) return { files: allFiles, reason: 'explicit full external check' }
-  const range = designLinkRange(options.eventName, options.payload)
+  if (options.baseShaOverride === 'ALL')
+    return {
+      files: allFiles,
+      reason: 'fallback full external check (AW_DESIGN_LINKS_BASE_SHA=ALL)',
+    }
+  const range = designLinkRange(options.eventName, options.payload, {
+    baseShaOverride: options.baseShaOverride,
+    headSha: options.headSha,
+  })
   if (!range) return { files: allFiles, reason: 'event has no complete immutable comparison' }
   if (!ensureCommit(options.git, range.base) || !ensureCommit(options.git, range.head))
     return { files: allFiles, reason: 'comparison commit unavailable; checking all docs' }
@@ -132,6 +160,8 @@ export async function checkDesignLinks(options: {
   payload: unknown
   repository: string
   all?: boolean
+  baseShaOverride?: string
+  headSha?: string
   git: LinkCheckGit
   run: (args: readonly string[]) => Promise<number>
 }): Promise<{ files: string[]; reason: string }> {
@@ -153,6 +183,8 @@ if (import.meta.main) {
       payload: eventPath ? JSON.parse(readFileSync(eventPath, 'utf8')) : {},
       repository: process.env.GITHUB_REPOSITORY ?? '',
       all: args.includes('--all'),
+      baseShaOverride: process.env.AW_DESIGN_LINKS_BASE_SHA,
+      headSha: process.env.GITHUB_SHA,
       git(command) {
         const result = spawnSync('git', [...command], {
           encoding: 'utf8',

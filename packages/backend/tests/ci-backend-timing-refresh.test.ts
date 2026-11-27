@@ -3,19 +3,28 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
+  ALL_BACKEND_TIMING_SOURCES,
+  CORE_CI_TIMING_SOURCES,
+  E2E_CI_TIMING_SOURCES,
   assertSuccessfulTimingSource,
   assertSafeBackendTimingUploads,
   mergeBackendTimings,
+  parseRefreshBackendTimingsArgs,
   projectBackendTimings,
   readBackendTimingSource,
   type BackendTimingSourceReader,
+  type BackendTimingTier,
   type BackendTimings,
 } from '../../../scripts/ci/refresh-backend-timings'
 import {
   composeBackendTimings,
   parseBackendTimingCompositionArgs,
 } from '../../../scripts/ci/compose-backend-timings'
-import { CI_WORKFLOW_PATH, CI_WORK_JOB_IDS } from '../../../scripts/ci/workflow-source'
+import {
+  BACKEND_FULL_NIGHTLY_PATH,
+  CI_WORKFLOW_PATH,
+  CI_WORK_JOB_IDS,
+} from '../../../scripts/ci/workflow-source'
 
 const a = 'packages/backend/tests/a.test.ts'
 const b = 'packages/backend/tests/helpers/model/b.spec.ts'
@@ -40,6 +49,18 @@ describe('measured backend timing refresh', () => {
       'utf8',
     )
     expect(() => assertSafeBackendTimingUploads(workflow, 2)).not.toThrow()
+    const nightly = readFileSync(
+      resolve(import.meta.dir, '../../../.github/workflows/backend-full-nightly.yml'),
+      'utf8',
+    )
+    expect(() => assertSafeBackendTimingUploads(nightly, 2, 'test-backend-full')).not.toThrow()
+    expect(() =>
+      assertSafeBackendTimingUploads(
+        nightly.replace('if: success()', 'if: always()'),
+        2,
+        'test-backend-full',
+      ),
+    ).toThrow('failed samples')
   })
 
   test('merges complete whole-file measurements in stable path order, including spec files', () => {
@@ -109,6 +130,65 @@ describe('measured backend timing refresh', () => {
       expect(() =>
         assertSuccessfulTimingSource({ ...source, ...change }, 'owner/repo', 42),
       ).toThrow('successful complete')
+
+    // RFC-627: per-consumer allowlists isolate workflow/event pairs strictly.
+    expect(
+      assertSuccessfulTimingSource(
+        { ...source, event: 'workflow_dispatch' },
+        'owner/repo',
+        42,
+        CORE_CI_TIMING_SOURCES,
+      ),
+    ).toBe('a'.repeat(40))
+    expect(() =>
+      assertSuccessfulTimingSource(
+        { ...source, name: 'backend-full-nightly', event: 'schedule' },
+        'owner/repo',
+        42,
+        CORE_CI_TIMING_SOURCES,
+      ),
+    ).toThrow('successful complete')
+    expect(
+      assertSuccessfulTimingSource(
+        { ...source, name: 'backend-full-nightly', event: 'schedule' },
+        'owner/repo',
+        42,
+        ALL_BACKEND_TIMING_SOURCES,
+      ),
+    ).toBe('a'.repeat(40))
+    expect(
+      assertSuccessfulTimingSource(
+        { ...source, name: 'backend-full-nightly', event: 'workflow_dispatch' },
+        'owner/repo',
+        42,
+        ALL_BACKEND_TIMING_SOURCES,
+      ),
+    ).toBe('a'.repeat(40))
+    expect(assertSuccessfulTimingSource(source, 'owner/repo', 42, ALL_BACKEND_TIMING_SOURCES)).toBe(
+      'a'.repeat(40),
+    )
+    for (const badAll of [
+      { name: 'CI', event: 'schedule' },
+      { name: 'CI', event: 'workflow_dispatch' },
+      { name: 'backend-full-nightly', event: 'push' },
+    ]) {
+      expect(() =>
+        assertSuccessfulTimingSource(
+          { ...source, ...badAll },
+          'owner/repo',
+          42,
+          ALL_BACKEND_TIMING_SOURCES,
+        ),
+      ).toThrow('successful complete')
+    }
+    expect(
+      assertSuccessfulTimingSource(
+        { ...source, event: 'workflow_dispatch' },
+        'owner/repo',
+        42,
+        E2E_CI_TIMING_SOURCES,
+      ),
+    ).toBe('a'.repeat(40))
   })
 })
 
@@ -131,6 +211,8 @@ function sourceFixture(
       - name: Upload measured backend test timings (ubuntu shards)
         if: success() && matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v6
+        with:
+          name: backend-test-timings-\${{ matrix.shard }}
   test-backend-postgresql: {}
 `
   const state = {
@@ -188,6 +270,7 @@ describe('complete backend timing source reader', () => {
     expect(source.timings).toEqual({ version: 1, files: { [a]: 0, [b]: 23 } })
     expect(source.expectedFiles).toEqual([a, b])
     expect(source.provenance).toEqual({
+      tier: 'all',
       sourceRun: 101,
       sourceSha: '65'.padStart(40, '0'),
       sourceRepository: 'owner/repo',
@@ -275,6 +358,125 @@ describe('complete backend timing source reader', () => {
     expect(() => fixture.read()).toThrow('Unknown source')
     fixture.state.workflowFiles = {}
     expect(() => fixture.read()).toThrow('Missing source')
+  })
+
+  test('tier=core enforces 16-shard SQLite ci-work.yml and filters expectedFiles to core; tier=all accepts 44-shard nightly and rejects SQLite', () => {
+    const migrationFile =
+      'packages/backend/tests/rfc398-auto-upgrade-resume-postgresql-phase-frozen.test.ts'
+    const coreWorkYaml = [
+      'on:',
+      '  workflow_call:',
+      'jobs:',
+      '  test-backend:',
+      '    env:',
+      '      AW_TEST_PROVIDERS: sqlite',
+      '    strategy:',
+      '      matrix:',
+      '        os: [ubuntu-latest]',
+      `        shard: [${Array.from({ length: 16 }, (_, i) => i + 1).join(', ')}]`,
+      '        shards: [16]',
+      '    steps:',
+      '      - name: Upload measured backend test timings (ubuntu shards)',
+      "        if: success() && matrix.os == 'ubuntu-latest'",
+      '        uses: actions/upload-artifact@v6',
+      '        with:',
+      '          name: backend-core-timings-${{ matrix.shard }}',
+      ...CI_WORK_JOB_IDS.filter((id) => id !== 'test-backend').map((id) => `  ${id}: {}`),
+    ].join('\n')
+    const coreFixture = sourceFixture(301, { [a]: 15, [b]: 25 }, 16)
+    coreFixture.state.workflowFiles['.github/workflows/ci.yml'] =
+      `jobs:\n  full-ci:\n    uses: ./${CI_WORKFLOW_PATH}\n`
+    coreFixture.state.workflowFiles[CI_WORKFLOW_PATH] = coreWorkYaml
+    coreFixture.state.expectedFiles = [a, b, migrationFile]
+    coreFixture.state.run.event = 'workflow_dispatch'
+
+    const coreSource = readBackendTimingSource(
+      { ...coreFixture.request, tier: 'core' },
+      coreFixture.reader,
+    )
+    expect(coreSource.provenance).toMatchObject({
+      tier: 'core',
+      sourceWorkflowPath: CI_WORKFLOW_PATH,
+      sourceShards: 16,
+      sourceFiles: 2,
+      measuredMilliseconds: 40,
+    })
+    expect(coreSource.expectedFiles).toEqual([a, b])
+
+    // Reading a 16-shard SQLite core run under tier=all must fail closed.
+    coreFixture.state.run.event = 'push'
+    expect(() =>
+      readBackendTimingSource({ ...coreFixture.request, tier: 'all' }, coreFixture.reader),
+    ).toThrow('must not narrow AW_TEST_PROVIDERS to sqlite')
+
+    // Reading a 44-shard dual-engine run under tier=core must fail closed.
+    const dualFixture = sourceFixture(302, { [a]: 10, [b]: 20 }, 44)
+    expect(() =>
+      readBackendTimingSource({ ...dualFixture.request, tier: 'core' }, dualFixture.reader),
+    ).toThrow('16 SQLite shards')
+
+    // Reading a 44-shard backend-full-nightly run under tier=all succeeds.
+    const nightlyFixture = sourceFixture(303, { [a]: 11, [b]: 22, [migrationFile]: 33 }, 44)
+    nightlyFixture.state.run.name = 'backend-full-nightly'
+    nightlyFixture.state.run.event = 'schedule'
+    nightlyFixture.state.workflowFiles[BACKEND_FULL_NIGHTLY_PATH] = [
+      'on:',
+      '  schedule:',
+      "    - cron: '0 2 * * *'",
+      '  workflow_dispatch:',
+      'jobs:',
+      '  test-backend-full:',
+      '    strategy:',
+      '      matrix:',
+      `        shard: [${Array.from({ length: 44 }, (_, i) => i + 1).join(', ')}]`,
+      '        shards: [44]',
+      '    steps:',
+      '      - name: Upload measured backend test timings (nightly full shards)',
+      '        if: success()',
+      '        uses: actions/upload-artifact@v6',
+      '        with:',
+      '          name: backend-full-timings-${{ matrix.shard }}',
+    ].join('\n')
+    const nightlySource = readBackendTimingSource(
+      { ...nightlyFixture.request, tier: 'all' },
+      nightlyFixture.reader,
+    )
+    expect(nightlySource.provenance).toMatchObject({
+      tier: 'all',
+      sourceWorkflowPath: BACKEND_FULL_NIGHTLY_PATH,
+      sourceShards: 44,
+      sourceFiles: 3,
+      measuredMilliseconds: 66,
+    })
+  })
+
+  test('refresh CLI argument parser supports --tier core/all and rejects invalid tiers', () => {
+    expect(parseRefreshBackendTimingsArgs(['dir', '123', 'out.json'])).toEqual({
+      tier: 'all',
+      artifacts: 'dir',
+      runId: 123,
+      output: 'out.json',
+    })
+    expect(parseRefreshBackendTimingsArgs(['--tier', 'core', 'dir', '123', 'out.json'])).toEqual({
+      tier: 'core',
+      artifacts: 'dir',
+      runId: 123,
+      output: 'out.json',
+    })
+    expect(parseRefreshBackendTimingsArgs(['--tier=all', 'dir', '123', 'out.json'])).toEqual({
+      tier: 'all',
+      artifacts: 'dir',
+      runId: 123,
+      output: 'out.json',
+    })
+    for (const args of [
+      ['--tier', 'migration', 'dir', '123', 'out.json'],
+      ['--tier=invalid', 'dir', '123', 'out.json'],
+      ['--tier'],
+      ['dir', 'abc', 'out.json'],
+    ]) {
+      expect(() => parseRefreshBackendTimingsArgs(args)).toThrow()
+    }
   })
 
   test('every raw shard and the entire source population are checked before returning a source', () => {
@@ -449,7 +651,7 @@ describe('composition of complete backend timing sources', () => {
       expect(() => composeBackendTimings(sources, { targetSha, files })).toThrow()
   })
 
-  test('CLI arguments require at least two explicit distinct raw artifact sources', () => {
+  test('CLI arguments support --tier core/all and require at least two explicit distinct raw artifact sources', () => {
     expect(
       parseBackendTimingCompositionArgs([
         'review/output.json',
@@ -459,12 +661,41 @@ describe('composition of complete backend timing sources', () => {
         '202',
       ]),
     ).toEqual({
+      tier: 'all',
       output: 'review/output.json',
       sources: [
         { artifactsDirectory: 'first raw directory', runId: 101 },
         { artifactsDirectory: 'second raw directory', runId: 202 },
       ],
     })
+    expect(
+      parseBackendTimingCompositionArgs([
+        '--tier',
+        'core',
+        'review/core.json',
+        'first',
+        '101',
+        'second',
+        '202',
+      ]),
+    ).toEqual({
+      tier: 'core',
+      output: 'review/core.json',
+      sources: [
+        { artifactsDirectory: 'first', runId: 101 },
+        { artifactsDirectory: 'second', runId: 202 },
+      ],
+    })
+    expect(
+      parseBackendTimingCompositionArgs([
+        '--tier=core',
+        'review/core.json',
+        'first',
+        '101',
+        'second',
+        '202',
+      ]).tier,
+    ).toBe('core')
     for (const args of [
       [],
       ['out'],
@@ -478,7 +709,55 @@ describe('composition of complete backend timing sources', () => {
       ['out', 'a', '1', 'b', '1.5'],
       ['out', 'a', '1', 'b', '1e2'],
       ['out', 'a', '1', 'b', '9007199254740992'],
+      ['--tier', 'migration', 'out', 'a', '1', 'b', '2'],
+      ['--tier=bad', 'out', 'a', '1', 'b', '2'],
     ])
       expect(() => parseBackendTimingCompositionArgs(args)).toThrow()
+  })
+
+  test('tier-aware composition locks 16-shard core vs 44-shard all and forbids cross-tier mixing', () => {
+    const makeCoreSource = (runId: number, files: Record<string, number>) => {
+      const f = sourceFixture(runId, files, 16)
+      f.state.workflowFiles['.github/workflows/ci.yml'] =
+        `jobs:\n  full-ci:\n    uses: ./${CI_WORKFLOW_PATH}\n`
+      f.state.workflowFiles[CI_WORKFLOW_PATH] = [
+        'on:',
+        '  workflow_call:',
+        'jobs:',
+        '  test-backend:',
+        '    env:',
+        '      AW_TEST_PROVIDERS: sqlite',
+        '    strategy:',
+        '      matrix:',
+        '        os: [ubuntu-latest]',
+        `        shard: [${Array.from({ length: 16 }, (_, i) => i + 1).join(', ')}]`,
+        '        shards: [16]',
+        '    steps:',
+        '      - name: Upload measured backend test timings (ubuntu shards)',
+        "        if: success() && matrix.os == 'ubuntu-latest'",
+        '        uses: actions/upload-artifact@v6',
+        '        with:',
+        '          name: backend-core-timings-${{ matrix.shard }}',
+        ...CI_WORK_JOB_IDS.filter((id) => id !== 'test-backend').map((id) => `  ${id}: {}`),
+      ].join('\n')
+      return readBackendTimingSource({ ...f.request, tier: 'core' }, f.reader)
+    }
+
+    const core1 = makeCoreSource(401, { [a]: 10, [b]: 30 })
+    const core2 = makeCoreSource(402, { [a]: 25, [b]: 20 })
+    const full1 = sourceFixture(403, { [a]: 100, [b]: 200 }, 44).read()
+    const target = { targetSha, files: [a, b] }
+
+    const composedCore = composeBackendTimings([core1, core2], target, 'core')
+    expect(composedCore.provenance.tier).toBe('core')
+    expect(composedCore.timings).toEqual({ version: 1, files: { [a]: 25, [b]: 30 } })
+
+    // Cross-tier mixing must fail closed in both directions.
+    expect(() => composeBackendTimings([core1, full1], target, 'core')).toThrow('16-shard core')
+    expect(() => composeBackendTimings([core1, full1], target, 'all')).toThrow('44-shard all')
+    expect(() => composeBackendTimings([core1, core2], target, 'all')).toThrow('44-shard all')
+    expect(() =>
+      composeBackendTimings([core1, core2], target, 'migration' as unknown as BackendTimingTier),
+    ).toThrow('Invalid backend timing composition tier')
   })
 })

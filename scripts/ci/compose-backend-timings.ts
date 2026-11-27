@@ -1,7 +1,9 @@
-// RFC-623: prepare reviewed scheduling weights from complete green sources.
+// RFC-623 / RFC-627: prepare reviewed scheduling weights from complete green sources.
 // Automatic CI collection continues to publish each run's own measurements.
+// Zero third-party dependencies: runs directly under Bun in no-install CI jobs.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import { BACKEND_CORE_SHARDS, BACKEND_FULL_SHARDS } from './backend-shards'
 import {
   assertBackendTestPopulation,
   loadBackendTimingSource,
@@ -9,30 +11,46 @@ import {
   readBackendTimingTarget,
   type BackendTimingProvenance,
   type BackendTimingSource,
+  type BackendTimingTier,
 } from './refresh-backend-timings'
-import { CI_WORKFLOW_PATH } from './workflow-source'
+import { BACKEND_FULL_NIGHTLY_PATH, CI_WORKFLOW_PATH } from './workflow-source'
 
 export interface BackendTimingTarget {
   targetSha: string
   files: readonly string[]
 }
 
-function checkedSource(source: BackendTimingSource) {
+function expectedShardsForTier(tier: BackendTimingTier): number {
+  return tier === 'core' ? BACKEND_CORE_SHARDS : BACKEND_FULL_SHARDS
+}
+
+function checkedSource(source: BackendTimingSource, expectedTier: BackendTimingTier) {
   const metadata = source?.provenance
+  const tier: BackendTimingTier = metadata?.tier ?? 'all'
+  const requiredShards = expectedShardsForTier(expectedTier)
+  const allowedWorkflows =
+    expectedTier === 'core'
+      ? [CI_WORKFLOW_PATH]
+      : ['.github/workflows/ci.yml', CI_WORKFLOW_PATH, BACKEND_FULL_NIGHTLY_PATH]
+
   if (
     !metadata ||
+    (tier !== 'core' && tier !== 'all') ||
+    tier !== expectedTier ||
     !Number.isSafeInteger(metadata.sourceRun) ||
     metadata.sourceRun < 1 ||
     typeof metadata.sourceSha !== 'string' ||
     !/^[0-9a-f]{40}$/.test(metadata.sourceSha) ||
     typeof metadata.sourceRepository !== 'string' ||
     !/^[^/\s]+\/[^/\s]+$/.test(metadata.sourceRepository) ||
-    !['.github/workflows/ci.yml', CI_WORKFLOW_PATH].includes(metadata.sourceWorkflowPath) ||
+    !allowedWorkflows.includes(metadata.sourceWorkflowPath) ||
     !Number.isSafeInteger(metadata.finalRunAttempt) ||
     metadata.finalRunAttempt < 1 ||
-    metadata.sourceShards !== 44
+    metadata.sourceShards !== requiredShards
   )
-    throw new Error('Composition requires complete 44-shard backend timing sources')
+    throw new Error(
+      `Composition requires complete ${requiredShards}-shard ${expectedTier} backend timing sources`,
+    )
 
   // read/load already validates the raw source shards. Recheck the merged map
   // against that source's entire tree, including files removed from the target.
@@ -46,6 +64,7 @@ function checkedSource(source: BackendTimingSource) {
   )
     throw new Error('Backend timing source metadata disagrees with its complete measurements')
   const provenance: BackendTimingProvenance = {
+    tier,
     sourceRun: metadata.sourceRun,
     sourceSha: metadata.sourceSha,
     sourceRepository: metadata.sourceRepository,
@@ -61,14 +80,18 @@ function checkedSource(source: BackendTimingSource) {
 export function composeBackendTimings(
   sources: readonly BackendTimingSource[],
   target: BackendTimingTarget,
+  tier?: BackendTimingTier,
 ) {
   if (!Array.isArray(sources) || sources.length < 2)
     throw new Error('Composition requires at least two distinct source runs')
   if (typeof target?.targetSha !== 'string' || !/^[0-9a-f]{40}$/.test(target.targetSha))
     throw new Error('Invalid committed timing target SHA')
+  const resolvedTier: BackendTimingTier = tier ?? sources[0]?.provenance?.tier ?? 'all'
+  if (resolvedTier !== 'core' && resolvedTier !== 'all')
+    throw new Error(`Invalid backend timing composition tier: ${String(resolvedTier)}`)
   const targetFiles = assertBackendTestPopulation(target.files)
   const checked = sources
-    .map(checkedSource)
+    .map((source) => checkedSource(source, resolvedTier))
     .sort((a, b) => a.provenance.sourceRun - b.provenance.sourceRun)
   if (new Set(checked.map((source) => source.provenance.sourceRun)).size !== checked.length)
     throw new Error(
@@ -102,6 +125,7 @@ export function composeBackendTimings(
   return {
     timings: { version: 1 as const, files },
     provenance: {
+      tier: resolvedTier,
       aggregation: 'per-file-maximum' as const,
       targetSha: target.targetSha,
       sourceRepository: checked[0]!.provenance.sourceRepository,
@@ -117,15 +141,32 @@ export function composeBackendTimings(
 }
 
 export function parseBackendTimingCompositionArgs(args: readonly string[]) {
-  const [output] = args
-  if (!output || args.length < 5 || (args.length - 1) % 2 !== 0)
+  let tier: BackendTimingTier = 'all'
+  const positional: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]!
+    if (arg === '--tier') {
+      const value = args[++index]
+      if (value !== 'core' && value !== 'all')
+        throw new Error(`Invalid --tier value: ${value ?? '(missing)'}`)
+      tier = value
+    } else if (arg.startsWith('--tier=')) {
+      const value = arg.slice('--tier='.length)
+      if (value !== 'core' && value !== 'all') throw new Error(`Invalid --tier value: ${value}`)
+      tier = value
+    } else {
+      positional.push(arg)
+    }
+  }
+  const [output] = positional
+  if (!output || positional.length < 5 || (positional.length - 1) % 2 !== 0)
     throw new Error(
-      'Usage: bun scripts/ci/compose-backend-timings.ts OUTPUT_JSON ARTIFACTS_DIR RUN_ID [ARTIFACTS_DIR RUN_ID ...] (at least two sources)',
+      'Usage: bun scripts/ci/compose-backend-timings.ts [--tier <core|all>] OUTPUT_JSON ARTIFACTS_DIR RUN_ID [ARTIFACTS_DIR RUN_ID ...] (at least two sources)',
     )
   const sources: { artifactsDirectory: string; runId: number }[] = []
-  for (let index = 1; index < args.length; index += 2) {
-    const artifactsDirectory = args[index]!
-    const runArg = args[index + 1]!
+  for (let index = 1; index < positional.length; index += 2) {
+    const artifactsDirectory = positional[index]!
+    const runArg = positional[index + 1]!
     const runId = Number(runArg)
     if (!artifactsDirectory || !/^\d+$/.test(runArg) || !Number.isSafeInteger(runId) || runId < 1)
       throw new Error('Each source requires an artifact directory and a positive integer run ID')
@@ -133,18 +174,19 @@ export function parseBackendTimingCompositionArgs(args: readonly string[]) {
   }
   if (new Set(sources.map((source) => source.runId)).size !== sources.length)
     throw new Error('Composition requires distinct source run IDs')
-  return { output, sources }
+  return { tier, output, sources }
 }
 
 if (import.meta.main) {
-  const { output, sources } = parseBackendTimingCompositionArgs(process.argv.slice(2))
-  const target = readBackendTimingTarget()
+  const { tier, output, sources } = parseBackendTimingCompositionArgs(process.argv.slice(2))
+  const target = readBackendTimingTarget(tier)
   const repository = process.env.GITHUB_REPOSITORY ?? 'wangbinquan/agent-workflow'
   const result = composeBackendTimings(
     sources.map(({ artifactsDirectory, runId }) =>
-      loadBackendTimingSource(artifactsDirectory, runId, repository),
+      loadBackendTimingSource(artifactsDirectory, runId, repository, tier),
     ),
     target,
+    tier,
   )
   const destination = resolve(output)
   mkdirSync(dirname(destination), { recursive: true })

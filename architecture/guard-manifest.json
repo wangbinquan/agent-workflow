@@ -799,7 +799,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc359-w8-ci-dual-engine-wiring.test.ts",
       "id": "rfc359-w8-ci-dual-engine-wiring",
-      "lines": 460,
+      "lines": 572,
       "mechanism": "ast",
       "minCorpusFiles": 1,
       "negativeFixture": true,

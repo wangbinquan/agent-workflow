@@ -1,8 +1,46 @@
-// RFC-611: merge measured whole-file durations without publishing partial or invented weights.
+// RFC-611 / RFC-627: merge measured whole-file durations without publishing partial or invented weights.
+// Zero third-party dependencies: runs directly under Bun in no-install CI jobs.
+import { YAML } from 'bun'
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { resolveCiWorkSource } from './workflow-source'
+import {
+  BACKEND_CORE_SHARDS,
+  BACKEND_FULL_SHARDS,
+  BACKEND_TEST_PATH_PATTERN,
+  filterBackendTestsByTier,
+  isValidBackendTestPath,
+} from './backend-shards'
+import {
+  BACKEND_FULL_NIGHTLY_PATH,
+  CI_WORKFLOW_PATH,
+  resolveCiWorkSource,
+  resolveNightlyBackendSource,
+} from './workflow-source'
+
+export type BackendTimingTier = 'core' | 'all'
+
+export interface TimingSourceRule {
+  readonly workflowName: string
+  readonly allowedEvents: readonly string[]
+}
+
+export const LEGACY_CI_TIMING_SOURCES: readonly TimingSourceRule[] = Object.freeze([
+  { workflowName: 'CI', allowedEvents: ['push'] },
+])
+
+export const CORE_CI_TIMING_SOURCES: readonly TimingSourceRule[] = Object.freeze([
+  { workflowName: 'CI', allowedEvents: ['push', 'workflow_dispatch'] },
+])
+
+export const ALL_BACKEND_TIMING_SOURCES: readonly TimingSourceRule[] = Object.freeze([
+  { workflowName: 'backend-full-nightly', allowedEvents: ['schedule', 'workflow_dispatch'] },
+  { workflowName: 'CI', allowedEvents: ['push'] },
+])
+
+export const E2E_CI_TIMING_SOURCES: readonly TimingSourceRule[] = Object.freeze([
+  { workflowName: 'CI', allowedEvents: ['push', 'workflow_dispatch'] },
+])
 
 export interface BackendTimings {
   version: 1
@@ -15,6 +53,7 @@ export interface TimingShard {
 }
 
 export interface BackendTimingProvenance {
+  tier: BackendTimingTier
   sourceRun: number
   sourceSha: string
   sourceRepository: string
@@ -35,6 +74,7 @@ export interface BackendTimingSourceRequest {
   artifactsDirectory: string
   runId: number
   repository: string
+  tier?: BackendTimingTier
 }
 
 export interface BackendTimingSourceReader {
@@ -44,24 +84,13 @@ export interface BackendTimingSourceReader {
   readShards(artifactsDirectory: string): readonly TimingShard[]
 }
 
-const backendTestPath = /^packages\/backend\/tests\/(?:[^/]+\/)*[^/]+\.(?:test|spec)\.ts$/
-
-function validPath(path: string): boolean {
-  return (
-    backendTestPath.test(path) &&
-    !path.split('/').some((part) => part === '.' || part === '..') &&
-    !path.includes('\\') &&
-    ![...path].some((character) => character.charCodeAt(0) < 32)
-  )
-}
-
 export function assertBackendTestPopulation(expectedFiles: readonly string[]): Set<string> {
   if (!Array.isArray(expectedFiles)) throw new Error('Source test population must be an array')
   const expected = new Set(expectedFiles)
   if (expected.size === 0 || expected.size !== expectedFiles.length)
     throw new Error('Source test population is empty or duplicated')
   for (const path of expected)
-    if (typeof path !== 'string' || !validPath(path))
+    if (typeof path !== 'string' || !isValidBackendTestPath(path))
       throw new Error(`Invalid source path: ${path}`)
   return expected
 }
@@ -92,7 +121,7 @@ export function mergeBackendTimings(
     )
       throw new Error(`Unsupported timing format in shard ${shard}`)
     for (const [path, ms] of Object.entries(document.files)) {
-      if (!validPath(path) || !expected.has(path))
+      if (!isValidBackendTestPath(path) || !expected.has(path))
         throw new Error(`Unexpected measured file: ${path}`)
       if (files.has(path)) throw new Error(`Duplicate measured file: ${path}`)
       if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0)
@@ -124,7 +153,12 @@ export function projectBackendTimings(measured: BackendTimings, currentFiles: re
   }
 }
 
-export function assertSuccessfulTimingSource(value: unknown, repository: string, runId: number) {
+export function assertSuccessfulTimingSource(
+  value: unknown,
+  repository: string,
+  runId: number,
+  allowedSources: readonly TimingSourceRule[] = LEGACY_CI_TIMING_SOURCES,
+): string {
   const run = value as {
     id?: unknown
     name?: unknown
@@ -135,34 +169,110 @@ export function assertSuccessfulTimingSource(value: unknown, repository: string,
     head_sha?: unknown
     head_repository?: { full_name?: unknown }
   } | null
+  const matchesAllowed =
+    run !== null &&
+    typeof run?.name === 'string' &&
+    typeof run?.event === 'string' &&
+    allowedSources.some(
+      (rule) => rule.workflowName === run.name && rule.allowedEvents.includes(run.event as string),
+    )
   if (
     !run ||
+    !matchesAllowed ||
     run.id !== runId ||
-    run.name !== 'CI' ||
     run.status !== 'completed' ||
     run.conclusion !== 'success' ||
-    run.event !== 'push' ||
     run.head_branch !== 'main' ||
     run.head_repository?.full_name !== repository ||
     typeof run.head_sha !== 'string' ||
     !/^[0-9a-f]{40}$/.test(run.head_sha)
   )
-    throw new Error('Timing source must be a successful complete main push CI in this repository')
+    throw new Error('Timing source must be a successful complete main CI run in this repository')
   return run.head_sha
 }
 
+interface ParsedWorkflowStep {
+  name?: unknown
+  if?: unknown
+  uses?: unknown
+  env?: Record<string, unknown>
+  with?: Record<string, unknown>
+}
+
+interface ParsedWorkflowJob {
+  env?: Record<string, unknown>
+  strategy?: { matrix?: Record<string, unknown> }
+  steps?: ParsedWorkflowStep[]
+}
+
+function parseWorkflowJob(workflow: string, jobId: string): ParsedWorkflowJob | null {
+  try {
+    const parsed = YAML.parse(workflow) as { jobs?: Record<string, ParsedWorkflowJob> } | null
+    const job = parsed?.jobs?.[jobId]
+    if (job && typeof job === 'object' && !Array.isArray(job)) return job
+  } catch {
+    // Fall through to legacy partial-snippet parser used by older unit fixtures.
+  }
+  return null
+}
+
+function jobHasSqliteProviderNarrowing(job: ParsedWorkflowJob | null): boolean {
+  if (!job) return false
+  if (job.env && String(job.env['AW_TEST_PROVIDERS'] ?? '') === 'sqlite') return true
+  if (Array.isArray(job.steps)) {
+    for (const step of job.steps) {
+      if (step?.env && String(step.env['AW_TEST_PROVIDERS'] ?? '') === 'sqlite') return true
+    }
+  }
+  return false
+}
+
+function readJobShardCount(job: ParsedWorkflowJob | null): number | null {
+  const shards = job?.strategy?.matrix?.shards
+  if (Array.isArray(shards) && shards.length === 1 && typeof shards[0] === 'number')
+    return shards[0]
+  return null
+}
+
 /** Legacy failed uploads are safe only when the source succeeded on its first attempt. */
-export function assertSafeBackendTimingUploads(workflow: string, finalAttempt: number): void {
+export function assertSafeBackendTimingUploads(
+  workflow: string,
+  finalAttempt: number,
+  jobId = 'test-backend',
+): void {
   if (!Number.isSafeInteger(finalAttempt) || finalAttempt < 1)
     throw new Error('Invalid source run attempt')
   if (finalAttempt === 1) return
-  const backendJob = workflow
-    .split('\n  test-backend:')[1]
-    ?.split('\n  test-backend-postgresql:')[0]
+
+  const job = parseWorkflowJob(workflow, jobId)
+  if (job && Array.isArray(job.steps)) {
+    const hasOsMatrix = Array.isArray(job.strategy?.matrix?.os)
+    const upload = job.steps.find(
+      (step) =>
+        typeof step?.uses === 'string' &&
+        step.uses.startsWith('actions/upload-artifact@') &&
+        typeof step.with?.name === 'string' &&
+        /^backend-(?:test|core|full)-timings-/.test(step.with.name),
+    )
+    const condition = typeof upload?.if === 'string' ? upload.if.trim() : ''
+    const expected = hasOsMatrix ? "success() && matrix.os == 'ubuntu-latest'" : 'success()'
+    if (condition !== expected) {
+      throw new Error(
+        'Legacy rerun artifacts may retain failed samples; require success-only uploads',
+      )
+    }
+    return
+  }
+
+  // Fallback for minimal non-YAML text fragments in unit tests.
+  const backendJob = workflow.split(`\n  ${jobId}:`)[1]?.split('\n  test-backend-postgresql:')[0]
   const upload = backendJob
-    ?.split('      - name: Upload measured backend test timings (ubuntu shards)')[1]
+    ?.split('      - name: Upload measured backend test timings')[1]
     ?.split('\n      - name:')[0]
-  if (!upload?.includes("        if: success() && matrix.os == 'ubuntu-latest'\n"))
+  if (
+    !upload?.includes("        if: success() && matrix.os == 'ubuntu-latest'\n") &&
+    !upload?.includes('        if: success()\n')
+  )
     throw new Error(
       'Legacy rerun artifacts may retain failed samples; require success-only uploads',
     )
@@ -174,35 +284,72 @@ export function readBackendTimingSource(
   reader: BackendTimingSourceReader,
 ): BackendTimingSource {
   const { artifactsDirectory, runId, repository } = request
+  const tier: BackendTimingTier = request.tier ?? 'all'
+  if (tier !== 'core' && tier !== 'all') throw new Error(`Invalid backend timing tier: ${tier}`)
   if (!Number.isSafeInteger(runId) || runId < 1)
     throw new Error('Invalid backend timing source run ID')
   const sourceRun = reader.readRun(repository, runId)
-  const sourceSha = assertSuccessfulTimingSource(sourceRun, repository, runId)
+  const allowedSources = tier === 'core' ? CORE_CI_TIMING_SOURCES : ALL_BACKEND_TIMING_SOURCES
+  const sourceSha = assertSuccessfulTimingSource(sourceRun, repository, runId, allowedSources)
+  const runName = (sourceRun as { name: string }).name
   const finalRunAttempt = (sourceRun as { run_attempt: number }).run_attempt
-  const sourceDefinition = resolveCiWorkSource((path) => reader.readSourceFile(sourceSha, path))
+
+  const readFile = (path: string) => reader.readSourceFile(sourceSha, path)
+  const isNightly = runName === 'backend-full-nightly'
+  const jobId = isNightly ? 'test-backend-full' : 'test-backend'
+  const sourceDefinition = isNightly
+    ? resolveNightlyBackendSource(readFile)
+    : resolveCiWorkSource(readFile)
   const sourceWorkflow = sourceDefinition.workflow
-  assertSafeBackendTimingUploads(sourceWorkflow, finalRunAttempt)
-  const backendJob = sourceWorkflow
-    .split('\n  test-backend:')[1]
-    ?.split('\n  test-backend-postgresql:')[0]
-  const countText = backendJob?.match(/\n\s+shards: \[(\d+)\]/)?.[1]
-  if (!countText) throw new Error('Source backend shard matrix is missing')
-  const expectedFiles = [...reader.readSourceTests(sourceSha)]
+  assertSafeBackendTimingUploads(sourceWorkflow, finalRunAttempt, jobId)
+
+  const parsedJob = parseWorkflowJob(sourceWorkflow, jobId)
+  const shardCount = readJobShardCount(parsedJob)
+  if (!shardCount) throw new Error('Source backend shard matrix is missing')
+
+  const hasSqliteOnly = jobHasSqliteProviderNarrowing(parsedJob)
+  if (tier === 'core') {
+    if (
+      sourceDefinition.path !== CI_WORKFLOW_PATH ||
+      shardCount !== BACKEND_CORE_SHARDS ||
+      !hasSqliteOnly
+    ) {
+      throw new Error(
+        `Core backend timing source must be ${CI_WORKFLOW_PATH} with ${BACKEND_CORE_SHARDS} SQLite shards`,
+      )
+    }
+  } else {
+    if (hasSqliteOnly) {
+      throw new Error('Full backend timing source must not narrow AW_TEST_PROVIDERS to sqlite')
+    }
+    if (
+      isNightly &&
+      (sourceDefinition.path !== BACKEND_FULL_NIGHTLY_PATH || shardCount !== BACKEND_FULL_SHARDS)
+    ) {
+      throw new Error(
+        `Nightly backend timing source must be ${BACKEND_FULL_NIGHTLY_PATH} with ${BACKEND_FULL_SHARDS} shards`,
+      )
+    }
+  }
+
+  const rawFiles = [...reader.readSourceTests(sourceSha)]
+  const expectedFiles = tier === 'core' ? filterBackendTestsByTier(rawFiles, 'core') : rawFiles
   const timings = mergeBackendTimings(
     reader.readShards(artifactsDirectory),
     expectedFiles,
-    Number(countText),
+    shardCount,
   )
   return {
     timings,
     expectedFiles,
     provenance: {
+      tier,
       sourceRun: runId,
       sourceSha,
       sourceRepository: repository,
       sourceWorkflowPath: sourceDefinition.path,
       finalRunAttempt,
-      sourceShards: Number(countText),
+      sourceShards: shardCount,
       sourceFiles: Object.keys(timings.files).length,
       measuredMilliseconds: Object.values(timings.files).reduce((sum, ms) => sum + ms, 0),
     },
@@ -219,50 +366,106 @@ function command(program: string, args: string[]): string {
 function treeTests(ref: string): string[] {
   return command('git', ['ls-tree', '-rz', '--name-only', ref, '--', 'packages/backend/tests'])
     .split('\0')
-    .filter((path) => backendTestPath.test(path))
+    .filter((path) => BACKEND_TEST_PATH_PATTERN.test(path))
 }
 
 /** Capture the committed target once; later source reads must not follow a moving HEAD. */
-export function readBackendTimingTarget(): { targetSha: string; files: string[] } {
+export function readBackendTimingTarget(tier: BackendTimingTier = 'all'): {
+  targetSha: string
+  files: string[]
+} {
   const targetSha = command('git', ['rev-parse', 'HEAD']).trim()
-  return { targetSha, files: treeTests(targetSha) }
+  return { targetSha, files: filterBackendTestsByTier(treeTests(targetSha), tier) }
+}
+
+function artifactLayout(
+  tier: BackendTimingTier,
+  runName: string,
+): {
+  dirPrefix: string
+  fileName: string
+} {
+  if (tier === 'core') {
+    return { dirPrefix: 'backend-core-timings-', fileName: 'backend-core-timings.json' }
+  }
+  if (runName === 'backend-full-nightly') {
+    return { dirPrefix: 'backend-full-timings-', fileName: 'backend-full-timings.json' }
+  }
+  return { dirPrefix: 'backend-test-timings-', fileName: 'backend-test-timings.json' }
 }
 
 export function loadBackendTimingSource(
   artifactsDirectory: string,
   runId: number,
   repository: string,
+  tier: BackendTimingTier = 'all',
 ): BackendTimingSource {
+  let observedRunName = 'CI'
   return readBackendTimingSource(
-    { artifactsDirectory, runId, repository },
+    { artifactsDirectory, runId, repository, tier },
     {
-      readRun: (repository, runId) =>
-        JSON.parse(command('gh', ['api', `repos/${repository}/actions/runs/${runId}`])) as unknown,
+      readRun: (repo, id) => {
+        const parsed = JSON.parse(command('gh', ['api', `repos/${repo}/actions/runs/${id}`])) as {
+          name?: unknown
+        }
+        if (typeof parsed?.name === 'string') observedRunName = parsed.name
+        return parsed
+      },
       readSourceFile: (sourceSha, path) => command('git', ['show', `${sourceSha}:${path}`]),
       readSourceTests: treeTests,
-      readShards: (directory) =>
-        readdirSync(directory, { withFileTypes: true })
-          .filter((entry) => entry.isDirectory() && /^backend-test-timings-\d+$/.test(entry.name))
+      readShards: (directory) => {
+        const { dirPrefix, fileName } = artifactLayout(tier, observedRunName)
+        const dirPattern = new RegExp(`^${dirPrefix.replaceAll('-', '\\-')}(\\d+)$`)
+        return readdirSync(directory, { withFileTypes: true })
+          .filter((entry) => entry.isDirectory() && dirPattern.test(entry.name))
           .map((entry) => ({
-            shard: Number(entry.name.slice('backend-test-timings-'.length)),
+            shard: Number(entry.name.slice(dirPrefix.length)),
             data: JSON.parse(
-              readFileSync(join(directory, entry.name, 'backend-test-timings.json'), 'utf8'),
+              readFileSync(join(directory, entry.name, fileName), 'utf8'),
             ) as unknown,
-          })),
+          }))
+      },
     },
   )
 }
 
-if (import.meta.main) {
-  const [artifacts, runArg, output] = process.argv.slice(2)
-  if (!artifacts || !runArg || !/^\d+$/.test(runArg) || !output)
+export function parseRefreshBackendTimingsArgs(args: readonly string[]): {
+  tier: BackendTimingTier
+  artifacts: string
+  runId: number
+  output: string
+} {
+  let tier: BackendTimingTier = 'all'
+  const positional: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]!
+    if (arg === '--tier') {
+      const value = args[++index]
+      if (value !== 'core' && value !== 'all')
+        throw new Error(`Invalid --tier value: ${value ?? '(missing)'}`)
+      tier = value
+    } else if (arg.startsWith('--tier=')) {
+      const value = arg.slice('--tier='.length)
+      if (value !== 'core' && value !== 'all') throw new Error(`Invalid --tier value: ${value}`)
+      tier = value
+    } else {
+      positional.push(arg)
+    }
+  }
+  const [artifacts, runArg, output] = positional
+  if (positional.length !== 3 || !artifacts || !runArg || !/^\d+$/.test(runArg) || !output)
     throw new Error(
-      'Usage: bun scripts/ci/refresh-backend-timings.ts ARTIFACTS_DIR RUN_ID OUTPUT_JSON',
+      'Usage: bun scripts/ci/refresh-backend-timings.ts [--tier <core|all>] ARTIFACTS_DIR RUN_ID OUTPUT_JSON',
     )
+  return { tier, artifacts, runId: Number(runArg), output }
+}
+
+if (import.meta.main) {
+  const { tier, artifacts, runId, output } = parseRefreshBackendTimingsArgs(process.argv.slice(2))
   const repository = process.env.GITHUB_REPOSITORY ?? 'wangbinquan/agent-workflow'
-  const runId = Number(runArg)
-  const source = loadBackendTimingSource(artifacts, runId, repository)
-  const projected = projectBackendTimings(source.timings, treeTests('HEAD'))
+  const source = loadBackendTimingSource(artifacts, runId, repository, tier)
+  const target = readBackendTimingTarget(tier)
+  const projected = projectBackendTimings(source.timings, target.files)
   const destination = resolve(output)
   mkdirSync(dirname(destination), { recursive: true })
   writeFileSync(destination, `${JSON.stringify(projected.timings, null, 2)}\n`)

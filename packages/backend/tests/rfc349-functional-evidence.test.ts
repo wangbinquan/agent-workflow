@@ -10,8 +10,14 @@ import {
   RFC349_T10_FUNCTIONAL_FRONTEND_TEST_FILES,
 } from './helpers/rfc349FunctionalEvidence'
 
+import { buildBunTestCommand } from '../../../scripts/ci/run-backend-shard'
+
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 const CI_WORKFLOW = readFileSync(resolve(ROOT, '.github', 'workflows', 'ci-work.yml'), 'utf8')
+const FULL_BACKEND_WORKFLOW = readFileSync(
+  resolve(ROOT, '.github', 'workflows', 'backend-full-nightly.yml'),
+  'utf8',
+)
 const FULL_E2E_WORKFLOW = readFileSync(
   resolve(ROOT, '.github', 'workflows', 'e2e-full-nightly.yml'),
   'utf8',
@@ -56,9 +62,23 @@ describe('RFC-349 T10-A functional evidence contract', () => {
 
   test('Main discovers every backend and frontend functional oracle', () => {
     expect(BUNFIG).toContain('root = "packages/backend/tests"')
+    // RFC-627: ci-work.yml partitions backend discovery across deterministic LPT tiers
+    // (`core` 16 shards + conditional `migration` 28 shards), while backend-full-nightly.yml
+    // runs the full 44-shard dual-engine discovery; all invoke bun:test with --isolate --randomize.
     expect(CI_WORKFLOW).toContain(
-      'bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/${{ matrix.shards }}',
+      'bun scripts/ci/run-backend-shard.ts --tier=core --shard=${{ matrix.shard }}/${{ matrix.shards }} --seed="$BUN_TEST_SEED"',
     )
+    expect(CI_WORKFLOW).toContain(
+      'bun scripts/ci/run-backend-shard.ts --tier=migration --shard=${{ matrix.shard }}/${{ matrix.shards }} --seed="$BUN_TEST_SEED"',
+    )
+    expect(FULL_BACKEND_WORKFLOW).toContain(
+      'bun scripts/ci/run-backend-shard.ts --tier=all --shard=${{ matrix.shard }}/${{ matrix.shards }} --seed="$BUN_TEST_SEED"',
+    )
+    expect(
+      buildBunTestCommand({ seed: '123', timingsOut: '/tmp/timings.json', coverage: false }, [
+        'packages/backend/tests/a.test.ts',
+      ]).slice(0, 5),
+    ).toEqual(['bun', 'test', '--isolate', '--randomize', '--seed=123'])
     expect(FRONTEND_PACKAGE).toContain('"test": "vitest run --sequence.shuffle"')
     expect(CI_WORKFLOW).toContain(
       'bun run --filter @agent-workflow/frontend test -- --shard=${{ matrix.shard }}/3',

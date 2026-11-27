@@ -239,14 +239,30 @@ export function assertE2ESelection(plan: E2EShardPlan, actualIds: string[]): voi
       'Actual Playwright tests differ from the planned shard; refusing incomplete or duplicated coverage',
     )
 }
+export const EXPECTED_E2E_WORKERS: Readonly<Record<E2EPlatform, number>> = Object.freeze({
+  linux: 4,
+  macos: 3,
+  windows: 4,
+})
+
+export function parseConfiguredE2EWorkers(raw: string | undefined): number | undefined {
+  if (raw === undefined || raw === '') return undefined
+  if (!/^[1-8]$/.test(raw))
+    throw new Error(`Invalid AW_E2E_WORKERS '${raw}': expected an integer from 1 to 8`)
+  return Number(raw)
+}
+
 export function assertE2ERuntimeSelection(
   plan: E2EShardPlan,
   actualIds: string[],
   config: { shard: unknown; workers: number; fullyParallel: boolean },
 ): void {
   if (config.shard) throw new Error('Do not combine a duration plan with native --shard')
-  if (config.workers !== 4 || config.fullyParallel)
-    throw new Error('The main E2E plan requires four workers and file-local sequential execution')
+  const expectedWorkers = EXPECTED_E2E_WORKERS[plan.platform]
+  if (config.workers !== expectedWorkers || config.fullyParallel)
+    throw new Error(
+      `The main E2E plan for ${plan.platform} requires ${expectedWorkers} workers and file-local sequential execution`,
+    )
   assertE2ESelection(plan, actualIds)
 }
 /** Regex matching avoids glob metacharacters in otherwise legitimate filenames. */

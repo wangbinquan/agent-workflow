@@ -19,8 +19,13 @@ import { E2ETimingCollector } from '../../../scripts/ci/e2e-timings-reporter'
 import {
   CI_WORKFLOW_PATH,
   CI_WORK_JOB_IDS,
+  LEGACY_CI_WORK_JOB_IDS,
   resolveCiWorkSource,
 } from '../../../scripts/ci/workflow-source'
+import {
+  assertSuccessfulTimingSource,
+  E2E_CI_TIMING_SOURCES,
+} from '../../../scripts/ci/refresh-backend-timings'
 
 const sourceMetadata = {
   runId: 12345,
@@ -409,6 +414,66 @@ describe('source topology authority', () => {
       })
       expect(reusableReads).toEqual(['.github/workflows/ci.yml', CI_WORKFLOW_PATH])
       expect(assertE2EShardTopology(reusableSource.workflow)).toEqual(shardCounts)
+
+      // RFC-627: historical 13-job reusable ci-work.yml commits remain readable for provenance.
+      const legacyReusable = JSON.stringify({
+        on: { workflow_call: {} },
+        jobs: {
+          ...Object.fromEntries(LEGACY_CI_WORK_JOB_IDS.map((id) => [id, {}])),
+          ...workflowFixture(shardCounts).jobs,
+        },
+      })
+      const legacyReusableSource = resolveCiWorkSource((path) => {
+        if (path === '.github/workflows/ci.yml')
+          return JSON.stringify({ jobs: { 'full-ci': { uses: `./${CI_WORKFLOW_PATH}` } } })
+        if (path === CI_WORKFLOW_PATH) return legacyReusable
+        throw new Error('Unexpected source file')
+      })
+      expect(assertE2EShardTopology(legacyReusableSource.workflow)).toEqual(shardCounts)
+    })
+
+    test(`${label} E2E timing source allowlist accepts CI push/workflow_dispatch and rejects nightly/schedule`, () => {
+      const baseRun = {
+        id: sourceMetadata.runId,
+        name: 'CI',
+        status: 'completed',
+        conclusion: 'success',
+        event: 'push',
+        head_branch: 'main',
+        head_sha: sourceMetadata.sourceSha,
+        head_repository: { full_name: sourceMetadata.repository },
+      }
+      expect(
+        assertSuccessfulTimingSource(
+          baseRun,
+          sourceMetadata.repository,
+          sourceMetadata.runId,
+          E2E_CI_TIMING_SOURCES,
+        ),
+      ).toBe(sourceMetadata.sourceSha)
+      expect(
+        assertSuccessfulTimingSource(
+          { ...baseRun, event: 'workflow_dispatch' },
+          sourceMetadata.repository,
+          sourceMetadata.runId,
+          E2E_CI_TIMING_SOURCES,
+        ),
+      ).toBe(sourceMetadata.sourceSha)
+      for (const bad of [
+        { name: 'backend-full-nightly', event: 'schedule' },
+        { name: 'backend-full-nightly', event: 'workflow_dispatch' },
+        { name: 'CI', event: 'schedule' },
+        { name: 'CI', event: 'pull_request' },
+      ]) {
+        expect(() =>
+          assertSuccessfulTimingSource(
+            { ...baseRun, ...bad },
+            sourceMetadata.repository,
+            sourceMetadata.runId,
+            E2E_CI_TIMING_SOURCES,
+          ),
+        ).toThrow('successful complete')
+      }
     })
 
     test(`${label} rejects matrix additions, omissions, unsupported counts and input types`, () => {

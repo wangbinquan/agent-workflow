@@ -5970,6 +5970,59 @@ value, expected 1`）说明漂移不止在**路径**，还在**请求体形状**
   重载时直接退出，随后“七分钟没有变化”的结论其实只观察了 30 秒。**轮询脚本每条输出都带时间戳，结论以时间戳
   为准，不以“大概过了多久”为准。**
 
+## macOS 上别给**本进程还开着的 SQLite 库文件**加硬链接：之后每次读都报 `disk I/O error`（RFC-626 实撞，2026-11-27）
+
+- **现象**：自动升级在冻结、离线升级都完成之后，第一次读工作副本就以 `disk I/O error` 结束（`SQLiteError`，
+  `code: 'SQLITE_IOERR_VNODE'`，`errno: 6922`）。报错点离原因很远：出错的是读，肇事的是此前对同一个文件做的一次
+  `linkSync`。本机全量套件里约 120 条用例（全部发布升级矩阵、全部断点续做）因此一起红。
+- **原因**：Bun 在 macOS 上用系统自带的 SQLite（`sqlite_source_id()` 以 `apl` 结尾），它盯着已打开库文件的 vnode：
+  文件的**硬链接数变了**（新增一个硬链接、删掉任意一个名字）或文件本身被改名之后，已打开的连接此后的读取全部失败。
+  `fsync`、`utimes`、给父目录改名都不触发。Linux 与 Windows 上 Bun 用自带的 SQLite，没有这个行为——所以这类代码
+  **在 CI 的 Linux 分片上是绿的，只在 macOS 上红**（本机与 macOS 夜间）。
+- **处置**：要让一个大文件「多一个名字而不多占一份空间」，macOS 上用写时复制克隆
+  （`copyFileSync(src, dst, constants.COPYFILE_FICLONE_FORCE)`：APFS 上与硬链接一样快、不占新空间，但是一个新的 inode），
+  其它平台才用硬链接。仓内的统一入口是 `platform/persistence/migration/freeze/shareFile.ts`。克隆之后「是不是同一个文件」
+  不能再靠 inode 判断，要由登记方自己记住（`fileJournal.ts` 的本地工件库即如此）。
+- **量磁盘时的连带坑**：`du` 把克隆出来的文件按完整大小各算一遍（它不知道块是共享的）。APFS 上量「新增占用」要用卷的
+  `df` 已用量前后差，否则同一份数据会被数成两三份。
+- **最小复现**（任意 macOS，`bun run`）：建库 → 只读打开并查一次 → `linkSync(库, 另一个名字)` → 再查一次即报错。
+
+## 估算一个 SQLite 库要占多少空间：按有效数据量，别按文件大小（RFC-626，2026-11-27 实测）
+
+- **事实**：用了几个月的库里空闲页可以占绝大部分。参考实例的 `db.sqlite` 是 24.7 GB，有效数据只有 1.07 GB；`VACUUM INTO` 出来的副本、
+  转换的暂存库、新库都只跟有效数据量成比例。
+- **踩法**：升级前的空间检查按文件大小乘倍数，估出 151.8 GB，当时可用 153.4 GB——只差 1.6 GB 就会以「空间不足」拒绝，而实际新增占用的峰值只有约 16 GB。
+- **做法**：有效数据量 =（`page_count` − `freelist_count`）× `page_size`，三个 `PRAGMA` 都是读文件头，与库的大小无关；PostgreSQL 取 `pg_database_size`。
+  仓内实现在 `platform/persistence/migration/freeze/capacity.ts`。手工查：
+  `sqlite3 db.sqlite "select (page_count - freelist_count) * page_size from pragma_page_count, pragma_freelist_count, pragma_page_size"`。
+
+## PostgreSQL 一条语句最多 65535 个绑定参数：分批要按「行数 × 列数」，别按固定行数（RFC-626 实撞，2026-11-27）
+
+- **现象**：把旧库逐表拷进 scratch 库时每批固定 1000 行，`tasks` 有 70 列，一批就是 70000 个参数；行数一过 1000 整个升级失败，
+  报出来的还是一句没有内容的 `source-blocked`（驱动抛的不是 `Error`，文案成了 `[object Object]`）。参考数据只有 537 个任务，所以一直没撞上。
+- **做法**：每批行数取 `min(上限, floor(参数预算 / 列数))`，预算留出余量（仓内拷贝用 60000、写新库用 30000）。列数多的表自然变成小批，
+  列数少的表不受影响。凡是「多行 `VALUES`」的写路径都适用，不只是迁移。
+- **连带**：把驱动或第三方库抛出的东西变成文案时，别假设它是 `Error`；仓内统一用 `platform/persistence/migration/errorText.ts`。
+
+## `bun:sqlite` 的 `Database.query()` 会缓存语句：和 DDL 交替执行时慢一个数量级（RFC-626 实测，2026-11-27）
+
+- **现象**：识别旧库属于哪个发布版本时，要在一个空库上逐条重放冻结迁移链，每放一条读一遍目录（上千条各不相同的 `PRAGMA`）。
+  读用 `database.query(sql)` 时，变慢的不只是读，**迁移本身的 DDL 也慢了约 10 倍**。
+- **原因与复现**：`query()` 把预编译语句留在连接的缓存里，连接上留着的语句越多，之后每条改结构的语句越慢。最小复现（内存库，
+  250 轮「建一张表加一个索引，再读一遍已有各表的 `PRAGMA table_xinfo`」）：读用 `query()` 时 DDL 合计 130～165 ms、读 103～108 ms；
+  读用 `prepare()` + `finalize()` 时 DDL 13～14 ms、读 58～60 ms（macOS，Bun 1.4.3）。
+- **做法**：在「读很多条不同的语句」与「改结构」交替的循环里，读用 `database.prepare(sql)` 加 `finalize()`（仓内例子：
+  `platform/persistence/migration/supportedSources.ts` 的 `readOnce`）。只读不改结构的路径不受影响，继续用 `query()`。
+
+## 给几个 GB 的文件算摘要别用流：常驻内存会多出 GB 级的一截（RFC-626 实测，2026-11-27）
+
+- **现象**：升级过程的常驻内存在算备份文件摘要的那十来秒里上跳约 1.9 GB（3.7 GB 的文件，`createReadStream` 逐块喂给哈希）。
+  每个分块是一个新的缓冲区，读得比回收快，而这段代码不回到事件循环、也不触发整堆回收。
+- **做法**：用一个固定大小的缓冲区同步读（`openSync` / `readSync` 循环，每读一段让出一次事件循环）。仓内统一入口是
+  `platform/persistence/migration/fileDigestInput.ts`（`createFileDigestInput()`，4 MiB 缓冲区，可连续用于多个文件）。
+- **量内存时的连带坑**：macOS 上 `/usr/bin/time -l` 的 `maximum resident set size` 把运行时预留但没写过的页、已释放未归还的页都算进去，
+  与「实际用了多少」可以差几个 GB；要看实际用量取同一份输出里的 `peak memory footprint`。两者都报，别只报一个。
+
 ## 本机 GitLab 是明文 HTTP 时，数字员工推送报“could not read Password”（2026-11-27 实撞）
 
 - **症状**：数字员工在“提交 MR”受阻，原因是 `repository-push-authentication-failed · fatal: could not read
@@ -9883,3 +9936,13 @@ I-b 之前 PostgreSQL 也走 sqlite-core 的 builder（sqlite-proxy），测试�
 - **`git archive` 也做行尾转换。** 它对每个文件走 `convert_to_working_tree`，Windows runner 的全局 `core.autocrlf=true` 会把没有 eol 规则的 tag（本仓 RFC-254 加 `.gitattributes` 之前的 v0.1.0～v0.16.x）里的 LF 全改成 CRLF。要取 tag 的提交字节就 `git -c core.autocrlf=false -c core.eol=lf archive …`（`scripts/release-upgrade/lib/binaries.ts` 的 `tagSourceArchive`）。**但 CRLF 不会让 `bun install --frozen-lockfile` 报 lockfile had changes**：RFC-398 第二次夜间曾这样归因 Windows 上老 tag 构建被拒，改成 LF 后夜间 41363751171 照样被拒；本机实测 Bun 1.3.13 接受 CRLF 的 `bun.lock`。报错只说「有变化」时，先拿到变化本身（在一次性目录里重新生成 lockfile 再比对），不要按手头的可疑点归因；tag 构建被拒时现在自动打印这份差异（`explainLockfileRefusal`）。这次的真正原因见下一条。
 - **Windows 上别在 8.3 短名目录里构建 Bun 项目。** GitHub windows-latest 的 `os.tmpdir()` 是 `C:\Users\RUNNER~1\…`（见上文 `realpathSync.native` 一条）。RFC-398 在这样的目录里解包 v0.1.0 / v0.10.0 / v0.16.3 的 tag 源码并 `bun install --frozen-lockfile`（Bun 1.3.13），一律报 lockfile had changes；同样的归档换到 `realpathSync.native` 展开后的长路径下，6 次构建全部通过（夜间 41363751171 → 41367335740，只改了这一个变量）。另外，`bun build --compile --outfile=x` 在 Windows 上写出的是 `x.exe`：编译后再按 `x` 去 stat 或运行的构建脚本会在编译成功之后失败（本仓 v0.16.x 及以前的 `scripts/build-binary.ts`）。
 - **把 `services/` 的文件迁进模块，等于把它放进模块内部守卫的扫描范围。** RFC-409 把 `services/dispatchFrontier.ts` 的函数原样迁入 task-execution 的 `domain/` 后，两条此前扫不到它的锁当场报红：RFC-339 的「wrapper 成员只由 scope 索引读 `nodeIds`」（`innerNodeIdsOf` 直接读 `.nodeIds`），以及 RFC-294 preflight 的 public 合同扫描（经 `public/queries` 重导出的函数返回可变 `Set`）。原样搬迁不等于守卫不变：迁入前先在 `tests/architecture/` 与 `rfc294-architecture-preflight.test.ts` 里查目标模块、目标层的规则；模块已有读取口（如 `directNodeIdsOf`）就委托给它；public 面要求只读类型时，导出一个返回 `ReadonlySet` 的包装函数，不要直接重导出 domain 函数。
+
+## RFC-627：CI 分层验证、排队治理与纯文档提交（2026-11-27）
+
+- **多轮文档/设计修订先在本地攒批，收敛后再一次性推送。** 免费公开仓只有 20 个并发 Actions runner 槽；虽然 RFC-627 已将主 CI 收口为工作流级单并发组（去掉 `queue: max`，最多 1 个运行中 + 1 个最新待跑）并为严格 Markdown 纯文档走 `docs-only` 快速通道，每改一轮文档仍立即 `git push` 仍会频繁触发 `detect-changes` + `docs-fast-gate` 甚至打断排队节奏。设计门多轮修订在本地 `main` 逐轮提交，收敛（过设计门请批或收口）后再 `git fetch origin main && git merge origin/main && git push origin main` 一次推上。
+- **主 CI 三档分流与兜底规则**：`ci.yml` 的 `detect-changes` 通过 GitHub API 查最近 200 条已完成的 `main` push 绿灯 run，取最近绿灯祖先与当前 HEAD 的 `--no-renames` diff 判定档位（`docs-only` / `standard` / `full`）；只要 API 不可用、祖先距 HEAD 超 200 提交、非祖先或 diff 为空，一律 fail-closed 降级到 `mode=full` 且 `links_base_sha=ALL`。
+  - `docs-only`：仅修改根目录文档（`STATE.md` / `CLAUDE.md` / `AGENTS.md` / `README*.md`）与 `design/` / `docs/` / `proposal/` 下非契约 `.md`（显式排除 `table-mapping.md`、`schema-contract.md`、`docs/crewstation-automation.md`）时触发，只跑 `docs-fast-gate`（Lychee 本地+变更外链 + 23 个后端文档契约测试 + 2 个 shared 文档契约测试），跳过 69-job 全矩阵与 `ci-feedback.yml`。
+  - `standard`：常规代码提交走 16 片 SQLite 核心后端（`run-backend-shard.ts --tier=core`，仅 shard 1 装 `opencode`，无 `--coverage`）+ 16 文件增强型真 PostgreSQL 双引擎门禁（`test-backend-postgresql`）+ 前端/构建/E2E（`e2e-macos` 3 worker）。
+  - `full`：触及迁移/持久化/平台内容迁移/全部模块与平台 `schema.ts`/双引擎夹具/任一迁移测试/CI/锁文件时自动触发，在 `standard` 基础上加跑 28 片真 PostgreSQL 双引擎完整迁移矩阵（`test-backend-migration`）；也可在 Actions 里手动 `workflow_dispatch`（默认 `mode=full`）对任意 `main` 提交强制补跑完整验证。每日 02:00 UTC 的 `backend-full-nightly.yml` 跑全套 44 片双引擎 + `--coverage` + Codecov。
+- **仓库根 `bun test` 会静默跳过 `packages/shared/tests/*`**：根目录 `bunfig.toml` 固定 `[test] root = "packages/backend/tests"`，在仓库根执行 `bun test packages/shared/tests/xxx.test.ts` 会 0 条用例且退出码 0。跑 shared 测试必须用 `bun run --filter @agent-workflow/shared test -- tests/xxx.test.ts`（`docs-fast-gate` 已拆分为独立步骤）。
+- **无 `--shard` 调用 `bun test --timings=<out> --update-timings` 会合并已有文件**：包装脚本 `scripts/ci/run-backend-shard.ts` 在启动前先删除目标 `timingsOut`，并在 0 退出后校验写出的文件键集与本片规划清单严格相等，避免静默漏跑或混入旧分片数据。

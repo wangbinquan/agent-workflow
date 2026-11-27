@@ -12,6 +12,12 @@ import {
 } from '@/modules/system-operations/domain/databaseMigration'
 
 import {
+  BACKEND_CORE_SHARDS,
+  BACKEND_FULL_SHARDS,
+  BACKEND_MIGRATION_SHARDS,
+  SHARD_1_PINNED_FILES,
+} from '../../../scripts/ci/backend-shards'
+import {
   parseRfc349EvidenceArgs,
   RFC349_CRASH_POINTS,
   RFC349_DATABASE_MIGRATION_PHASES,
@@ -175,16 +181,46 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     // 精确登记完整矩阵；所有覆盖要求、provider、命令及原预算不变。
     // 2026-10-14 CI 提速：Ubuntu 32 → 24 片（单片仍在预算 ~67% 内）；macOS 12 片整体移到
     // `backend-macos-nightly.yml`，片数与预算原样。
-    // Parse the owning job: the shard text must not accept an unrelated matrix elsewhere
-    // in this workflow or reject the stronger expanded leg.
-    const matrix = parse(owners['ci-work.yml']).jobs['test-backend'].strategy.matrix
+    // Parse the owning jobs: RFC-627 splits Main CI backend into 16-shard core (`test-backend`)
+    // plus conditional 28-shard full migration (`test-backend-migration`), backed by a daily
+    // 44-shard full dual-engine sweep (`backend-full-nightly.yml`).
+    const ciWorkDoc = parse(owners['ci-work.yml'])
+    const matrix = ciWorkDoc.jobs['test-backend'].strategy.matrix
     expect(matrix.os).toEqual(['ubuntu-latest'])
-    // 2026-10-26 RFC-395 激活使后端测试量约翻倍：用户裁决 Ubuntu 24 → 36 片。
-    // 2026-11-01 RFC-398 加入约 105 runner-分钟，照加 runner 的规矩扩到 44 片。
-    expect(matrix.shard).toEqual(Array.from({ length: 44 }, (_, index) => index + 1))
-    expect(matrix.shards).toEqual([44])
+    expect(matrix.shard).toEqual(
+      Array.from({ length: BACKEND_CORE_SHARDS }, (_, index) => index + 1),
+    )
+    expect(matrix.shards).toEqual([BACKEND_CORE_SHARDS])
     expect(matrix.include).toBeUndefined()
     expect(matrix.exclude).toBeUndefined()
+
+    const migrationMatrix = ciWorkDoc.jobs['test-backend-migration'].strategy.matrix
+    expect(migrationMatrix.os).toEqual(['ubuntu-latest'])
+    expect(migrationMatrix.shard).toEqual(
+      Array.from({ length: BACKEND_MIGRATION_SHARDS }, (_, index) => index + 1),
+    )
+    expect(migrationMatrix.shards).toEqual([BACKEND_MIGRATION_SHARDS])
+    expect(migrationMatrix.include).toBeUndefined()
+    expect(migrationMatrix.exclude).toBeUndefined()
+
+    const fullNightlySource = readFileSync(
+      resolve(ROOT, '.github', 'workflows', 'backend-full-nightly.yml'),
+      'utf8',
+    )
+    const fullNightlyMatrix = parse(fullNightlySource).jobs['test-backend-full'].strategy.matrix
+    expect(fullNightlyMatrix.shard).toEqual(
+      Array.from({ length: BACKEND_FULL_SHARDS }, (_, index) => index + 1),
+    )
+    expect(fullNightlyMatrix.shards).toEqual([BACKEND_FULL_SHARDS])
+    expect(fullNightlyMatrix.include).toBeUndefined()
+    expect(fullNightlyMatrix.exclude).toBeUndefined()
+    expect(fullNightlySource).toContain(
+      '--tier=all --shard=${{ matrix.shard }}/${{ matrix.shards }}',
+    )
+    expect(fullNightlySource).toContain(
+      'seed=$(( (GITHUB_RUN_NUMBER * 10 + MATRIX_SHARD) % 2147483647 ))',
+    )
+
     const macosMatrix = parse(
       readFileSync(resolve(ROOT, '.github', 'workflows', 'backend-macos-nightly.yml'), 'utf8'),
     ).jobs['test-backend-macos'].strategy.matrix
@@ -212,21 +248,34 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     type BackendJob = {
       'runs-on': string
       strategy: { matrix: { os?: string[] } }
-      steps: { uses?: string; run?: string }[]
+      steps: { uses?: string; run?: string; if?: string }[]
     }
     const workflow = (name: string) =>
       parse(readFileSync(resolve(ROOT, '.github', 'workflows', name), 'utf8'))
     const ubuntu: BackendJob = workflow('ci-work.yml').jobs['test-backend']
+    const fullNightly: BackendJob = workflow('backend-full-nightly.yml').jobs['test-backend-full']
     const macos: BackendJob = workflow('backend-macos-nightly.yml').jobs['test-backend-macos']
     expect(ubuntu.strategy.matrix.os).toEqual(['ubuntu-latest'])
+    expect(fullNightly['runs-on']).toBe('ubuntu-latest')
     expect(macos['runs-on']).toBe('macos-latest')
-    // Both OS legs (per-push ubuntu, nightly macOS) still own this same environment.
-    for (const backend of [ubuntu, macos]) {
+    // RFC-627: Ubuntu shards pin cli.test.ts and opencode-version.test.ts to shard 1 and install
+    // opencode on shard 1 only; macOS nightly still installs opencode on its native shards.
+    expect(SHARD_1_PINNED_FILES).toEqual([
+      'packages/backend/tests/cli.test.ts',
+      'packages/backend/tests/opencode-version.test.ts',
+    ])
+    for (const backend of [ubuntu, fullNightly]) {
       expect(backend.steps.some((step) => step.uses?.startsWith('actions/checkout@'))).toBe(true)
-      expect(
-        backend.steps.some((step) => step.run?.includes('bun install -g opencode-ai@latest')),
-      ).toBe(true)
+      const opencodeStep = backend.steps.find((step) =>
+        step.run?.includes('bun install -g opencode-ai@latest'),
+      )
+      expect(opencodeStep).toBeDefined()
+      expect(opencodeStep?.if).toBe('matrix.shard == 1')
     }
+    expect(macos.steps.some((step) => step.uses?.startsWith('actions/checkout@'))).toBe(true)
+    expect(
+      macos.steps.some((step) => step.run?.includes('bun install -g opencode-ai@latest')),
+    ).toBe(true)
   })
 
   test('locks before/after crash coverage for every migration phase and the first target chunk', () => {

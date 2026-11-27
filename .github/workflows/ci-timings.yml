@@ -2,7 +2,7 @@ name: CI timing refresh
 
 on:
   workflow_run:
-    workflows: [CI]
+    workflows: [CI, backend-full-nightly]
     types: [completed]
 
 permissions:
@@ -13,13 +13,16 @@ jobs:
   collect:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
-    # Only eligible successful runs enter this group. A failed CI completion
-    # must not cancel an in-progress collector and leave no replacement.
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      ((github.event.workflow_run.name == 'CI' &&
+        (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')) ||
+       (github.event.workflow_run.name == 'backend-full-nightly' &&
+        (github.event.workflow_run.event == 'schedule' || github.event.workflow_run.event == 'workflow_dispatch')))
+    # Isolate concurrency per source workflow so a main CI completion (including docs-only)
+    # cannot cancel an in-progress nightly full timing collection.
     concurrency:
-      group: ci-timing-refresh
+      group: ci-timing-refresh-${{ github.event.workflow_run.name }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -27,46 +30,142 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+
       - name: Detect timing collector in the completed source
         id: source
+        shell: bash
         run: |
           if [ -f scripts/ci/refresh-backend-timings.ts ] && [ -f scripts/ci/refresh-e2e-timings.ts ]; then
             echo 'supported=true' >> "$GITHUB_OUTPUT"
           else
             echo 'Completed source predates the timing collector; no review artifact is produced.'
           fi
-      - uses: oven-sh/setup-bun@v2
+
+      - name: Inspect completed run artifacts and select collection mode
+        id: inspect
         if: steps.source.outputs.supported == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ github.event.workflow_run.id }}
+          SOURCE_WORKFLOW: ${{ github.event.workflow_run.name }}
+          SOURCE_EVENT: ${{ github.event.workflow_run.event }}
+        run: |
+          set -euo pipefail
+          names=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN}/artifacts?per_page=100" --paginate --jq '.artifacts[].name')
+          legacy_count=$(printf '%s\n' "$names" | grep -Ec '^backend-test-timings-[0-9]+$' || true)
+          core_count=$(printf '%s\n' "$names" | grep -Ec '^backend-core-timings-[0-9]+$' || true)
+          full_count=$(printf '%s\n' "$names" | grep -Ec '^backend-full-timings-[0-9]+$' || true)
+          e2e_count=$(printf '%s\n' "$names" | grep -Ec '^e2e-test-timings-' || true)
+          echo "Observed artifacts: workflow=$SOURCE_WORKFLOW event=$SOURCE_EVENT legacy=$legacy_count core=$core_count full=$full_count e2e=$e2e_count"
+
+          mode=""
+          if [ "$SOURCE_WORKFLOW" = "backend-full-nightly" ]; then
+            if [ "$full_count" -gt 0 ]; then
+              mode="full-nightly"
+            else
+              echo "::error::backend-full-nightly run ${SOURCE_RUN} has no backend-full-timings-* artifacts"
+              exit 1
+            fi
+          elif [ "$SOURCE_WORKFLOW" = "CI" ]; then
+            if [ -z "$names" ]; then
+              echo "docs-only CI run ${SOURCE_RUN}; no artifacts uploaded."
+              mode="skip-docs-only"
+            elif [ "$core_count" -gt 0 ] && [ "$e2e_count" -gt 0 ]; then
+              mode="core-ci"
+            elif [ "$legacy_count" -gt 0 ] && [ "$e2e_count" -gt 0 ]; then
+              if [ "$SOURCE_EVENT" = "push" ]; then
+                mode="legacy-ci"
+              else
+                echo "Legacy non-push CI run ${SOURCE_RUN}; skipping legacy collector."
+                mode="skip-docs-only"
+              fi
+            else
+              echo "::error::Inconsistent CI timing artifacts on run ${SOURCE_RUN} (legacy=${legacy_count}, core=${core_count}, full=${full_count}, e2e=${e2e_count})"
+              exit 1
+            fi
+          else
+            echo "::error::Unexpected source workflow: ${SOURCE_WORKFLOW}"
+            exit 1
+          fi
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+
+      - uses: oven-sh/setup-bun@v2
+        if: steps.inspect.outputs.mode == 'legacy-ci' || steps.inspect.outputs.mode == 'core-ci' || steps.inspect.outputs.mode == 'full-nightly'
         with:
           bun-version: '1.4.3'
+
       - uses: actions/download-artifact@v6
-        if: steps.source.outputs.supported == 'true'
+        if: steps.inspect.outputs.mode == 'legacy-ci'
         with:
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
           pattern: backend-test-timings-*
           path: ${{ runner.temp }}/measured-backend
+
       - uses: actions/download-artifact@v6
-        if: steps.source.outputs.supported == 'true'
+        if: steps.inspect.outputs.mode == 'core-ci'
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          pattern: backend-core-timings-*
+          path: ${{ runner.temp }}/measured-backend
+
+      - uses: actions/download-artifact@v6
+        if: steps.inspect.outputs.mode == 'full-nightly'
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+          pattern: backend-full-timings-*
+          path: ${{ runner.temp }}/measured-backend
+
+      - uses: actions/download-artifact@v6
+        if: steps.inspect.outputs.mode == 'legacy-ci' || steps.inspect.outputs.mode == 'core-ci'
         with:
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
           pattern: e2e-test-timings-*
           path: ${{ runner.temp }}/measured-e2e
+
       - name: Validate complete source measurements and prepare review artifacts
-        if: steps.source.outputs.supported == 'true'
+        if: steps.inspect.outputs.mode == 'legacy-ci' || steps.inspect.outputs.mode == 'core-ci' || steps.inspect.outputs.mode == 'full-nightly'
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_RUN: ${{ github.event.workflow_run.id }}
+          COLLECTION_MODE: ${{ steps.inspect.outputs.mode }}
         run: |
-          bun scripts/ci/refresh-backend-timings.ts \
-            "$RUNNER_TEMP/measured-backend" "$SOURCE_RUN" \
-            "$RUNNER_TEMP/timing-review/backend-test-timings.json"
-          bun scripts/ci/refresh-e2e-timings.ts \
-            "$RUNNER_TEMP/measured-e2e" "$SOURCE_RUN" \
-            "$RUNNER_TEMP/timing-review/e2e-test-timings.json"
+          set -euo pipefail
+          case "$COLLECTION_MODE" in
+            legacy-ci)
+              bun scripts/ci/refresh-backend-timings.ts \
+                "$RUNNER_TEMP/measured-backend" "$SOURCE_RUN" \
+                "$RUNNER_TEMP/timing-review/backend-test-timings.json"
+              bun scripts/ci/refresh-e2e-timings.ts \
+                "$RUNNER_TEMP/measured-e2e" "$SOURCE_RUN" \
+                "$RUNNER_TEMP/timing-review/e2e-test-timings.json"
+              ;;
+            core-ci)
+              bun scripts/ci/refresh-backend-timings.ts --tier core \
+                "$RUNNER_TEMP/measured-backend" "$SOURCE_RUN" \
+                "$RUNNER_TEMP/timing-review/backend-core-test-timings.json"
+              bun scripts/ci/refresh-e2e-timings.ts \
+                "$RUNNER_TEMP/measured-e2e" "$SOURCE_RUN" \
+                "$RUNNER_TEMP/timing-review/e2e-test-timings.json"
+              ;;
+            full-nightly)
+              bun scripts/ci/refresh-backend-timings.ts --tier all \
+                "$RUNNER_TEMP/measured-backend" "$SOURCE_RUN" \
+                "$RUNNER_TEMP/timing-review/backend-test-timings.json"
+              ;;
+            *)
+              echo "::error::Unexpected COLLECTION_MODE=${COLLECTION_MODE}"
+              exit 1
+              ;;
+          esac
+
       - uses: actions/upload-artifact@v6
-        if: steps.source.outputs.supported == 'true'
+        if: steps.inspect.outputs.mode == 'legacy-ci' || steps.inspect.outputs.mode == 'core-ci' || steps.inspect.outputs.mode == 'full-nightly'
         with:
           name: reviewed-ci-timings-${{ github.event.workflow_run.id }}
           path: ${{ runner.temp }}/timing-review/

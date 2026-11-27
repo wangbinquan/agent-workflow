@@ -6,34 +6,169 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'CI verification tier (full runs core + full PG migration; auto classifies diff)'
+        type: choice
+        options: [full, auto]
+        default: full
+
+# RFC-627: workflow-level single concurrency group per ref (no queue: max).
+# Running runs finish untouched; superseded pending runs cancel cleanly without
+# invoking `ci-required`. Manual workflow_dispatch runs use an isolated group.
+concurrency:
+  group: >-
+    ${{ github.event_name == 'workflow_dispatch'
+        && format('{0}-manual-{1}', github.workflow, github.run_id)
+        || format('{0}-{1}', github.workflow, github.ref) }}
+  cancel-in-progress: false
 
 jobs:
+  detect-changes:
+    name: Classify CI verification tier
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      mode: ${{ steps.classify.outputs.mode }}
+      base_sha: ${{ steps.classify.outputs.base_sha }}
+      links_base_sha: ${{ steps.classify.outputs.links_base_sha }}
+      reason: ${{ steps.classify.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 200
+          filter: blob:none
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Classify changes since last verified green ancestor
+        id: classify
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AW_DISPATCH_MODE: ${{ inputs.mode }}
+        run: bun scripts/ci/classify-ci-changes.ts
+
+  docs-fast-gate:
+    name: Docs fast gate (links + doc contract tests)
+    needs: [detect-changes]
+    if: >-
+      ${{ needs['detect-changes'].result == 'success' &&
+          needs['detect-changes'].outputs.mode == 'docs-only' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Cache bun package downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Check every local design link and install Lychee
+        uses: lycheeverse/lychee-action@v2
+        with:
+          lycheeVersion: v0.24.2
+          args: --offline --no-progress --verbose 'design/**/*.md'
+          fail: true
+          jobSummary: true
+
+      - name: Check external links in changed design documents
+        shell: bash
+        run: bun scripts/ci/check-design-links.ts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AW_DESIGN_LINKS_BASE_SHA: ${{ needs['detect-changes'].outputs.links_base_sha }}
+          RUST_LOG: warn,lychee_lib::ratelimit::host=debug
+
+      - name: Run backend doc-contract tests
+        shell: bash
+        env:
+          AW_TEST_PROVIDERS: sqlite
+        run: >-
+          bun test --isolate
+          packages/backend/tests/rfc-index-status-drift.test.ts
+          packages/backend/tests/docs-node-kind-coverage.test.ts
+          packages/backend/tests/docs-runbook-command-guard.test.ts
+          packages/backend/tests/docs-implementation-parity.test.ts
+          packages/backend/tests/rfc276-runtime-hardening-deprecation.test.ts
+          packages/backend/tests/rfc271-ac-coverage.test.ts
+          packages/backend/tests/rfc284-env-flags-registry.test.ts
+          packages/backend/tests/rfc254-windows-e2e-exclusions.test.ts
+          packages/backend/tests/rfc310-ac-evidence-index.test.ts
+          packages/backend/tests/rfc321-repository-publication-ratchet.test.ts
+          packages/backend/tests/rfc349-functional-evidence.test.ts
+          packages/backend/tests/review-dispatch-cci.test.ts
+          packages/backend/tests/rfc473-execution-outcome-and-resource-sessions.test.ts
+          packages/backend/tests/rfc474-entry-adapter-bootstrap-assembly.test.ts
+          packages/backend/tests/rfc475-commit-push-owner-split.test.ts
+          packages/backend/tests/rfc476-task-delete-and-review-queue-owners.test.ts
+          packages/backend/tests/rfc477-rollback-limits-launch-preflight-owners.test.ts
+          packages/backend/tests/rfc478-task-service-retirement.test.ts
+          packages/backend/tests/architecture/rfc294-design-parity.test.ts
+          packages/backend/tests/architecture/rfc317-architecture-ledgers.test.ts
+          packages/backend/tests/architecture/rfc317-stale-assertion-invariants.test.ts
+          packages/backend/tests/architecture/rfc326-review-tool-route-guard.test.ts
+          packages/backend/tests/architecture/rfc546-module-singleton-exceptions.test.ts
+
+      - name: Run shared doc-contract tests
+        # bunfig.toml pins root `bun test` to packages/backend/tests, so shared
+        # doc contracts must run through the shared workspace filter.
+        shell: bash
+        run: >-
+          bun run --filter @agent-workflow/shared test --
+          tests/config-rfc300.test.ts
+          tests/webhook-vars-rfc263.test.ts
+
   full-ci:
     name: Full CI
-    # Only calculation holds a lane. CI required can wait for its lightweight
-    # runner without preventing the next SHA's complete work from being admitted.
+    needs: [detect-changes]
+    if: >-
+      ${{ needs['detect-changes'].result == 'success' &&
+          (needs['detect-changes'].outputs.mode == 'standard' ||
+           needs['detect-changes'].outputs.mode == 'full') }}
     uses: ./.github/workflows/ci-work.yml
-    concurrency:
-      group: >-
-        ${{ github.workflow }}-${{ github.ref }}-${{ (endsWith(format('{0}', github.run_number), '0') || endsWith(format('{0}', github.run_number), '2') || endsWith(format('{0}', github.run_number), '4') || endsWith(format('{0}', github.run_number), '6') || endsWith(format('{0}', github.run_number), '8')) && 'even' || 'odd' }}
-      queue: max
-      cancel-in-progress: false
+    with:
+      run_migration_full: ${{ needs['detect-changes'].outputs.mode == 'full' }}
+      links_base_sha: ${{ needs['detect-changes'].outputs.links_base_sha }}
 
   ci-required:
-    # One stable, unique terminal context for branch protection. It waits for
-    # every gate (including all matrix legs through their parent job result) and
-    # treats failure, cancellation, skip, an empty result, or any future unknown
-    # result as non-success. Keep the explicit list locked by the topology test.
+    # One stable, unique terminal context for branch protection. It fails closed
+    # on every mode (docs-only / standard / full) and rejects any missing,
+    # unknown, cancelled, failed or unexpectedly skipped job.
     name: CI required
     if: ${{ always() }}
-    needs: [full-ci]
+    needs: [detect-changes, docs-fast-gate, full-ci]
     runs-on: ubuntu-slim
     timeout-minutes: 5
     env:
+      DETECT_CHANGES_RESULT: ${{ needs['detect-changes'].result }}
+      CI_MODE: ${{ needs['detect-changes'].outputs.mode }}
+      DOCS_FAST_GATE_RESULT: ${{ needs['docs-fast-gate'].result }}
       FULL_CI_RESULT: ${{ needs['full-ci'].result }}
       LINT_RESULT: ${{ needs['full-ci'].outputs['lint'] }}
       TEST_BACKEND_RESULT: ${{ needs['full-ci'].outputs['test-backend'] }}
       TEST_BACKEND_POSTGRESQL_RESULT: ${{ needs['full-ci'].outputs['test-backend-postgresql'] }}
+      TEST_BACKEND_MIGRATION_RESULT: ${{ needs['full-ci'].outputs['test-backend-migration'] }}
       TEST_FRONTEND_RESULT: ${{ needs['full-ci'].outputs['test-frontend'] }}
       SCANS_RESULT: ${{ needs['full-ci'].outputs['scans'] }}
       PERF_RESULT: ${{ needs['full-ci'].outputs['perf'] }}
@@ -45,33 +180,54 @@ jobs:
       E2E_MACOS_RESULT: ${{ needs['full-ci'].outputs['e2e-macos'] }}
       E2E_WINDOWS_RESULT: ${{ needs['full-ci'].outputs['e2e-windows'] }}
     steps:
-      - name: Require every CI job to succeed
+      - name: Require every applicable CI job to succeed
         shell: bash
         run: |
           failed=0
-          check() {
-            local name result
+          expect_result() {
+            local name expected actual
             name="$1"
-            result="$2"
-            if [ "$result" != "success" ]; then
-              echo "::error::${name} concluded '${result:-missing}', expected 'success'"
+            expected="$2"
+            actual="$3"
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::${name} concluded '${actual:-missing}', expected '${expected}'"
               failed=1
             fi
           }
 
-          check full-ci "$FULL_CI_RESULT"
-          check lint "$LINT_RESULT"
-          check test-backend "$TEST_BACKEND_RESULT"
-          check test-backend-postgresql "$TEST_BACKEND_POSTGRESQL_RESULT"
-          check test-frontend "$TEST_FRONTEND_RESULT"
-          check scans "$SCANS_RESULT"
-          check perf "$PERF_RESULT"
-          check docs "$DOCS_RESULT"
-          check build-binary "$BUILD_BINARY_RESULT"
-          check build-binary-macos "$BUILD_BINARY_MACOS_RESULT"
-          check build-binary-windows "$BUILD_BINARY_WINDOWS_RESULT"
-          check e2e "$E2E_RESULT"
-          check e2e-macos "$E2E_MACOS_RESULT"
-          check e2e-windows "$E2E_WINDOWS_RESULT"
+          expect_result detect-changes success "$DETECT_CHANGES_RESULT"
+
+          case "$CI_MODE" in
+            docs-only)
+              expect_result docs-fast-gate success "$DOCS_FAST_GATE_RESULT"
+              expect_result full-ci skipped "$FULL_CI_RESULT"
+              ;;
+            standard|full)
+              expect_result docs-fast-gate skipped "$DOCS_FAST_GATE_RESULT"
+              expect_result full-ci success "$FULL_CI_RESULT"
+              expect_result lint success "$LINT_RESULT"
+              expect_result test-backend success "$TEST_BACKEND_RESULT"
+              expect_result test-backend-postgresql success "$TEST_BACKEND_POSTGRESQL_RESULT"
+              expect_result test-frontend success "$TEST_FRONTEND_RESULT"
+              expect_result scans success "$SCANS_RESULT"
+              expect_result perf success "$PERF_RESULT"
+              expect_result docs success "$DOCS_RESULT"
+              expect_result build-binary success "$BUILD_BINARY_RESULT"
+              expect_result build-binary-macos success "$BUILD_BINARY_MACOS_RESULT"
+              expect_result build-binary-windows success "$BUILD_BINARY_WINDOWS_RESULT"
+              expect_result e2e success "$E2E_RESULT"
+              expect_result e2e-macos success "$E2E_MACOS_RESULT"
+              expect_result e2e-windows success "$E2E_WINDOWS_RESULT"
+              if [ "$CI_MODE" = "full" ]; then
+                expect_result test-backend-migration success "$TEST_BACKEND_MIGRATION_RESULT"
+              else
+                expect_result test-backend-migration skipped "$TEST_BACKEND_MIGRATION_RESULT"
+              fi
+              ;;
+            *)
+              echo "::error::invalid CI_MODE '${CI_MODE:-missing}', expected docs-only|standard|full"
+              failed=1
+              ;;
+          esac
 
           exit "$failed"

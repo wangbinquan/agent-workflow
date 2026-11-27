@@ -1,12 +1,30 @@
 name: CI feedback
 
-# Advisory static feedback for the newest source on each ref. The complete CI
-# still validates every queued SHA and owns the only `CI required` context.
+# Advisory static feedback for the newest code on each ref. Pure Markdown doc
+# pushes skip this advisory workflow (they are validated by CI's docs-fast-gate).
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'STATE.md'
+      - 'CLAUDE.md'
+      - 'AGENTS.md'
+      - 'README.md'
+      - 'README.zh-CN.md'
+      - 'design/**/*.md'
+      - 'docs/**/*.md'
+      - 'proposal/**/*.md'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'STATE.md'
+      - 'CLAUDE.md'
+      - 'AGENTS.md'
+      - 'README.md'
+      - 'README.zh-CN.md'
+      - 'design/**/*.md'
+      - 'docs/**/*.md'
+      - 'proposal/**/*.md'
   workflow_dispatch:
 
 permissions:
@@ -42,9 +60,6 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Cache Prettier results
-        # Only content-validated formatting results are persisted. A source SHA
-        # makes caches refreshable; restores stay inside the tool/config boundary.
-        # ESLint's typed dependency graph is deliberately not persisted here.
         uses: actions/cache@v6
         with:
           path: node_modules/.cache/prettier

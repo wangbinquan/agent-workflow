@@ -7,8 +7,10 @@ import type { FullConfig, Suite } from '@playwright/test/reporter'
 import {
   assertE2ESelection,
   assertE2ERuntimeSelection,
+  EXPECTED_E2E_WORKERS,
   e2ePlatform,
   exactE2EMatch,
+  parseConfiguredE2EWorkers,
   parseE2EDiscovery,
   parseE2EShardPlan,
   parseE2ETimings,
@@ -179,12 +181,19 @@ describe('duration partitions', () => {
     }
     expect(new Set(populations.flat().map((plan) => plan.discoveryDigest)).size).toBe(1)
   })
-  test('every macOS three-shard runtime selection rejects omitted, duplicate and foreign identities', () => {
-    const config = { shard: null, workers: 4, fullyParallel: false }
+  test('every macOS three-shard runtime selection rejects omitted, duplicate, foreign identities and wrong workers', () => {
+    expect(EXPECTED_E2E_WORKERS).toEqual({ linux: 4, macos: 3, windows: 4 })
+    const config = { shard: null, workers: 3, fullyParallel: false }
     for (const current of [1, 2, 3]) {
       const plan = planE2EShards(tests, timings, 'macos', current, 3)
       const ids = selectedE2ETests(plan).map((test) => test.id)
       expect(() => assertE2ERuntimeSelection(plan, ids, config)).not.toThrow()
+      expect(() => assertE2ERuntimeSelection(plan, ids, { ...config, workers: 4 })).toThrow(
+        'requires 3 workers',
+      )
+      expect(() => assertE2ERuntimeSelection(plan, ids, { ...config, workers: 2 })).toThrow(
+        'requires 3 workers',
+      )
       expect(() => assertE2ERuntimeSelection(plan, ids.slice(1), config)).toThrow('coverage')
       expect(() => assertE2ERuntimeSelection(plan, [...ids, ids[0]!], config)).toThrow('coverage')
       expect(() =>
@@ -194,6 +203,17 @@ describe('duration partitions', () => {
       expect(() =>
         assertE2ERuntimeSelection(plan, [otherShardId, ...ids.slice(1)], config),
       ).toThrow('coverage')
+    }
+  })
+
+  test('AW_E2E_WORKERS parser accepts 1..8 or empty and rejects malformed worker counts', () => {
+    expect(parseConfiguredE2EWorkers(undefined)).toBeUndefined()
+    expect(parseConfiguredE2EWorkers('')).toBeUndefined()
+    for (let workers = 1; workers <= 8; workers++) {
+      expect(parseConfiguredE2EWorkers(String(workers))).toBe(workers)
+    }
+    for (const invalid of ['0', '9', '-1', '3.5', 'abc', ' 3', '3 ', '03']) {
+      expect(() => parseConfiguredE2EWorkers(invalid)).toThrow('AW_E2E_WORKERS')
     }
   })
   test('OS weights are distinct, obsolete weights add no tests, and skipped files are still assigned', () => {
@@ -238,8 +258,14 @@ describe('duration partitions', () => {
       assertE2ERuntimeSelection(plan, ids, { ...config, shard: { current: 1, total: 3 } }),
     ).toThrow('native --shard')
     expect(() => assertE2ERuntimeSelection(plan, ids, { ...config, workers: 3 })).toThrow(
-      'four workers',
+      'requires 4 workers',
     )
+    const windowsPlan = planE2EShards(tests, timings, 'windows', 1, 4)
+    const windowsIds = selectedE2ETests(windowsPlan).map((test) => test.id)
+    expect(() => assertE2ERuntimeSelection(windowsPlan, windowsIds, config)).not.toThrow()
+    expect(() =>
+      assertE2ERuntimeSelection(windowsPlan, windowsIds, { ...config, workers: 3 }),
+    ).toThrow('requires 4 workers')
     expect(() => assertE2ERuntimeSelection(plan, ids, { ...config, fullyParallel: true })).toThrow(
       'sequential',
     )

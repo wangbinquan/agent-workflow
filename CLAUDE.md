@@ -188,6 +188,9 @@ unstaged changes`），而它的 `--autostash` 属于被禁的 stash。因此：
   推完再 `git fetch` 确认 `git rev-parse HEAD == git rev-parse origin/main`，
   任何时刻都不允许本地落后于远端。
 
+  **多轮文档与设计修订本地攒批推送（RFC-627）**：同一 RFC 在设计门或草稿阶段发生多轮纯文档修订时，每轮先在本地 `main` 固化提交，待收敛（如过设计门并准备请批，或收口合并）后再一次性 `git fetch origin main && git merge origin/main && git push origin main`，避免一轮一推在免费 20 并发槽配额下制造多余 CI 排队。本条不放宽「本地 `main` 不得落后于 `origin/main`」：每次推送前仍按上述步骤先 merge `origin/main`。
+  此外，主 CI 已按变更范围自动分流为 `docs-only` / `standard` / `full` 三档（细节见 `docs/dev-gotchas.md` 与 `.github/workflows/ci.yml`）；需要强制对当前 HEAD 跑完整双引擎迁移矩阵时，可通过 `workflow_dispatch`（默认 `mode=full`）触发。
+
   **为什么不建分支**（三条真实损害）：①并发 session 的 commit 被分支切换「顺走」到
   别人的分支上（曾真实发生）；②CI 只在 `push to main` 与 `PR to main` 触发，待在
   分支上等于**一次 CI 都没跑**；③`main` 持续前进，分支越久越要 rebase，冲突面滚雪球。

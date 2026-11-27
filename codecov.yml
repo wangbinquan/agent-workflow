@@ -1,6 +1,6 @@
-# Codecov config — controls the patch/project coverage status checks
-# rendered on each PR. Receives lcov from the `Upload coverage to Codecov`
-# step in .github/workflows/ci.yml (`check` job, ubuntu leg only).
+# Codecov config — controls the patch/project coverage status checks.
+# RFC-627: receives lcov daily from the `Upload backend coverage to Codecov
+# (nightly full shards)` step in .github/workflows/backend-full-nightly.yml.
 #
 # Patch coverage is the diff-only number — the percentage of the LINES
 # THIS PR ADDS that are covered by tests. It is the mechanical enforcement

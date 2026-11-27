@@ -6,9 +6,15 @@
 // green while two workspaces were never executed.
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parse } from 'yaml'
+import {
+  BACKEND_CORE_SHARDS,
+  BACKEND_FULL_SHARDS,
+  BACKEND_MIGRATION_SHARDS,
+} from '../../../scripts/ci/backend-shards'
+import { CI_WORK_JOB_IDS } from '../../../scripts/ci/workflow-source'
 
 interface RootPackageJson {
   packageManager?: string
@@ -45,6 +51,11 @@ const ciFeedbackWorkflow = readFileSync(
 // 2026-10-14 CI 提速：macOS 后端腿从 ci.yml 移到这条 nightly，命令 / 片数 / 预算原样。
 const macosBackendNightly = readFileSync(
   resolve(root, '.github', 'workflows', 'backend-macos-nightly.yml'),
+  'utf8',
+)
+// RFC-627: complete 44-shard dual-engine backend + coverage sweep runs daily and on dispatch.
+const fullBackendNightly = readFileSync(
+  resolve(root, '.github', 'workflows', 'backend-full-nightly.yml'),
   'utf8',
 )
 const visualWorkflow = readFileSync(
@@ -160,21 +171,22 @@ function occurrenceCount(source: string, marker: string): number {
   return source.split(marker).length - 1
 }
 
-// RFC-611: different source SHAs must wait without replacing pending runs. Two
-// stable run-number lanes bound calculation fanout; the required job waits outside them.
-const fullCiAdmissionGroup =
-  "${{ github.workflow }}-${{ github.ref }}-${{ (endsWith(format('{0}', github.run_number), '0') || " +
-  "endsWith(format('{0}', github.run_number), '2') || " +
-  "endsWith(format('{0}', github.run_number), '4') || " +
-  "endsWith(format('{0}', github.run_number), '6') || " +
-  "endsWith(format('{0}', github.run_number), '8')) && 'even' || 'odd' }}"
+// RFC-627: workflow-level single concurrency group per ref (no `queue: max`).
+// In-progress runs finish untouched; superseded pending runs are replaced so
+// queues stay bounded at 1 running + 1 pending. Manual workflow_dispatch runs
+// use an isolated group keyed by run_id.
+const ciWorkflowConcurrencyGroup =
+  "${{ github.event_name == 'workflow_dispatch' && " +
+  "format('{0}-manual-{1}', github.workflow, github.run_id) || " +
+  "format('{0}-{1}', github.workflow, github.ref) }}"
 
-function isQueuedFullCiAdmission(value: unknown): boolean {
+function isBoundedCiWorkflowConcurrency(value: unknown): boolean {
   if (typeof value !== 'object' || value === null) return false
   const concurrency = value as Record<string, unknown>
   return (
-    concurrency.group === fullCiAdmissionGroup &&
-    concurrency.queue === 'max' &&
+    typeof concurrency.group === 'string' &&
+    concurrency.group.replace(/\s+/g, ' ').trim() === ciWorkflowConcurrencyGroup &&
+    concurrency.queue === undefined &&
     concurrency['cancel-in-progress'] === false
   )
 }
@@ -187,25 +199,35 @@ function e2eConstant(source: string, name: string, where: string): number {
 }
 
 describe('repository test entrypoint', () => {
-  test('only eligible successful CI completions can supersede a timing collector', () => {
+  test('only eligible successful CI and nightly completions can supersede a timing collector', () => {
     const workflow = parse(readFileSync(resolve(root, '.github/workflows/ci-timings.yml'), 'utf8'))
     expect(workflow.concurrency).toBeUndefined()
-    expect(workflow.on.workflow_run).toEqual({ workflows: ['CI'], types: ['completed'] })
+    expect(workflow.on.workflow_run).toEqual({
+      workflows: ['CI', 'backend-full-nightly'],
+      types: ['completed'],
+    })
     const job = workflow.jobs.collect
     expect(job.if).toContain("github.event.workflow_run.conclusion == 'success'")
-    expect(job.if).toContain("github.event.workflow_run.event == 'push'")
     expect(job.if).toContain("github.event.workflow_run.head_branch == 'main'")
     expect(job.if).toContain(
       'github.event.workflow_run.head_repository.full_name == github.repository',
     )
-    expect(job.concurrency).toEqual({ group: 'ci-timing-refresh', 'cancel-in-progress': true })
+    expect(job.if).toContain("github.event.workflow_run.name == 'CI'")
+    expect(job.if).toContain("github.event.workflow_run.name == 'backend-full-nightly'")
+    expect(job.if).toContain("github.event.workflow_run.event == 'push'")
+    expect(job.if).toContain("github.event.workflow_run.event == 'schedule'")
+    expect(job.if).toContain("github.event.workflow_run.event == 'workflow_dispatch'")
+    expect(job.concurrency).toEqual({
+      group: 'ci-timing-refresh-${{ github.event.workflow_run.name }}',
+      'cancel-in-progress': true,
+    })
     expect(workflow.permissions).toEqual({ actions: 'read', contents: 'read' })
   })
 
-  test('complete CI retains every pending SHA in two stable admission lanes', () => {
+  test('CI bounds queue depth at workflow level without cancelling in-progress runs', () => {
     const workflow = parse(ciEntryWorkflow)
-    expect(workflow.concurrency).toBeUndefined()
-    expect(isQueuedFullCiAdmission(workflow.jobs['full-ci'].concurrency)).toBe(true)
+    expect(isBoundedCiWorkflowConcurrency(workflow.concurrency)).toBe(true)
+    expect(workflow.jobs['full-ci'].concurrency).toBeUndefined()
     expect(workflow.jobs['full-ci'].uses).toBe('./.github/workflows/ci-work.yml')
     expect(workflow.jobs['ci-required'].concurrency).toBeUndefined()
     const calculation = parse(ciWorkflow)
@@ -215,44 +237,51 @@ describe('repository test entrypoint', () => {
       expect(job.concurrency).toBeUndefined()
     expect(workflow.on.push).toEqual({ branches: ['main'] })
     expect(workflow.on.pull_request).toEqual({ branches: ['main'] })
-    expect(workflow.on).toHaveProperty('workflow_dispatch')
-  })
-
-  test('actionlint compatibility exception covers only the validated CI queue field', () => {
-    const config = parse(readFileSync(resolve(root, '.github/actionlint.yaml'), 'utf8'))
-    expect(config).toEqual({
-      paths: {
-        '.github/workflows/ci.yml': {
-          ignore: [
-            '^unexpected key "queue" for "concurrency" section\\. expected one of "cancel-in-progress", "group"$',
-          ],
-        },
-      },
+    expect(workflow.on.workflow_dispatch.inputs.mode).toMatchObject({
+      type: 'choice',
+      options: ['full', 'auto'],
+      default: 'full',
     })
   })
 
-  test('full CI admission rejects replacement queues and per-attempt or per-SHA fanout', () => {
-    const concurrency = parse(ciEntryWorkflow).jobs['full-ci'].concurrency as Record<
-      string,
-      unknown
-    >
+  test('actionlint requires no compatibility ignore file once queue: max is retired', () => {
+    expect(existsSync(resolve(root, '.github/actionlint.yaml'))).toBe(false)
+  })
+
+  test('CI workflow concurrency rejects unbounded queues, mid-run cancellation, and unisolated manual runs', () => {
+    const concurrency = parse(ciEntryWorkflow).concurrency as Record<string, unknown>
     for (const invalid of [
-      { ...concurrency, queue: undefined },
-      { ...concurrency, queue: 'single' },
+      { ...concurrency, queue: 'max' },
       { ...concurrency, 'cancel-in-progress': true },
       { ...concurrency, group: '${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}' },
-      { ...concurrency, group: fullCiAdmissionGroup.replaceAll('run_number', 'run_attempt') },
+      { ...concurrency, group: ciWorkflowConcurrencyGroup.replaceAll('run_id', 'run_attempt') },
       { ...concurrency, group: '${{ github.workflow }}-${{ github.ref }}' },
     ]) {
-      expect(isQueuedFullCiAdmission(invalid)).toBe(false)
+      expect(isBoundedCiWorkflowConcurrency(invalid)).toBe(false)
     }
   })
 
-  test('latest static feedback is advisory and never substitutes for complete CI', () => {
+  test('latest static feedback is advisory, skips pure Markdown doc commits, and never substitutes for complete CI', () => {
     const workflow = parse(ciFeedbackWorkflow)
+    const expectedDocsIgnore = [
+      'STATE.md',
+      'CLAUDE.md',
+      'AGENTS.md',
+      'README.md',
+      'README.zh-CN.md',
+      'design/**/*.md',
+      'docs/**/*.md',
+      'proposal/**/*.md',
+    ]
     expect(workflow.name).toBe('CI feedback')
-    expect(workflow.on.push).toEqual({ branches: ['main'] })
-    expect(workflow.on.pull_request).toEqual({ branches: ['main'] })
+    expect(workflow.on.push).toEqual({
+      branches: ['main'],
+      'paths-ignore': expectedDocsIgnore,
+    })
+    expect(workflow.on.pull_request).toEqual({
+      branches: ['main'],
+      'paths-ignore': expectedDocsIgnore,
+    })
     expect(workflow.on).toHaveProperty('workflow_dispatch')
     expect(workflow.permissions).toEqual({ contents: 'read' })
     expect(workflow.concurrency).toEqual({
@@ -368,32 +397,38 @@ describe('repository test entrypoint', () => {
   test('every backend gate isolates files and randomizes execution order', () => {
     expect(backendPkg.scripts?.test).toBe(hardenedBunCommand)
     expect(backendBunfig).toContain('preload = ["./tests/setup.ts"]')
-    // CI shards the backend suite across runners: each shard is an isolated VM,
-    // which is why sharding is safe where `bun test --parallel` deadlocks on the
-    // single-instance daemon flock. Both CI legs (per-push ubuntu, nightly macOS)
-    // keep --isolate --randomize; the
-    // ubuntu shards additionally instrument coverage and emit the lcov report
-    // consumed by Codecov. The local root gate uses complete serial shards with
-    // distinct home/temp namespaces; backendPkg.scripts.test remains the
-    // single-process diagnostic entrypoint asserted above.
+    // RFC-627: per-push CI shards backend tests through deterministic LPT planning
+    // (`run-backend-shard.ts`: 16 core SQLite shards + conditional 28 dual-engine migration
+    // shards), while `backend-full-nightly.yml` runs the complete 44-shard dual-engine suite
+    // with `--coverage` and Codecov upload. Every leg preserves `--isolate --randomize`.
     expect(ciWorkflow).toContain(
-      `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/\${{ matrix.shards }} --coverage --coverage-reporter=lcov`,
+      'run: bun scripts/ci/run-backend-shard.ts --tier=core --shard=${{ matrix.shard }}/${{ matrix.shards }} --seed="$BUN_TEST_SEED" --timings-out="$RUNNER_TEMP/backend-core-timings.json"',
     )
-    // RFC-398: the ubuntu shards are balanced by recorded per-file duration (round-robin by name
-    // clustered the long upgrade suites and three shards hit the 15-minute budget, run 41293473768).
-    // Bun reads the committed file second and writes this shard's measured durations to the
-    // fresh first file, which only successful shards upload for the next refresh.
     expect(ciWorkflow).toContain(
-      '--coverage-reporter=lcov --timings="$RUNNER_TEMP/backend-test-timings.json" ' +
-        '--timings=.github/backend-test-timings.json --update-timings',
+      'run: bun scripts/ci/run-backend-shard.ts --tier=migration --shard=${{ matrix.shard }}/${{ matrix.shards }} --seed="$BUN_TEST_SEED" --timings-out="$RUNNER_TEMP/backend-migration-timings.json"',
     )
     const uploadTimings = ciWorkflow
       .slice(ciWorkflow.indexOf('- name: Upload measured backend test timings (ubuntu shards)'))
       .split('\n      - name:')[0]!
     expect(uploadTimings).toContain("if: success() && matrix.os == 'ubuntu-latest'")
     expect(uploadTimings).not.toContain('failure()')
-    expect(uploadTimings).toContain('name: backend-test-timings-${{ matrix.shard }}')
-    expect(uploadTimings).toContain('path: ${{ runner.temp }}/backend-test-timings.json')
+    expect(uploadTimings).toContain('name: backend-core-timings-${{ matrix.shard }}')
+    expect(uploadTimings).toContain('path: ${{ runner.temp }}/backend-core-timings.json')
+
+    expect(fullBackendNightly).toContain(
+      'run: bun scripts/ci/run-backend-shard.ts --tier=all --shard=${{ matrix.shard }}/${{ matrix.shards }} --seed="$BUN_TEST_SEED" --timings-out="$RUNNER_TEMP/backend-full-timings.json" --coverage',
+    )
+    const nightlyUploadTimings = fullBackendNightly
+      .slice(
+        fullBackendNightly.indexOf(
+          '- name: Upload measured backend test timings (nightly full shards)',
+        ),
+      )
+      .split('\n      - name:')[0]!
+    expect(nightlyUploadTimings).toContain('if: success()')
+    expect(nightlyUploadTimings).not.toContain('failure()')
+    expect(nightlyUploadTimings).toContain('name: backend-full-timings-${{ matrix.shard }}')
+    expect(nightlyUploadTimings).toContain('path: ${{ runner.temp }}/backend-full-timings.json')
     // The file must stay Bun's v1 shape and keep weights for the heavy suites that caused it.
     const timings = JSON.parse(
       readFileSync(resolve(root, '.github', 'backend-test-timings.json'), 'utf8'),
@@ -419,7 +454,7 @@ describe('repository test entrypoint', () => {
     expect(macosBackendNightly).toContain(
       `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/\${{ matrix.shards }}\n`,
     )
-    for (const workflow of [ciWorkflow, macosBackendNightly]) {
+    for (const workflow of [ciWorkflow, fullBackendNightly, macosBackendNightly]) {
       expect(workflow).toContain('name: Derive reproducible backend test seed')
       expect(workflow).toContain('echo "BUN_TEST_SEED=$seed" >> "$GITHUB_ENV"')
       expect(workflow).toContain('echo "Backend test seed: $seed"')
@@ -488,78 +523,81 @@ describe('repository test entrypoint', () => {
       include?: { os: string; shard: number; shards: number }[]
     } = parse(backendJob)['test-backend'].strategy.matrix
     expect(matrix.include).toBeUndefined()
+    const migrationJob = workflowJob(ciWorkflow, 'test-backend-migration')
+    expect(migrationJob).toContain('fail-fast: false')
+    const migrationMatrix: {
+      os: string[]
+      shard: number[]
+      shards: number[]
+      include?: unknown
+    } = parse(migrationJob)['test-backend-migration'].strategy.matrix
+    expect(migrationMatrix.include).toBeUndefined()
+    const fullNightlyJob: {
+      'runs-on': string
+      strategy: { 'fail-fast': boolean; matrix: { shard: number[]; shards: number[] } }
+    } = parse(fullBackendNightly).jobs['test-backend-full']
+    expect(fullNightlyJob['runs-on']).toBe('ubuntu-latest')
+    expect(fullNightlyJob.strategy['fail-fast']).toBe(false)
     const macosJob: {
       'runs-on': string
       strategy: { 'fail-fast': boolean; matrix: { shard: number[]; shards: number[] } }
     } = parse(macosBackendNightly).jobs['test-backend-macos']
     expect(macosJob['runs-on']).toBe('macos-latest')
     expect(macosJob.strategy['fail-fast']).toBe(false)
-    const backendLegs = [
-      ...matrix.os.flatMap((os) =>
-        matrix.shard.flatMap((shard) => matrix.shards.map((shards) => ({ os, shard, shards }))),
-      ),
-      ...macosJob.strategy.matrix.shard.flatMap((shard) =>
-        macosJob.strategy.matrix.shards.map((shards) => ({ os: 'macos-latest', shard, shards })),
-      ),
-    ]
-    expect([...new Set(backendLegs.map((leg) => leg.os))].sort()).toEqual([
-      'macos-latest',
-      'ubuntu-latest',
-    ])
-    for (const [os, total] of [
-      // RFC-359 W5（2026-09-13）：Ubuntu 从八片加到十二片——AC-6 把大批用例迁成双引擎之后
-      // Ubuntu 侧每个文件要跑两遍，连续两次 run 的 shard 1/8 都撞上 15 分钟 job 预算
-      // （一次是测试体跑完后整个 job 超时、一次是 15:15）。实测八片最长片贴到预算 101%，
-      // 十片只压到 81%（macOS 那次证明 88% 也不够），十二片压到 ~67%。同样照 ci.yml 的规矩：
-      // 加 runner，不动预算、不改单条用例超时。
-      // RFC-370 CI 修复：run 36404992960 的 5/12 持续执行仍耗尽总预算，扩到十六片。
-      // 2026-10-06: 13/16 exhausted the original job budget while the suite advanced.
-      // Thirty-two independent runners retain both providers and every original test.
-      // 2026-10-14 CI 提速：32 → 24 片。实测单片 5~7 分钟，主要开销在排队与每片 ~1.5 分钟
-      // 的固定开销；24 片单片 ~8~10 分钟，仍在预算 ~67% 以内。
-      // 2026-10-26 RFC-395 激活使后端测试量约翻倍：用户裁决 24 → 36 片，最长片约 10 分钟。
-      // 2026-11-01 RFC-398 后全套按文件墙钟约 360 分钟，36 片均衡后最长仍约 11.5 分钟；
-      // 照同一规矩加 runner 到 44 片，最长片回到约 10 分钟。
-      ['ubuntu-latest', 44],
-      // RFC-359 W57：macOS 从四片加到六片——四片时最长的一片长期在 15 分钟预算的 75%~90%，
-      // 实测有一次跑到 15 分 16 秒被超时杀掉（GitHub 把超时报成 `cancelled`，聚合 job 随之判红）。
-      // 处置照 ci.yml 自己立的规矩：加 runner，不动预算、不改单条用例超时。
-      // 2026-10-06: two complete 6/6 runs hit the same job budget while tests advanced.
-      // Twelve independent runners retain the complete discovery set and all original budgets.
-      // 2026-10-14：这 12 片整体移到 backend-macos-nightly.yml。
-      // 2026-10-29：RFC-395 语料让 12 片各跑 9~15 分钟，run 40909866975 的 8/12 在 15 分钟预算处
-      // 被取消（其中 RFC-376 报告合同一条就用了 215 秒）。照同一规矩加 runner：12 → 18 片。
-      ['macos-latest', 18],
-    ] as const) {
-      // Every N/M occurs once, so native Bun sharding partitions the complete
-      // unfiltered discovery set. No extra include can duplicate a shard.
-      expect(
-        backendLegs.filter((leg) => leg.os === os).sort((left, right) => left.shard - right.shard),
-      ).toEqual(
-        Array.from({ length: total }, (_, index) => ({ os, shard: index + 1, shards: total })),
-      )
-    }
+
+    expect(matrix.os).toEqual(['ubuntu-latest'])
+    expect(matrix.shard).toEqual(
+      Array.from({ length: BACKEND_CORE_SHARDS }, (_, index) => index + 1),
+    )
+    expect(matrix.shards).toEqual([BACKEND_CORE_SHARDS])
+
+    expect(migrationMatrix.os).toEqual(['ubuntu-latest'])
+    expect(migrationMatrix.shard).toEqual(
+      Array.from({ length: BACKEND_MIGRATION_SHARDS }, (_, index) => index + 1),
+    )
+    expect(migrationMatrix.shards).toEqual([BACKEND_MIGRATION_SHARDS])
+
+    expect(fullNightlyJob.strategy.matrix.shard).toEqual(
+      Array.from({ length: BACKEND_FULL_SHARDS }, (_, index) => index + 1),
+    )
+    expect(fullNightlyJob.strategy.matrix.shards).toEqual([BACKEND_FULL_SHARDS])
+
+    expect(macosJob.strategy.matrix.shard).toEqual(
+      Array.from({ length: 18 }, (_, index) => index + 1),
+    )
+    expect(macosJob.strategy.matrix.shards).toEqual([18])
+
     expect(backendJob).toContain(
       'name: Backend tests (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})',
     )
+    expect(backendJob).not.toContain('--coverage')
+    expect(backendJob).not.toContain('codecov/codecov-action')
     expect(occurrenceCount(backendJob, `--shard=\${{ matrix.shard }}/\${{ matrix.shards }}`)).toBe(
       1,
     )
     expect(
+      occurrenceCount(migrationJob, `--shard=\${{ matrix.shard }}/\${{ matrix.shards }}`),
+    ).toBe(1)
+    expect(
+      occurrenceCount(fullBackendNightly, `--shard=\${{ matrix.shard }}/\${{ matrix.shards }}`),
+    ).toBe(1)
+    expect(
       occurrenceCount(macosBackendNightly, `--shard=\${{ matrix.shard }}/\${{ matrix.shards }}`),
     ).toBe(1)
     const coverageStep = workflowStep(
-      backendJob,
-      'Upload backend coverage to Codecov (ubuntu shards)',
+      fullBackendNightly,
+      'Upload backend coverage to Codecov (nightly full shards)',
     )
-    expect(coverageStep).toContain("if: matrix.os == 'ubuntu-latest'")
     expect(coverageStep).toContain('files: ./coverage/lcov.info')
     expect(coverageStep).toContain('flags: backend-shard-${{ matrix.shard }}')
     expect(coverageStep).toContain('name: backend-coverage-shard-${{ matrix.shard }}')
     const required = workflowJob(ciEntryWorkflow, 'ci-required')
-    expect(required).toContain('needs: [full-ci]')
+    expect(required).toContain('needs: [detect-changes, docs-fast-gate, full-ci]')
     expect(required).toContain(
       "TEST_BACKEND_RESULT: ${{ needs['full-ci'].outputs['test-backend'] }}",
+    )
+    expect(required).toContain(
+      "TEST_BACKEND_MIGRATION_RESULT: ${{ needs['full-ci'].outputs['test-backend-migration'] }}",
     )
 
     expect(frontendJob).toContain('fail-fast: false')
@@ -609,6 +647,9 @@ describe('repository test entrypoint', () => {
     }
     expect(e2eJob).toContain('steps: &e2e-steps')
     expect(workflowJob(ciWorkflow, 'e2e-macos')).toContain('steps: *e2e-steps')
+    expect(workflowJob(ciWorkflow, 'e2e-macos')).toContain("AW_E2E_WORKERS: '3'")
+    expect(workflowJob(ciWorkflow, 'e2e')).not.toContain('AW_E2E_WORKERS')
+    expect(workflowJob(ciWorkflow, 'e2e-windows')).not.toContain('AW_E2E_WORKERS')
     expect(workflowJob(ciWorkflow, 'e2e-windows')).toContain('steps: *e2e-steps')
     // Native discovery retains the same filters; the planner consumes the one
     // complete matrix denominator. Execution must not shard the selected files again.
@@ -847,18 +888,11 @@ describe('repository test entrypoint', () => {
   })
 
   test('every Actions job has an explicit bounded deadline', () => {
-    const expectedCiDeadlines = new Map<string, number>([
+    const expectedCiWorkDeadlines = new Map<string, number>([
       ['lint', 15],
       ['test-backend', 15],
-      // RFC-357: the only regular gate that runs against a real PostgreSQL
-      // server (a `services:` container). 15 matches test-backend — the lane
-      // runs one small suite, so the budget is dominated by install + migrate,
-      // not by the tests.
       ['test-backend-postgresql', 15],
-      // RFC-254 T31: 20 because the Windows leg is genuinely slower at the same
-      // work — measured 373s wall for the full suite on a real Windows host vs
-      // ~160s on macOS, and a CI shard carries install + cache on top. Raised
-      // deliberately with the leg, not in response to a timeout.
+      ['test-backend-migration', 15],
       ['test-frontend', 20],
       ['scans', 15],
       ['perf', 15],
@@ -869,17 +903,35 @@ describe('repository test entrypoint', () => {
       ['e2e', 20],
       ['e2e-macos', 20],
       ['e2e-windows', 20],
+    ])
+    const expectedEntryDeadlines = new Map<string, number>([
+      ['detect-changes', 5],
+      ['docs-fast-gate', 10],
       ['ci-required', 5],
     ])
-    expect(workflowJobNames(ciWorkflow)).toEqual(
-      [...expectedCiDeadlines.keys()].filter((name) => name !== 'ci-required'),
-    )
-    expect(workflowJobNames(ciEntryWorkflow)).toEqual(['full-ci', 'ci-required'])
-    for (const [name, minutes] of expectedCiDeadlines) {
-      const job = workflowJob(name === 'ci-required' ? ciEntryWorkflow : ciWorkflow, name)
+    expect(workflowJobNames(ciWorkflow)).toEqual([...CI_WORK_JOB_IDS])
+    expect([...expectedCiWorkDeadlines.keys()]).toEqual([...CI_WORK_JOB_IDS])
+    expect(workflowJobNames(ciEntryWorkflow)).toEqual([
+      'detect-changes',
+      'docs-fast-gate',
+      'full-ci',
+      'ci-required',
+    ])
+    for (const [name, minutes] of expectedCiWorkDeadlines) {
+      const job = workflowJob(ciWorkflow, name)
       expect(occurrenceCount(job, 'timeout-minutes:')).toBe(1)
       expect(job).toContain(`timeout-minutes: ${minutes}`)
     }
+    for (const [name, minutes] of expectedEntryDeadlines) {
+      const job = workflowJob(ciEntryWorkflow, name)
+      expect(occurrenceCount(job, 'timeout-minutes:')).toBe(1)
+      expect(job).toContain(`timeout-minutes: ${minutes}`)
+    }
+
+    const fullNightlyJob = workflowJob(fullBackendNightly, 'test-backend-full')
+    expect(workflowJobNames(fullBackendNightly)).toEqual(['test-backend-full'])
+    expect(occurrenceCount(fullNightlyJob, 'timeout-minutes:')).toBe(1)
+    expect(fullNightlyJob).toContain('timeout-minutes: 15')
 
     const visualJob = workflowJob(visualWorkflow, 'visual-regression')
     expect(workflowJobNames(visualWorkflow)).toEqual(['visual-regression'])
@@ -961,7 +1013,7 @@ describe('repository test entrypoint', () => {
     }
   })
 
-  test('the stable required context waits for and fails closed on every CI job', () => {
+  test('the stable required context waits for and fails closed on every CI mode and job', () => {
     const requiredJob = workflowJob(ciEntryWorkflow, 'ci-required')
     const expectedNeeds = workflowJobNames(ciWorkflow)
     const entry = parse(ciEntryWorkflow)
@@ -969,10 +1021,17 @@ describe('repository test entrypoint', () => {
 
     expect(requiredJob).toContain('name: CI required')
     expect(requiredJob).toContain('if: ${{ always() }}')
-    expect(entry.jobs['ci-required'].needs).toEqual(['full-ci'])
+    expect(entry.jobs['ci-required'].needs).toEqual(['detect-changes', 'docs-fast-gate', 'full-ci'])
     expect(Object.keys(outputs)).toEqual(expectedNeeds)
+    expect(requiredJob).toContain("DETECT_CHANGES_RESULT: ${{ needs['detect-changes'].result }}")
+    expect(requiredJob).toContain("CI_MODE: ${{ needs['detect-changes'].outputs.mode }}")
+    expect(requiredJob).toContain("DOCS_FAST_GATE_RESULT: ${{ needs['docs-fast-gate'].result }}")
     expect(requiredJob).toContain("FULL_CI_RESULT: ${{ needs['full-ci'].result }}")
-    expect(requiredJob).toContain('check full-ci "$FULL_CI_RESULT"')
+    expect(requiredJob).toContain('expect_result detect-changes success "$DETECT_CHANGES_RESULT"')
+    expect(requiredJob).toContain('expect_result docs-fast-gate success "$DOCS_FAST_GATE_RESULT"')
+    expect(requiredJob).toContain('expect_result full-ci skipped "$FULL_CI_RESULT"')
+    expect(requiredJob).toContain('expect_result docs-fast-gate skipped "$DOCS_FAST_GATE_RESULT"')
+    expect(requiredJob).toContain('expect_result full-ci success "$FULL_CI_RESULT"')
 
     for (const dependency of expectedNeeds) {
       const resultEnv = `${dependency.replaceAll('-', '_').toUpperCase()}_RESULT`
@@ -982,9 +1041,15 @@ describe('repository test entrypoint', () => {
       expect(requiredJob).toContain(
         `${resultEnv}: \${{ needs['full-ci'].outputs['${dependency}'] }}`,
       )
-      expect(requiredJob).toContain(`check ${dependency} "$${resultEnv}"`)
+      if (dependency === 'test-backend-migration') {
+        expect(requiredJob).toContain(`expect_result ${dependency} success "$${resultEnv}"`)
+        expect(requiredJob).toContain(`expect_result ${dependency} skipped "$${resultEnv}"`)
+      } else {
+        expect(requiredJob).toContain(`expect_result ${dependency} success "$${resultEnv}"`)
+      }
     }
-    expect(requiredJob).toContain('if [ "$result" != "success" ]; then')
+    expect(requiredJob).toContain('if [ "$actual" != "$expected" ]; then')
+    expect(requiredJob).toContain("invalid CI_MODE '${CI_MODE:-missing}'")
     expect(requiredJob).toContain('exit "$failed"')
   })
 

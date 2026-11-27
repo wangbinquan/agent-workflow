@@ -1,9 +1,15 @@
-## 2026-11-27 RFC-628 数字员工被事件抢占后丢失「回复检视意见」（In Progress，用户指示立项并完整交付；`design/RFC-628-employee-reply-after-preemption/`）
+## 2026-11-27 RFC-627 CI 吞吐、分层验证与排队治理（In Progress，用户 2026-11-27 批准实施；`design/RFC-627-ci-throughput-tiered-verification/`）
+
+- **来由**：用户 2026-11-27 要求分析 GitHub CI 耗时问题并给出优化方案，阅读诊断报告（单次 ~560 runner-分钟、91 次已完成主 CI 端到端中位 80m / 最长 188m、33% 纯文档提交空烧全矩阵、47% 成功率、诊断时刻积压 12 个 run）后回复「全部同意」；已先取消队列中 10 个中间纯文档 run，按 RFC 流程落档三件套并通过三轮设计门后，用户 2026-11-27 回复「批准实施」。
+- **范围**：工作流级单并发组去 `queue: max` 消除无界积压；基于最近绿灯祖先 diff 的严格 Markdown `docs-only` 快速通道（含 23 后端 + 2 shared 共 25 个文档契约测试、防排队合并漏测代码、`ci-feedback` 同步忽略纯文档）与三模式 fail-closed `CI required`；后端分层（常规代码 push 16 片 SQLite 核心 + 16 文件真 PG 增强门禁、仅 shard 1 装 `opencode`、去每提交 `--coverage`；触及迁移/持久化/平台内容迁移/全部模块与平台 schema/双引擎夹具/任一迁移测试/CI/锁文件自动 `full` 加跑 28 片真 PG 完整迁移双引擎；新增每日 `backend-full-nightly.yml` 44 片全量双引擎 + coverage/Codecov）；`e2e-macos` 改为 3 worker（同步 `e2e-shards.ts` 按平台校验）；`ci-timings.yml` 双并发组 + 四路分流兼容 `docs-only` 与历史 SHA；协作规范写入本地攒批推送。零后端生产源码改动，不冲突在途 RFC-626。
+- **现状**：实施完成（T1–T8 全部实现、集中验证与独立实现门已通过，现推送进入 T9 hosted 实测验收：`full` / `docs-only` / `standard` / `backend-full-nightly`）。
+
+## 2026-11-27 RFC-628 数字员工被事件抢占后丢失「回复检视意见」（Done；`94703d534`；`design/RFC-628-employee-reply-after-preemption/`）
 
 - **来由**：2026-11-27 用真实 GitLab 验证 RFC-616 时发现的缺陷的后一半（前一半「读 MR 事实撞上头提交变化而阻塞」已在 `033f5fafe` 修掉）：修复提交推送之后、回复发出之前到来声明抢占的事件（检视、冲突、MR 生命周期、审批更新；最常见的是员工自己的推送引起的生命周期事件），规划器放弃「回复修复结果」，此后没有路径回到它，准备好的回复不再发出。用户同日指示为它单独立 RFC 并完整交付。
 - **范围**：只改 development-automation 的类型包与平台工作项（另在 MR 事实采集处增量标出线程列表是否读全），不改通用调度、不加表结构。「关注 MR 状态」结算时先把上一轮做完：修复已发布 → 回复；未发布且头提交未变 → 回到提交；回复完毕后才汇总新意见；审批仍在进行中时同样先续办。`development` 升 `@12`、`graph-development` 升 `@3`，新行为以冻结清单或修订号为条件。
 - **用户可见的限制**：进行中的交办钉在旧修订号上，得不到修复；工作区被平台重建后丢失的未提交修复不恢复。设计里由起草方代为裁决的各项列在 design §7，用户可改判。
-- **现状**：实现、全部用例、集中验证与实现门均已完成，待 CI。设计门（subagent，只审功能）不通过，3 项 P1、12 项 P2 全部采纳，原设计的「跨轮携带旧回复」改为「先把上一轮做完」（design §8）；实现门（subagent，只审功能）通过，2 项 P2 已处置：代码平台的线程列表没有读全时不再把缺席的线程当作已删除，并补了四组用例（design §9）。集中验证只在 SQLite 上执行，双库以 CI 为准。（编号原拟 627，已被并发的 CI 吞吐 RFC 占用，顺延为 628。）
+- **现状**：已交付，提交 `94703d534`，CI run 46070872625 通过（后端第 41/44 片首次在 15 分钟时限处被取消：没有失败用例、不含本 RFC 新增的用例，同样的文件比上一次绿 run 慢约 1.76 倍，是那台 runner 变慢；只重跑了这一片）。设计门（subagent，只审功能）不通过，3 项 P1、12 项 P2 全部采纳，原设计的「跨轮携带旧回复」改为「先把上一轮做完」（design §8）；实现门（subagent，只审功能）通过，2 项 P2 已处置：代码平台的线程列表没有读全时不再把缺席的线程当作已删除，并补了四组用例（design §9）。集中验证只在 SQLite 上执行，双库以 CI 为准。（编号原拟 627，已被并发的 CI 吞吐 RFC 占用，顺延为 628。）
 
 ## 2026-11-27 RFC-626 升级必达与最短耗时（In Progress，用户已批准；`design/RFC-626-upgrade-no-refusal-minimal-time/`）
 
@@ -17510,6 +17516,7 @@ M5 打磨       [12/12 ✅]  M5 完工 — 单二进制 / i18n / 暗色 / 备份
 
 | ID | 标题 | 关键产出 |
 | --- | --- | --- |
+| RFC-628 | 数字员工被事件抢占后丢失「回复检视意见」 | 「关注 MR 状态」结算时先把上一轮做完（修复已发布 → 回复；未发布且头提交未变 → 回到提交；回复完毕后才汇总新意见），`development@12`、`graph-development@3`，旧修订号上的交办行为不变；7 个新用例文件；设计门与实现门由 subagent 执行；`94703d534`，CI run 46070872625 通过；[验收清单](design/RFC-628-employee-reply-after-preemption/plan.md)。 |
 | RFC-623 | 第三轮CI：降低macOS runner需求与后端长尾 | macOS E2E4→3，完整测试与原预算/门禁保持；097d41d6主CI69/69、严格collector验收；[同口径实测及限制](design/RFC-623-macos-ci-runner-demand/acceptance.md)。 |
 | RFC-378 | 脑图澄清主动思考与决定复核 | 完整实现与用例、独立功能门、393ecaea3 CI 49/49、单机/托管真实旅程及原始最终文档；[逐项证据](design/RFC-378-mindmap-decision-review/acceptance.md)。 |
 | RFC-370 | CrewStation 完整托管部署 | 单机与托管同一业务路径（P1 → M0～M3 → v3 V1～V13 → v4 V14～V21），本机 CS 上逐级实机验收，最终正式 AW `v0.6.30`（`8e5c57a21`）与独立服务 rfc042 `v0.2.9`；验收中发现的 AW / CS 缺陷均已修复并补回归用例，附属 CS RFC-040 / 042 / 043 Done；[逐项证据](design/RFC-370-crewstation-hosted-deployment/status.md)。 |
