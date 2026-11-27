@@ -1,6 +1,6 @@
 # RFC-626 技术设计
 
-> 状态：Draft。产品口径见 [proposal.md](./proposal.md)，任务分解见 [plan.md](./plan.md)。
+> 状态：In Progress（用户 2026-11-27 批准）。产品口径见 [proposal.md](./proposal.md)，任务分解见 [plan.md](./plan.md)。
 > 本文引用的行号以提交 `384cf824e` 为准，路径相对 `packages/backend/src/`。标「已核」的是我对着源码读过的，
 > 标「调研」的是只读调研给出、实现前须复核的结论。
 

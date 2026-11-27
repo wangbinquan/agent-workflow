@@ -1,6 +1,6 @@
 # RFC-626 实施计划
 
-> 状态：Draft。需求见 [proposal.md](./proposal.md)，设计见 [design.md](./design.md)。
+> 状态：In Progress（用户 2026-11-27 批准并要求完整实现；没有要求再做一轮设计检视）。需求见 [proposal.md](./proposal.md)，设计见 [design.md](./design.md)。
 > 按仓库硬规则：批准后先完成全部实现与全部测试用例，再集中验证；不边写边测。
 
 ## 任务
