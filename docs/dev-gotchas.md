@@ -30,7 +30,7 @@
 >   失败断言与其点名的路径；失败集合里指向他人路径 / 他人 RFC 命名空间的，不是你的。
 > - **要在干净基线上验证**：把改动提交上去，让 **CI** 在干净 checkout 上跑——CI 绿是
 >   最省事也最权威的证据（本仓 CI 只在 `push to main` 触发，而我们本来就直推 main）。
-> - **要限定 Codex review 范围**：按路径告诉它只看自己改过的文件，读 findings 时剔除
+> - **要限定门检视的范围**：按路径告诉执行检视的 subagent 只看自己改过的文件，读 findings 时剔除
 >   指向他人路径的条目。
 > - **要避免误提交别人的东西**：按路径精确 `git add <file>`，提交前
 >   `git diff HEAD -- <file>` 逐 hunk 认领；**绝不**用 stash 去「隔离」别人的改动
@@ -4822,9 +4822,14 @@ epoch-2 给已有表加列时，在 owner contribution 中追加可空列或字�
 - **deps 链字段改名必须枚举全部承载类型——spread 透传会把留旧名的键静默丢在边界外**（RFC-282 C1 实测，2026-08-12）：把 `RunTaskOptions.opencodeCmd` 改名 `binaryOverride` 时漏了上游 `StartTaskDeps`/`FusionDeps`/daemon auto-resume deps 三个载体，而 task.ts 的透传写法是 `...(deps.opencodeCmd ? { opencodeCmd: deps.opencodeCmd } : {})`——**spread 进目标类型不触发 excess property check**，tsc 全绿、键在 RunTaskOptions 门口静默蒸发，表现为 mock 二进制失联、测试任务走真 opencode 超时 failed。三段漏斗族的第五形态：前四次是「键没接」，这次是「键改名后旧名残段照跑」。判据：改名 deps 字段时 `grep -rn "旧名"` 必须清零到只剩围栏内合法使用，**顶层载体类型改名后让 tsc 把全部断链显形**（错误驱动清零），且靠真子进程 e2e（mock 头必须真被 spawn）兜底——纯 mock 单测抓不到这层。
 - **「改了设置不生效」多半不是没接线，而是只在启动时读**：共享限流器支持热 resize（`util/semaphore.ts` 增容会 drain 排队者、缩容不抢占），但 RFC-266 之前唯一的 resize 调用方是 `runTask` ⇒ 新值要等下一个任务启动才套上，没有新任务就永远不生效。定式：daemon 级可变配置在 `PUT /api/config` 里就地生效（`routes/config.ts` 已有 RFC-233 `setMode` 的线性化点先例，写在 `applyConfigPatch` **之后**，写盘失败不得留下"已按新值放行"的既成事实）；per-task 的实例要热生效则必须先有 daemon 级注册表（`taskFanoutPools.ts`，生命周期照抄 `taskWriteLocks.ts` 的「gc 只许 runTask finally 调 + idle 守卫」，否则删了再建会把一个池裂成两个、任务以双倍并发跑）。
 
-## Codex review（本仓工作流的一部分）
+## 门检视（本仓工作流的一部分）
 
-> 强制门时机与坑；companion 的**本机调用路径**属个人配置，不在此。
+> 强制门时机与坑。
+>
+> **2026-11-27 起**：设计门与实现门由本 session 派生的 **subagent** 执行，不指定评审工具或模型（规则在 `CLAUDE.md`
+> §工作准则「独立检视双门」）。本节与下一节里点名 Codex 的条目，是此前用该工具做门检视时积累的经验：
+> 讲评审方法的（限定范围、错开视角、按验收标准逐条对账等）对任何执行者都适用；讲该工具自身行为的
+> （job 僵尸、读 stdin、job registry 等）只在仍然用它时参考。
 
 - **两个门**：写完 RFC 请批前（**设计门**）+ 改完代码 declare done 前（**实现门**），每次修 findings。这是 CI 之外的额外门（RFC-101 抓过 7 个真问题）。
 - **共享树上从分离 worktree 跑**：并发 session 的 diff 会**吞掉**你的 review（你的代码出 0 findings）；从 pin 到你 commit 的分离 worktree 跑，并 grep job log 证明这不是空洞通过。
@@ -4850,7 +4855,7 @@ epoch-2 给已有表加列时，在 owner contribution 中追加可空列或字�
   - **哪类 RFC 更容易中招，决定了这一路该切多重**：**重构型**（如 RFC-287）验收标准本身就是「契约逐字保持」，拍板项多是**做不做**的开关，开关状态一眼可验;**产品行为型**（如 RFC-304）拍板项是**怎么判**的语义，而语义恰恰是修 bug 时最容易顺手调整的东西。RFC-304 那 7 条**全部**落在「怎么判」上（先 resolve 还是保持未解决、默认监管还是默认跳过），一条都不在「做不做」上——不是巧合。产品行为型 RFC 请把这一路当**必切**。
   - **查完是干净的也值得查——「干净」不是默认状态，是查过才知道的结论**。RFC-287 五轮门 90 个修复、9 条用户拍板，照此法逐条对当前代码，9/9 在位（连「未被选中的候选方案」都记在代码注释里）。作者全程自认为每个歧义都问过用户，但那是**信念**不是**证据**,逐条对完才变成证据。不写这一条，规则会退化成「出过事的人才查」，而它真正的价值是把「要不要查」从判断力问题变成流程问题——谁都能照着做。
 
-## impl-gate（Codex 实现门）经验规律
+## impl-gate（实现门）经验规律
 
 历次 impl-gate 沉淀出的「finding 类型 → 风险」规律，接手评审/修复时按此预期：
 
