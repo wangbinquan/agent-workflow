@@ -1,7 +1,7 @@
 import { selectedDatabaseConfiguration } from '@/platform/persistence/databaseProviderRuntime'
 // `agent-workflow start` — daemon foreground entry.
 import type { DeploymentProfile } from './deploymentProfile'
-import type { DevelopmentOverlay } from './developmentReload'
+import { developmentListenPort, portIsFree, type DevelopmentOverlay } from './developmentReload'
 import { composeDaemonSession } from './daemonSession'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
@@ -328,7 +328,6 @@ export async function startCommand(
     // RFC-359 W3-T16：这里没有 provider 执行分支——按 provider 查表取会话装配器，
     // bootstrap / resume / 监听全部走同一条中立序列（design §6 / §7 守卫 4）。
     const bindHost = launch.host ?? profile.listen.host ?? config.bindHost
-    const bindPort = launch.port ?? profile.listen.port ?? config.bindPort ?? 0
     const lifecycle = Object.freeze({
       operationId: 'daemon-start',
       provider: databaseProvider.provider,
@@ -409,6 +408,13 @@ export async function startCommand(
       createMigrationAdmission: createDatabaseMigrationDaemonAdmission,
     })
     await initial.session.resume(lifecycle)
+    // Decided in the statement before the listener binds: a development reload keeps the address
+    // its previous generation published, and whether that port is still free must not go stale.
+    const bindPort = developmentListenPort({
+      configured: launch.port ?? profile.listen.port ?? config.bindPort ?? 0,
+      previous: development?.listenPort,
+      isFree: (port) => portIsFree(bindHost, port),
+    })
     await serveDaemon({
       bootstrap: daemonProviderBootstrap,
       authRuntime: initial.application.core.authRuntime,

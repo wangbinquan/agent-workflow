@@ -129,6 +129,10 @@ Database.prototype.query = function (sql, ...args) {
       const second = JSON.parse(readFileSync(infoPath, 'utf8')) as typeof first
       expect(second.pid).toBe(first.pid)
       expect(second.startedAt).not.toBe(first.startedAt)
+      // Regression (2026-11-26): each reload used to listen on a new ephemeral port, and Vite —
+      // which reads this file once, when it starts — kept proxying `/api` to the old one, so the
+      // dev server answered 500 after the first backend save. The address now survives a reload.
+      expect(second.url).toBe(first.url)
       const after = await fetch(`${second.url}health`, { signal: AbortSignal.timeout(5000) })
       expect(after.status).toBe(200)
       expect(((await after.json()) as { ok: boolean }).ok).toBe(true)

@@ -10,6 +10,8 @@ import { Paths } from '@/platform/configuration/installationPaths'
 export interface DevelopmentOverlay {
   readonly daemonHost: DaemonHostLifecyclePort
   readonly developmentIntegrity: { validatedDatabase?: string }
+  /** The port the previous source generation listened on; absent for the first one. */
+  readonly listenPort?: number
 }
 
 export interface DevelopmentDaemonState {
@@ -17,6 +19,42 @@ export interface DevelopmentDaemonState {
   tail: Promise<void>
   current?: { stop(): Promise<void> }
   integrity: DevelopmentOverlay['developmentIntegrity']
+  /** Where the last generation that became ready listened. A failed start does not forget it. */
+  listenPort?: number
+}
+
+/**
+ * The port a daemon start binds. A configured port is somebody's choice and is bound as is. With
+ * none configured (0) the port is ephemeral, and a development reload then listens where its
+ * previous generation did, so the daemon keeps one address for the whole session — unless another
+ * process has taken that port since, in which case any free port still starts the daemon.
+ *
+ * Without this every source reload moved to a new ephemeral port, and whatever had read the address
+ * once was left pointing at a closed one: Vite resolves its `/api` proxy from `.daemon.info` when it
+ * starts, so every request answered 500 after the first backend save (2026-11-26).
+ */
+export function developmentListenPort(input: {
+  /** 0: nothing configures a port. */
+  readonly configured: number
+  readonly previous: number | undefined
+  readonly isFree: (port: number) => boolean
+}): number {
+  if (input.configured !== 0 || input.previous === undefined) return input.configured
+  return input.isFree(input.previous) ? input.previous : 0
+}
+
+/**
+ * Whether the port can be bound on this host right now, found out by binding it. The caller binds
+ * for real in its very next statement, in the same process: a port another process takes in between
+ * fails that bind with an explicit error, and the reload after it finds the port taken and moves on.
+ */
+export function portIsFree(hostname: string, port: number): boolean {
+  try {
+    Bun.listen({ hostname, port, socket: { data() {} } }).stop(true)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function createDevelopmentDaemonState(): DevelopmentDaemonState {
@@ -64,6 +102,7 @@ export function reloadDevelopmentDaemon(
         announceReady: (url) => native.announceReady(url),
         async publishReady(info) {
           await native.publishReady(info)
+          state.listenPort = info.port
           ready.resolve()
         },
         subscribeShutdown(input) {
@@ -80,7 +119,11 @@ export function reloadDevelopmentDaemon(
         },
       }
       state.current = generation
-      void start({ daemonHost: host, developmentIntegrity: state.integrity }).catch((error) => {
+      void start({
+        daemonHost: host,
+        developmentIntegrity: state.integrity,
+        ...(state.listenPort === undefined ? {} : { listenPort: state.listenPort }),
+      }).catch((error) => {
         state.integrity.validatedDatabase = undefined
         if (state.current === generation) state.current = undefined
         ready.reject(error)

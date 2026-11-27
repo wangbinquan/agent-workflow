@@ -27,12 +27,15 @@ const preparation: readonly Change[] = [
       '        },\n',
   },
 ]
+// The overlay later gained `listenPort` (a reload keeps its port). The approved delta is still the
+// one preparation field between `daemonHost` and what follows it; the line after it is part of both
+// fragments so that neither is a prefix of the other.
 const overlayPreparation: readonly Change[] = [
   {
     current:
-      'export interface DevelopmentOverlay {\n  readonly daemonHost: DaemonHostLifecyclePort\n  readonly developmentIntegrity: { validatedDatabase?: string }\n}\n',
+      'export interface DevelopmentOverlay {\n  readonly daemonHost: DaemonHostLifecyclePort\n  readonly developmentIntegrity: { validatedDatabase?: string }\n  /** The port the previous source generation listened on; absent for the first one. */\n',
     previous:
-      'export interface DevelopmentOverlay {\n  readonly daemonHost: DaemonHostLifecyclePort\n}\n',
+      'export interface DevelopmentOverlay {\n  readonly daemonHost: DaemonHostLifecyclePort\n  /** The port the previous source generation listened on; absent for the first one. */\n',
   },
 ]
 // RFC-492: the driver family moved into runtime-management's infrastructure; bootstrap takes the self-check from its

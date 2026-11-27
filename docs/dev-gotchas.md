@@ -5932,6 +5932,27 @@ value, expected 1`）说明漂移不止在**路径**，还在**请求体形状**
   这一半只会看到「语义离谱的响应码」。所以一旦看到**桩不可能返回的状态码**，先怀疑端口串了，
   别去追业务逻辑。
 
+## `bun run dev` 的后端每次热重载都换端口，Vite 代理随即失效（2026-11-26 实撞，已修）
+
+- **症状**：`bun run dev` 起来后页面正常；后端任何一个源文件保存之后，`localhost:5174` 上所有 `/api` 请求都是
+  500，Vite 日志里是 `http proxy error … connect ECONNREFUSED 127.0.0.1:<第一代的端口>`。直接访问
+  `.daemon.info` 里的新端口是通的。多个会话同时改后端时，几分钟内必然出现。
+- **原因**：没有配置端口时监听端口是 0（随机）。dev 的热重载（`bootstrap/developmentReload.ts`）是“停掉上一代、
+  再起一代”，于是每一代都重新要一个随机端口；而 `packages/frontend/vite.config.ts` 只在 Vite 启动时读一次
+  `.daemon.info`。进程号没变，地址变了。
+- **修法**：重载的那一代去绑上一代公布过的端口（`developmentListenPort`）。配置了端口（`--port`、部署档案、
+  `config.json` 的 `bindPort`）时照旧用配置的。上一代的端口万一被别的进程占了，就退回随机端口——这时 Vite
+  仍会失效，重启 `bun run dev` 即可。
+- **这里用了“先看端口是否空闲、再绑定”，与上一节的教训并不冲突**：检查与绑定是同一进程里紧挨着的两条语句
+  （`startCommand` 里 `developmentListenPort` 之后就是 `serveDaemon`，中间没有 `await`），只有别的进程恰好在这
+  几微秒里占走端口才会出事，而那时绑定会直接报 `EADDRINUSE`、这一代启动失败，下一次重载发现端口被占就改用
+  随机端口——不会像上一节那样悄悄连到别人的服务。没有改成“直接绑、失败再退”，是因为 `serveDaemon` 里那条
+  `Bun.serve` 语句被 `rfc213-dev-startup-root-inverse` 与 `rfc370-daemon-host-root-wiring` 两处守卫按原样锁着。
+- **还剩的一种情况**：单独在 `packages/frontend` 下起 Vite、另起 daemon 时，Vite 仍然只在启动时读一次地址；
+  daemon 进程重启换了端口，要重启 Vite。
+- 回归用例：`dev-reload-cli.test.ts`（真实 `--hot` 进程，保存一次源文件后 `.daemon.info` 的地址不变）、
+  `dev-reload.test.ts`。
+
 ## mock IdP 重启后所有 OIDC 登录失败：`kid` 不变 + 长寿 JWKS 缓存（2026-08-22 实测）
 
 `bun dev` 的开发登录服务（`packages/system-mocks/src/dev-auth`）第一次跑通后，**重启这个

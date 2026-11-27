@@ -1,3 +1,7 @@
+## 2026-11-26 `bun run dev` 的后端热重载保持原端口（缺陷修复，不走 RFC）
+
+`bun run dev` 没有配置端口时，后端每次热重载都换一个随机端口；Vite 只在启动时读一次 `.daemon.info`，于是第一次保存后端源文件之后，`localhost:5174` 上所有 `/api` 请求都是 500。现在重载的那一代沿用上一代公布的端口（`bootstrap/developmentReload.ts` 的 `developmentListenPort`；配置了端口时照旧，原端口被别的进程占用时退回随机端口）。`serveDaemon` 与 `main.ts` 未改。回归用例：`dev-reload-cli.test.ts`（真实 `--hot` 进程，保存后地址不变）、`dev-reload.test.ts`（4 条）。本地：引用这两个源文件的 79 个后端测试文件全部通过，tsc 与 eslint 干净；主 CI 结论待本提交的 run。细节见 `docs/dev-gotchas.md` 同名条目。
+
 ## 2026-11-26 RFC-625 第二批 CI：Windows 进程身份与不可变准备复用（In Progress；`design/RFC-625-ci-process-identity-and-manifest-reuse/`）
 
 用户已授权本批完整CI实测。Windows进程创建身份/接管token、job内不可变manifest复用及三份完整green计时max权重已实现，原覆盖/隔离/预算保持。集中验证修复PG延迟配置与Windows触发清单问题；共享源码持续变化使本地跨进程命中结果受限，完整结论待干净提交的主CI与Windows原生CI。详情见设计与plan。
