@@ -7,7 +7,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { parseStopTimeoutMs } from '@/cli/stop'
-import { persistenceHead } from '@/bootstrap/persistenceHead'
+import { persistenceHead, persistenceHistory } from '@/bootstrap/persistenceHead'
 import { EPOCH2_META_TABLES } from '@/modules/system-operations/composition/schema'
 import { persistenceSchema } from '@/bootstrap/persistenceSchema'
 import {
@@ -74,6 +74,14 @@ describe('RFC-629 T1 — persistenceHead cold-start & schema-history --check com
     )
     expect(headWithPg17.postgresqlCatalog?.postgresqlMajor).toBe(17)
     expect(headWithPg17.contract.digest).toBe(head.contract.digest)
+  })
+
+  test('persistenceHistory preserves persistenceHead object identity when loaded afterward', () => {
+    const head = persistenceHead()
+    const history = persistenceHistory()
+    expect(history.length).toBeGreaterThanOrEqual(2)
+    expect(history.at(-1)).toBe(head)
+    expect(persistenceHead()).toBe(head)
   })
 
   test('runSchemaHistoryCommand --check still verifies every historical PG catalog and fails closed on corruption', () => {
