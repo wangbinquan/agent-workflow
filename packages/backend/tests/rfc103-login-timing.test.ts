@@ -10,7 +10,7 @@
 import { describe, expect, test, beforeEach, afterEach, spyOn } from 'bun:test'
 import type { Hono } from 'hono'
 
-import { verifyPasswordDummy } from '../src/auth/passwords'
+import { DUMMY_ARGON2ID_HASH, HASH_OPTS, verifyPasswordDummy } from '../src/auth/passwords'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   describeEachProviderHttpApplication,
@@ -38,11 +38,22 @@ async function login(app: Hono, username: string, password: string): Promise<Res
 
 // RFC-359 AC-6：两个引擎各跑一遍。
 describe('RFC-103 T9 verifyPasswordDummy', () => {
+  test('预计算哑哈希使用精确的 OWASP HASH_OPTS 参数并可真实校验', async () => {
+    expect(DUMMY_ARGON2ID_HASH).toStartWith(
+      `$argon2id$v=19$m=${HASH_OPTS.memoryCost},t=${HASH_OPTS.timeCost},p=1$`,
+    )
+    expect(await Bun.password.verify('aw-constant-time-dummy-secret', DUMMY_ARGON2ID_HASH)).toBe(
+      true,
+    )
+    expect(await Bun.password.verify('wrong-secret', DUMMY_ARGON2ID_HASH)).toBe(false)
+  })
+
   test('总是返回 false 且实际跑了一次 argon2 verify', async () => {
     const spy = spyOn(Bun.password, 'verify')
     const result = await verifyPasswordDummy('whatever')
     expect(result).toBe(false)
     expect(spy.mock.calls.length).toBeGreaterThanOrEqual(1)
+    expect(spy.mock.calls[0]?.[1]).toBe(DUMMY_ARGON2ID_HASH)
     spy.mockRestore()
   })
 })

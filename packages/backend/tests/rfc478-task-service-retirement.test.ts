@@ -63,11 +63,13 @@ function targetOf(from: string, specifier: string): string | null {
 }
 
 const importsOf = (files: readonly string[]) =>
-  files.flatMap((path) =>
-    specifiersIn(readFileSync(path, 'utf8'))
+  files.flatMap((path) => {
+    const text = readFileSync(path, 'utf8')
+    if (!text.includes('/task') && !text.includes('\\u') && !text.includes('\\x')) return []
+    return specifiersIn(text)
       .filter((specifier) => targetOf(path, specifier) === RETIRED)
-      .map((specifier) => `${slash(relative(REPO_ROOT, path))} -> ${specifier}`),
-  )
+      .map((specifier) => `${slash(relative(REPO_ROOT, path))} -> ${specifier}`)
+  })
 
 const RETIRED_PATH = /(?:^|[/'"@])services\/task(?:\.ts)?$/
 const RETIRED_DIRECTORY_SEGMENT = /(?:^|\/)services$/

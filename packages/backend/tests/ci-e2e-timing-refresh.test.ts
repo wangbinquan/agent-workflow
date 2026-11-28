@@ -5,16 +5,27 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  assertCrossOsNightlyE2ETopology,
   assertE2EShardTopology,
+  CROSS_OS_NIGHTLY_E2E_SHARD_COUNTS,
   E2E_SHARD_COUNTS,
   IneligibleE2ETimingSampleError,
   mergeE2ETimings,
+  parseRefreshE2ETimingsArgs,
   writeE2ETimingReview,
   type E2ETimingArtifact,
   type E2ETimingSource,
   type E2EShardTopology,
 } from '../../../scripts/ci/refresh-e2e-timings'
-import { planE2EShards, selectedE2ETests, type E2EPlatform } from '../../../scripts/ci/e2e-shards'
+import {
+  OS_CORE_E2E_SPECS,
+  planE2EShards,
+  selectedE2ETests,
+  type DiscoveredE2ETest,
+  type E2EPlatform,
+  type E2ETier,
+  type E2ETimings,
+} from '../../../scripts/ci/e2e-shards'
 import { E2ETimingCollector } from '../../../scripts/ci/e2e-timings-reporter'
 import {
   CI_WORKFLOW_PATH,
@@ -24,6 +35,7 @@ import {
 } from '../../../scripts/ci/workflow-source'
 import {
   assertSuccessfulTimingSource,
+  CROSS_OS_NIGHTLY_E2E_TIMING_SOURCES,
   E2E_CI_TIMING_SOURCES,
 } from '../../../scripts/ci/refresh-backend-timings'
 
@@ -95,8 +107,8 @@ function fixture(source: E2ETimingSource) {
   )
 }
 
-const topologies: readonly E2EShardTopology[] = [
-  E2E_SHARD_COUNTS,
+const topologies: readonly Readonly<{ linux: 3; macos: 3 | 4; windows: 4 }>[] = [
+  { linux: 3, macos: 3, windows: 4 },
   { linux: 3, macos: 4, windows: 4 },
 ]
 
@@ -256,7 +268,7 @@ for (const shardCounts of topologies) {
       const artifacts = fixture(source)
       const index = artifacts.findIndex((artifact) => artifact.name === foreignShard.name)
       artifacts[index] = foreignShard
-      expect(() => mergeE2ETimings(artifacts, source)).toThrow('source/platform/shard')
+      expect(() => mergeE2ETimings(artifacts, source)).toThrow('source/platform/tier/shard')
 
       const wrongTiming = fixture(source)
       wrongTiming[index]!.timings.shard = {
@@ -363,15 +375,20 @@ describe('source topology authority', () => {
       ...sourceMetadata,
       shardCounts: { linux: 3, macos: 4, windows: 4 },
     }
-    const currentSource: E2ETimingSource = { ...sourceMetadata, shardCounts: E2E_SHARD_COUNTS }
+    const threeMacosSource: E2ETimingSource = {
+      ...sourceMetadata,
+      shardCounts: { linux: 3, macos: 3, windows: 4 },
+    }
     const partialLegacy = fixture(legacySource).filter(
       (artifact) => artifact.name !== 'e2e-test-timings-macOS-4',
     )
     expect(partialLegacy).toHaveLength(10)
     expect(() => mergeE2ETimings(partialLegacy, legacySource)).toThrow('11')
-    expect(() => mergeE2ETimings(partialLegacy, currentSource)).toThrow('source/platform/shard')
-    expect(() => mergeE2ETimings(fixture(currentSource), legacySource)).toThrow('11')
-    expect(() => mergeE2ETimings(fixture(legacySource), currentSource)).toThrow('10')
+    expect(() => mergeE2ETimings(partialLegacy, threeMacosSource)).toThrow(
+      'source/platform/tier/shard',
+    )
+    expect(() => mergeE2ETimings(fixture(threeMacosSource), legacySource)).toThrow('11')
+    expect(() => mergeE2ETimings(fixture(legacySource), threeMacosSource)).toThrow('10')
   })
 
   test('current source YAML declares the current topology', () => {
@@ -566,6 +583,267 @@ describe('source topology authority', () => {
       'jobs: [',
     ])
       expect(() => assertE2EShardTopology(workflow)).toThrow()
+  })
+})
+
+describe('RFC-629 3/2/2 os-core CI and 0/3/4 cross-OS nightly E2E timing refresh', () => {
+  const osCoreTests: DiscoveredE2ETest[] = OS_CORE_E2E_SPECS.map((file, index) => ({
+    id: `core-${index}`,
+    file,
+    expectedStatus: 'passed',
+  }))
+  const nonCoreTests: DiscoveredE2ETest[] = [
+    { id: 'extra-1', file: 'e2e/auth-isolation.spec.ts', expectedStatus: 'passed' },
+    { id: 'extra-2', file: 'e2e/identity-access.spec.ts', expectedStatus: 'passed' },
+  ]
+  const fullTests: DiscoveredE2ETest[] = [...osCoreTests, ...nonCoreTests]
+
+  const baseTimings = (): E2ETimings => ({
+    version: 1,
+    defaultMs: 60_000,
+    platforms: {
+      linux: {
+        'e2e/main.spec.ts': 900,
+        'e2e/auth-isolation.spec.ts': 800,
+        'e2e/stale-linux.spec.ts': 700,
+      },
+      macos: {
+        'e2e/main.spec.ts': 910,
+        'e2e/auth-isolation.spec.ts': 810,
+        'e2e/identity-access.spec.ts': 820,
+      },
+      windows: {
+        'e2e/main.spec.ts': 920,
+        'e2e/auth-isolation.spec.ts': 830,
+        'e2e/identity-access.spec.ts': 840,
+      },
+    },
+  })
+
+  function buildTieredArtifacts(
+    source: E2ETimingSource,
+    perPlatform: Partial<
+      Record<E2EPlatform, { tests: DiscoveredE2ETest[]; tier: E2ETier; durationMs?: number }>
+    >,
+  ) {
+    return (Object.entries(source.shardCounts) as [E2EPlatform, number][]).flatMap(
+      ([platform, total]) => {
+        if (total === 0) return []
+        const spec = perPlatform[platform]!
+        const runner = platform === 'linux' ? 'Linux' : platform === 'macos' ? 'macOS' : 'Windows'
+        return Array.from({ length: total }, (_, index) => {
+          const plan = planE2EShards(
+            spec.tests,
+            { version: 1, defaultMs: 60_000, platforms: { linux: {}, macos: {}, windows: {} } },
+            platform,
+            index + 1,
+            total,
+            source.sourceSha,
+            spec.tier,
+          )
+          const collector = new E2ETimingCollector(selectedE2ETests(plan))
+          let now = 0
+          const stepMs = spec.durationMs ?? 250
+          for (const test of selectedE2ETests(plan)) {
+            collector.begin(test.id, now)
+            now += stepMs
+            collector.end(test.id, test.expectedStatus, 0, now)
+          }
+          return {
+            name: `e2e-test-timings-${runner}-${index + 1}`,
+            plan,
+            timings: {
+              version: 1,
+              measurement: 'first-test-begin-to-last-test-end-per-spec',
+              sourceSha: source.sourceSha,
+              runId: String(source.runId),
+              runAttempt: '1',
+              platform,
+              shard: plan.shard,
+              discoveryDigest: plan.discoveryDigest,
+              status: 'passed',
+              ...collector.snapshot(),
+            },
+          }
+        })
+      },
+    )
+  }
+
+  test('3/2/2 os-core CI refresh requires --merge-base, updates linux full + macOS/Windows 19 OS-core specs, and preserves non-core entries', () => {
+    const source: E2ETimingSource = {
+      ...sourceMetadata,
+      shardCounts: E2E_SHARD_COUNTS,
+      sourceWorkflow: 'CI',
+    }
+    const artifacts = buildTieredArtifacts(source, {
+      linux: { tests: fullTests, tier: 'pr-full', durationMs: 150 },
+      macos: { tests: osCoreTests, tier: 'os-core', durationMs: 300 },
+      windows: { tests: osCoreTests, tier: 'os-core', durationMs: 400 },
+    })
+
+    // Refuses partial refresh without --merge-base (prevents wiping non-os-core entries).
+    expect(() => mergeE2ETimings(artifacts, source)).toThrow('--merge-base')
+
+    const merged = mergeE2ETimings(artifacts, source, 60_000, baseTimings())
+    expect(merged.provenance.sourceShardCounts).toEqual({ linux: 3, macos: 2, windows: 2 })
+    expect(merged.provenance.sourceTiers).toEqual({
+      linux: 'pr-full',
+      macos: 'os-core',
+      windows: 'os-core',
+    })
+    expect(merged.provenance.mergedFromBase).toBe(true)
+    // Linux replaced completely (stale-linux removed, fullTests measured).
+    expect(merged.platforms.linux['e2e/stale-linux.spec.ts']).toBeUndefined()
+    expect(merged.platforms.linux['e2e/main.spec.ts']).toBe(150)
+    expect(merged.platforms.linux['e2e/auth-isolation.spec.ts']).toBe(150)
+    // macOS/Windows updated OS-core entries AND preserved non-core entries from baseTimings.
+    expect(merged.platforms.macos['e2e/main.spec.ts']).toBe(300)
+    expect(merged.platforms.macos['e2e/auth-isolation.spec.ts']).toBe(810)
+    expect(merged.platforms.macos['e2e/identity-access.spec.ts']).toBe(820)
+    expect(merged.platforms.windows['e2e/main.spec.ts']).toBe(400)
+    expect(merged.platforms.windows['e2e/auth-isolation.spec.ts']).toBe(830)
+    expect(merged.platforms.windows['e2e/identity-access.spec.ts']).toBe(840)
+
+    // Wrong plan.tier fails closed.
+    const wrongTier = buildTieredArtifacts(source, {
+      linux: { tests: fullTests, tier: 'pr-full' },
+      macos: { tests: osCoreTests, tier: 'pr-full' },
+      windows: { tests: osCoreTests, tier: 'os-core' },
+    })
+    expect(() => mergeE2ETimings(wrongTier, source, 60_000, baseTimings())).toThrow(
+      'source/platform/tier/shard',
+    )
+
+    // Extra spec in macOS os-core population fails closed against exact OS_CORE_E2E_SPECS set.
+    const extraCoreSpec = buildTieredArtifacts(source, {
+      linux: { tests: fullTests, tier: 'pr-full' },
+      macos: { tests: fullTests, tier: 'os-core' },
+      windows: { tests: osCoreTests, tier: 'os-core' },
+    })
+    expect(() => mergeE2ETimings(extraCoreSpec, source, 60_000, baseTimings())).toThrow(
+      'OS_CORE_E2E_SPECS',
+    )
+  })
+
+  test('0/3/4 cross-OS nightly refresh requires --merge-base, replaces macOS/Windows pr-full while preserving Linux, and validates live workflow', () => {
+    const crossOsWorkflow = readFileSync(
+      new URL('../../../.github/workflows/e2e-cross-os-nightly.yml', import.meta.url),
+      'utf8',
+    )
+    expect(assertCrossOsNightlyE2ETopology(crossOsWorkflow)).toEqual(
+      CROSS_OS_NIGHTLY_E2E_SHARD_COUNTS,
+    )
+    expect(() =>
+      assertCrossOsNightlyE2ETopology(crossOsWorkflow.replace('shards: [4]', 'shards: [2]')),
+    ).toThrow()
+
+    const source: E2ETimingSource = {
+      ...sourceMetadata,
+      shardCounts: CROSS_OS_NIGHTLY_E2E_SHARD_COUNTS,
+      sourceWorkflow: 'e2e-cross-os-nightly',
+    }
+    const artifacts = buildTieredArtifacts(source, {
+      macos: { tests: fullTests, tier: 'pr-full', durationMs: 320 },
+      windows: { tests: fullTests, tier: 'pr-full', durationMs: 420 },
+    })
+    expect(artifacts).toHaveLength(7)
+
+    // Refuses without --merge-base (prevents wiping Linux entries).
+    expect(() => mergeE2ETimings(artifacts, source)).toThrow('--merge-base')
+
+    const merged = mergeE2ETimings(artifacts, source, 60_000, baseTimings())
+    expect(merged.provenance.sourceWorkflow).toBe('e2e-cross-os-nightly')
+    expect(merged.provenance.sourceShardCounts).toEqual({ linux: 0, macos: 3, windows: 4 })
+    expect(merged.provenance.sourceTiers).toEqual({ macos: 'pr-full', windows: 'pr-full' })
+    expect(merged.platforms.linux).toEqual(baseTimings().platforms.linux)
+    expect(merged.platforms.macos['e2e/auth-isolation.spec.ts']).toBe(320)
+    expect(merged.platforms.windows['e2e/identity-access.spec.ts']).toBe(420)
+
+    // Rejects os-core tier on cross-OS nightly.
+    const wrongNightlyTier = buildTieredArtifacts(source, {
+      macos: { tests: osCoreTests, tier: 'os-core' },
+      windows: { tests: fullTests, tier: 'pr-full' },
+    })
+    expect(() => mergeE2ETimings(wrongNightlyTier, source, 60_000, baseTimings())).toThrow(
+      'source/platform/tier/shard',
+    )
+
+    // Source allowlist accepts schedule + workflow_dispatch on e2e-cross-os-nightly and rejects CI/push.
+    const baseNightlyRun = {
+      id: sourceMetadata.runId,
+      name: 'e2e-cross-os-nightly',
+      status: 'completed',
+      conclusion: 'success',
+      event: 'schedule',
+      head_branch: 'main',
+      head_sha: sourceMetadata.sourceSha,
+      head_repository: { full_name: sourceMetadata.repository },
+    }
+    expect(
+      assertSuccessfulTimingSource(
+        baseNightlyRun,
+        sourceMetadata.repository,
+        sourceMetadata.runId,
+        CROSS_OS_NIGHTLY_E2E_TIMING_SOURCES,
+      ),
+    ).toBe(sourceMetadata.sourceSha)
+    expect(
+      assertSuccessfulTimingSource(
+        { ...baseNightlyRun, event: 'workflow_dispatch' },
+        sourceMetadata.repository,
+        sourceMetadata.runId,
+        CROSS_OS_NIGHTLY_E2E_TIMING_SOURCES,
+      ),
+    ).toBe(sourceMetadata.sourceSha)
+    for (const bad of [
+      { name: 'CI', event: 'push' },
+      { name: 'e2e-cross-os-nightly', event: 'push' },
+      { name: 'backend-full-nightly', event: 'schedule' },
+    ]) {
+      expect(() =>
+        assertSuccessfulTimingSource(
+          { ...baseNightlyRun, ...bad },
+          sourceMetadata.repository,
+          sourceMetadata.runId,
+          CROSS_OS_NIGHTLY_E2E_TIMING_SOURCES,
+        ),
+      ).toThrow('successful complete')
+    }
+  })
+
+  test('parseRefreshE2ETimingsArgs parses --source and --merge-base flags and rejects invalid inputs', () => {
+    expect(parseRefreshE2ETimingsArgs(['dir', '123', 'out.json'])).toEqual({
+      sourceKind: 'ci',
+      mergeBasePath: undefined,
+      directory: 'dir',
+      runId: 123,
+      output: 'out.json',
+    })
+    expect(
+      parseRefreshE2ETimingsArgs([
+        '--source=cross-os-nightly',
+        '--merge-base',
+        'base.json',
+        'dir',
+        '456',
+        'out.json',
+      ]),
+    ).toEqual({
+      sourceKind: 'cross-os-nightly',
+      mergeBasePath: 'base.json',
+      directory: 'dir',
+      runId: 456,
+      output: 'out.json',
+    })
+    for (const bad of [
+      ['--source=invalid', 'dir', '123', 'out.json'],
+      ['--merge-base', '', 'dir', '123', 'out.json'],
+      ['--unknown', 'dir', '123', 'out.json'],
+      ['dir', 'abc', 'out.json'],
+    ]) {
+      expect(() => parseRefreshE2ETimingsArgs(bad)).toThrow()
+    }
   })
 })
 

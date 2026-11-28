@@ -35,6 +35,9 @@ jobs:
       mode: ${{ steps.classify.outputs.mode }}
       base_sha: ${{ steps.classify.outputs.base_sha }}
       links_base_sha: ${{ steps.classify.outputs.links_base_sha }}
+      run_frontend_full: ${{ steps.classify.outputs.run_frontend_full }}
+      run_e2e: ${{ steps.classify.outputs.run_e2e }}
+      gitleaks_base_sha: ${{ steps.classify.outputs.gitleaks_base_sha }}
       reason: ${{ steps.classify.outputs.reason }}
     steps:
       - uses: actions/checkout@v5
@@ -150,6 +153,9 @@ jobs:
     with:
       run_migration_full: ${{ needs['detect-changes'].outputs.mode == 'full' }}
       links_base_sha: ${{ needs['detect-changes'].outputs.links_base_sha }}
+      run_frontend_full: ${{ needs['detect-changes'].outputs.run_frontend_full != 'false' }}
+      run_e2e: ${{ needs['detect-changes'].outputs.run_e2e != 'false' }}
+      gitleaks_base_sha: ${{ needs['detect-changes'].outputs.gitleaks_base_sha }}
 
   ci-required:
     # One stable, unique terminal context for branch protection. It fails closed
@@ -163,6 +169,7 @@ jobs:
     env:
       DETECT_CHANGES_RESULT: ${{ needs['detect-changes'].result }}
       CI_MODE: ${{ needs['detect-changes'].outputs.mode }}
+      RUN_E2E: ${{ needs['detect-changes'].outputs.run_e2e }}
       DOCS_FAST_GATE_RESULT: ${{ needs['docs-fast-gate'].result }}
       FULL_CI_RESULT: ${{ needs['full-ci'].result }}
       LINT_RESULT: ${{ needs['full-ci'].outputs['lint'] }}
@@ -212,12 +219,24 @@ jobs:
               expect_result scans success "$SCANS_RESULT"
               expect_result perf success "$PERF_RESULT"
               expect_result docs success "$DOCS_RESULT"
-              expect_result build-binary success "$BUILD_BINARY_RESULT"
-              expect_result build-binary-macos success "$BUILD_BINARY_MACOS_RESULT"
-              expect_result build-binary-windows success "$BUILD_BINARY_WINDOWS_RESULT"
-              expect_result e2e success "$E2E_RESULT"
-              expect_result e2e-macos success "$E2E_MACOS_RESULT"
-              expect_result e2e-windows success "$E2E_WINDOWS_RESULT"
+              if [ "$RUN_E2E" = "true" ]; then
+                expect_result build-binary success "$BUILD_BINARY_RESULT"
+                expect_result build-binary-macos success "$BUILD_BINARY_MACOS_RESULT"
+                expect_result build-binary-windows success "$BUILD_BINARY_WINDOWS_RESULT"
+                expect_result e2e success "$E2E_RESULT"
+                expect_result e2e-macos success "$E2E_MACOS_RESULT"
+                expect_result e2e-windows success "$E2E_WINDOWS_RESULT"
+              elif [ "$RUN_E2E" = "false" ]; then
+                expect_result build-binary skipped "$BUILD_BINARY_RESULT"
+                expect_result build-binary-macos skipped "$BUILD_BINARY_MACOS_RESULT"
+                expect_result build-binary-windows skipped "$BUILD_BINARY_WINDOWS_RESULT"
+                expect_result e2e skipped "$E2E_RESULT"
+                expect_result e2e-macos skipped "$E2E_MACOS_RESULT"
+                expect_result e2e-windows skipped "$E2E_WINDOWS_RESULT"
+              else
+                echo "::error::invalid RUN_E2E '${RUN_E2E:-missing}', expected true|false"
+                failed=1
+              fi
               if [ "$CI_MODE" = "full" ]; then
                 expect_result test-backend-migration success "$TEST_BACKEND_MIGRATION_RESULT"
               else

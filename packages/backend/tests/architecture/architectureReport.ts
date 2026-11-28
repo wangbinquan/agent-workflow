@@ -2922,6 +2922,11 @@ export function reportGateSets(
   entries: readonly string[],
   known: readonly KnownViolationRecord[],
   publicContract: PublicContractInputs = corpusPublicContract(corpus),
+  gateSets: Readonly<Record<string, string[]>> = gateViolationSets(
+    corpus,
+    architectureFiles,
+    entries,
+  ),
 ): Record<string, string[]> {
   const pairs = corpus.edges
     .filter(
@@ -2950,7 +2955,7 @@ export function reportGateSets(
         .map((edge) => `${edge.from.path} -> ${edge.target}`),
     )
   return {
-    ...gateViolationSets(corpus, architectureFiles, entries),
+    ...gateSets,
     'depcheck-known-violations': known
       .map((entry) => `${entry.rule}|${entry.from}|${entry.to}`)
       .sort(),

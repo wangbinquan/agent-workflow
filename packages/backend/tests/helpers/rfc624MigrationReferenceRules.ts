@@ -626,7 +626,220 @@ export const RFC589_RULE = {
   oldPaths: ['routes/agents', 'routes/workgroups'],
 } as const
 
-export const MIGRATION_REFERENCE_RULES = [
+export interface ForbiddenNamedImportRule {
+  readonly target: string
+  readonly names: readonly string[]
+}
+
+export interface MigrationReferenceRule {
+  readonly id: string
+  readonly sourceFile: string
+  readonly title: string
+  readonly oldPaths: readonly string[]
+  readonly oldPrefixes?: readonly string[]
+  readonly forbiddenNamedImports?: readonly ForbiddenNamedImportRule[]
+}
+
+export const RFC584_RETIRED: ReadonlyArray<readonly [string, string | null]> = [
+  [
+    'modules/development-automation/infrastructure/actionWorkspace',
+    'tests/helpers/developmentActionWorkspace',
+  ],
+  [
+    'modules/development-automation/infrastructure/pipelineEvidenceImport',
+    'tests/helpers/developmentPipelineEvidenceImport',
+  ],
+  [
+    'modules/development-automation/infrastructure/verificationRunner',
+    'tests/helpers/developmentVerificationRunner',
+  ],
+  [
+    'modules/event-center/infrastructure/customEventObserverProgram',
+    'tests/helpers/customEventObserverProgram',
+  ],
+  ['modules/task-execution/composition/systemAgentRun', 'tests/helpers/preparedSystemAgentRun'],
+  ['modules/resource-catalog/infrastructure/mcpDiagnosticsEffects', null],
+  ['modules/intent/application/maintenance', null],
+]
+
+export const RFC584_RULE: MigrationReferenceRule = {
+  id: 'RFC-584',
+  sourceFile:
+    'packages/backend/tests/rfc584-rfc370-closure-unreachable-production-files-boundary.test.ts',
+  title: 'src / tests / scripts 的全部说明符不再解析到旧路径',
+  oldPaths: RFC584_RETIRED.map(([old]) => old),
+}
+
+export const RFC585_MOVED: ReadonlyArray<readonly [string, string]> = [
+  [
+    'platform/workspace/local/isolation',
+    'modules/source-control/infrastructure/local/nodeIsolation',
+  ],
+  [
+    'platform/workspace/local/isolationReferences',
+    'modules/source-control/infrastructure/local/isolationReferences',
+  ],
+  [
+    'platform/workspace/local/submoduleParams',
+    'modules/source-control/infrastructure/local/submoduleParams',
+  ],
+  ['services/gitSubmodule', 'modules/source-control/infrastructure/local/gitSubmodule'],
+]
+
+export const RFC585_RULE: MigrationReferenceRule = {
+  id: 'RFC-585',
+  sourceFile:
+    'packages/backend/tests/rfc585-node-isolation-family-into-source-control-boundary.test.ts',
+  title: 'src / tests / scripts 的全部说明符不再解析到旧路径',
+  oldPaths: RFC585_MOVED.map(([old]) => old),
+}
+
+export const RFC586_RULE: MigrationReferenceRule = {
+  id: 'RFC-586',
+  sourceFile:
+    'packages/backend/tests/rfc586-merge-conflict-resolution-into-source-control-boundary.test.ts',
+  title: 'src / tests / scripts 的全部说明符不再解析到旧路径',
+  oldPaths: ['services/mergeAgent'],
+}
+
+export const RFC588_RULE: MigrationReferenceRule = {
+  id: 'RFC-588',
+  sourceFile: 'packages/backend/tests/rfc588-task-routes-split-by-owner-boundary.test.ts',
+  title: 'src / tests / scripts 的全部说明符不再解析到旧路径',
+  oldPaths: ['routes/tasks'],
+}
+
+export const RFC590_RULE: MigrationReferenceRule = {
+  id: 'RFC-590',
+  sourceFile: 'packages/backend/tests/rfc590-task-catalog-route-into-inbound-boundary.test.ts',
+  title: 'src / tests / scripts 的全部说明符不再解析到旧路径或 task-catalog public',
+  oldPaths: ['routes/taskCatalog'],
+  oldPrefixes: ['modules/task-catalog/public/'],
+}
+
+export const RFC591_MOVED_NAMES = [
+  'GIT_ABORTED_EXIT_CODE',
+  'GIT_TIMEOUT_EXIT_CODE',
+  'GitRunResult',
+  'nonInteractiveGitEnv',
+  'runGit',
+] as const
+
+export const RFC591_RULE: MigrationReferenceRule = {
+  id: 'RFC-591',
+  sourceFile: 'packages/backend/tests/rfc591-git-process-runner-into-platform-boundary.test.ts',
+  title: 'src / tests / scripts 里没有任何 import 从 util/git 取这五个名字',
+  oldPaths: [],
+  forbiddenNamedImports: [{ target: 'util/git', names: RFC591_MOVED_NAMES }],
+}
+
+export const RFC592_MOVED_NAMES = ['gitCommitExists', 'gitMetaDirsFor'] as const
+
+export const RFC592_RULE: MigrationReferenceRule = {
+  id: 'RFC-592',
+  sourceFile:
+    'packages/backend/tests/rfc592-git-queries-and-collaboration-rollback-port-boundary.test.ts',
+  title: 'src / tests / scripts 里没有任何 import 从 util/git 取这两个名字',
+  oldPaths: [],
+  forbiddenNamedImports: [{ target: 'util/git', names: RFC592_MOVED_NAMES }],
+}
+
+export const RFC593_RULE: MigrationReferenceRule = {
+  id: 'RFC-593',
+  sourceFile: 'packages/backend/tests/rfc593-util-git-into-source-control-boundary.test.ts',
+  title: 'src / tests / scripts 的全部说明符不再解析到 util/git',
+  oldPaths: ['util/git'],
+}
+
+export const RFC594_RULE: MigrationReferenceRule = {
+  id: 'RFC-594',
+  sourceFile:
+    'packages/backend/tests/rfc594-code-round-contract-into-task-execution-boundary.test.ts',
+  title: 'src / tests / scripts 的全部说明符不再解析到 services/codeRoundContract',
+  oldPaths: ['services/codeRoundContract'],
+}
+
+export const RFC617_MOVED: readonly (readonly [string, string])[] = [
+  ['util/redact', 'platform/logging/redact'],
+  ['util/safePath', 'platform/workspace/local/safePath'],
+  ['util/fileTrust', 'platform/execution/local/fileTrust'],
+  ['util/win32Acl', 'platform/execution/local/win32Acl'],
+  ['util/gitRef', 'platform/contracts/gitRef'],
+  ['util/gitHardening', 'platform/execution/local/gitHardening'],
+]
+
+export const RFC617_RULE: MigrationReferenceRule = {
+  id: 'RFC-617',
+  sourceFile: 'packages/backend/tests/rfc617-util-primitives-into-platform-boundary.test.ts',
+  title: 'src / tests / scripts 没有文件再经任何写法取旧位置',
+  oldPaths: RFC617_MOVED.map(([old]) => old),
+}
+
+export const RFC618_REMOVED = [
+  'modules/intent/domain/teaching/reconciliation',
+  'modules/resource-catalog/application/portableImportReferences',
+  'modules/resource-catalog/composition/portableImportReferences',
+  'modules/resource-catalog/infrastructure/legacy/workflow.yaml',
+] as const
+
+export const RFC618_RULE: MigrationReferenceRule = {
+  id: 'RFC-618',
+  sourceFile: 'packages/backend/tests/rfc618-unreachable-production-files-boundary.test.ts',
+  title: '没有文件再经任何写法取四个旧位置',
+  oldPaths: RFC618_REMOVED,
+}
+
+export const RFC619_MOVED: readonly (readonly [string, string])[] = [
+  ['util/gitCredentialLease', 'platform/execution/local/gitCredentialLease'],
+  ['util/gitCredentialHelper', 'platform/execution/local/gitCredentialHelper'],
+  ['util/oidcResponse', 'routes/oidcResponse'],
+]
+
+export const RFC619_RULE: MigrationReferenceRule = {
+  id: 'RFC-619',
+  sourceFile: 'packages/backend/tests/rfc619-util-emptied-boundary.test.ts',
+  title: '没有文件再经任何写法取 util/ 下的路径',
+  oldPaths: RFC619_MOVED.map(([old]) => old),
+  oldPrefixes: ['util/'],
+}
+
+export const RFC620_RULE: MigrationReferenceRule = {
+  id: 'RFC-620',
+  sourceFile: 'packages/backend/tests/rfc620-secret-box-into-platform-boundary.test.ts',
+  title: '没有文件再经任何写法取 auth/secretBox',
+  oldPaths: ['auth/secretBox'],
+}
+
+export const RFC621_OLD = ['auth/systemIdentity', 'auth/token'] as const
+
+export const RFC621_RULE: MigrationReferenceRule = {
+  id: 'RFC-621',
+  sourceFile: 'packages/backend/tests/rfc621-system-identity-and-token-file-boundary.test.ts',
+  title: '没有文件再经任何写法取 auth/systemIdentity 或 auth/token',
+  oldPaths: RFC621_OLD,
+}
+
+export const RFC622_BINDER_NAMES = [
+  'bindChangeCandidateParticipant',
+  'bindCandidateDeliveryParticipant',
+  'bindRepositoryCommitParticipant',
+] as const
+
+export const RFC622_RULE: MigrationReferenceRule = {
+  id: 'RFC-622',
+  sourceFile:
+    'packages/backend/tests/rfc622-source-control-binders-into-application-boundary.test.ts',
+  title: '没有文件再取旧的提交绑定文件或从组合层取候选绑定器',
+  oldPaths: ['modules/source-control/composition/repositoryCommit'],
+  forbiddenNamedImports: [
+    {
+      target: 'modules/source-control/composition/repositoryCandidate',
+      names: RFC622_BINDER_NAMES,
+    },
+  ],
+}
+
+export const MIGRATION_REFERENCE_RULES: readonly MigrationReferenceRule[] = [
   RFC571_RULE,
   RFC572_RULE,
   RFC573_RULE,
@@ -640,8 +853,23 @@ export const MIGRATION_REFERENCE_RULES = [
   RFC581_RULE,
   RFC582_RULE,
   RFC583_RULE,
+  RFC584_RULE,
+  RFC585_RULE,
+  RFC586_RULE,
   RFC587_RULE,
+  RFC588_RULE,
   RFC589_RULE,
+  RFC590_RULE,
+  RFC591_RULE,
+  RFC592_RULE,
+  RFC593_RULE,
+  RFC594_RULE,
+  RFC617_RULE,
+  RFC618_RULE,
+  RFC619_RULE,
+  RFC620_RULE,
+  RFC621_RULE,
+  RFC622_RULE,
 ] as const
 
 export const RFC575_UTIL_REMAINDER: string[] = [

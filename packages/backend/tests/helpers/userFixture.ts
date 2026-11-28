@@ -6,7 +6,8 @@ import type { CreateUserBody, PatchUserBody, UserPublic } from '@agent-workflow/
 import { SYSTEM_USER_ID } from '@agent-workflow/shared'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { createAuthRuntimeFor } from '@/auth/composition'
-import { hashPassword } from '@/auth/passwords'
+import { HASH_OPTS, hashPassword } from '@/auth/passwords'
+import { materializeTestFixtureBytes } from './testFixtureCache'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
@@ -88,13 +89,51 @@ export async function countNonSystemUsers(db: PersistenceDb): Promise<number> {
   return (await listAllUsers(db)).filter((user) => user.id !== SYSTEM_USER_ID).length
 }
 
+const fixturePasswordHashCache = new Map<string, Promise<string>>()
+
+export async function fixturePasswordHash(plaintext: string): Promise<string> {
+  // Keep exact production validation behavior without caching rejected inputs.
+  if (plaintext.length < 8) {
+    return hashPassword(plaintext)
+  }
+  const cacheKey = JSON.stringify({
+    algorithm: HASH_OPTS.algorithm,
+    memoryCost: HASH_OPTS.memoryCost,
+    timeCost: HASH_OPTS.timeCost,
+    plaintext,
+  })
+  const cached = fixturePasswordHashCache.get(cacheKey)
+  if (cached !== undefined) return cached
+  const pending = (async () => {
+    const { bytes } = await materializeTestFixtureBytes({
+      kind: 'test-user-argon2id',
+      inputs: {
+        format: 1,
+        algorithm: HASH_OPTS.algorithm,
+        memoryCost: HASH_OPTS.memoryCost,
+        timeCost: HASH_OPTS.timeCost,
+        plaintext,
+      },
+      buildBytes: async () => new TextEncoder().encode(await hashPassword(plaintext)),
+    })
+    return new TextDecoder().decode(bytes)
+  })()
+  fixturePasswordHashCache.set(cacheKey, pending)
+  try {
+    return await pending
+  } catch (error) {
+    fixturePasswordHashCache.delete(cacheKey)
+    throw error
+  }
+}
+
 export async function createUser(db: PersistenceDb, input: CreateUserInput): Promise<UserRow> {
   return withIdentity(db, async (runtime) => {
     const operator = await runtime.localOperator.forUser(input.createdBy ?? SYSTEM_USER_ID)
     if (operator === null)
       throw new ForbiddenError('user-access-actor-inactive', 'user access actor is not active')
     const id = ulid()
-    const passwordHash = input.password ? await hashPassword(input.password) : null
+    const passwordHash = input.password ? await fixturePasswordHash(input.password) : null
     // CLI / OIDC 风格夹具允许指定初始状态、创建者和时间；统一交给生产建号命令。
     await runtime.createManagedUser.execute(operator.commandContext(input.now ?? Date.now()), {
       id,

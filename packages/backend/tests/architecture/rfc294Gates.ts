@@ -1188,6 +1188,41 @@ function literalSpecifier(node: ts.Expression | ts.TypeNode): string | null {
   return null
 }
 
+interface UnitPathIndex {
+  readonly exact: Map<string, { readonly unit: SourceUnit; readonly index: number }>
+  readonly suffix: Map<string, { readonly unit: SourceUnit; readonly index: number }>
+}
+
+const unitPathIndexes = new WeakMap<readonly SourceUnit[], UnitPathIndex>()
+const importBindingsCache = new WeakMap<SourceUnit, Map<string, ImportBinding>>()
+const namedDeclarationsCache = new WeakMap<SourceUnit, Map<string, ts.Declaration>>()
+const namedDeclarationResolutionCache = new WeakMap<
+  readonly SourceUnit[],
+  Map<string, { readonly unit: SourceUnit; readonly declaration: ts.Declaration } | null>
+>()
+const declarationSensitiveCache = new WeakMap<readonly SourceUnit[], Map<string, string | null>>()
+
+function getUnitPathIndex(units: readonly SourceUnit[]): UnitPathIndex {
+  const cached = unitPathIndexes.get(units)
+  if (cached !== undefined) return cached
+  const exact = new Map<string, { readonly unit: SourceUnit; readonly index: number }>()
+  const suffix = new Map<string, { readonly unit: SourceUnit; readonly index: number }>()
+  for (let index = 0; index < units.length; index += 1) {
+    const unit = units[index]!
+    const entry = { unit, index }
+    if (!exact.has(unit.path)) exact.set(unit.path, entry)
+    let slash = unit.path.indexOf('/')
+    while (slash !== -1) {
+      const tail = unit.path.slice(slash + 1)
+      if (tail.length > 0 && !suffix.has(tail)) suffix.set(tail, entry)
+      slash = unit.path.indexOf('/', slash + 1)
+    }
+  }
+  const built: UnitPathIndex = { exact, suffix }
+  unitPathIndexes.set(units, built)
+  return built
+}
+
 function resolveUnit(
   units: readonly SourceUnit[],
   fromPath: string,
@@ -1211,13 +1246,31 @@ function resolveUnit(
   const attempts = [candidate, `${candidate}.ts`, `${candidate}.tsx`, `${candidate}/index.ts`].map(
     portable,
   )
-  return units.find(
-    (unit) =>
-      attempts.includes(unit.path) || attempts.some((attempt) => unit.path.endsWith(`/${attempt}`)),
-  )
+  if (attempts.some((attempt) => attempt.length === 0 || attempt.startsWith('/'))) {
+    return units.find(
+      (unit) =>
+        attempts.includes(unit.path) ||
+        attempts.some((attempt) => unit.path.endsWith(`/${attempt}`)),
+    )
+  }
+  const index = getUnitPathIndex(units)
+  let best: { readonly unit: SourceUnit; readonly index: number } | undefined
+  for (const attempt of attempts) {
+    const exactHit = index.exact.get(attempt)
+    if (exactHit !== undefined && (best === undefined || exactHit.index < best.index)) {
+      best = exactHit
+    }
+    const suffixHit = index.suffix.get(attempt)
+    if (suffixHit !== undefined && (best === undefined || suffixHit.index < best.index)) {
+      best = suffixHit
+    }
+  }
+  return best?.unit
 }
 
 function importBindings(unit: SourceUnit): Map<string, ImportBinding> {
+  const cached = importBindingsCache.get(unit)
+  if (cached !== undefined) return cached
   const bindings = new Map<string, ImportBinding>()
   for (const statement of unit.source.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) {
@@ -1244,10 +1297,13 @@ function importBindings(unit: SourceUnit): Map<string, ImportBinding> {
       })
     }
   }
+  importBindingsCache.set(unit, bindings)
   return bindings
 }
 
 function namedDeclarations(unit: SourceUnit): Map<string, ts.Declaration> {
+  const cached = namedDeclarationsCache.get(unit)
+  if (cached !== undefined) return cached
   const declarations = new Map<string, ts.Declaration>()
   for (const statement of unit.source.statements) {
     if (
@@ -1265,7 +1321,101 @@ function namedDeclarations(unit: SourceUnit): Map<string, ts.Declaration> {
       }
     }
   }
+  namedDeclarationsCache.set(unit, declarations)
   return declarations
+}
+
+function resolveNamedDeclarationInternal(
+  units: readonly SourceUnit[],
+  unit: SourceUnit,
+  name: string,
+  seen: Set<string>,
+  cache: Map<string, { readonly unit: SourceUnit; readonly declaration: ts.Declaration } | null>,
+): {
+  readonly result: { readonly unit: SourceUnit; readonly declaration: ts.Declaration } | undefined
+  readonly hitCycle: boolean
+} {
+  const key = `${unit.path}#${name}`
+  if (cache.has(key)) {
+    return { result: cache.get(key) ?? undefined, hitCycle: false }
+  }
+  if (seen.has(key)) return { result: undefined, hitCycle: true }
+  seen.add(key)
+
+  let sawCycle = false
+  try {
+    const local = namedDeclarations(unit).get(name)
+    if (local !== undefined) {
+      const found = { unit, declaration: local }
+      cache.set(key, found)
+      return { result: found, hitCycle: false }
+    }
+
+    const binding = importBindings(unit).get(name)
+    if (binding !== undefined && binding.importedName !== '*') {
+      const target = resolveUnit(units, unit.path, binding.specifier)
+      if (target !== undefined) {
+        const resolved = resolveNamedDeclarationInternal(
+          units,
+          target,
+          binding.importedName,
+          seen,
+          cache,
+        )
+        if (resolved.result !== undefined) {
+          cache.set(key, resolved.result)
+          return { result: resolved.result, hitCycle: false }
+        }
+        if (resolved.hitCycle) sawCycle = true
+      }
+    }
+
+    for (const statement of unit.source.statements) {
+      if (!ts.isExportDeclaration(statement)) continue
+      if (statement.exportClause === undefined && statement.moduleSpecifier !== undefined) {
+        const target = resolveUnit(
+          units,
+          unit.path,
+          literalSpecifier(statement.moduleSpecifier) ?? '',
+        )
+        if (target !== undefined) {
+          const resolved = resolveNamedDeclarationInternal(units, target, name, seen, cache)
+          if (resolved.result !== undefined) {
+            cache.set(key, resolved.result)
+            return { result: resolved.result, hitCycle: false }
+          }
+          if (resolved.hitCycle) sawCycle = true
+        }
+        continue
+      }
+      if (statement.exportClause === undefined || !ts.isNamedExports(statement.exportClause))
+        continue
+      for (const element of statement.exportClause.elements) {
+        if (element.name.text !== name) continue
+        const target =
+          statement.moduleSpecifier === undefined
+            ? unit
+            : resolveUnit(units, unit.path, literalSpecifier(statement.moduleSpecifier) ?? '')
+        if (target === undefined) continue
+        const resolved = resolveNamedDeclarationInternal(
+          units,
+          target,
+          element.propertyName?.text ?? element.name.text,
+          seen,
+          cache,
+        )
+        if (resolved.result !== undefined) {
+          cache.set(key, resolved.result)
+          return { result: resolved.result, hitCycle: false }
+        }
+        if (resolved.hitCycle) sawCycle = true
+      }
+    }
+    if (!sawCycle) cache.set(key, null)
+    return { result: undefined, hitCycle: sawCycle }
+  } finally {
+    seen.delete(key)
+  }
 }
 
 function resolveNamedDeclaration(
@@ -1274,54 +1424,12 @@ function resolveNamedDeclaration(
   name: string,
   seen = new Set<string>(),
 ): { unit: SourceUnit; declaration: ts.Declaration } | undefined {
-  const key = `${unit.path}#${name}`
-  if (seen.has(key)) return undefined
-  seen.add(key)
-
-  const local = namedDeclarations(unit).get(name)
-  if (local !== undefined) return { unit, declaration: local }
-
-  const binding = importBindings(unit).get(name)
-  if (binding !== undefined && binding.importedName !== '*') {
-    const target = resolveUnit(units, unit.path, binding.specifier)
-    if (target !== undefined) {
-      const resolved = resolveNamedDeclaration(units, target, binding.importedName, seen)
-      if (resolved !== undefined) return resolved
-    }
+  let cache = namedDeclarationResolutionCache.get(units)
+  if (cache === undefined) {
+    cache = new Map()
+    namedDeclarationResolutionCache.set(units, cache)
   }
-
-  for (const statement of unit.source.statements) {
-    if (!ts.isExportDeclaration(statement)) continue
-    if (statement.exportClause === undefined && statement.moduleSpecifier !== undefined) {
-      const target = resolveUnit(
-        units,
-        unit.path,
-        literalSpecifier(statement.moduleSpecifier) ?? '',
-      )
-      if (target !== undefined) {
-        const resolved = resolveNamedDeclaration(units, target, name, seen)
-        if (resolved !== undefined) return resolved
-      }
-      continue
-    }
-    if (statement.exportClause === undefined || !ts.isNamedExports(statement.exportClause)) continue
-    for (const element of statement.exportClause.elements) {
-      if (element.name.text !== name) continue
-      const target =
-        statement.moduleSpecifier === undefined
-          ? unit
-          : resolveUnit(units, unit.path, literalSpecifier(statement.moduleSpecifier) ?? '')
-      if (target === undefined) continue
-      const resolved = resolveNamedDeclaration(
-        units,
-        target,
-        element.propertyName?.text ?? element.name.text,
-        seen,
-      )
-      if (resolved !== undefined) return resolved
-    }
-  }
-  return undefined
+  return resolveNamedDeclarationInternal(units, unit, name, seen, cache).result
 }
 
 function hasExportModifier(node: ts.Node): boolean {
@@ -1725,59 +1833,125 @@ function isReviewedTransactionPort(unit: SourceUnit, declaration: ts.Declaration
   )
 }
 
+function sensitiveIdentityNameInternal(
+  units: readonly SourceUnit[],
+  unit: SourceUnit,
+  node: ts.TypeNode | undefined,
+  seen: Set<string>,
+  declCache: Map<string, string | null>,
+): { readonly value: string | undefined; readonly hitCycle: boolean } {
+  if (node === undefined) return { value: undefined, hitCycle: false }
+  if (ts.isTypeReferenceNode(node)) {
+    const name = ts.isIdentifier(node.typeName) ? node.typeName.text : node.typeName.right.text
+    const target = declarationForTypeReference(units, unit, node)
+    let sawCycle = false
+    if (target !== undefined) {
+      if (isReviewedTransactionPort(target.unit, target.declaration)) {
+        return { value: undefined, hitCycle: false }
+      }
+      const key = `${target.unit.path}:${target.declaration.pos}`
+      if (declCache.has(key)) {
+        const cached = declCache.get(key) ?? undefined
+        if (cached !== undefined) return { value: cached, hitCycle: false }
+      } else {
+        if (seen.has(key)) {
+          sawCycle = true
+        } else {
+          seen.add(key)
+          try {
+            const declarationNameNode = ts.getNameOfDeclaration(target.declaration)
+            const declarationName =
+              declarationNameNode !== undefined && ts.isIdentifier(declarationNameNode)
+                ? declarationNameNode.text
+                : undefined
+            if (declarationName !== undefined && SENSITIVE_TYPE.test(declarationName)) {
+              if (ts.isTypeAliasDeclaration(target.declaration)) {
+                const underlying = sensitiveIdentityNameInternal(
+                  units,
+                  target.unit,
+                  target.declaration.type,
+                  seen,
+                  declCache,
+                )
+                if (underlying.value !== undefined) {
+                  declCache.set(key, underlying.value)
+                  return { value: underlying.value, hitCycle: false }
+                }
+                if (!underlying.hitCycle) declCache.set(key, declarationName)
+                return { value: declarationName, hitCycle: false }
+              }
+              declCache.set(key, declarationName)
+              return { value: declarationName, hitCycle: false }
+            }
+            if (ts.isTypeAliasDeclaration(target.declaration)) {
+              const aliasResult = sensitiveIdentityNameInternal(
+                units,
+                target.unit,
+                target.declaration.type,
+                seen,
+                declCache,
+              )
+              if (aliasResult.value !== undefined) {
+                declCache.set(key, aliasResult.value)
+                return { value: aliasResult.value, hitCycle: false }
+              }
+              if (aliasResult.hitCycle) {
+                sawCycle = true
+              } else {
+                declCache.set(key, null)
+              }
+            } else {
+              declCache.set(key, null)
+            }
+          } finally {
+            seen.delete(key)
+          }
+        }
+      }
+      if (ts.isTypeAliasDeclaration(target.declaration)) {
+        for (const argument of node.typeArguments ?? []) {
+          const sensitive = sensitiveIdentityNameInternal(units, unit, argument, seen, declCache)
+          if (sensitive.value !== undefined) return { value: sensitive.value, hitCycle: false }
+          if (sensitive.hitCycle) sawCycle = true
+        }
+        return { value: undefined, hitCycle: sawCycle }
+      }
+    }
+    if (SENSITIVE_TYPE.test(name)) return { value: name, hitCycle: false }
+    for (const argument of node.typeArguments ?? []) {
+      const sensitive = sensitiveIdentityNameInternal(units, unit, argument, seen, declCache)
+      if (sensitive.value !== undefined) return { value: sensitive.value, hitCycle: false }
+      if (sensitive.hitCycle) sawCycle = true
+    }
+    return { value: undefined, hitCycle: sawCycle }
+  }
+  if (ts.isParenthesizedTypeNode(node) || ts.isTypeOperatorNode(node)) {
+    return sensitiveIdentityNameInternal(units, unit, node.type, seen, declCache)
+  }
+  if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node)) {
+    let sawCycle = false
+    for (const member of node.types) {
+      const sensitive = sensitiveIdentityNameInternal(units, unit, member, seen, declCache)
+      if (sensitive.value !== undefined) return { value: sensitive.value, hitCycle: false }
+      if (sensitive.hitCycle) sawCycle = true
+    }
+    return { value: undefined, hitCycle: sawCycle }
+  }
+  return { value: undefined, hitCycle: false }
+}
+
 function sensitiveIdentityName(
   units: readonly SourceUnit[],
   unit: SourceUnit,
   node: ts.TypeNode | undefined,
   seen = new Set<string>(),
 ): string | undefined {
-  if (node === undefined) return undefined
-  if (ts.isTypeReferenceNode(node)) {
-    const name = ts.isIdentifier(node.typeName) ? node.typeName.text : node.typeName.right.text
-    const target = declarationForTypeReference(units, unit, node)
-    if (target !== undefined) {
-      if (isReviewedTransactionPort(target.unit, target.declaration)) return undefined
-      const key = `${target.unit.path}:${target.declaration.pos}`
-      if (seen.has(key)) return undefined
-      seen.add(key)
-      const declarationNameNode = ts.getNameOfDeclaration(target.declaration)
-      if (
-        declarationNameNode !== undefined &&
-        ts.isIdentifier(declarationNameNode) &&
-        SENSITIVE_TYPE.test(declarationNameNode.text)
-      ) {
-        if (ts.isTypeAliasDeclaration(target.declaration)) {
-          const underlying = sensitiveIdentityName(
-            units,
-            target.unit,
-            target.declaration.type,
-            seen,
-          )
-          if (underlying !== undefined) return underlying
-        }
-        return declarationNameNode.text
-      }
-      if (ts.isTypeAliasDeclaration(target.declaration)) {
-        return sensitiveIdentityName(units, target.unit, target.declaration.type, seen)
-      }
-    }
-    if (SENSITIVE_TYPE.test(name)) return name
-    for (const argument of node.typeArguments ?? []) {
-      const sensitive = sensitiveIdentityName(units, unit, argument, seen)
-      if (sensitive !== undefined) return sensitive
-    }
-    return undefined
+  let declCache = declarationSensitiveCache.get(units)
+  if (declCache === undefined) {
+    declCache = new Map()
+    declarationSensitiveCache.set(units, declCache)
   }
-  if (ts.isParenthesizedTypeNode(node) || ts.isTypeOperatorNode(node)) {
-    return sensitiveIdentityName(units, unit, node.type, seen)
-  }
-  if (ts.isUnionTypeNode(node) || ts.isIntersectionTypeNode(node)) {
-    for (const member of node.types) {
-      const sensitive = sensitiveIdentityName(units, unit, member, seen)
-      if (sensitive !== undefined) return sensitive
-    }
-  }
-  return undefined
+  return sensitiveIdentityNameInternal(units, unit, node, seen, declCache).value
 }
 
 function isRuntimeFunctionLike(node: ts.Node): node is ts.FunctionLikeDeclaration {

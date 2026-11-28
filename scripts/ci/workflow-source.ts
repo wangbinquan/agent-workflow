@@ -5,6 +5,16 @@ import { YAML } from 'bun'
 
 export const CI_WORKFLOW_PATH = '.github/workflows/ci-work.yml'
 export const BACKEND_FULL_NIGHTLY_PATH = '.github/workflows/backend-full-nightly.yml'
+export const E2E_CROSS_OS_NIGHTLY_PATH = '.github/workflows/e2e-cross-os-nightly.yml'
+
+export const CROSS_OS_NIGHTLY_E2E_JOB_IDS = [
+  'build-binary-macos',
+  'build-binary-windows',
+  'e2e-macos-full',
+  'e2e-windows-full',
+  'gitleaks-full-history',
+  'test-frontend-windows',
+] as const
 
 export const LEGACY_CI_WORK_JOB_IDS = [
   'lint',
@@ -85,4 +95,23 @@ export function resolveNightlyBackendSource(readSourceFile: (path: string) => st
   if (JSON.stringify(names) !== JSON.stringify(['test-backend-full']))
     throw new Error('Nightly backend workflow has an unknown job population')
   return { path: BACKEND_FULL_NIGHTLY_PATH, workflow }
+}
+
+export function resolveCrossOsNightlyE2ESource(readSourceFile: (path: string) => string): {
+  path: string
+  workflow: string
+} {
+  const workflow = readSourceFile(E2E_CROSS_OS_NIGHTLY_PATH)
+  const parsed = YAML.parse(workflow) as {
+    on?: Record<string, unknown>
+    jobs?: Record<string, unknown>
+  } | null
+  if (!parsed?.on || !('schedule' in parsed.on) || !('workflow_dispatch' in parsed.on))
+    throw new Error(
+      'Cross-OS nightly E2E workflow must declare schedule and workflow_dispatch triggers',
+    )
+  const names = Object.keys(parsed.jobs ?? {}).sort()
+  if (JSON.stringify(names) !== JSON.stringify([...CROSS_OS_NIGHTLY_E2E_JOB_IDS].sort()))
+    throw new Error('Cross-OS nightly E2E workflow has an unknown job population')
+  return { path: E2E_CROSS_OS_NIGHTLY_PATH, workflow }
 }

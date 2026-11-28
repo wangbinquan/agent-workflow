@@ -310,10 +310,7 @@ async function cruise(pkg: PackageName, tsConfigPath: string): Promise<CruiseRes
 async function main(): Promise<void> {
   const tmp = mkdtempSync(join(tmpdir(), 'agent-workflow-depcheck-'))
   try {
-    const results: CruiseResult[] = []
-    for (const pkg of PACKAGES) {
-      results.push(await cruise(pkg, writeFlatTsConfig(tmp, pkg)))
-    }
+    const results = await Promise.all(PACKAGES.map((pkg) => cruise(pkg, writeFlatTsConfig(tmp, pkg))))
     const verdict = evaluateCruises(results)
     for (const line of formatVerdict(verdict)) console.log(line)
     if (isBlocking(verdict)) process.exit(1)

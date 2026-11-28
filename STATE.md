@@ -4,6 +4,12 @@
 - **范围**：`/observability` 由五个页签改为范围条 + 时间与对比 + 七个关注面；后端把 RFC-371 v2 的用量读路径并入 RFC-616 的过程引擎（范围装配、根的判定、限制到运行里的一部分、按维度分组），新增未结束单元、任务谱系、告警三项事实（告警由 system-operations 经新的中立合同提供）；读路由由十条变八条；不新增表、列、索引与后台作业，没有迁移。前端新增范围条、可排序表头两个公共组件，扩展时间轴、柱图、指标卡。口径变化列在 proposal §8.3，能力影响列在 §11。
 - **现状**：三件套与可点击原型（`prototype/index.html`，示例数据）已落档；设计门（subagent，只审功能）待跑；用户批准之前不写实现代码。
 
+## 2026-11-28 RFC-629 CI 冷启动修复、重复扫描与夹具去重及跨 OS 分层验证（In Progress，用户 2026-11-27 批准全部实施；`design/RFC-629-ci-cold-start-dedup-and-cross-os-tiering/`）
+
+- **来由**：RFC-627 收口后，用户要求在质量防护不下降的前提下进一步压榨 CI 耗时并合并重复用例；审阅实测剖析与全部 9 项优化方案（Track A 零收缩提速/去重 + Track B 跨 OS E2E 与 Windows 前端分层）后回复「都做，你自己推进完成」。
+- **范围**：修复 `persistenceHead()` 93 MB / 60 个废弃 PG catalog 冷加载、`eachProvider` / `testDatabase` 懒加载与跨进程 SQLite 基线/PG `TEMPLATE` 库 + 静态快照/`installMockRuntime` 缓存、`rfc294Gates` $O(N^3)$ 索引化、预计算 `passwords` 常量哑哈希与 `userFixture` 缓存、消除 2 处 30s 硬编码睡眠并并发化慢测；扩展 RFC-624 共享语料守卫与新增 `rfc629-shared-program-guards`、前端纯 Node 守卫迁入 `source-guards`、E2E 同配置 daemon 复用与 `rfc396-*` 轮询/拆分；下线重复 `ci-feedback.yml`、ESLint/`.tsbuildinfo` 缓存、并行化 `depcheck` / `test-backend-postgresql` / `build-binary`、增量 `gitleaks` + 原生 `shellcheck`、`test-backend` 16→12 片、路径感知前端契约快通道与纯后端测试跳过 E2E；跨 OS E2E 分层（Linux 121 全量 + macOS/Windows 19 `OS_CORE_E2E_SPECS` + 每日 `e2e-cross-os-nightly.yml`），Windows 前端迁入 nightly 并把 `e2e-harness.test.ts` 接入 `windows-platform.yml`。
+- **现状**：三轮设计门、T1–T7 全量实现与测试、本地集中验证与两轮独立只读功能实现门（最终 `PASS` 0 findings）均已通过，正在推送 `main` 进入 Hosted CI 全模式与夜间工作流实测验收。
+
 ## 2026-11-28 RFC-627 CI 吞吐、分层验证与排队治理（Done；`f74f5f370` / `44a1284ea` / `f601eed3c`；`design/RFC-627-ci-throughput-tiered-verification/`）
 
 - **来由**：用户 2026-11-27 要求分析 GitHub CI 耗时问题并给出优化方案，阅读诊断报告（单次 ~560 runner-分钟、91 次已完成主 CI 端到端中位 80m / 最长 188m、33% 纯文档提交空烧全矩阵、47% 成功率、诊断时刻积压 12 个 run）后回复「全部同意」；三轮设计门后于 2026-11-27 获「批准实施」。

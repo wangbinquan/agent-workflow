@@ -280,3 +280,133 @@ export async function materializeTestFixture(options: MaterializeFixtureOptions)
     )
   }
 }
+
+export interface MaterializeFixtureBytesOptions {
+  kind: string
+  inputs: FixtureInput
+  /** Null explicitly disables the job cache; undefined reads the CI environment. */
+  cacheRoot?: string | null
+  signal?: AbortSignal
+  timeoutMs?: number
+  buildBytes: (signal: AbortSignal) => Promise<Uint8Array>
+}
+
+async function readVerifiedArtifactBytes(
+  directory: string,
+  manifest: Manifest,
+  signal: AbortSignal,
+): Promise<Uint8Array> {
+  signal.throwIfAborted()
+  const raw = await readFile(join(directory, 'artifact'))
+  const bytes = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
+  if (bytes.byteLength !== manifest.size || fixtureDigest(bytes) !== manifest.sha256)
+    throw new Error('Fixture cache artifact digest mismatch')
+  return bytes
+}
+
+/**
+ * RFC-629: immutable byte-buffer fixture shared inside one CI job across Bun isolates.
+ * Uses the same atomic lock and SHA-256 verification as `materializeTestFixture`, without
+ * copying to a separate per-case file on disk.
+ */
+export async function materializeTestFixtureBytes(
+  options: MaterializeFixtureBytesOptions,
+): Promise<{
+  bytes: Uint8Array
+  key: string
+  cache: 'hit' | 'miss' | 'disabled'
+}> {
+  const { kind, buildBytes } = options
+  const key = fixtureCacheKey(kind, options.inputs)
+  const cacheRoot =
+    options.cacheRoot === undefined ? process.env[TEST_FIXTURE_CACHE_ENV] : options.cacheRoot
+  if (cacheRoot && !isAbsolute(cacheRoot)) throw new Error('Fixture cache root must be absolute')
+  const timeoutMs = options.timeoutMs ?? 120_000
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
+    throw new Error('Invalid fixture cache timeout')
+  const controller = new AbortController()
+  const abort = () => controller.abort(options.signal!.reason)
+  options.signal?.addEventListener('abort', abort, { once: true })
+  if (options.signal?.aborted) abort()
+  let waitingOwner = ''
+  const timer = setTimeout(
+    () =>
+      controller.abort(
+        new Error(`Fixture preparation timed out: ${kind}; lock owner ${waitingOwner || 'none'}`),
+      ),
+    timeoutMs,
+  )
+  const signal = controller.signal
+  let stage: string | undefined
+  let lock: string | undefined
+  let ownsLock = false
+  const token = randomUUID()
+  let state: 'hit' | 'miss' | 'disabled' = cacheRoot ? 'miss' : 'disabled'
+  try {
+    signal.throwIfAborted()
+    if (!cacheRoot) {
+      const bytes = await buildBytes(signal)
+      signal.throwIfAborted()
+      if (bytes.byteLength <= 0) throw new Error('Fixture builder produced empty bytes')
+      return { bytes, key, cache: state }
+    }
+    await mkdir(cacheRoot, { recursive: true })
+    if (!(await lstat(cacheRoot)).isDirectory()) throw new Error('Invalid fixture cache root')
+    const entry = join(cacheRoot, `${kind}-${key}`)
+    lock = `${entry}.lock`
+    while (true) {
+      signal.throwIfAborted()
+      const existing = await manifestAt(entry, key, kind, false)
+      if (existing) {
+        state = 'hit'
+        return {
+          bytes: await readVerifiedArtifactBytes(entry, existing, signal),
+          key,
+          cache: state,
+        }
+      }
+      try {
+        await mkdir(lock)
+        ownsLock = true
+        await writeFile(join(lock, 'owner.json'), JSON.stringify({ pid: process.pid, token }))
+        break
+      } catch (error) {
+        if (ownsLock || (error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+        try {
+          waitingOwner = await readFile(join(lock, 'owner.json'), 'utf8')
+        } catch (readError) {
+          if (!missing(readError)) throw readError
+        }
+        await waitForChange(cacheRoot, signal)
+      }
+    }
+    const existing = await manifestAt(entry, key, kind, false)
+    if (existing) {
+      state = 'hit'
+      return { bytes: await readVerifiedArtifactBytes(entry, existing, signal), key, cache: state }
+    }
+    stage = await mkdtemp(join(cacheRoot, `.fixture-${kind}-`))
+    const bytes = await buildBytes(signal)
+    signal.throwIfAborted()
+    if (bytes.byteLength <= 0) throw new Error('Fixture builder produced empty bytes')
+    await writeFile(join(stage, 'artifact'), bytes)
+    const manifest: Manifest = {
+      version: 1,
+      key,
+      kind,
+      size: bytes.byteLength,
+      sha256: fixtureDigest(bytes),
+      executable: false,
+    }
+    await writeFile(join(stage, 'manifest.json'), JSON.stringify(manifest))
+    signal.throwIfAborted()
+    await rename(stage, entry)
+    stage = undefined
+    return { bytes, key, cache: state }
+  } finally {
+    clearTimeout(timer)
+    options.signal?.removeEventListener('abort', abort)
+    if (stage) await rm(stage, { recursive: true, force: true })
+    if (ownsLock && lock) await releaseOwnedLock(lock, token)
+  }
+}

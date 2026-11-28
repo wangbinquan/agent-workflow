@@ -2,7 +2,7 @@
 // Zero third-party dependencies: runs directly under Bun in `detect-changes` without `bun install`.
 import { spawnSync } from 'node:child_process'
 import { appendFileSync, readFileSync } from 'node:fs'
-import { isMigrationTierTest } from './backend-shards'
+import { isMigrationTierTest, isValidBackendTestPath } from './backend-shards'
 
 export type CiMode = 'docs-only' | 'standard' | 'full'
 
@@ -25,6 +25,9 @@ export interface ChangeClassificationResult {
   mode: CiMode
   baseSha: string
   linksBaseSha: string
+  runFrontendFull: boolean
+  runE2e: boolean
+  gitleaksBaseSha: string
   reason: string
   changedCount: number
 }
@@ -125,9 +128,32 @@ export const FULL_TRIGGER_PATTERNS: readonly RegExp[] = Object.freeze([
   /^packages\/backend\/tests\/(?:helpers\/)?.*(?:rfc395|rfc398|rfc625|rfc626)/,
 ])
 
+/** Exact repository files whose modification requires the full 3-shard frontend Vitest run. */
+export const FRONTEND_FULL_TRIGGER_EXACT_PATHS = Object.freeze([
+  'package.json',
+  'bun.lock',
+  'bunfig.toml',
+  'tsconfig.base.json',
+  'eslint.config.js',
+  '.prettierrc',
+  '.prettierignore',
+  '.github/workflows/ci.yml',
+  '.github/workflows/ci-work.yml',
+] as const)
+
+/** Directory prefixes whose modification requires the full 3-shard frontend Vitest run. */
+export const FRONTEND_FULL_TRIGGER_DIR_PREFIXES = Object.freeze([
+  'packages/frontend/',
+  'packages/shared/',
+  'scripts/ci/',
+] as const)
+
 const DOCS_ONLY_EXACT_SET: ReadonlySet<string> = new Set(DOCS_ONLY_EXACT_PATHS)
 const DOCS_ONLY_EXCLUDED_SET: ReadonlySet<string> = new Set(DOCS_ONLY_EXCLUDED_PATHS)
 const FULL_TRIGGER_EXACT_SET: ReadonlySet<string> = new Set(FULL_TRIGGER_EXACT_PATHS)
+const FRONTEND_FULL_TRIGGER_EXACT_SET: ReadonlySet<string> = new Set(
+  FRONTEND_FULL_TRIGGER_EXACT_PATHS,
+)
 
 function isValidRepoRelativePath(path: string): boolean {
   if (!path || path.includes('\\') || path.startsWith('/')) return false
@@ -161,24 +187,68 @@ export function isFullTriggerPath(path: string): boolean {
   return FULL_TRIGGER_PATTERNS.some((pattern) => pattern.test(path))
 }
 
-export function classifyChangedPaths(paths: readonly string[]): { mode: CiMode; reason: string } {
+export function isFrontendFullTriggerPath(path: string): boolean {
+  if (!isValidRepoRelativePath(path)) return true
+  if (FRONTEND_FULL_TRIGGER_EXACT_SET.has(path)) return true
+  return FRONTEND_FULL_TRIGGER_DIR_PREFIXES.some((prefix) => path.startsWith(prefix))
+}
+
+/**
+ * Pure backend test files (`packages/backend/tests/**\/*.{test,spec}.ts`, excluding
+ * `helpers/` and `fixtures/` which may be imported by `e2e/`). Changes confined to
+ * these paths and docs-only paths do not affect the compiled binary or browser E2E.
+ */
+export function isBackendTestOnlyPath(path: string): boolean {
+  if (!isValidBackendTestPath(path)) return false
+  if (
+    path.startsWith('packages/backend/tests/helpers/') ||
+    path.startsWith('packages/backend/tests/fixtures/')
+  )
+    return false
+  return true
+}
+
+export function classifyChangedPaths(paths: readonly string[]): {
+  mode: CiMode
+  runFrontendFull: boolean
+  runE2e: boolean
+  reason: string
+} {
   if (paths.length === 0)
-    return { mode: 'full', reason: 'empty diff; failing closed to full verification' }
+    return {
+      mode: 'full',
+      runFrontendFull: true,
+      runE2e: true,
+      reason: 'empty diff; failing closed to full verification',
+    }
   if (paths.some((path) => !isValidRepoRelativePath(path)))
-    return { mode: 'full', reason: 'invalid path in diff; failing closed to full verification' }
+    return {
+      mode: 'full',
+      runFrontendFull: true,
+      runE2e: true,
+      reason: 'invalid path in diff; failing closed to full verification',
+    }
   if (paths.every(isDocsOnlyPath))
     return {
       mode: 'docs-only',
+      runFrontendFull: false,
+      runE2e: false,
       reason: `all ${paths.length} changed files match strict Markdown docs allowlist`,
     }
+  const runFrontendFull = paths.some(isFrontendFullTriggerPath)
+  const runE2e = !paths.every((path) => isDocsOnlyPath(path) || isBackendTestOnlyPath(path))
   const fullHit = paths.find(isFullTriggerPath)
   if (fullHit !== undefined)
     return {
       mode: 'full',
+      runFrontendFull,
+      runE2e,
       reason: `full verification triggered by ${fullHit}`,
     }
   return {
     mode: 'standard',
+    runFrontendFull,
+    runE2e,
     reason: `${paths.length} non-migration code/test files changed`,
   }
 }
@@ -201,6 +271,9 @@ function failClosedFull(reason: string): ChangeClassificationResult {
     mode: 'full',
     baseSha: '',
     linksBaseSha: 'ALL',
+    runFrontendFull: true,
+    runE2e: true,
+    gitleaksBaseSha: '',
     reason,
     changedCount: 0,
   }
@@ -283,6 +356,9 @@ export function resolveCiClassification(options: {
     mode: classified.mode,
     baseSha,
     linksBaseSha: baseSha,
+    runFrontendFull: classified.runFrontendFull,
+    runE2e: classified.runE2e,
+    gitleaksBaseSha: baseSha,
     reason: `${classified.reason} (${baseSha.slice(0, 8)}..${compareHead.slice(0, 8)})`,
     changedCount: changed.length,
   }
@@ -368,6 +444,9 @@ if (import.meta.main) {
         `mode=${clean(result.mode)}`,
         `base_sha=${clean(result.baseSha)}`,
         `links_base_sha=${clean(result.linksBaseSha)}`,
+        `run_frontend_full=${result.runFrontendFull}`,
+        `run_e2e=${result.runE2e}`,
+        `gitleaks_base_sha=${clean(result.gitleaksBaseSha)}`,
         `reason=${clean(result.reason)}`,
       ].join('\n') + '\n',
     )

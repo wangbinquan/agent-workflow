@@ -10,9 +10,12 @@ import {
   EXPECTED_E2E_WORKERS,
   e2ePlatform,
   exactE2EMatch,
+  filterE2EDiscoveryByTier,
+  OS_CORE_E2E_SPECS,
   parseConfiguredE2EWorkers,
   parseE2EDiscovery,
   parseE2EShardPlan,
+  parseE2ETier,
   parseE2ETimings,
   planE2EShards,
   selectedE2ETests,
@@ -341,5 +344,53 @@ describe('whole-spec timing windows', () => {
     expect(collector.snapshot().files['e2e/a.spec.ts']!.durationMs).toBe(300)
     expect(collector.snapshot().files['e2e/b.spec.ts']!.complete).toBe(false)
     expect(() => collector.begin('foreign', 0)).toThrow('Unexpected')
+  })
+})
+
+describe('RFC-629 OS-core E2E tiering', () => {
+  const fullPopulation: DiscoveredE2ETest[] = [
+    ...OS_CORE_E2E_SPECS.map((file, index) => ({
+      id: `os-core-${index}`,
+      file,
+      expectedStatus: 'passed',
+    })),
+    { id: 'non-core-1', file: 'e2e/auth-isolation.spec.ts', expectedStatus: 'passed' },
+    { id: 'non-core-2', file: 'e2e/identity-access.spec.ts', expectedStatus: 'passed' },
+  ]
+
+  test('OS_CORE_E2E_SPECS has 19 unique repository-relative specs and parseE2ETier fails closed', () => {
+    expect(OS_CORE_E2E_SPECS).toHaveLength(19)
+    expect(new Set(OS_CORE_E2E_SPECS).size).toBe(19)
+    expect(parseE2ETier('pr-full')).toBe('pr-full')
+    expect(parseE2ETier('os-core')).toBe('os-core')
+    for (const invalid of ['', 'nightly', 'full', 'core', 'OS-CORE']) {
+      expect(() => parseE2ETier(invalid), invalid).toThrow('Unknown E2E tier')
+    }
+  })
+
+  test('filterE2EDiscoveryByTier keeps full population for pr-full and exact 19 specs for os-core, failing closed on any missing OS-core spec', () => {
+    expect(filterE2EDiscoveryByTier(fullPopulation, 'pr-full')).toHaveLength(
+      OS_CORE_E2E_SPECS.length + 2,
+    )
+    const filtered = filterE2EDiscoveryByTier(fullPopulation, 'os-core')
+    expect(filtered.map((test) => test.file).sort()).toEqual([...OS_CORE_E2E_SPECS].sort())
+
+    const missingOne = fullPopulation.filter((test) => test.file !== OS_CORE_E2E_SPECS[0])
+    expect(() => filterE2EDiscoveryByTier(missingOne, 'os-core')).toThrow(OS_CORE_E2E_SPECS[0])
+  })
+
+  test('plan.tier round-trips explicitly, defaults legacy plans without tier to pr-full, and rejects unknown tiers', () => {
+    const osCoreOnly = filterE2EDiscoveryByTier(fullPopulation, 'os-core')
+    const plan = planE2EShards(osCoreOnly, timingInput(), 'macos', 1, 2, null, 'os-core')
+    expect(plan.tier).toBe('os-core')
+    expect(parseE2EShardPlan(JSON.parse(JSON.stringify(plan)))).toEqual(plan)
+
+    const legacyWithoutTier = JSON.parse(JSON.stringify(plan)) as Record<string, unknown>
+    delete legacyWithoutTier.tier
+    expect(parseE2EShardPlan(legacyWithoutTier).tier).toBe('pr-full')
+
+    expect(() =>
+      parseE2EShardPlan({ ...JSON.parse(JSON.stringify(plan)), tier: 'nightly' }),
+    ).toThrow('Unknown E2E tier')
   })
 })

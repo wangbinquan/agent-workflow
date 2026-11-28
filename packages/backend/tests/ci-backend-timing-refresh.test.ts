@@ -360,60 +360,64 @@ describe('complete backend timing source reader', () => {
     expect(() => fixture.read()).toThrow('Missing source')
   })
 
-  test('tier=core enforces 16-shard SQLite ci-work.yml and filters expectedFiles to core; tier=all accepts 44-shard nightly and rejects SQLite', () => {
+  test('tier=core enforces 12-shard (or historical 16-shard) SQLite ci-work.yml and filters expectedFiles to core; tier=all accepts 44-shard nightly and rejects SQLite', () => {
     const migrationFile =
       'packages/backend/tests/rfc398-auto-upgrade-resume-postgresql-phase-frozen.test.ts'
-    const coreWorkYaml = [
-      'on:',
-      '  workflow_call:',
-      'jobs:',
-      '  test-backend:',
-      '    env:',
-      '      AW_TEST_PROVIDERS: sqlite',
-      '    strategy:',
-      '      matrix:',
-      '        os: [ubuntu-latest]',
-      `        shard: [${Array.from({ length: 16 }, (_, i) => i + 1).join(', ')}]`,
-      '        shards: [16]',
-      '    steps:',
-      '      - name: Upload measured backend test timings (ubuntu shards)',
-      "        if: success() && matrix.os == 'ubuntu-latest'",
-      '        uses: actions/upload-artifact@v6',
-      '        with:',
-      '          name: backend-core-timings-${{ matrix.shard }}',
-      ...CI_WORK_JOB_IDS.filter((id) => id !== 'test-backend').map((id) => `  ${id}: {}`),
-    ].join('\n')
-    const coreFixture = sourceFixture(301, { [a]: 15, [b]: 25 }, 16)
-    coreFixture.state.workflowFiles['.github/workflows/ci.yml'] =
-      `jobs:\n  full-ci:\n    uses: ./${CI_WORKFLOW_PATH}\n`
-    coreFixture.state.workflowFiles[CI_WORKFLOW_PATH] = coreWorkYaml
-    coreFixture.state.expectedFiles = [a, b, migrationFile]
-    coreFixture.state.run.event = 'workflow_dispatch'
+    const makeCoreWorkYaml = (shardCount: number) =>
+      [
+        'on:',
+        '  workflow_call:',
+        'jobs:',
+        '  test-backend:',
+        '    env:',
+        '      AW_TEST_PROVIDERS: sqlite',
+        '    strategy:',
+        '      matrix:',
+        '        os: [ubuntu-latest]',
+        `        shard: [${Array.from({ length: shardCount }, (_, i) => i + 1).join(', ')}]`,
+        `        shards: [${shardCount}]`,
+        '    steps:',
+        '      - name: Upload measured backend test timings (ubuntu shards)',
+        "        if: success() && matrix.os == 'ubuntu-latest'",
+        '        uses: actions/upload-artifact@v6',
+        '        with:',
+        '          name: backend-core-timings-${{ matrix.shard }}',
+        ...CI_WORK_JOB_IDS.filter((id) => id !== 'test-backend').map((id) => `  ${id}: {}`),
+      ].join('\n')
 
-    const coreSource = readBackendTimingSource(
-      { ...coreFixture.request, tier: 'core' },
-      coreFixture.reader,
-    )
-    expect(coreSource.provenance).toMatchObject({
-      tier: 'core',
-      sourceWorkflowPath: CI_WORKFLOW_PATH,
-      sourceShards: 16,
-      sourceFiles: 2,
-      measuredMilliseconds: 40,
-    })
-    expect(coreSource.expectedFiles).toEqual([a, b])
+    for (const shardCount of [12, 16]) {
+      const coreFixture = sourceFixture(300 + shardCount, { [a]: 15, [b]: 25 }, shardCount)
+      coreFixture.state.workflowFiles['.github/workflows/ci.yml'] =
+        `jobs:\n  full-ci:\n    uses: ./${CI_WORKFLOW_PATH}\n`
+      coreFixture.state.workflowFiles[CI_WORKFLOW_PATH] = makeCoreWorkYaml(shardCount)
+      coreFixture.state.expectedFiles = [a, b, migrationFile]
+      coreFixture.state.run.event = 'workflow_dispatch'
 
-    // Reading a 16-shard SQLite core run under tier=all must fail closed.
-    coreFixture.state.run.event = 'push'
-    expect(() =>
-      readBackendTimingSource({ ...coreFixture.request, tier: 'all' }, coreFixture.reader),
-    ).toThrow('must not narrow AW_TEST_PROVIDERS to sqlite')
+      const coreSource = readBackendTimingSource(
+        { ...coreFixture.request, tier: 'core' },
+        coreFixture.reader,
+      )
+      expect(coreSource.provenance).toMatchObject({
+        tier: 'core',
+        sourceWorkflowPath: CI_WORKFLOW_PATH,
+        sourceShards: shardCount,
+        sourceFiles: 2,
+        measuredMilliseconds: 40,
+      })
+      expect(coreSource.expectedFiles).toEqual([a, b])
+
+      // Reading a SQLite core run under tier=all must fail closed.
+      coreFixture.state.run.event = 'push'
+      expect(() =>
+        readBackendTimingSource({ ...coreFixture.request, tier: 'all' }, coreFixture.reader),
+      ).toThrow('must not narrow AW_TEST_PROVIDERS to sqlite')
+    }
 
     // Reading a 44-shard dual-engine run under tier=core must fail closed.
     const dualFixture = sourceFixture(302, { [a]: 10, [b]: 20 }, 44)
     expect(() =>
       readBackendTimingSource({ ...dualFixture.request, tier: 'core' }, dualFixture.reader),
-    ).toThrow('16 SQLite shards')
+    ).toThrow('12 (or historical 16) SQLite shards')
 
     // Reading a 44-shard backend-full-nightly run under tier=all succeeds.
     const nightlyFixture = sourceFixture(303, { [a]: 11, [b]: 22, [migrationFile]: 33 }, 44)
@@ -715,9 +719,9 @@ describe('composition of complete backend timing sources', () => {
       expect(() => parseBackendTimingCompositionArgs(args)).toThrow()
   })
 
-  test('tier-aware composition locks 16-shard core vs 44-shard all and forbids cross-tier mixing', () => {
-    const makeCoreSource = (runId: number, files: Record<string, number>) => {
-      const f = sourceFixture(runId, files, 16)
+  test('tier-aware composition locks 12/16-shard core vs 44-shard all and forbids cross-tier mixing', () => {
+    const makeCoreSource = (runId: number, files: Record<string, number>, shardCount = 12) => {
+      const f = sourceFixture(runId, files, shardCount)
       f.state.workflowFiles['.github/workflows/ci.yml'] =
         `jobs:\n  full-ci:\n    uses: ./${CI_WORKFLOW_PATH}\n`
       f.state.workflowFiles[CI_WORKFLOW_PATH] = [
@@ -730,8 +734,8 @@ describe('composition of complete backend timing sources', () => {
         '    strategy:',
         '      matrix:',
         '        os: [ubuntu-latest]',
-        `        shard: [${Array.from({ length: 16 }, (_, i) => i + 1).join(', ')}]`,
-        '        shards: [16]',
+        `        shard: [${Array.from({ length: shardCount }, (_, i) => i + 1).join(', ')}]`,
+        `        shards: [${shardCount}]`,
         '    steps:',
         '      - name: Upload measured backend test timings (ubuntu shards)',
         "        if: success() && matrix.os == 'ubuntu-latest'",
@@ -743,8 +747,8 @@ describe('composition of complete backend timing sources', () => {
       return readBackendTimingSource({ ...f.request, tier: 'core' }, f.reader)
     }
 
-    const core1 = makeCoreSource(401, { [a]: 10, [b]: 30 })
-    const core2 = makeCoreSource(402, { [a]: 25, [b]: 20 })
+    const core1 = makeCoreSource(401, { [a]: 10, [b]: 30 }, 12)
+    const core2 = makeCoreSource(402, { [a]: 25, [b]: 20 }, 16)
     const full1 = sourceFixture(403, { [a]: 100, [b]: 200 }, 44).read()
     const target = { targetSha, files: [a, b] }
 
@@ -753,7 +757,7 @@ describe('composition of complete backend timing sources', () => {
     expect(composedCore.timings).toEqual({ version: 1, files: { [a]: 25, [b]: 30 } })
 
     // Cross-tier mixing must fail closed in both directions.
-    expect(() => composeBackendTimings([core1, full1], target, 'core')).toThrow('16-shard core')
+    expect(() => composeBackendTimings([core1, full1], target, 'core')).toThrow('12/16-shard core')
     expect(() => composeBackendTimings([core1, full1], target, 'all')).toThrow('44-shard all')
     expect(() => composeBackendTimings([core1, core2], target, 'all')).toThrow('44-shard all')
     expect(() =>

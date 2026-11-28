@@ -1,10 +1,19 @@
 // RFC-398 §7.3/A1: source daemon, real HTTP, migrated workflow execution, restart and doctor.
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync, writeFileSync, watch } from 'node:fs'
-import { join } from 'node:path'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+  watch,
+} from 'node:fs'
+import { dirname, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { REPO_ROOT } from '../../../../../scripts/release-upgrade/lib/io'
 import type { ApiExpectation } from '../../../../../scripts/release-upgrade/lib/seed-model'
+import { fixtureFileDigest, materializeTestFixture } from '../testFixtureCache'
 import type { BuiltRelease } from './build'
 import { equal, invariant, type Row } from './data'
 
@@ -38,26 +47,52 @@ export async function installMockRuntime(
   built: BuiltRelease,
   snapshot?: Awaited<ReturnType<BuiltRelease['snapshotTarget']>>,
 ): Promise<string> {
-  const entry = join(built.home, 'matrix-mock-entry.ts'),
-    outfile = join(built.home, `matrix-opencode${process.platform === 'win32' ? '.exe' : ''}`)
+  const outfile = join(built.home, `matrix-opencode${process.platform === 'win32' ? '.exe' : ''}`)
   const fixture = join(REPO_ROOT, 'packages/backend/tests/fixtures/mock-opencode.ts')
-  writeFileSync(
-    entry,
-    `if (process.argv.includes('--version')) { console.log('1.17.5'); } else { await import(${JSON.stringify(fixture)}); }\n`,
-  )
-  // Compile in a child whose cwd is the case home: the compiler writes its temporary
-  // `.bun-build` file to the current directory, and every concurrently running test file
-  // sharing the repository root would report it as a leak.
-  const compile = Bun.spawn(
-    [process.execPath, 'build', entry, '--compile', '--target', 'bun', '--outfile', outfile],
-    { cwd: built.home, stdout: 'pipe', stderr: 'pipe' },
-  )
-  const [code, compileOutput] = await Promise.all([
-    compile.exited,
-    new Response(compile.stderr).text(),
-    new Response(compile.stdout).text(),
-  ])
-  invariant(code === 0, `compile mock runtime: ${compileOutput}`)
+  const entrySource = `if (process.argv.includes('--version')) { console.log('1.17.5'); } else { await import(${JSON.stringify(fixture)}); }\n`
+  const fixtureSha256 = await fixtureFileDigest(fixture)
+  await materializeTestFixture({
+    kind: 'matrix-mock-opencode',
+    executable: true,
+    inputs: {
+      format: 1,
+      entrySource,
+      fixture,
+      fixtureSha256,
+      bunVersion: Bun.version,
+      bunRevision: Bun.revision,
+      platform: process.platform,
+      arch: process.arch,
+    },
+    destination: outfile,
+    build: async (destination) => {
+      // Compile inside a sibling temporary directory of `destination` so `.bun-build` cannot leak
+      // into the repo root, `renameSync` stays on the exact same filesystem/drive (no EXDEV on
+      // Windows or tmpfs containers), and platform-suffixed outfiles match Windows `.exe`.
+      const buildDir = mkdtempSync(join(dirname(destination), '.aw-matrix-mock-build-'))
+      try {
+        const entry = join(buildDir, 'matrix-mock-entry.ts')
+        const compiled = join(
+          buildDir,
+          `matrix-opencode${process.platform === 'win32' ? '.exe' : ''}`,
+        )
+        writeFileSync(entry, entrySource)
+        const compile = Bun.spawn(
+          [process.execPath, 'build', entry, '--compile', '--target', 'bun', '--outfile', compiled],
+          { cwd: buildDir, stdout: 'pipe', stderr: 'pipe' },
+        )
+        const [code, compileOutput] = await Promise.all([
+          compile.exited,
+          new Response(compile.stderr).text(),
+          new Response(compile.stdout).text(),
+        ])
+        invariant(code === 0, `compile mock runtime: ${compileOutput}`)
+        renameSync(compiled, destination)
+      } finally {
+        rmSync(buildDir, { recursive: true, force: true })
+      }
+    },
+  })
   built.env.AGENT_WORKFLOW_OPENCODE_BIN = outfile
   built.env.MOCK_OPENCODE_OUTPUTS = JSON.stringify({
     document: '# Matrix acceptance\nPreserved workflow completed.\n',

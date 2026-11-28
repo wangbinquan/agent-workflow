@@ -11,9 +11,10 @@
 // 覆盖范围（C12）：② 覆盖 backend 的 `src`、`tests`、`scripts` 与仓库根 `scripts` 的全部 TS / MJS 文件；① ③ ④ 只读两个文件。运行器的行为由既有
 // 用例覆盖（`git.test.ts`、`git-noninteractive-env`、`rfc208` / `rfc287` 的超时与取消、`rfc252` 的加固、`rfc284-git-twin-textlock`）。
 import { describe, expect, test } from 'bun:test'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
+import { RFC591_MOVED_NAMES as MOVED } from './helpers/rfc624MigrationReferenceRules'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const REPO = resolve(BACKEND, '..', '..')
@@ -22,13 +23,6 @@ const slash = (path: string) => path.split('\\').join('/')
 
 const RUNNER = 'platform/execution/local/gitProcess.ts'
 const UTIL_GIT = 'util/git.ts'
-const MOVED = [
-  'GIT_ABORTED_EXIT_CODE',
-  'GIT_TIMEOUT_EXIT_CODE',
-  'GitRunResult',
-  'nonInteractiveGitEnv',
-  'runGit',
-] as const
 const read = (file: string) => readFileSync(join(SRC, file), 'utf8')
 
 /** `<file> imports <name> from util/git` for every named import (or re-export) of a moved name whose specifier resolves to util/git. */
@@ -79,19 +73,6 @@ function runnerLeaks(text: string): string[] {
   )
 }
 
-function walk(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir).flatMap((name) => {
-    if (name === 'node_modules' || name === 'dist') return []
-    const path = join(dir, name)
-    return statSync(path).isDirectory()
-      ? walk(path)
-      : /\.(?:[cm]?tsx?|mjs)$/.test(name)
-        ? [path]
-        : []
-  })
-}
-
 /** Names a file offers: `export { … } [from]`, `export type { … } [from]` and `export` declarations. */
 function offeredNames(path: string, text: string): string[] {
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
@@ -137,18 +118,7 @@ describe('RFC-591 —— 运行器在 platform', () => {
     }
   })
 
-  test('src / tests / scripts 里没有任何 import 从 util/git 取这五个名字', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(join(REPO, 'scripts')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(6000)
-    expect(
-      files.flatMap((path) => utilGitImportsOfMoved(path, readFileSync(path, 'utf8'))),
-    ).toEqual([])
-  }, 240_000)
+  // RFC-629: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('负对照：别名、相对路径、带扩展名、type import 与转出都会被认出；别的名字与新位置不算', () => {
     expect(

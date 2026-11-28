@@ -103,7 +103,13 @@ function publicSignatureViolations(units: readonly SourceUnit[]) {
           : undefined
       }),
   }
-  const checker = ts.createProgram([...files.keys()], options, host).getTypeChecker()
+  // Narrow program roots to all module `public/` entrypoints; `resolveModuleNames`
+  // still pulls in every transitive dependency (aliases, re-exports, `auth/actor.ts`,
+  // `shared`, and owner factories) without type-checking ~1,600 unreachable internal files.
+  const publicRoots = [...files.keys()].filter((path) =>
+    /^packages\/backend\/src\/modules\/[^/]+\/public\//.test(path),
+  )
+  const checker = ts.createProgram(publicRoots, options, host).getTypeChecker()
   const actorLeaks = new Set<string>()
   const constructorLeaks = new Set<string>()
   const visitedDeclarations = new Set<ts.Declaration>()

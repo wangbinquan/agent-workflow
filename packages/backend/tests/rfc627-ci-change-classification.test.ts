@@ -9,10 +9,14 @@ import {
   DOCS_ONLY_DIR_PREFIXES,
   DOCS_ONLY_EXACT_PATHS,
   DOCS_ONLY_EXCLUDED_PATHS,
+  FRONTEND_FULL_TRIGGER_DIR_PREFIXES,
+  FRONTEND_FULL_TRIGGER_EXACT_PATHS,
   FULL_TRIGGER_DIR_PREFIXES,
   FULL_TRIGGER_EXACT_PATHS,
   FULL_TRIGGER_FILE_PREFIXES,
+  isBackendTestOnlyPath,
   isDocsOnlyPath,
+  isFrontendFullTriggerPath,
   isFullTriggerPath,
   MAX_ANCESTOR_DISTANCE,
   parseNullSeparatedPaths,
@@ -203,11 +207,16 @@ describe('RFC-627 change classification rules', () => {
       ...DOCS_ONLY_EXACT_PATHS,
       ...DOCS_ONLY_EXCLUDED_PATHS,
       ...FULL_TRIGGER_EXACT_PATHS,
+      ...FRONTEND_FULL_TRIGGER_EXACT_PATHS,
     ]) {
       expect(trackedSet.has(path), `stale or untracked configured file: ${path}`).toBe(true)
     }
 
-    for (const dir of [...DOCS_ONLY_DIR_PREFIXES, ...FULL_TRIGGER_DIR_PREFIXES]) {
+    for (const dir of [
+      ...DOCS_ONLY_DIR_PREFIXES,
+      ...FULL_TRIGGER_DIR_PREFIXES,
+      ...FRONTEND_FULL_TRIGGER_DIR_PREFIXES,
+    ]) {
       expect(trackedDirs.has(dir), `stale or untracked configured directory: ${dir}`).toBe(true)
     }
 
@@ -598,6 +607,152 @@ describe('RFC-627 range resolution, queue coalescing, and fail-closed fallbacks'
         git: makeGit({}).git,
         listCompletedMainPushRuns: () => [greenRun()],
       }),
-    ).toMatchObject({ mode: 'full', baseSha: '', linksBaseSha: 'ALL' })
+    ).toMatchObject({
+      mode: 'full',
+      baseSha: '',
+      linksBaseSha: 'ALL',
+      runFrontendFull: true,
+      runE2e: true,
+      gitleaksBaseSha: '',
+    })
+  })
+
+  test('RFC-629 classifies runFrontendFull, runE2e (orthogonal to mode=full), and gitleaksBaseSha fail-closed', () => {
+    for (const path of [
+      'packages/frontend/src/App.tsx',
+      'packages/shared/src/types.ts',
+      'scripts/ci/classify-ci-changes.ts',
+      'package.json',
+      'eslint.config.js',
+      '.github/workflows/ci-work.yml',
+      '../escape',
+    ]) {
+      expect(isFrontendFullTriggerPath(path), path).toBe(true)
+    }
+    for (const path of [
+      'packages/backend/src/main.ts',
+      'packages/backend/tests/tasks.test.ts',
+      'e2e/main.spec.ts',
+      'STATE.md',
+    ]) {
+      expect(isFrontendFullTriggerPath(path), path).toBe(false)
+    }
+
+    // Pure backend test paths exclude helpers/, fixtures/, and non-test helper files.
+    for (const path of [
+      'packages/backend/tests/tasks.test.ts',
+      'packages/backend/tests/architecture/rfc319-ci-topology.test.ts',
+      'packages/backend/tests/rfc395-v1-golden.test.ts',
+    ]) {
+      expect(isBackendTestOnlyPath(path), path).toBe(true)
+    }
+    for (const path of [
+      'packages/backend/tests/helpers/testDatabase.ts',
+      'packages/backend/tests/helpers/foo.test.ts',
+      'packages/backend/tests/fixtures/release-upgrade/releases.json',
+      'packages/backend/tests/migration-freeze.ts',
+      'packages/backend/src/main.ts',
+      'e2e/main.spec.ts',
+    ]) {
+      expect(isBackendTestOnlyPath(path), path).toBe(false)
+    }
+
+    // Pure backend core test (+ optional doc): standard, fast frontend contract, skip E2E.
+    expect(
+      classifyChangedPaths(['packages/backend/tests/tasks.test.ts', 'STATE.md']),
+    ).toMatchObject({
+      mode: 'standard',
+      runFrontendFull: false,
+      runE2e: false,
+    })
+
+    // Pure backend migration test: mode=full is orthogonal to runE2e=false!
+    expect(classifyChangedPaths(['packages/backend/tests/rfc395-v1-golden.test.ts'])).toMatchObject(
+      {
+        mode: 'full',
+        runFrontendFull: false,
+        runE2e: false,
+      },
+    )
+
+    // Backend helper change could be imported by e2e/, so runE2e stays true.
+    expect(classifyChangedPaths(['packages/backend/tests/helpers/testDatabase.ts'])).toMatchObject({
+      mode: 'full',
+      runFrontendFull: false,
+      runE2e: true,
+    })
+
+    // Backend production source change skips full frontend Vitest (runs 14 contract tests) but keeps E2E.
+    expect(
+      classifyChangedPaths([
+        'packages/backend/src/modules/workflow-definition/application/workflows.ts',
+      ]),
+    ).toMatchObject({
+      mode: 'standard',
+      runFrontendFull: false,
+      runE2e: true,
+    })
+
+    // Frontend or shared change enables full frontend Vitest and E2E.
+    expect(classifyChangedPaths(['packages/frontend/src/App.tsx'])).toMatchObject({
+      mode: 'standard',
+      runFrontendFull: true,
+      runE2e: true,
+    })
+
+    // Docs-only skips both.
+    expect(classifyChangedPaths(['STATE.md'])).toMatchObject({
+      mode: 'docs-only',
+      runFrontendFull: false,
+      runE2e: false,
+    })
+
+    // Empty / invalid diff fails closed to true/true.
+    expect(classifyChangedPaths([])).toMatchObject({
+      mode: 'full',
+      runFrontendFull: true,
+      runE2e: true,
+    })
+
+    // resolveCiClassification propagates gitleaksBaseSha on verified ancestor and clears it on fail-closed.
+    const { git } = makeGit({ diffStdout: 'packages/backend/tests/rfc395-v1-golden.test.ts\0' })
+    expect(
+      resolveCiClassification({
+        eventName: 'push',
+        payload: {},
+        headSha: SHA_HEAD,
+        repository: 'owner/repo',
+        currentRunId: 2000,
+        git,
+        listCompletedMainPushRuns: () => [greenRun()],
+      }),
+    ).toMatchObject({
+      mode: 'full',
+      baseSha: SHA_GREEN,
+      linksBaseSha: SHA_GREEN,
+      runFrontendFull: false,
+      runE2e: false,
+      gitleaksBaseSha: SHA_GREEN,
+    })
+
+    expect(
+      resolveCiClassification({
+        eventName: 'workflow_dispatch',
+        payload: {},
+        dispatchMode: 'full',
+        headSha: SHA_HEAD,
+        repository: 'owner/repo',
+        currentRunId: 2000,
+        git,
+        listCompletedMainPushRuns: () => [greenRun()],
+      }),
+    ).toMatchObject({
+      mode: 'full',
+      baseSha: '',
+      linksBaseSha: 'ALL',
+      runFrontendFull: true,
+      runE2e: true,
+      gitleaksBaseSha: '',
+    })
   })
 })

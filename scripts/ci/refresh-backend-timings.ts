@@ -8,6 +8,7 @@ import {
   BACKEND_CORE_SHARDS,
   BACKEND_FULL_SHARDS,
   BACKEND_TEST_PATH_PATTERN,
+  LEGACY_BACKEND_CORE_SHARDS,
   filterBackendTestsByTier,
   isValidBackendTestPath,
 } from './backend-shards'
@@ -40,6 +41,10 @@ export const ALL_BACKEND_TIMING_SOURCES: readonly TimingSourceRule[] = Object.fr
 
 export const E2E_CI_TIMING_SOURCES: readonly TimingSourceRule[] = Object.freeze([
   { workflowName: 'CI', allowedEvents: ['push', 'workflow_dispatch'] },
+])
+
+export const CROSS_OS_NIGHTLY_E2E_TIMING_SOURCES: readonly TimingSourceRule[] = Object.freeze([
+  { workflowName: 'e2e-cross-os-nightly', allowedEvents: ['schedule', 'workflow_dispatch'] },
 ])
 
 export interface BackendTimings {
@@ -309,13 +314,11 @@ export function readBackendTimingSource(
 
   const hasSqliteOnly = jobHasSqliteProviderNarrowing(parsedJob)
   if (tier === 'core') {
-    if (
-      sourceDefinition.path !== CI_WORKFLOW_PATH ||
-      shardCount !== BACKEND_CORE_SHARDS ||
-      !hasSqliteOnly
-    ) {
+    const validCoreShards =
+      shardCount === BACKEND_CORE_SHARDS || shardCount === LEGACY_BACKEND_CORE_SHARDS
+    if (sourceDefinition.path !== CI_WORKFLOW_PATH || !validCoreShards || !hasSqliteOnly) {
       throw new Error(
-        `Core backend timing source must be ${CI_WORKFLOW_PATH} with ${BACKEND_CORE_SHARDS} SQLite shards`,
+        `Core backend timing source must be ${CI_WORKFLOW_PATH} with ${BACKEND_CORE_SHARDS} (or historical ${LEGACY_BACKEND_CORE_SHARDS}) SQLite shards`,
       )
     }
   } else {

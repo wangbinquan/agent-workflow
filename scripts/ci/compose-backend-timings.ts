@@ -3,7 +3,11 @@
 // Zero third-party dependencies: runs directly under Bun in no-install CI jobs.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { BACKEND_CORE_SHARDS, BACKEND_FULL_SHARDS } from './backend-shards'
+import {
+  BACKEND_CORE_SHARDS,
+  BACKEND_FULL_SHARDS,
+  LEGACY_BACKEND_CORE_SHARDS,
+} from './backend-shards'
 import {
   assertBackendTestPopulation,
   loadBackendTimingSource,
@@ -20,14 +24,14 @@ export interface BackendTimingTarget {
   files: readonly string[]
 }
 
-function expectedShardsForTier(tier: BackendTimingTier): number {
-  return tier === 'core' ? BACKEND_CORE_SHARDS : BACKEND_FULL_SHARDS
+function allowedShardsForTier(tier: BackendTimingTier): readonly number[] {
+  return tier === 'core' ? [BACKEND_CORE_SHARDS, LEGACY_BACKEND_CORE_SHARDS] : [BACKEND_FULL_SHARDS]
 }
 
 function checkedSource(source: BackendTimingSource, expectedTier: BackendTimingTier) {
   const metadata = source?.provenance
   const tier: BackendTimingTier = metadata?.tier ?? 'all'
-  const requiredShards = expectedShardsForTier(expectedTier)
+  const allowedShards = allowedShardsForTier(expectedTier)
   const allowedWorkflows =
     expectedTier === 'core'
       ? [CI_WORKFLOW_PATH]
@@ -46,10 +50,10 @@ function checkedSource(source: BackendTimingSource, expectedTier: BackendTimingT
     !allowedWorkflows.includes(metadata.sourceWorkflowPath) ||
     !Number.isSafeInteger(metadata.finalRunAttempt) ||
     metadata.finalRunAttempt < 1 ||
-    metadata.sourceShards !== requiredShards
+    !allowedShards.includes(metadata.sourceShards)
   )
     throw new Error(
-      `Composition requires complete ${requiredShards}-shard ${expectedTier} backend timing sources`,
+      `Composition requires complete ${allowedShards.join('/')}-shard ${expectedTier} backend timing sources`,
     )
 
   // read/load already validates the raw source shards. Recheck the merged map

@@ -1,0 +1,272 @@
+# RFC-629: daily full cross-OS E2E (macOS 3-shard + Windows 4-shard pr-full),
+# Windows full 3-shard frontend Vitest sweep, and full-history gitleaks scan.
+# Per-push CI runs full Linux E2E (3 shards) + 19 OS-core specs on macOS/Windows (2 shards each)
+# and Ubuntu frontend + incremental gitleaks; this nightly closes the complete cross-OS & full-history loop.
+
+name: e2e-cross-os-nightly
+
+on:
+  schedule:
+    - cron: '30 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-binary-macos:
+    name: Build cross-OS nightly binary (macos-latest)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Cache bun package downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Build production + test-only e2e binaries
+        shell: bash
+        run: bun run build:binary:e2e
+
+      - name: Upload test-only e2e artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-workflow-e2e-macos-latest
+          path: |
+            dist/agent-workflow-e2e-*
+            dist/stub-opencode-*
+            dist/system-mock-tool-*
+          if-no-files-found: error
+
+  build-binary-windows:
+    name: Build cross-OS nightly binary (windows-latest)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Build production + test-only e2e binaries
+        shell: bash
+        run: bun run build:binary:e2e
+
+      - name: Upload test-only e2e artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-workflow-e2e-windows-latest
+          path: |
+            dist/agent-workflow-e2e-*
+            dist/stub-opencode-*
+            dist/system-mock-tool-*
+          if-no-files-found: error
+
+  e2e-macos-full:
+    name: Playwright e2e full (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
+    needs: build-binary-macos
+    if: ${{ !cancelled() && needs['build-binary-macos'].result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest]
+        shard: [1, 2, 3]
+        shards: [3]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
+      AW_E2E_WORKERS: '3'
+      AW_E2E_TIER: pr-full
+    steps: &cross-os-e2e-steps
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Cache bun package downloads
+        if: runner.os != 'Windows'
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Download test-only e2e binary + stub
+        uses: actions/download-artifact@v8
+        with:
+          name: agent-workflow-e2e-${{ matrix.os }}
+          path: dist
+
+      - name: Restore executable bit on the e2e binary and mock executables
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x dist/agent-workflow-e2e-*
+          test -n "$(find dist -maxdepth 1 -type f -name 'stub-opencode-*')"
+          chmod +x dist/stub-opencode-*
+          test -n "$(find dist -maxdepth 1 -type f -name 'system-mock-tool-*')"
+          chmod +x dist/system-mock-tool-*
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('bun.lock') }}
+
+      - name: Install Playwright browsers
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run full e2e (shard ${{ matrix.shard }}/${{ matrix.shards }})
+        env:
+          CI: 'true'
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ runner.temp }}/e2e-discovery.json
+          AW_E2E_SHARD_PLAN: ${{ runner.temp }}/e2e-shard-plan.json
+          AW_E2E_TIMINGS_OUTPUT: ${{ runner.temp }}/e2e-timings.json
+          AW_E2E_WINDOWS_EXCLUDE: 'focus rings are not clipped anywhere|rfc250-workflow-camera'
+          AW_E2E_TIER_EXCLUDE: '@nightly'
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            bun run e2e -- --list --reporter=json --project=chromium \
+              --grep-invert "$AW_E2E_TIER_EXCLUDE|$AW_E2E_WINDOWS_EXCLUDE"
+          else
+            bun run e2e -- --list --reporter=json --project=chromium \
+              --grep-invert "$AW_E2E_TIER_EXCLUDE"
+          fi
+          bun run scripts/ci/plan-e2e-shards.ts \
+            --report "$PLAYWRIGHT_JSON_OUTPUT_NAME" --platform "$RUNNER_OS" \
+            --tier "$AW_E2E_TIER" \
+            --shard=${{ matrix.shard }}/${{ matrix.shards }} --output "$AW_E2E_SHARD_PLAN"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            bun run e2e -- --config=playwright.ci.config.ts --project=chromium \
+              --grep-invert "$AW_E2E_TIER_EXCLUDE|$AW_E2E_WINDOWS_EXCLUDE"
+          else
+            bun run e2e -- --config=playwright.ci.config.ts --project=chromium \
+              --grep-invert "$AW_E2E_TIER_EXCLUDE"
+          fi
+
+      - name: Upload measured e2e file timings
+        if: success() || failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-test-timings-${{ runner.os }}-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/e2e-timings.json
+            ${{ runner.temp }}/e2e-shard-plan.json
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 14
+
+      - name: Upload Playwright trace on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-trace-nightly-${{ matrix.os }}-shard${{ matrix.shard }}
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+
+  e2e-windows-full:
+    name: Playwright e2e full (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
+    needs: build-binary-windows
+    if: ${{ !cancelled() && needs['build-binary-windows'].result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+        shard: [1, 2, 3, 4]
+        shards: [4]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.ms-playwright
+      AW_E2E_TIER: pr-full
+    steps: *cross-os-e2e-steps
+
+  test-frontend-windows:
+    name: Frontend tests (windows-latest shard ${{ matrix.shard }}/3)
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Test (frontend, vitest shard)
+        shell: bash
+        run: bun run --filter @agent-workflow/frontend test -- --shard=${{ matrix.shard }}/3
+
+  gitleaks-full-history:
+    name: Gitleaks full-history secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Cache gitleaks binary
+        uses: actions/cache@v6
+        with:
+          path: ~/.local/bin/aw-ci-gitleaks
+          key: ci-gitleaks-v1-${{ runner.os }}-8.30.1
+
+      - name: Run full-history gitleaks scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool_dir="$HOME/.local/bin/aw-ci-gitleaks"
+          mkdir -p "$tool_dir"
+          version=8.30.1
+          if [ ! -x "$tool_dir/gitleaks" ]; then
+            curl -fsSL \
+              "https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_linux_x64.tar.gz" \
+              | tar -xz -C "$tool_dir" gitleaks
+          fi
+          "$tool_dir/gitleaks" detect --source . --no-banner --redact --verbose

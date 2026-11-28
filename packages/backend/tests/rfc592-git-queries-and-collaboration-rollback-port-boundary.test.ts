@@ -143,18 +143,7 @@ describe('RFC-592 —— 两个查询在 platform', () => {
     ).toEqual(['@/util/git', '@/modules/source-control/public/types'])
   })
 
-  test('src / tests / scripts 里没有任何 import 从 util/git 取这两个名字', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(join(REPO, 'scripts')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(6000)
-    expect(
-      files.flatMap((path) => utilGitImports(path, readFileSync(path, 'utf8'), MOVED)),
-    ).toEqual([])
-  }, 240_000)
+  // RFC-629: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('负对照：别名、相对路径、带扩展名与转出都会被认出；别的名字与新位置不算', () => {
     expect(
@@ -178,7 +167,13 @@ describe('RFC-592 —— collaboration 与 runtime-management 不取 util/git', 
       walk(join(SRC, root)),
     )
     expect(files.length).toBeGreaterThanOrEqual(100)
-    expect(files.flatMap((path) => utilGitImports(path, readFileSync(path, 'utf8')))).toEqual([])
+    expect(
+      files.flatMap((path) => {
+        const text = readFileSync(path, 'utf8')
+        if (!text.includes('git') && !text.includes('\\u') && !text.includes('\\x')) return []
+        return utilGitImports(path, text)
+      }),
+    ).toEqual([])
   })
 
   test('负对照：任何名字或整个命名空间取自 util/git 都会被认出', () => {

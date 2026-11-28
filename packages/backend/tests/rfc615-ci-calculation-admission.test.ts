@@ -9,8 +9,11 @@ import {
   BACKEND_FULL_NIGHTLY_PATH,
   CI_WORKFLOW_PATH,
   CI_WORK_JOB_IDS,
+  CROSS_OS_NIGHTLY_E2E_JOB_IDS,
+  E2E_CROSS_OS_NIGHTLY_PATH,
   LEGACY_CI_WORK_JOB_IDS,
   resolveCiWorkSource,
+  resolveCrossOsNightlyE2ESource,
   resolveNightlyBackendSource,
 } from '../../../scripts/ci/workflow-source'
 
@@ -19,6 +22,7 @@ const entryPath = '.github/workflows/ci.yml'
 const entrySource = readFileSync(resolve(root, entryPath), 'utf8')
 const workSource = readFileSync(resolve(root, CI_WORKFLOW_PATH), 'utf8')
 const nightlySource = readFileSync(resolve(root, BACKEND_FULL_NIGHTLY_PATH), 'utf8')
+const crossOsNightlySource = readFileSync(resolve(root, E2E_CROSS_OS_NIGHTLY_PATH), 'utf8')
 const entry = parse(entrySource)
 const work = parse(workSource)
 const nightly = parse(nightlySource)
@@ -26,14 +30,27 @@ const required = entry.jobs['ci-required']
 const gate = required.steps[0].run as string
 const resultEnv = (id: string) => `${id.replaceAll('-', '_').toUpperCase()}_RESULT`
 
+const E2E_AND_BUILD_JOB_IDS = [
+  'build-binary',
+  'build-binary-macos',
+  'build-binary-windows',
+  'e2e',
+  'e2e-macos',
+  'e2e-windows',
+] as const
+
 const allWorkSuccessEnvs = Object.fromEntries(
   CI_WORK_JOB_IDS.map((id) => [resultEnv(id), 'success']),
 )
 const emptyWorkEnvs = Object.fromEntries(CI_WORK_JOB_IDS.map((id) => [resultEnv(id), '']))
+const skippedE2eBuildEnvs = Object.fromEntries(
+  E2E_AND_BUILD_JOB_IDS.map((id) => [resultEnv(id), 'skipped']),
+)
 
 const docsOnlySuccess: Record<string, string> = {
   DETECT_CHANGES_RESULT: 'success',
   CI_MODE: 'docs-only',
+  RUN_E2E: 'false',
   DOCS_FAST_GATE_RESULT: 'success',
   FULL_CI_RESULT: 'skipped',
   ...emptyWorkEnvs,
@@ -42,18 +59,32 @@ const docsOnlySuccess: Record<string, string> = {
 const standardSuccess: Record<string, string> = {
   DETECT_CHANGES_RESULT: 'success',
   CI_MODE: 'standard',
+  RUN_E2E: 'true',
   DOCS_FAST_GATE_RESULT: 'skipped',
   FULL_CI_RESULT: 'success',
   ...allWorkSuccessEnvs,
   TEST_BACKEND_MIGRATION_RESULT: 'skipped',
 }
 
+const standardNoE2eSuccess: Record<string, string> = {
+  ...standardSuccess,
+  RUN_E2E: 'false',
+  ...skippedE2eBuildEnvs,
+}
+
 const fullSuccess: Record<string, string> = {
   DETECT_CHANGES_RESULT: 'success',
   CI_MODE: 'full',
+  RUN_E2E: 'true',
   DOCS_FAST_GATE_RESULT: 'skipped',
   FULL_CI_RESULT: 'success',
   ...allWorkSuccessEnvs,
+}
+
+const fullNoE2eSuccess: Record<string, string> = {
+  ...fullSuccess,
+  RUN_E2E: 'false',
+  ...skippedE2eBuildEnvs,
 }
 
 function executeGate(results: Record<string, string>) {
@@ -83,6 +114,9 @@ describe('RFC-615 / RFC-627 CI admission, tiering, and terminal gate', () => {
     expect(entry.jobs['full-ci'].with).toEqual({
       run_migration_full: "${{ needs['detect-changes'].outputs.mode == 'full' }}",
       links_base_sha: "${{ needs['detect-changes'].outputs.links_base_sha }}",
+      run_frontend_full: "${{ needs['detect-changes'].outputs.run_frontend_full != 'false' }}",
+      run_e2e: "${{ needs['detect-changes'].outputs.run_e2e != 'false' }}",
+      gitleaks_base_sha: "${{ needs['detect-changes'].outputs.gitleaks_base_sha }}",
     })
     expect(entry.jobs['full-ci'].concurrency).toBeUndefined()
     expect(entry.jobs['full-ci']['runs-on']).toBeUndefined()
@@ -118,36 +152,73 @@ describe('RFC-615 / RFC-627 CI admission, tiering, and terminal gate', () => {
       expect(job['continue-on-error']).toBeUndefined()
       expect(job['runs-on']).toBeDefined()
       expect(job['timeout-minutes']).toBe(id === 'test-frontend' || id.startsWith('e2e') ? 20 : 15)
-      const matrix = job.strategy?.matrix as Record<string, unknown[]> | undefined
+      const matrix = job.strategy?.matrix as Record<string, unknown> | undefined
       let count = 1
       if (matrix) {
         expect(matrix.include).toBeUndefined()
         expect(matrix.exclude).toBeUndefined()
         expect(job.strategy['fail-fast']).toBe(false)
-        count = Object.values(matrix).reduce((acc, values) => acc * values.length, 1)
+        if (id === 'test-frontend') {
+          expect(matrix.os).toEqual(['ubuntu-latest'])
+          expect(matrix.shard).toBe(
+            "${{ fromJSON(inputs.run_frontend_full && '[1, 2, 3]' || '[1]') }}",
+          )
+          // Full frontend runs 3 Ubuntu shards (backend-only contract fast-path runs 1).
+          count = 3
+        } else {
+          count = Object.values(matrix).reduce<number>((acc, values) => {
+            expect(Array.isArray(values), `${id} matrix axis must be an array`).toBe(true)
+            return acc * (values as unknown[]).length
+          }, 1)
+        }
       }
       fullCalculationJobs += count
       if (id !== 'test-backend-migration') standardCalculationJobs += count
     }
-    // Standard calculation: lint(1) + core backend(16) + PG(1) + frontend(6) + scans(1) +
-    // perf(1) + docs(1) + build(3) + e2e(10) = 40. Full adds 28 migration shards = 68.
-    expect(standardCalculationJobs).toBe(40)
-    expect(fullCalculationJobs).toBe(68)
+    // RFC-629: Standard calculation (max): lint(1) + core backend(12) + PG(1) + frontend(3) +
+    // scans(1) + perf(1) + docs(1) + build(3) + e2e(3 Linux + 2 macOS + 2 Windows = 7) = 30.
+    // Full adds 28 migration shards = 58.
+    expect(standardCalculationJobs).toBe(30)
+    expect(fullCalculationJobs).toBe(58)
     expect(required.env.DETECT_CHANGES_RESULT).toBe("${{ needs['detect-changes'].result }}")
     expect(required.env.CI_MODE).toBe("${{ needs['detect-changes'].outputs.mode }}")
+    expect(required.env.RUN_E2E).toBe("${{ needs['detect-changes'].outputs.run_e2e }}")
     expect(required.env.DOCS_FAST_GATE_RESULT).toBe("${{ needs['docs-fast-gate'].result }}")
     expect(required.env.FULL_CI_RESULT).toBe("${{ needs['full-ci'].result }}")
   })
 
-  test('the actual required Bash script accepts valid docs-only, standard, and full outcomes', () => {
+  test('the actual required Bash script accepts valid docs-only, standard, and full outcomes (with and without E2E)', () => {
     for (const [label, env] of [
       ['docs-only', docsOnlySuccess],
       ['standard', standardSuccess],
+      ['standard (run_e2e=false)', standardNoE2eSuccess],
       ['full', fullSuccess],
+      ['full (run_e2e=false)', fullNoE2eSuccess],
     ] as const) {
       const result = executeGate(env)
       expect(result.error, label).toBeUndefined()
       expect(result.status, `${label}: ${result.stdout}${result.stderr}`).toBe(0)
+    }
+  })
+
+  test('the actual required Bash script enforces orthogonal RUN_E2E checks and rejects invalid values', () => {
+    for (const base of [standardSuccess, fullSuccess]) {
+      for (const badRunE2e of ['', 'yes', 'TRUE', '1', 'auto']) {
+        const result = executeGate({ ...base, RUN_E2E: badRunE2e })
+        expect(result.status).toBe(1)
+        expect(result.stdout).toContain(`invalid RUN_E2E '${badRunE2e || 'missing'}'`)
+      }
+    }
+    for (const base of [standardNoE2eSuccess, fullNoE2eSuccess]) {
+      for (const id of E2E_AND_BUILD_JOB_IDS) {
+        for (const badOutcome of ['success', 'failure', 'cancelled', '', 'unknown']) {
+          const result = executeGate({ ...base, [resultEnv(id)]: badOutcome })
+          expect(result.status).toBe(1)
+          expect(result.stdout).toContain(
+            `${id} concluded '${badOutcome || 'missing'}', expected 'skipped'`,
+          )
+        }
+      }
     }
   })
 
@@ -230,6 +301,7 @@ describe('RFC-615 / RFC-627 CI admission, tiering, and terminal gate', () => {
   test('fixture cache is per runner job and is never restored from Actions storage', () => {
     for (const job of [
       work.jobs['test-backend'],
+      work.jobs['test-backend-postgresql'],
       work.jobs['test-backend-migration'],
       nightly.jobs['test-backend-full'],
     ]) {
@@ -261,9 +333,13 @@ describe('RFC-615 / RFC-627 no-install CI scripts and timing workflow resolution
     const noInstallScripts = [
       'scripts/ci/workflow-source.ts',
       'scripts/ci/backend-shards.ts',
+      'scripts/ci/e2e-shards.ts',
       'scripts/ci/classify-ci-changes.ts',
       'scripts/ci/refresh-backend-timings.ts',
       'scripts/ci/compose-backend-timings.ts',
+      'scripts/ci/refresh-e2e-timings.ts',
+      'scripts/ci/run-postgresql-gate.ts',
+      'scripts/ci/run-frontend-contract-tests.ts',
     ]
     for (const relPath of noInstallScripts) {
       const source = readFileSync(resolve(root, relPath), 'utf8')
@@ -385,6 +461,30 @@ describe('RFC-615 / RFC-627 no-install CI scripts and timing workflow resolution
       }),
     ]) {
       expect(() => resolveNightlyBackendSource(() => bad)).toThrow()
+    }
+  })
+
+  test('resolves e2e-cross-os-nightly.yml and rejects missing triggers or unknown job populations', () => {
+    expect(
+      resolveCrossOsNightlyE2ESource((path) => {
+        if (path !== E2E_CROSS_OS_NIGHTLY_PATH) throw new Error(`Unexpected path: ${path}`)
+        return crossOsNightlySource
+      }),
+    ).toEqual({ path: E2E_CROSS_OS_NIGHTLY_PATH, workflow: crossOsNightlySource })
+
+    const validJobs = Object.fromEntries(CROSS_OS_NIGHTLY_E2E_JOB_IDS.map((id) => [id, {}]))
+    const missingOne = { ...validJobs }
+    delete missingOne['e2e-windows-full']
+    for (const bad of [
+      stringify({ on: { schedule: [] }, jobs: validJobs }),
+      stringify({ on: { workflow_dispatch: {} }, jobs: validJobs }),
+      stringify({ on: { schedule: [], workflow_dispatch: {} }, jobs: missingOne }),
+      stringify({
+        on: { schedule: [], workflow_dispatch: {} },
+        jobs: { ...validJobs, unexpected: {} },
+      }),
+    ]) {
+      expect(() => resolveCrossOsNightlyE2ESource(() => bad)).toThrow()
     }
   })
 })

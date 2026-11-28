@@ -28,6 +28,8 @@ import {
 } from '@/platform/execution/local/daemonLock'
 import { Paths } from '@/platform/configuration/installationPaths'
 
+export const DEFAULT_STOP_TIMEOUT_MS = 30_000
+
 export interface StopOptions {
   /** Max time to wait for the daemon to exit after the request. Default 30s. */
   timeoutMs?: number
@@ -84,7 +86,7 @@ export async function stopCommand(opts: StopOptions = {}): Promise<StopResult> {
     throw new Error(`failed to signal PID ${pid}: ${requested.reason}`)
   }
 
-  const timeoutMs = opts.timeoutMs ?? 30_000
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_STOP_TIMEOUT_MS
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (!existsSync(lockPath)) {

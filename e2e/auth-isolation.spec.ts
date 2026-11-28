@@ -17,7 +17,7 @@
 // The "developer / viewer" roles named in the RFC-054 plan don't exist in
 // the schema; we cover the actual `admin` × `user` matrix here instead.
 //
-// 8 cases, each rebuilds its own daemon for full isolation:
+// 8 cases sharing one daemon (serial, per-case unique usernames/PATs):
 //
 //   1. regular bob can NOT see admin alice's task             → 404 task-not-found（RFC-285 B1 同形）
 //   2. admin alice CAN see regular bob's task                 → 200 (tasks:read:all)
@@ -252,203 +252,198 @@ async function getTaskAs(
 }
 
 // ----------------------------------------------------------------------------
+// Shared daemon + fixture repo/workflow for all 8 pure-fetch cases
+// ----------------------------------------------------------------------------
+
+let sharedDaemon: DaemonHandle | undefined
+let sharedRepo: RepoFixture | undefined
+let sharedWorkflow: WorkflowFixture | undefined
+
+function requireSuite(): { daemon: DaemonHandle; repo: RepoFixture; wf: WorkflowFixture } {
+  if (!sharedDaemon || !sharedRepo || !sharedWorkflow) {
+    throw new Error('auth-isolation shared daemon is not initialized')
+  }
+  return { daemon: sharedDaemon, repo: sharedRepo, wf: sharedWorkflow }
+}
+
+test.beforeAll(async () => {
+  sharedRepo = makeFixtureRepo()
+  sharedDaemon = await startDaemon({ stubMode: 'basic' })
+  sharedWorkflow = await seedWorkflow(sharedDaemon)
+})
+
+test.afterAll(async () => {
+  const daemon = sharedDaemon
+  const repo = sharedRepo
+  sharedDaemon = undefined
+  sharedRepo = undefined
+  sharedWorkflow = undefined
+  if (daemon) await daemon.stop()
+  if (repo) repo.cleanup()
+})
+
+// ----------------------------------------------------------------------------
 // Cases
 // ----------------------------------------------------------------------------
 
 // LOCKS: cross-user task visibility (the headline canViewTask gate).
 // RFC-285 B1：不可见与不存在同形——外人拿 404 task-not-found，错误码探不出存在性。
 test("regular bob can NOT see admin alice's task → 404 task-not-found", async () => {
-  const repo = makeFixtureRepo()
-  const daemon = await startDaemon({ stubMode: 'basic' })
-  try {
-    const alice = await createUserAndLogin(daemon, {
-      username: 'alice',
-      password: 'AlicePassword123',
-      role: 'admin',
-    })
-    const bob = await createUserAndLogin(daemon, {
-      username: 'bob',
-      password: 'BobPassword123',
-      role: 'user',
-    })
-    const wf = await seedWorkflow(daemon)
-    const aliceTask = await launchTaskAs(
-      daemon,
-      alice.sessionToken,
-      wf.workflowId,
-      repo.repoDir,
-      'alice-task',
-    )
+  const { daemon, repo, wf } = requireSuite()
+  const alice = await createUserAndLogin(daemon, {
+    username: 'alice-c1',
+    password: 'AlicePassword123',
+    role: 'admin',
+  })
+  const bob = await createUserAndLogin(daemon, {
+    username: 'bob-c1',
+    password: 'BobPassword123',
+    role: 'user',
+  })
+  const aliceTask = await launchTaskAs(
+    daemon,
+    alice.sessionToken,
+    wf.workflowId,
+    repo.repoDir,
+    'alice-task',
+  )
 
-    const res = await getTaskAs(daemon, bob.sessionToken, aliceTask)
-    expect(res.status).toBe(404)
-    const body = (await res.json()) as { ok: false; code: string }
-    expect(body.ok).toBe(false)
-    expect(body.code).toBe('task-not-found')
-  } finally {
-    await daemon.stop()
-    repo.cleanup()
-  }
+  const res = await getTaskAs(daemon, bob.sessionToken, aliceTask)
+  expect(res.status).toBe(404)
+  const body = (await res.json()) as { ok: false; code: string }
+  expect(body.ok).toBe(false)
+  expect(body.code).toBe('task-not-found')
 })
 
 // LOCKS: admin sees all (tasks:read:all permission grants cross-user view).
 test("admin alice CAN see regular bob's task → 200", async () => {
-  const repo = makeFixtureRepo()
-  const daemon = await startDaemon({ stubMode: 'basic' })
-  try {
-    const alice = await createUserAndLogin(daemon, {
-      username: 'alice',
-      password: 'AlicePassword123',
-      role: 'admin',
-    })
-    const bob = await createUserAndLogin(daemon, {
-      username: 'bob',
-      password: 'BobPassword123',
-      role: 'user',
-    })
-    const wf = await seedWorkflow(daemon)
-    const bobTask = await launchTaskAs(
-      daemon,
-      bob.sessionToken,
-      wf.workflowId,
-      repo.repoDir,
-      'bob-task',
-    )
+  const { daemon, repo, wf } = requireSuite()
+  const alice = await createUserAndLogin(daemon, {
+    username: 'alice-c2',
+    password: 'AlicePassword123',
+    role: 'admin',
+  })
+  const bob = await createUserAndLogin(daemon, {
+    username: 'bob-c2',
+    password: 'BobPassword123',
+    role: 'user',
+  })
+  const bobTask = await launchTaskAs(
+    daemon,
+    bob.sessionToken,
+    wf.workflowId,
+    repo.repoDir,
+    'bob-task',
+  )
 
-    const res = await getTaskAs(daemon, alice.sessionToken, bobTask)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { id: string; name: string }
-    expect(body.id).toBe(bobTask)
-    expect(body.name).toBe('bob-task')
-  } finally {
-    await daemon.stop()
-    repo.cleanup()
-  }
+  const res = await getTaskAs(daemon, alice.sessionToken, bobTask)
+  expect(res.status).toBe(200)
+  const body = (await res.json()) as { id: string; name: string }
+  expect(body.id).toBe(bobTask)
+  expect(body.name).toBe('bob-task')
 })
 
 // LOCKS: cross-regular task visibility (no leakage between same-role users).
 test("regular bob can NOT see another regular carol's task → 404", async () => {
-  const repo = makeFixtureRepo()
-  const daemon = await startDaemon({ stubMode: 'basic' })
-  try {
-    const bob = await createUserAndLogin(daemon, {
-      username: 'bob',
-      password: 'BobPassword123',
-      role: 'user',
-    })
-    const carol = await createUserAndLogin(daemon, {
-      username: 'carol',
-      password: 'CarolPassword123',
-      role: 'user',
-    })
-    const wf = await seedWorkflow(daemon)
-    const carolTask = await launchTaskAs(
-      daemon,
-      carol.sessionToken,
-      wf.workflowId,
-      repo.repoDir,
-      'carol-task',
-    )
+  const { daemon, repo, wf } = requireSuite()
+  const bob = await createUserAndLogin(daemon, {
+    username: 'bob-c3',
+    password: 'BobPassword123',
+    role: 'user',
+  })
+  const carol = await createUserAndLogin(daemon, {
+    username: 'carol-c3',
+    password: 'CarolPassword123',
+    role: 'user',
+  })
+  const carolTask = await launchTaskAs(
+    daemon,
+    carol.sessionToken,
+    wf.workflowId,
+    repo.repoDir,
+    'carol-task',
+  )
 
-    const res = await getTaskAs(daemon, bob.sessionToken, carolTask)
-    expect(res.status).toBe(404)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('task-not-found')
-  } finally {
-    await daemon.stop()
-    repo.cleanup()
-  }
+  const res = await getTaskAs(daemon, bob.sessionToken, carolTask)
+  expect(res.status).toBe(404)
+  const body = (await res.json()) as { code: string }
+  expect(body.code).toBe('task-not-found')
 })
 
 // LOCKS: own-task visibility (control case — proves the deny path is
 // targeted, not a daemon-wide block on every regular user).
 test('regular bob CAN see own task → 200 (control)', async () => {
-  const repo = makeFixtureRepo()
-  const daemon = await startDaemon({ stubMode: 'basic' })
-  try {
-    const bob = await createUserAndLogin(daemon, {
-      username: 'bob',
-      password: 'BobPassword123',
-      role: 'user',
-    })
-    const wf = await seedWorkflow(daemon)
-    const bobTask = await launchTaskAs(
-      daemon,
-      bob.sessionToken,
-      wf.workflowId,
-      repo.repoDir,
-      'bob-own-task',
-    )
+  const { daemon, repo, wf } = requireSuite()
+  const bob = await createUserAndLogin(daemon, {
+    username: 'bob-c4',
+    password: 'BobPassword123',
+    role: 'user',
+  })
+  const bobTask = await launchTaskAs(
+    daemon,
+    bob.sessionToken,
+    wf.workflowId,
+    repo.repoDir,
+    'bob-own-task',
+  )
 
-    const res = await getTaskAs(daemon, bob.sessionToken, bobTask)
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { id: string }
-    expect(body.id).toBe(bobTask)
-  } finally {
-    await daemon.stop()
-    repo.cleanup()
-  }
+  const res = await getTaskAs(daemon, bob.sessionToken, bobTask)
+  expect(res.status).toBe(200)
+  const body = (await res.json()) as { id: string }
+  expect(body.id).toBe(bobTask)
 })
 
 // LOCKS: admin-only /api/config (settings:read missing on user baseline).
 test('regular bob can NOT GET /api/config → 403 forbidden', async () => {
-  const daemon = await startDaemon({ stubMode: 'basic' })
-  try {
-    const bob = await createUserAndLogin(daemon, {
-      username: 'bob',
-      password: 'BobPassword123',
-      role: 'user',
-    })
-    const res = await fetch(`${daemon.baseUrl}/api/config`, {
-      headers: { Authorization: `Bearer ${bob.sessionToken}` },
-    })
-    expect(res.status).toBe(403)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('forbidden')
+  const { daemon } = requireSuite()
+  const bob = await createUserAndLogin(daemon, {
+    username: 'bob-c5',
+    password: 'BobPassword123',
+    role: 'user',
+  })
+  const res = await fetch(`${daemon.baseUrl}/api/config`, {
+    headers: { Authorization: `Bearer ${bob.sessionToken}` },
+  })
+  expect(res.status).toBe(403)
+  const body = (await res.json()) as { code: string }
+  expect(body.code).toBe('forbidden')
 
-    // Sanity counter-check: admin alice CAN read /api/config.
-    const alice = await createUserAndLogin(daemon, {
-      username: 'alice',
-      password: 'AlicePassword123',
-      role: 'admin',
-    })
-    const aliceRes = await fetch(`${daemon.baseUrl}/api/config`, {
-      headers: { Authorization: `Bearer ${alice.sessionToken}` },
-    })
-    expect(aliceRes.status).toBe(200)
-  } finally {
-    await daemon.stop()
-  }
+  // Sanity counter-check: admin alice CAN read /api/config.
+  const alice = await createUserAndLogin(daemon, {
+    username: 'alice-c5',
+    password: 'AlicePassword123',
+    role: 'admin',
+  })
+  const aliceRes = await fetch(`${daemon.baseUrl}/api/config`, {
+    headers: { Authorization: `Bearer ${alice.sessionToken}` },
+  })
+  expect(aliceRes.status).toBe(200)
 })
 
 // LOCKS: admin-only users management (users:write missing on user baseline).
 test('regular bob can NOT POST /api/users → 403 forbidden', async () => {
-  const daemon = await startDaemon({ stubMode: 'basic' })
-  try {
-    const bob = await createUserAndLogin(daemon, {
-      username: 'bob',
-      password: 'BobPassword123',
-      role: 'user',
-    })
-    const res = await fetch(`${daemon.baseUrl}/api/users`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${bob.sessionToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        username: 'mallory',
-        displayName: 'Mallory',
-        role: 'admin',
-        password: 'MalloryPassword123',
-      }),
-    })
-    expect(res.status).toBe(403)
-    const body = (await res.json()) as { code: string }
-    expect(body.code).toBe('forbidden')
-  } finally {
-    await daemon.stop()
-  }
+  const { daemon } = requireSuite()
+  const bob = await createUserAndLogin(daemon, {
+    username: 'bob-c6',
+    password: 'BobPassword123',
+    role: 'user',
+  })
+  const res = await fetch(`${daemon.baseUrl}/api/users`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${bob.sessionToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      username: 'mallory',
+      displayName: 'Mallory',
+      role: 'admin',
+      password: 'MalloryPassword123',
+    }),
+  })
+  expect(res.status).toBe(403)
+  const body = (await res.json()) as { code: string }
+  expect(body.code).toBe('forbidden')
 })
 
 // RFC-247 D1/D3/D4 — supersedes RFC-221's "no session actor may ever mint a
@@ -462,126 +457,118 @@ test('regular bob can NOT POST /api/users → 403 forbidden', async () => {
 // pieces (issue → hash → present → resolve → gate) which only an end-to-end run
 // exercises together, so this test now proves the chain instead of its absence.
 test('a minted PAT holds exactly its matrix — reads on, unticked verbs off', async () => {
-  const daemon = await startDaemon({ stubMode: 'basic' })
-  try {
-    const alice = await createUserAndLogin(daemon, {
-      username: 'alice',
-      password: 'AlicePassword123',
-      role: 'admin',
-    })
+  const { daemon } = requireSuite()
+  const alice = await createUserAndLogin(daemon, {
+    username: 'alice-c7',
+    password: 'AlicePassword123',
+    role: 'admin',
+  })
 
-    const mintRes = await fetch(`${daemon.baseUrl}/api/auth/pats`, {
-      method: 'POST',
+  const mintRes = await fetch(`${daemon.baseUrl}/api/auth/pats`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${alice.sessionToken}`,
+      'Content-Type': 'application/json',
+    },
+    // Create only. Alice is an admin, so her role baseline holds every delete
+    // point — the token must still not get them.
+    body: JSON.stringify({
+      name: 'auth-isolation-pat',
+      scopes: ['agents:create'],
+      purpose: 'general',
+    }),
+  })
+  expect(mintRes.status).toBe(201)
+  const minted = (await mintRes.json()) as { token: string; pat: { scopes: string[] } }
+  expect(minted.token.length).toBeGreaterThan(20)
+
+  const withToken = (path: string, init?: RequestInit) =>
+    fetch(`${daemon.baseUrl}${path}`, {
+      ...init,
       headers: {
-        Authorization: `Bearer ${alice.sessionToken}`,
+        Authorization: `Bearer ${minted.token}`,
         'Content-Type': 'application/json',
+        ...(init?.headers ?? {}),
       },
-      // Create only. Alice is an admin, so her role baseline holds every delete
-      // point — the token must still not get them.
-      body: JSON.stringify({
-        name: 'auth-isolation-pat',
-        scopes: ['agents:create'],
-        purpose: 'general',
-      }),
     })
-    expect(mintRes.status).toBe(201)
-    const minted = (await mintRes.json()) as { token: string; pat: { scopes: string[] } }
-    expect(minted.token.length).toBeGreaterThan(20)
 
-    const withToken = (path: string, init?: RequestInit) =>
-      fetch(`${daemon.baseUrl}${path}`, {
-        ...init,
-        headers: {
-          Authorization: `Bearer ${minted.token}`,
-          'Content-Type': 'application/json',
-          ...(init?.headers ?? {}),
-        },
-      })
+  // Reads are always on — an empty-ish matrix is a read-only token, not a
+  // powerless one.
+  expect((await withToken('/api/agents')).status).toBe(200)
 
-    // Reads are always on — an empty-ish matrix is a read-only token, not a
-    // powerless one.
-    expect((await withToken('/api/agents')).status).toBe(200)
+  // The ticked verb works.
+  const created = await withToken('/api/agents', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: 'pat-minted-agent',
+      description: 'created by an RFC-247 scoped token',
+      bodyMd: 'noop',
+    }),
+  })
+  expect(created.status).toBe(201)
+  const agent = (await created.json()) as { id: string }
 
-    // The ticked verb works.
-    const created = await withToken('/api/agents', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'pat-minted-agent',
-        description: 'created by an RFC-247 scoped token',
-        bodyMd: 'noop',
-      }),
-    })
-    expect(created.status).toBe(201)
-    const agent = (await created.json()) as { id: string }
+  // …and the unticked one does not, even though the OWNER could do it.
+  const deleteRes = await withToken(`/api/agents/${agent.id}`, { method: 'DELETE' })
+  expect(deleteRes.status).toBe(403)
+  expect(((await deleteRes.json()) as { code: string }).code).toBe('forbidden')
 
-    // …and the unticked one does not, even though the OWNER could do it.
-    const deleteRes = await withToken(`/api/agents/${agent.id}`, { method: 'DELETE' })
-    expect(deleteRes.status).toBe(403)
-    expect(((await deleteRes.json()) as { code: string }).code).toBe('forbidden')
-
-    // The same delete through Alice's SESSION succeeds — proving the refusal
-    // above is the token's matrix, not a missing capability on the account.
-    //
-    // An agent delete carries TWO independent guards besides the permission
-    // gate: RFC-222's type-to-confirm name and RFC-231's revision fence. Both
-    // have to be satisfied here, and both are read back from the resource
-    // rather than guessed — which is also exactly what an MCP caller has to do.
-    const fetched = (await (await withToken(`/api/agents/${agent.id}`)).json()) as {
-      updatedAt: number
-      aclRevision: number
-    }
-    const sessionDelete = await fetch(`${daemon.baseUrl}/api/agents/${agent.id}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${alice.sessionToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        confirm: 'pat-minted-agent',
-        expectedUpdatedAt: fetched.updatedAt,
-        expectedAclRevision: fetched.aclRevision,
-      }),
-    })
-    expect(sessionDelete.status).toBe(204)
-
-    // D6 — no token reaches the account surface, whatever its matrix.
-    expect((await withToken('/api/auth/me')).status).toBe(403)
-  } finally {
-    await daemon.stop()
+  // The same delete through Alice's SESSION succeeds — proving the refusal
+  // above is the token's matrix, not a missing capability on the account.
+  //
+  // An agent delete carries TWO independent guards besides the permission
+  // gate: RFC-222's type-to-confirm name and RFC-231's revision fence. Both
+  // have to be satisfied here, and both are read back from the resource
+  // rather than guessed — which is also exactly what an MCP caller has to do.
+  const fetched = (await (await withToken(`/api/agents/${agent.id}`)).json()) as {
+    updatedAt: number
+    aclRevision: number
   }
+  const sessionDelete = await fetch(`${daemon.baseUrl}/api/agents/${agent.id}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${alice.sessionToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      confirm: 'pat-minted-agent',
+      expectedUpdatedAt: fetched.updatedAt,
+      expectedAclRevision: fetched.aclRevision,
+    }),
+  })
+  expect(sessionDelete.status).toBe(204)
+
+  // D6 — no token reaches the account surface, whatever its matrix.
+  expect((await withToken('/api/auth/me')).status).toBe(403)
 })
 
 // RFC-247 D2 — the purpose axis, end to end. An `mcp_only` token authenticates
 // (it is a valid credential) and is then refused at the REST channel.
 test('an mcp_only PAT authenticates but cannot use the REST API', async () => {
-  const daemon = await startDaemon({ stubMode: 'basic' })
-  try {
-    const alice = await createUserAndLogin(daemon, {
-      username: 'alice',
-      password: 'AlicePassword123',
-      role: 'admin',
-    })
+  const { daemon } = requireSuite()
+  const alice = await createUserAndLogin(daemon, {
+    username: 'alice-c8',
+    password: 'AlicePassword123',
+    role: 'admin',
+  })
 
-    const mintRes = await fetch(`${daemon.baseUrl}/api/auth/pats`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${alice.sessionToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ name: 'mcp-only-pat', scopes: [], purpose: 'mcp_only' }),
-    })
-    expect(mintRes.status).toBe(201)
-    const minted = (await mintRes.json()) as { token: string }
+  const mintRes = await fetch(`${daemon.baseUrl}/api/auth/pats`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${alice.sessionToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name: 'mcp-only-pat', scopes: [], purpose: 'mcp_only' }),
+  })
+  expect(mintRes.status).toBe(201)
+  const minted = (await mintRes.json()) as { token: string }
 
-    const res = await fetch(`${daemon.baseUrl}/api/agents`, {
-      headers: { Authorization: `Bearer ${minted.token}` },
-    })
-    // 403, not 401: the credential is real and the refusal is about the
-    // channel. A 401 would send the caller off to re-authenticate, which would
-    // never fix it.
-    expect(res.status).toBe(403)
-    expect(((await res.json()) as { code: string }).code).toBe('token-mcp-only')
-  } finally {
-    await daemon.stop()
-  }
+  const res = await fetch(`${daemon.baseUrl}/api/agents`, {
+    headers: { Authorization: `Bearer ${minted.token}` },
+  })
+  // 403, not 401: the credential is real and the refusal is about the
+  // channel. A 401 would send the caller off to re-authenticate, which would
+  // never fix it.
+  expect(res.status).toBe(403)
+  expect(((await res.json()) as { code: string }).code).toBe('token-mcp-only')
 })

@@ -27,9 +27,14 @@ import { setDefaultTimeout, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join, relative, resolve, sep } from 'node:path'
+import { existsSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import ts from 'typescript'
+import {
+  RAW_TRANSACTION_SITES,
+  countNonCommentMatches,
+  withoutConversionTargetTransactions,
+} from './helpers/rfc629SharedProgramRules'
 
 // Building the cached whole-source TypeScript semantic graph take about 7 s per CI-scaled case; allow 30 s.
 setDefaultTimeout(30000)
@@ -105,50 +110,11 @@ describe('S-10 platform semantics: drizzle + bun:sqlite async transaction is dec
 })
 
 // ---------------------------------------------------------------------------
-// 守卫层
+// 守卫层（实库 `ts.Program` 全仓扫描已并入 architecture/rfc629-shared-program-guards.test.ts；
+// 本文件保留 SQLite 行为证明层、虚拟 ConversionTargetConnection 负对照与账本元数据校核）
 // ---------------------------------------------------------------------------
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
-
-function walkTsFiles(dir: string): string[] {
-  const out: string[] = []
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const p = join(dir, entry.name)
-    if (entry.isDirectory()) out.push(...walkTsFiles(p))
-    else if (entry.name.endsWith('.ts')) out.push(p)
-  }
-  return out
-}
-
-function isCommentLine(line: string): boolean {
-  const trimmed = line.trim()
-  return trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')
-}
-
-function countNonCommentMatches(content: string, re: RegExp): number {
-  let n = 0
-  for (const line of content.split('\n')) {
-    if (isCommentLine(line)) continue
-    const m = line.match(re)
-    if (m) n += m.length
-  }
-  return n
-}
-
-/**
- * RFC-359 W2 —— `databaseSessionFor(db).transaction(async (tx) => …)` 是仓内唯一被认可的
- * **provider-中立**事务原语（`platform/persistence/databaseTransaction.ts`）：SQLite 侧它不走
- * bun:sqlite 的同步包装器，而是显式 `BEGIN IMMEDIATE` + async 体 + 显式 COMMIT/ROLLBACK
- * （半提交与 BUSY_SNAPSHOT 两类危害都在原语内关闭，锁在 rfc359-engine-capabilities /
- * rfc359-each-provider-harness）。它不是这两条守卫要抓的「裸 drizzle db.transaction」，
- * 计数前先剔掉这一形态；`session.transaction(` 之类的别名不豁免——原语的调用形态只有这一种。
- */
-function withoutNeutralSessionTransactions(content: string): string {
-  return content.replace(
-    /databaseSessionFor\([^()]*\)\s*\.transaction\s*\(/g,
-    'databaseSessionFor(…)(',
-  )
-}
 
 const backendConfig = ts.readConfigFile(resolve(BACKEND_SRC, '../tsconfig.json'), ts.sys.readFile)
 if (backendConfig.error)
@@ -158,59 +124,6 @@ const compilerOptions = ts.parseJsonConfigFileContent(
   ts.sys,
   resolve(BACKEND_SRC, '..'),
 ).options
-let sourceProgram: ts.Program | undefined
-
-/** T18 P3-B: the offline conversion connection awaits the complete body under
- * BEGIN IMMEDIATE / COMMIT / ROLLBACK. Resolve that actual contract, including
- * aliases and nested properties; a receiver name or local lookalike is no proof.
- * Only erase the method token, so a raw transaction inside its body stays visible.
- */
-function withoutConversionTargetTransactions(
-  source: ts.SourceFile,
-  checker: ts.TypeChecker,
-  content = source.text,
-): string {
-  const ranges: Array<{ start: number; end: number }> = []
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === 'transaction'
-    ) {
-      const callee = node.expression
-      const type = checker.getTypeAtLocation(callee.expression)
-      const declarations = checker.getPropertyOfType(type, 'transaction')?.declarations ?? []
-      if (
-        !(type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) &&
-        declarations.length > 0 &&
-        declarations.every(
-          (declaration) =>
-            resolve(declaration.getSourceFile().fileName) ===
-              resolve(BACKEND_SRC, 'platform/persistence/migration/run/types.ts') &&
-            ts.isInterfaceDeclaration(declaration.parent) &&
-            declaration.parent.name.text === 'ConversionTargetConnection',
-        )
-      )
-        ranges.push({ start: callee.name.getStart(source), end: callee.name.getEnd() })
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(source)
-  for (const { start, end } of ranges.sort((a, b) => b.start - a.start))
-    if (end <= content.length)
-      content = content.slice(0, start) + ' '.repeat(end - start) + content.slice(end)
-  return content
-}
-
-function transactionSource(file: string, content: string): string {
-  if (!/\.transaction\s*\(/.test(content)) return content
-  sourceProgram ??= ts.createProgram(walkTsFiles(BACKEND_SRC), compilerOptions)
-  const source = sourceProgram.getSourceFile(file)
-  if (!source) throw new Error(`S-10 transaction source missing: ${file}`)
-  return withoutNeutralSessionTransactions(
-    withoutConversionTargetTransactions(source, sourceProgram.getTypeChecker(), content),
-  )
-}
 
 test('S-10 resolves the real async target contract while retaining raw and unknown receivers', () => {
   const file = resolve(BACKEND_SRC, '__s10_transaction_fixture.ts')
@@ -239,7 +152,11 @@ test('S-10 resolves the real async target contract while retaining raw and unkno
   host.getSourceFile = (name, language, onError, createNew) =>
     name === file ? source : readSource(name, language, onError, createNew)
   const program = ts.createProgram([file], compilerOptions, host)
-  const filtered = withoutConversionTargetTransactions(source, program.getTypeChecker())
+  const filtered = withoutConversionTargetTransactions(
+    source,
+    program.getTypeChecker(),
+    BACKEND_SRC,
+  )
   expect(countNonCommentMatches(filtered, /\.transaction\s*\(\s*async\b/g)).toBe(5)
   expect(filtered).toContain('raw.transaction(async')
   expect(filtered).toContain('unresolved.transaction(async')
@@ -250,134 +167,7 @@ test('S-10 resolves the real async target contract while retaining raw and unkno
   expect(filtered).not.toContain('alias.transaction(')
 })
 
-/**
- * This guard is intentionally about Bun's synchronous SQLite transaction
- * wrapper. PostgreSQL transactions are asynchronous by contract, so counting
- * their `.transaction(async ...)` calls here would turn the SQLite safety lock
- * into a provider-name allowlist. Keep the corpus source-backed instead: a file
- * is in scope only when it imports the concrete SQLite client/runtime (or is
- * itself a named SQLite adapter).
- */
-function sqliteTransactionSource(relativePath: string, content: string): string | null {
-  if (/(^|\/)postgresql[^/]*\.ts$/i.test(relativePath)) return null
-  const ownsSqlite =
-    /(^|\/)sqlite[^/]*\.ts$/i.test(relativePath) ||
-    /from\s+['"](?:@\/db\/client|[^'"]*\/db\/client)['"]/.test(content) ||
-    /from\s+['"](?:bun:sqlite|drizzle-orm\/bun-sqlite)['"]/.test(content)
-  if (!ownsSqlite) return null
-
-  // A few provider-private infrastructure modules colocate two explicitly
-  // named factories. Only the SQLite half is subject to Bun's synchronous
-  // transaction rule; the PostgreSQL half deliberately owns async tx bodies.
-  const postgresqlFactory = content.search(
-    /(?:export\s+)?(?:async\s+)?function\s+\w*Postgresql\w*\s*\(/,
-  )
-  return postgresqlFactory < 0 ? content : content.slice(0, postgresqlFactory)
-}
-
-/**
- * RFC-093 已落地（WP-7）：调研基线的五处装饰性 async 事务（mcp.ts / memory.ts ×2 /
- * plugin.ts / review.ts）已全部改写为 `dbTxSync`（src/db/txSync.ts）的同步执行面。
- * 守卫从此零容忍：src 内任何非注释行出现 `.transaction(async` 即红。
- */
-const EXPECTED_ASYNC_TX_SITES: Record<string, number> = {}
-
-describe('S-10 guard: `.transaction(async` inventory in packages/backend/src', () => {
-  test('ZERO decorative async transactions — any occurrence turns this red (use dbTxSync)', () => {
-    const actual: Record<string, number> = {}
-    for (const file of walkTsFiles(BACKEND_SRC)) {
-      const rel = relative(BACKEND_SRC, file).split(sep).join('/')
-      const content = readFileSync(file, 'utf8')
-      const sqliteSource = sqliteTransactionSource(rel, content)
-      if (sqliteSource === null) continue
-      const count = countNonCommentMatches(
-        transactionSource(file, sqliteSource),
-        /\.transaction\s*\(\s*async\b/g,
-      )
-      if (count > 0) {
-        actual[rel] = count
-      }
-    }
-    // 任何命中 → 此断言红。处置：不要写 async 事务体——它在 bun:sqlite 下
-    // 没有任何原子性（见本文件行为证明层）；用 src/db/txSync.ts 的 dbTxSync
-    // + 同步执行面（.all()/.run()/.get()）。
-    expect(actual).toEqual(EXPECTED_ASYNC_TX_SITES)
-  })
-})
-
-/**
- * RFC-317 T37（CC-04）—— 词法禁令升级为**站点账本**。
- *
- * 上面那条只挡 `.transaction(async`：一个**不带 `async` 关键字、但返回 promise** 的箭头
- * 函数它一个字都匹配不到。而 bun:sqlite 只看「回调返回了什么」——返回一个 pending
- * promise，wrapper 就当回调结束并立刻 COMMIT，之后的语句全在 autocommit 里跑。也就是说
- * 那条禁令挡住的是**一种拼法**，不是那类危险。
- *
- * `dbTxSync` 才是本仓唯一被认可的事务原语：它在类型层把返回 promise 的回调塌成
- * `never`，在运行期对 thenable 抛错（抛在事务内 ⇒ drizzle ROLLBACK，失败得大声）。
- * 于是「谁在绕过它直接调 drizzle 的 db.transaction」必须是**可枚举的**——新增一处要么
- * 改用 dbTxSync，要么在这张表里登记并说清为什么。
- *
- * 【RFC-351 订正】此前这段写的是「回调体是同步的 ⇒ 安全」。那句话只关闭了**一半**危害。
- * `dbTxSync` 承担两个互相独立的职责：
- *
- *   1. 同步体（S-10）：拒绝 async 回调，避免 bun:sqlite 在第一个 await 处提前 COMMIT；
- *   2. `{ behavior: 'immediate' }`（RFC-338 AC-2）：在事务边界预占 writer。deferred 事务
- *      先读取快照、再去升级成写，只要别的连接在这中间完成一次短提交，升级就以
- *      `SQLITE_BUSY_SNAPSHOT` **立即**失败并**绕过 busy_timeout**（`db/txSync.ts:51-57`）。
- *      裸 `SQLiteError` 不是 `DomainError`，`platform/errors/domainErrors.ts` 于是兜成 500 `internal-error`。
- *
- * 只答第 1 条的理由会让第 2 条看起来「已评估」。2026-09-02 主干 CI run `33638907352` 上
- * DE-07 的两次工具发布 500 就是第 2 条：`sqliteAuthoringStore.publishTool` 当时正是一处裸
- * deferred 的「先读后写」。RFC-351 把除纯读外的站点全部收敛到 `dbTxSync`，本表因此只剩
- * 纯读事务，并要求每条 `why` **同时**回答这两类危害（下面的守卫强制）。
- */
-interface RawTransactionSite {
-  /** 该文件里裸 `db.transaction(` 的处数，与磁盘逐条相等。 */
-  readonly count: number
-  /** 必须同时回答 S-10（同步体）与 RFC-338 AC-2（BEGIN IMMEDIATE）两类危害。 */
-  readonly why: string
-}
-
-const RAW_TRANSACTION_SITES: Record<string, RawTransactionSite> = {}
-
-describe('RFC-317 T37（CC-04）—— 绕过 dbTxSync 的原始事务站点必须逐处可见', () => {
-  const actualSites = (): Record<string, number> => {
-    const actual: Record<string, number> = {}
-    for (const file of walkTsFiles(BACKEND_SRC)) {
-      const rel = relative(BACKEND_SRC, file).split(sep).join('/')
-      if (rel === 'db/txSync.ts') continue
-      const content = readFileSync(file, 'utf8')
-      const sqliteSource = sqliteTransactionSource(rel, content)
-      if (sqliteSource === null) continue
-      const count = countNonCommentMatches(
-        transactionSource(file, sqliteSource),
-        /\.transaction\s*\(/g,
-      )
-      if (count > 0) actual[rel] = count
-    }
-    return actual
-  }
-
-  test('语料非空：确实扫得到一批站点（扫成空说明判据失效，此刻零预言力）', () => {
-    // RFC-351 之后本表只剩纯读事务；RFC-359 W4-D7a 把最后一处（writerCutoverPersistence 的快照读）改成
-    // 逐语句快照读，账本归零是**目标态**而不是判据失效——语料非空判据只剩「扫得到源码树」。
-    expect(walkTsFiles(BACKEND_SRC).length).toBeGreaterThanOrEqual(300)
-  })
-
-  test('站点账本与磁盘逐条相等（新增一处不登记 ⇒ 红；改用 dbTxSync 后要把这行删掉 ⇒ 也红）', () => {
-    expect(
-      actualSites(),
-      '有人绕过 dbTxSync 直接调了 drizzle 的 db.transaction。dbTxSync 的两道防线' +
-        '（类型层把返回 promise 的回调塌成 never、运行期对 thenable 抛错并回滚）都不作用于' +
-        '直调；确有理由直调就在 RAW_TRANSACTION_SITES 里登记这一处',
-    ).toEqual(
-      Object.fromEntries(
-        Object.entries(RAW_TRANSACTION_SITES).map(([file, site]) => [file, site.count]),
-      ),
-    )
-  })
-
+describe('RFC-317 T37（CC-04）—— 原始事务账本元数据校核', () => {
   // RFC-351 —— 只答「回调体是同步的」不够：那只关闭 S-10，没关闭 RFC-338 AC-2。
   test('每条保留理由都同时回答两类危害（只答同步体 ⇒ 红）', () => {
     for (const [file, site] of Object.entries(RAW_TRANSACTION_SITES)) {

@@ -9,30 +9,14 @@
 // ② 六个新文件只取 node 内置、shared 与 platform，不取任何模块或 legacy 目录。
 // ③ 负对照：判据认得出别名、相对路径与 `mock.module` 三种写法。
 import { describe, expect, test } from 'bun:test'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, normalize, relative, resolve } from 'node:path'
 import ts from 'typescript'
+import { RFC617_MOVED as MOVED } from './helpers/rfc624MigrationReferenceRules'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const SRC = join(BACKEND, 'src')
-const MOVED: readonly (readonly [string, string])[] = [
-  ['util/redact', 'platform/logging/redact'],
-  ['util/safePath', 'platform/workspace/local/safePath'],
-  ['util/fileTrust', 'platform/execution/local/fileTrust'],
-  ['util/win32Acl', 'platform/execution/local/win32Acl'],
-  ['util/gitRef', 'platform/contracts/gitRef'],
-  ['util/gitHardening', 'platform/execution/local/gitHardening'],
-]
 const OLD = new Set(MOVED.map(([old]) => old))
-
-function walk(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir).flatMap((name) => {
-    if (name === 'node_modules' || name === 'dist') return []
-    const path = join(dir, name)
-    return statSync(path).isDirectory() ? walk(path) : /\.(?:[cm]?ts|mjs)$/.test(name) ? [path] : []
-  })
-}
 
 /**
  * Every module specifier a file names on the syntax tree — imports, re-exports, `import('…')`, `require('…')` and
@@ -106,22 +90,7 @@ describe('RFC-617 —— util/ 的六个通用原语原样归 platform', () => {
     }
   })
 
-  test('没有文件再经任何写法取旧位置', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(resolve(BACKEND, '../../scripts')),
-      ...walk(resolve(BACKEND, '../../tests')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(3000)
-    const leaks = files.flatMap((path) =>
-      oldUtilImports(path, readFileSync(path, 'utf8')).map(
-        (specifier) => `${relative(BACKEND, path)} -> ${specifier}`,
-      ),
-    )
-    expect(leaks).toEqual([])
-  }, 60_000)
+  // RFC-629: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('六个新文件只取 node 内置、shared 与 platform', () => {
     for (const [, next] of MOVED) {

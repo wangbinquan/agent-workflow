@@ -67,11 +67,19 @@ function targetOf(from: string, specifier: string): string | null {
 const isRetired = (stem: string | null) => (RETIRED as readonly string[]).includes(stem ?? '')
 
 const importsOf = (files: readonly string[]) =>
-  files.flatMap((path) =>
-    specifiersIn(readFileSync(path, 'utf8'))
+  files.flatMap((path) => {
+    const text = readFileSync(path, 'utf8')
+    if (
+      !text.includes('taskDelete') &&
+      !text.includes('reviewMutationCoordinator') &&
+      !text.includes('\\u') &&
+      !text.includes('\\x')
+    )
+      return []
+    return specifiersIn(text)
       .filter((specifier) => isRetired(targetOf(path, specifier)))
-      .map((specifier) => `${slash(relative(REPO_ROOT, path))} -> ${specifier}`),
-  )
+      .map((specifier) => `${slash(relative(REPO_ROOT, path))} -> ${specifier}`)
+  })
 
 const RETIRED_PATH = /(?:^|[/'"@])services\/(?:taskDelete|reviewMutationCoordinator)(?:\.ts)?$/
 

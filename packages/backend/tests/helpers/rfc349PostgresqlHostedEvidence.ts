@@ -478,8 +478,9 @@ export const RFC349_T10_REGRESSION_COVERAGE_OWNERS = Object.freeze([
     evidenceRole: 'ui-only-full-regression',
     ownerWorkflow: 'ci-work.yml',
     command: 'bun run --filter @agent-workflow/frontend test',
-    // 删掉的那条只跑 ubuntu；Main CI 跑 ubuntu + Windows 两个 OS。
-    strongerBecause: 'os: [ubuntu-latest, windows-latest]',
+    // RFC-629: Ubuntu 3-shard Vitest runs per push in ci-work.yml and Windows 3-shard Vitest runs daily in e2e-cross-os-nightly.yml.
+    strongerBecause:
+      'bun run --filter @agent-workflow/frontend test -- --shard=${{ matrix.shard }}/3',
   },
   {
     lane: 'e2e',

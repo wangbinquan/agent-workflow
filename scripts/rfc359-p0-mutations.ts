@@ -574,13 +574,16 @@ export function validatePhaseLog(raw: string, exitCode: number, phase: Phase, pr
   }
 }
 
-function parseOptions(args: readonly string[]) {
+export function parseOptions(args: readonly string[]) {
   let providers: Provider[] = ['sqlite', 'postgresql']
   let outputDir = 'test-results/rfc359-p0-mutations'
+  let concurrency = 1
   const seen = new Set<string>()
-  for (let index = 0; index < args.length; index += 2) {
-    const flag = args[index]!
-    const value = args[index + 1]
+  for (let index = 0; index < args.length; index++) {
+    const rawArg = args[index]!
+    const equals = rawArg.indexOf('=')
+    const flag = equals < 0 ? rawArg : rawArg.slice(0, equals)
+    const value = equals < 0 ? args[++index] : rawArg.slice(equals + 1)
     if (seen.has(flag) || value === undefined || value.startsWith('--'))
       throw new Error(`Invalid option ${flag}`)
     seen.add(flag)
@@ -591,9 +594,13 @@ function parseOptions(args: readonly string[]) {
         return name
       })
       if (new Set(providers).size !== providers.length) throw new Error('Duplicate providers')
+    } else if (flag === '--concurrency') {
+      if (!/^[1-8]$/.test(value))
+        throw new Error(`Invalid --concurrency '${value}': expected an integer from 1 to 8`)
+      concurrency = Number(value)
     } else throw new Error(`Unknown option ${flag}`)
   }
-  return { providers, outputDir: resolve(outputDir) }
+  return { providers, outputDir: resolve(outputDir), concurrency }
 }
 
 const repository = dirname(dirname(fileURLToPath(import.meta.url)))
@@ -790,7 +797,7 @@ async function runPhase(provider: Provider, phase: Phase, outputDir: string) {
 }
 
 async function main(): Promise<void> {
-  const { providers, outputDir } = parseOptions(process.argv.slice(2))
+  const { providers, outputDir, concurrency } = parseOptions(process.argv.slice(2))
   mkdirSync(outputDir, { recursive: true })
   const results: Awaited<ReturnType<typeof runPhase>>[] = []
   const failures: string[] = []
@@ -826,25 +833,59 @@ async function main(): Promise<void> {
     return unchanged
   }
   save(false)
-  for (const provider of providers) {
-    for (const phase of PHASES) {
-      console.log(`[rfc359-p0] ${provider} ${phase.id}`)
-      try {
-        const result = await runPhase(provider, phase, outputDir)
-        results.push(result)
-        if (!result.valid) failures.push(`${provider}/${phase.id}: ${result.reasons.join('; ')}`)
-        save(false)
-        // Missing PostgreSQL configuration fails this real baseline. Never skip
-        // it or count later import/setup errors as successful mutations.
-        if (phase.id === 'current-before' && !result.valid) break
-      } catch (error) {
-        failures.push(
-          `${provider}/${phase.id}: ${error instanceof Error ? error.stack : String(error)}`,
-        )
-        save(false)
-        if (phase.id === 'current-before') break
+  const beforePhase = PHASES[0]!
+  const mutationPhases = PHASES.slice(1, -1)
+  const afterPhase = PHASES[PHASES.length - 1]!
+
+  const executeSinglePhase = async (provider: Provider, phase: Phase) => {
+    console.log(`[rfc359-p0] ${provider} ${phase.id}`)
+    try {
+      const result = await runPhase(provider, phase, outputDir)
+      return {
+        result,
+        failure: result.valid ? undefined : `${provider}/${phase.id}: ${result.reasons.join('; ')}`,
+      }
+    } catch (error) {
+      return {
+        result: undefined,
+        failure: `${provider}/${phase.id}: ${error instanceof Error ? error.stack : String(error)}`,
       }
     }
+  }
+
+  for (const provider of providers) {
+    const first = await executeSinglePhase(provider, beforePhase)
+    if (first.result !== undefined) results.push(first.result)
+    if (first.failure !== undefined) failures.push(first.failure)
+    save(false)
+    // Missing PostgreSQL configuration fails this real baseline. Never skip
+    // it or count later import/setup errors as successful mutations.
+    if (first.result === undefined || !first.result.valid) continue
+
+    const middleOutcomes = new Array<Awaited<ReturnType<typeof executeSinglePhase>>>(
+      mutationPhases.length,
+    )
+    let cursor = 0
+    const workerCount = Math.min(concurrency, mutationPhases.length)
+    await Promise.all(
+      Array.from({ length: workerCount }, async () => {
+        while (true) {
+          const index = cursor++
+          if (index >= mutationPhases.length) return
+          middleOutcomes[index] = await executeSinglePhase(provider, mutationPhases[index]!)
+        }
+      }),
+    )
+    for (const outcome of middleOutcomes) {
+      if (outcome.result !== undefined) results.push(outcome.result)
+      if (outcome.failure !== undefined) failures.push(outcome.failure)
+    }
+    save(false)
+
+    const last = await executeSinglePhase(provider, afterPhase)
+    if (last.result !== undefined) results.push(last.result)
+    if (last.failure !== undefined) failures.push(last.failure)
+    save(false)
   }
   const unchanged = save(true)
   if (failures.length > 0 || !unchanged) {

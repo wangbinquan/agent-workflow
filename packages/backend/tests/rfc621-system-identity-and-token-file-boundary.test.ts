@@ -13,10 +13,11 @@ import { dirname, join, normalize, relative, resolve } from 'node:path'
 import ts from 'typescript'
 import * as shared from '@agent-workflow/shared'
 
+import { RFC621_OLD as OLD } from './helpers/rfc624MigrationReferenceRules'
+
 const BACKEND = resolve(import.meta.dir, '..')
 const REPO = resolve(BACKEND, '..', '..')
 const SRC = join(BACKEND, 'src')
-const OLD = ['auth/systemIdentity', 'auth/token'] as const
 
 function walk(dir: string): string[] {
   if (!existsSync(dir)) return []
@@ -76,6 +77,7 @@ function oldImports(path: string, text: string): string[] {
 
 /** Where a file declares or re-exports `SYSTEM_USER_ID` (a variable, a function or an export specifier). */
 function systemUserIdSites(path: string, text: string): string[] {
+  if (!text.includes('SYSTEM_USER_ID') && !text.includes('\\u')) return []
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
   const found: string[] = []
   const visit = (node: ts.Node): void => {
@@ -112,22 +114,7 @@ describe('RFC-621 —— auth/ 的两个中性原语离开 legacy 目录', () =>
       expect([name, text.includes(name)]).toEqual([name, true])
   })
 
-  test('没有文件再经任何写法取两个旧位置', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(join(REPO, 'scripts')),
-      ...walk(join(REPO, 'tests')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(3000)
-    const leaks = files.flatMap((path) =>
-      oldImports(path, readFileSync(path, 'utf8')).map(
-        (specifier) => `${relative(BACKEND, path)} -> ${specifier}`,
-      ),
-    )
-    expect(leaks).toEqual([])
-  }, 60_000)
+  // RFC-629: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('单一来处：auth/actor 不再转出，backend 生产代码里没有第二处声明', () => {
     const production = walk(SRC)

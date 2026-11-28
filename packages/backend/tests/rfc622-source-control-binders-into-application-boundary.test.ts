@@ -16,7 +16,6 @@ import { dirname, join, normalize, relative, resolve } from 'node:path'
 import ts from 'typescript'
 
 const BACKEND = resolve(import.meta.dir, '..')
-const REPO = resolve(BACKEND, '..', '..')
 const SRC = join(BACKEND, 'src')
 const SC = 'modules/source-control/'
 const CANDIDATE_APP = SC + 'application/repositoryCandidateParticipants'
@@ -174,22 +173,7 @@ describe('RFC-622 —— source-control 的候选与提交绑定器迁入 applic
     }
   })
 
-  test('没有文件再取旧的提交绑定文件，也没有文件从组合层取候选绑定器', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(join(REPO, 'scripts')),
-      ...walk(join(REPO, 'tests')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(3000)
-    const found = files.flatMap((path) =>
-      oldPathFindings(path, readFileSync(path, 'utf8')).map(
-        (finding) => `${relative(BACKEND, path)} -> ${finding}`,
-      ),
-    )
-    expect(found).toEqual([])
-  }, 60_000)
+  // RFC-629: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 })
 
 describe('RFC-622 —— 负对照（伪造源码）', () => {

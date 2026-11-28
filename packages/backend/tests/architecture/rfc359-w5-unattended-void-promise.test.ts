@@ -48,123 +48,13 @@
 // **自己也在写库**（连接池一关，兜底块自己就抛、异常越过它逃出来）。能机械判准的只有调用点那一侧。
 
 import { describe, expect, test } from 'bun:test'
-import { readdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
 import ts from 'typescript'
+import {
+  UNATTENDED_VOID_PROMISE_DEBT,
+  countUnattendedVoidPromises,
+} from '../helpers/rfc629SharedProgramRules'
 
-const SRC = resolve(import.meta.dir, '..', '..', 'src')
-
-/** 扫到的全部 backend 源文件——语料下限的分母（RFC-317 T13：扫空 = 假绿）。 */
-function corpusFiles(): string[] {
-  const out: string[] = []
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(join(SRC, dir), { withFileTypes: true })) {
-      const rel = dir === '' ? entry.name : `${dir}/${entry.name}`
-      if (entry.isDirectory()) walk(rel)
-      else if (entry.name.endsWith('.ts')) out.push(rel)
-    }
-  }
-  walk('')
-  return out
-}
-
-/** thenable 才算数：`void someSyncCall()` 不是本守卫的对象。按类型判，不按名字判。 */
-function isThenable(type: ts.Type): boolean {
-  if (type.isUnionOrIntersection()) return type.types.some(isThenable)
-  return type.getProperty('then') !== undefined
-}
-
-/**
- * 链上是否已经有人接住拒绝。`.catch(…)` 与双参 `.then(ok, err)` 都算；
- * `.finally(…)` **不算**——它不消费拒绝，只是转手。
- */
-function hasRejectionHandler(expr: ts.Expression): boolean {
-  let cur: ts.Expression = expr
-  for (;;) {
-    if (ts.isParenthesizedExpression(cur)) {
-      cur = cur.expression
-      continue
-    }
-    if (ts.isAwaitExpression(cur)) return true
-    if (!ts.isCallExpression(cur)) return false
-    const callee = cur.expression
-    if (!ts.isPropertyAccessExpression(callee)) return false
-    if (callee.name.text === 'catch') return true
-    if (callee.name.text === 'then' && cur.arguments.length >= 2) return true
-    cur = callee.expression
-  }
-}
-
-function countUnattended(source: ts.SourceFile, checker: ts.TypeChecker): number {
-  let count = 0
-  const visit = (node: ts.Node): void => {
-    if (ts.isExpressionStatement(node) && ts.isVoidExpression(node.expression)) {
-      const inner = node.expression.expression
-      if (!hasRejectionHandler(inner) && isThenable(checker.getTypeAtLocation(inner))) count += 1
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(source)
-  return count
-}
-
-let sourceProgram: ts.Program | undefined
-function program(): ts.Program {
-  if (sourceProgram === undefined) {
-    const configPath = resolve(SRC, '..', 'tsconfig.json')
-    const config = ts.readConfigFile(configPath, ts.sys.readFile)
-    if (config.error !== undefined) {
-      throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, '\n'))
-    }
-    const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, resolve(SRC, '..'))
-    sourceProgram = ts.createProgram(
-      corpusFiles().map((file) => join(SRC, file)),
-      parsed.options,
-    )
-  }
-  return sourceProgram
-}
-
-function scan(): string[] {
-  const built = program()
-  const checker = built.getTypeChecker()
-  const out: string[] = []
-  for (const rel of corpusFiles()) {
-    const source = built.getSourceFile(join(SRC, rel))
-    if (source === undefined) throw new Error(`RFC-359 void-promise corpus missing ${rel}`)
-    const count = countUnattended(source, checker)
-    if (count > 0) out.push(`${rel}: ${count}`)
-  }
-  return out.sort()
-}
-
-/**
- * 存量：`void <promise>` 且链上无 `.catch` / 无双参 `.then`。逐文件计数。
- * 退役判据见头注释——在调用点链上补一个拒绝处理器即可，账本随之改小。
- */
-export const UNATTENDED_VOID_PROMISE_DEBT: readonly string[] = [
-  // RFC-383: the two terminal callbacks move from both roots into one session bundle.
-  'bootstrap/daemonModules/developmentAutomation.ts: 2',
-  'mcp/server.ts: 1',
-  // RFC-370 H8: the existing observer nudge moved out of the HTTP transport unchanged.
-  'modules/integration/application/verifiedWebhookIngress.ts: 1',
-  'modules/intent/application/dispatcher.ts: 3',
-  'modules/intent/inbound/intentSessionRoutes.ts: 10',
-  // RFC-451: moved unchanged from services/repoBatchImport.ts.
-  'modules/source-control/infrastructure/local/repositoryBatchImport.ts: 2',
-  // RFC-476: moved unchanged from services/reviewMutationCoordinator.ts (the in-flight lookup registration).
-  'modules/task-execution/infrastructure/reviewMutationQueue.ts: 1',
-  // RFC-453: moved unchanged from services/structuralDiff/service.ts.
-  'modules/workspace-insight/application/structuralDiff/taskStructuralDiff.ts: 2',
-  'platform/background/maintenanceService.ts: 1',
-  'platform/background/maintenanceWorkerRuntime.ts: 3',
-  'platform/events/committed/workerDefinitions.ts: 1',
-  // RFC-456: moved unchanged from services/controlListener.ts.
-  'platform/execution/local/controlListener.ts: 1',
-  'platform/execution/local/managedProcess.ts: 4',
-  // RFC-392 removes the unused SQLite test initialization fallback.
-  'server.ts: 1',
-]
+export { UNATTENDED_VOID_PROMISE_DEBT }
 
 /** 内存源码变异：不改共享工作树，验证判据确实咬住「没人接的 fire-and-forget」。 */
 function fixtureUnattended(body: string): number {
@@ -188,9 +78,11 @@ function fixtureUnattended(body: string): number {
   const host = ts.createCompilerHost(options)
   host.getSourceFile = (name) => (name === file ? source : undefined)
   const built = ts.createProgram([file], options, host)
-  return countUnattended(source, built.getTypeChecker())
+  return countUnattendedVoidPromises(source, built.getTypeChecker())
 }
 
+// RFC-629: the live full-backend `ts.Program` scan runs in
+// `architecture/rfc629-shared-program-guards.test.ts` on the shared program.
 describe('RFC-359 W5 —— 没人接的 `void <promise>` 只降不升', () => {
   test.each([
     'function f() { void query() }',
@@ -211,21 +103,5 @@ describe('RFC-359 W5 —— 没人接的 `void <promise>` 只降不升', () => {
     'function f() { void plain() }',
   ])('放行：%s', (body) => {
     expect(fixtureUnattended(body)).toBe(0)
-  })
-
-  test('逐文件计数与账本逐字相等（增了是新的 PG-only unhandled rejection，减了是收敛，都要改账本）', () => {
-    expect(
-      scan(),
-      '`void <promise>` 且链上没有拒绝处理器的站点变了。\n' +
-        '**增**了说明新写了一条在 PostgreSQL 上会变成进程级 unhandled rejection 的路径——\n' +
-        'bun:sqlite 上它同步 settle 看不出问题，PG 上库一关就以 `Connection closed` 拒绝，\n' +
-        'bun test 记成「Unhandled error between tests」：用例全过、进程退 1（CI run 34768029441）。\n' +
-        '给它接上 `.catch(…)`（或双参 `.then(ok, err)`）并落一条 warn。\n' +
-        '**减**了说明有人接住了——把账本一起改小，让这次收敛留下一次有署名的提交记录。',
-    ).toEqual([...UNATTENDED_VOID_PROMISE_DEBT])
-  }, 120_000)
-
-  test('语料下限：扫到的源文件数量不为零（防扫空假绿）', () => {
-    expect(corpusFiles().length).toBeGreaterThanOrEqual(500)
   })
 })

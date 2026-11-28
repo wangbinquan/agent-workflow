@@ -1,13 +1,23 @@
-// RFC-624: the exact parser used by the shared scan and every original negative fixture.
+// RFC-624 & RFC-629: the exact parser used by the shared scan and every original negative fixture.
 import { dirname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 
 const slash = (path: string) => path.split('\\').join('/')
 
-export function resolveMigrationSpecifiers(SRC: string, path: string, text: string): string[] {
+export interface MigrationSpecifierSite {
+  readonly target: string
+  /** Original exported names bound by static import/export-from clauses (`*` for namespace/star). */
+  readonly namedImports: readonly string[]
+}
+
+export function resolveMigrationSpecifierSites(
+  SRC: string,
+  path: string,
+  text: string,
+): MigrationSpecifierSite[] {
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
-  const out: string[] = []
-  const add = (specifier: string) => {
+  const out: MigrationSpecifierSite[] = []
+  const add = (specifier: string, namedImports: readonly string[] = []) => {
     const bare = specifier.replace(/\.(?:[cm]?tsx?|[cm]?js)$/, '')
     const target = bare.startsWith('@/')
       ? join(SRC, bare.slice(2))
@@ -16,15 +26,41 @@ export function resolveMigrationSpecifiers(SRC: string, path: string, text: stri
         : null
     if (target === null) return
     const below = slash(relative(SRC, target))
-    if (!below.startsWith('..')) out.push(below)
+    if (!below.startsWith('..')) out.push({ target: below, namedImports })
   }
   const visit = (node: ts.Node) => {
     if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      ts.isImportDeclaration(node) &&
       node.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    )
-      add(node.moduleSpecifier.text)
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    ) {
+      const bindings = node.importClause?.namedBindings
+      const namedImports: string[] = []
+      if (bindings !== undefined && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          namedImports.push((element.propertyName ?? element.name).text)
+        }
+      } else if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+        namedImports.push('*')
+      }
+      add(node.moduleSpecifier.text, namedImports)
+    }
+    if (
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    ) {
+      const clause = node.exportClause
+      const namedImports: string[] = []
+      if (clause !== undefined && ts.isNamedExports(clause)) {
+        for (const element of clause.elements) {
+          namedImports.push((element.propertyName ?? element.name).text)
+        }
+      } else {
+        namedImports.push('*')
+      }
+      add(node.moduleSpecifier.text, namedImports)
+    }
     if (
       ts.isImportTypeNode(node) &&
       ts.isLiteralTypeNode(node.argument) &&
@@ -48,4 +84,8 @@ export function resolveMigrationSpecifiers(SRC: string, path: string, text: stri
   }
   visit(source)
   return out
+}
+
+export function resolveMigrationSpecifiers(SRC: string, path: string, text: string): string[] {
+  return resolveMigrationSpecifierSites(SRC, path, text).map((site) => site.target)
 }

@@ -44,10 +44,13 @@ export async function schemaHistoryMain(argv: readonly string[]): Promise<void> 
   const module = (await import(pathToFileURL(resolvedRegistryPath).href)) as Record<string, unknown>
   const registry = module[exportName] as SchemaRegistry | undefined
   if (!registry) throw new Error(`registry export missing: ${exportName}`)
+  const metaTables =
+    resolvedRegistryPath === liveRegistryPath ? EPOCH2_META_TABLES : HISTORY_META_TABLES
   const paths = [
     ...runSchemaHistoryCommand(args[0] === '--catalog' ? ['--check'] : args, {
       registry,
       directory,
+      metaTables,
       ...(edgePath
         ? { explicitEdge: JSON.parse(readFileSync(edgePath, 'utf8')) as SchemaEdge }
         : {}),
@@ -55,8 +58,6 @@ export async function schemaHistoryMain(argv: readonly string[]): Promise<void> 
   ]
   if (args[0] === '--catalog' && (args.length !== 1 || !postgresqlUrl))
     throw new Error('--catalog requires a PostgreSQL URL (--postgresql-url-env <name>)')
-  const metaTables =
-    resolvedRegistryPath === liveRegistryPath ? EPOCH2_META_TABLES : HISTORY_META_TABLES
   if (postgresqlUrl) {
     const url = new URL(postgresqlUrl)
     const admin = new SQL(url.toString(), { max: 1 })

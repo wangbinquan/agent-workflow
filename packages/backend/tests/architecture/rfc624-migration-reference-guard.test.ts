@@ -1,4 +1,4 @@
-// RFC-624: fifteen independent migration rules, one live working-tree corpus.
+// RFC-624 & RFC-629: thirty independent migration rules, one live five-root working-tree corpus.
 // Discovery remains here so the existing T13/T14 guards can trace its floor.
 import { beforeAll, describe, expect, test } from 'bun:test'
 import {
@@ -16,15 +16,23 @@ import { join, relative, resolve } from 'node:path'
 import {
   MIGRATION_REFERENCE_RULES,
   RFC575_UTIL_REMAINDER as UTIL_REMAINDER,
+  RFC590_RULE,
+  RFC619_RULE,
+  RFC622_RULE,
+  type MigrationReferenceRule,
 } from '../helpers/rfc624MigrationReferenceRules'
-import { resolveMigrationSpecifiers } from '../helpers/rfc624MigrationSpecifiers'
+import {
+  resolveMigrationSpecifiers,
+  resolveMigrationSpecifierSites,
+  type MigrationSpecifierSite,
+} from '../helpers/rfc624MigrationSpecifiers'
 
 const REPO = resolve(import.meta.dir, '../../../..')
 const SRC = join(REPO, 'packages/backend/src')
 const slash = (path: string) => path.split('\\').join('/')
 
-// Same roots, extensions and exclusions as the fifteen original scanners.
-// Read the working tree, including untracked files, rather than a Git file list.
+// Five roots covering backend src/tests/scripts plus repo-root scripts/ and tests/
+// (including tests/perf/run.ts). Reads the working tree, including untracked files.
 function walk(dir: string): string[] {
   if (!existsSync(dir)) return []
   return readdirSync(dir).flatMap((name) => {
@@ -40,7 +48,32 @@ function walk(dir: string): string[] {
 
 interface ReferenceFile {
   readonly file: string
-  readonly targets: readonly string[]
+  readonly sites: readonly MigrationSpecifierSite[]
+}
+
+export function matchMigrationRule(
+  rule: MigrationReferenceRule,
+  file: string,
+  sites: readonly MigrationSpecifierSite[],
+): string[] {
+  const old = new Set<string>(rule.oldPaths)
+  const prefixes = rule.oldPrefixes ?? []
+  const forbiddenNamed = rule.forbiddenNamedImports ?? []
+  const hits: string[] = []
+  for (const site of sites) {
+    if (old.has(site.target) || prefixes.some((prefix) => site.target.startsWith(prefix))) {
+      hits.push(`${file} -> ${site.target}`)
+    }
+    for (const entry of forbiddenNamed) {
+      if (site.target !== entry.target) continue
+      for (const name of site.namedImports) {
+        if (entry.names.includes(name)) {
+          hits.push(`${file} -> ${site.target}#${name}`)
+        }
+      }
+    }
+  }
+  return hits
 }
 
 function readMigrationCorpus(repo: string): readonly ReferenceFile[] {
@@ -51,11 +84,12 @@ function readMigrationCorpus(repo: string): readonly ReferenceFile[] {
     ...walk(join(backend, 'tests')),
     ...walk(join(backend, 'scripts')),
     ...walk(join(repo, 'scripts')),
+    ...walk(join(repo, 'tests')),
   ]
   expect(files.length).toBeGreaterThanOrEqual(6000)
   return files.map((path) => ({
     file: slash(relative(repo, path)),
-    targets: resolveMigrationSpecifiers(src, path, readFileSync(path, 'utf8')),
+    sites: resolveMigrationSpecifierSites(src, path, readFileSync(path, 'utf8')),
   }))
 }
 
@@ -67,18 +101,13 @@ describe('RFC-624 migrated-path references', () => {
 
   for (const rule of MIGRATION_REFERENCE_RULES) {
     test(`${rule.id}: ${rule.title}`, () => {
-      const old = new Set<string>(rule.oldPaths)
-      expect(
-        corpus.flatMap(({ file, targets }) =>
-          targets.filter((target) => old.has(target)).map((target) => `${file} -> ${target}`),
-        ),
-      ).toEqual([])
+      expect(corpus.flatMap(({ file, sites }) => matchMigrationRule(rule, file, sites))).toEqual([])
     }, 240_000)
   }
 })
 
 describe('RFC-624 scanner obligations', () => {
-  test('all fifteen original rules remain registered independently', () => {
+  test('all thirty migration rules remain registered independently', () => {
     expect(MIGRATION_REFERENCE_RULES.map((rule) => rule.id)).toEqual([
       'RFC-571',
       'RFC-572',
@@ -93,10 +122,25 @@ describe('RFC-624 scanner obligations', () => {
       'RFC-581',
       'RFC-582',
       'RFC-583',
+      'RFC-584',
+      'RFC-585',
+      'RFC-586',
       'RFC-587',
+      'RFC-588',
       'RFC-589',
+      'RFC-590',
+      'RFC-591',
+      'RFC-592',
+      'RFC-593',
+      'RFC-594',
+      'RFC-617',
+      'RFC-618',
+      'RFC-619',
+      'RFC-620',
+      'RFC-621',
+      'RFC-622',
     ])
-    expect(new Set(MIGRATION_REFERENCE_RULES.map((rule) => rule.sourceFile)).size).toBe(15)
+    expect(new Set(MIGRATION_REFERENCE_RULES.map((rule) => rule.sourceFile)).size).toBe(30)
   })
 
   test('an empty or missing working-tree corpus fails before zero-reference assertions', () => {
@@ -159,6 +203,41 @@ describe('RFC-624 scanner obligations', () => {
     ])
   })
 
+  test('shared rule matcher enforces oldPrefixes and forbiddenNamedImports while ignoring safe siblings', () => {
+    const prefixSites = resolveMigrationSpecifierSites(
+      SRC,
+      join(SRC, 'probe.ts'),
+      [
+        "export type Probe = typeof import('@/modules/task-catalog/public/queries')",
+        "import { ok } from '@/modules/task-catalog/composition'",
+        "import { lease } from '@/util/anyFutureHelper'",
+        "import { safe } from '@/utility/helper'",
+      ].join('\n'),
+    )
+    expect(matchMigrationRule(RFC590_RULE, 'probe.ts', prefixSites)).toEqual([
+      'probe.ts -> modules/task-catalog/public/queries',
+    ])
+    expect(matchMigrationRule(RFC619_RULE, 'probe.ts', prefixSites)).toEqual([
+      'probe.ts -> util/anyFutureHelper',
+    ])
+
+    const namedSites = resolveMigrationSpecifierSites(
+      SRC,
+      join(SRC, 'probe.ts'),
+      [
+        "import { bindChangeCandidateParticipant, createLocalRepositoryCandidateEffects } from '@/modules/source-control/composition/repositoryCandidate'",
+        "export { bindCandidateDeliveryParticipant as renamed } from './modules/source-control/composition/repositoryCandidate'",
+        "import { createLocalRepositoryCandidateEffects as safeLocal } from '@/modules/source-control/composition/repositoryCandidate'",
+        "mock.module('@/modules/source-control/composition/repositoryCommit', () => ({}))",
+      ].join('\n'),
+    )
+    expect(matchMigrationRule(RFC622_RULE, 'probe.ts', namedSites)).toEqual([
+      'probe.ts -> modules/source-control/composition/repositoryCandidate#bindChangeCandidateParticipant',
+      'probe.ts -> modules/source-control/composition/repositoryCandidate#bindCandidateDeliveryParticipant',
+      'probe.ts -> modules/source-control/composition/repositoryCommit',
+    ])
+  })
+
   test('package names, paths outside src, comments and ordinary strings are not references', () => {
     expect(
       resolveMigrationSpecifiers(
@@ -175,13 +254,14 @@ describe('RFC-624 scanner obligations', () => {
   })
 })
 
-// RFC-575: preserve its independent util-directory inventory under the shared corpus floor.
-describe('RFC-575 —— util/ 只剩安全相邻的一族', () => {
-  test('util/ 的文件清单', () => {
-    // RFC-619: util/ itself is gone; an absent directory lists nothing.
+// RFC-575 & RFC-619: preserve independent util-directory inventory under the shared corpus floor.
+describe('RFC-575 & RFC-619 —— util/ 已清空', () => {
+  test('util/ 下没有任何源码文件', () => {
+    // RFC-619: util/ itself is gone; an absent directory lists nothing (recursively).
     const dir = join(SRC, 'util')
     expect(
       (existsSync(dir) ? readdirSync(dir) : []).filter((name) => name.endsWith('.ts')).sort(),
     ).toEqual(UTIL_REMAINDER)
+    expect(walk(dir)).toEqual([])
   })
 })

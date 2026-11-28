@@ -12,30 +12,17 @@
 // ④ 源码运行时（非内嵌）凭据助手命令里的入口就是 `src/main.ts`，且该文件存在——相对路径错一层这里就红。
 // ⑤ 负对照：别名、相对路径与 `mock.module` 三种写法都认得出，字符串里的路径不算；命令解析认得出入口位置。
 import { describe, expect, test } from 'bun:test'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, normalize, relative, resolve } from 'node:path'
 import ts from 'typescript'
 import { gitCredentialHelperValue } from '@/platform/execution/local/gitCredentialLease'
 import { binaryEntries } from './architecture/architectureReport'
 import { BINARY_ENTRIES } from './architecture/rfc294Gates'
+import { RFC619_MOVED as MOVED } from './helpers/rfc624MigrationReferenceRules'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const REPO = resolve(BACKEND, '..', '..')
 const SRC = join(BACKEND, 'src')
-const MOVED: readonly (readonly [string, string])[] = [
-  ['util/gitCredentialLease', 'platform/execution/local/gitCredentialLease'],
-  ['util/gitCredentialHelper', 'platform/execution/local/gitCredentialHelper'],
-  ['util/oidcResponse', 'routes/oidcResponse'],
-]
-
-function walk(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir).flatMap((name) => {
-    if (name === 'node_modules' || name === 'dist') return []
-    const path = join(dir, name)
-    return statSync(path).isDirectory() ? walk(path) : /\.(?:[cm]?ts|mjs)$/.test(name) ? [path] : []
-  })
-}
 
 /**
  * Every module specifier a file names on the syntax tree — imports, re-exports, `import('…')`, `require('…')` and
@@ -89,31 +76,14 @@ function helperArgv(value: string): string[] {
 }
 
 describe('RFC-619 —— util/ 清空', () => {
-  test('util/ 下没有任何源码文件，三个文件在新位置', () => {
-    // git 不跟踪空目录：判据看的是 `util/` 下还有没有源码文件，不看目录本身。
-    expect(walk(join(SRC, 'util'))).toEqual([])
+  test('三个旧文件不在、新文件在（递归空目录与全仓引用扫描见 rfc624-migration-reference-guard）', () => {
     for (const [old, next] of MOVED) {
       expect([old, existsSync(join(SRC, `${old}.ts`))]).toEqual([old, false])
       expect([next, existsSync(join(SRC, `${next}.ts`))]).toEqual([next, true])
     }
   })
 
-  test('没有文件再经任何写法取 util/ 下的路径', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(join(REPO, 'scripts')),
-      ...walk(join(REPO, 'tests')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(3000)
-    const leaks = files.flatMap((path) =>
-      utilImports(path, readFileSync(path, 'utf8')).map(
-        (specifier) => `${relative(BACKEND, path)} -> ${specifier}`,
-      ),
-    )
-    expect(leaks).toEqual([])
-  }, 60_000)
+  // RFC-629: this rule's full-corpus scan and recursive `src/util` check are registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('单二进制的凭据助手入口在新位置，架构门的入口清单与构建脚本一致', () => {
     const helper = 'packages/backend/src/platform/execution/local/gitCredentialHelper.ts'

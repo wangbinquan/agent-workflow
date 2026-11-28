@@ -2,7 +2,7 @@ name: CI timing refresh
 
 on:
   workflow_run:
-    workflows: [CI, backend-full-nightly]
+    workflows: [CI, backend-full-nightly, e2e-cross-os-nightly]
     types: [completed]
 
 permissions:
@@ -18,6 +18,8 @@ jobs:
       ((github.event.workflow_run.name == 'CI' &&
         (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch')) ||
        (github.event.workflow_run.name == 'backend-full-nightly' &&
+        (github.event.workflow_run.event == 'schedule' || github.event.workflow_run.event == 'workflow_dispatch')) ||
+       (github.event.workflow_run.name == 'e2e-cross-os-nightly' &&
         (github.event.workflow_run.event == 'schedule' || github.event.workflow_run.event == 'workflow_dispatch')))
     # Isolate concurrency per source workflow so a main CI completion (including docs-only)
     # cannot cancel an in-progress nightly full timing collection.
@@ -67,12 +69,32 @@ jobs:
               echo "::error::backend-full-nightly run ${SOURCE_RUN} has no backend-full-timings-* artifacts"
               exit 1
             fi
+          elif [ "$SOURCE_WORKFLOW" = "e2e-cross-os-nightly" ]; then
+            if [ "$e2e_count" -gt 0 ]; then
+              mode="cross-os-e2e-nightly"
+            else
+              echo "::error::e2e-cross-os-nightly run ${SOURCE_RUN} has no e2e-test-timings-* artifacts"
+              exit 1
+            fi
           elif [ "$SOURCE_WORKFLOW" = "CI" ]; then
             if [ -z "$names" ]; then
               echo "docs-only CI run ${SOURCE_RUN}; no artifacts uploaded."
               mode="skip-docs-only"
             elif [ "$core_count" -gt 0 ] && [ "$e2e_count" -gt 0 ]; then
               mode="core-ci"
+            elif [ "$core_count" -gt 0 ] && [ "$e2e_count" -eq 0 ]; then
+              # Fail closed: allow core-only-ci ONLY when all E2E & binary build jobs were legitimately skipped.
+              conclusions=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN}/jobs?per_page=100" --paginate \
+                --jq '.jobs[] | select(.name | test("^Full CI / (Playwright e2e|e2e($|-)|Build production binary|build-binary($|-))")) | .conclusion')
+              e2e_build_jobs=$(printf '%s\n' "$conclusions" | grep -Ec '.+' || true)
+              non_skipped=$(printf '%s\n' "$conclusions" | grep -Evc '^skipped$|^$' || true)
+              echo "Observed E2E/build job conclusions on run ${SOURCE_RUN}: total=${e2e_build_jobs} non_skipped=${non_skipped}"
+              if [ "$e2e_build_jobs" -ge 6 ] && [ "$non_skipped" -eq 0 ]; then
+                mode="core-only-ci"
+              else
+                echo "::error::CI run ${SOURCE_RUN} has 0 e2e artifacts without all E2E/build jobs skipped (matched=${e2e_build_jobs}, non_skipped=${non_skipped})"
+                exit 1
+              fi
             elif [ "$legacy_count" -gt 0 ] && [ "$e2e_count" -gt 0 ]; then
               if [ "$SOURCE_EVENT" = "push" ]; then
                 mode="legacy-ci"
@@ -91,7 +113,7 @@ jobs:
           echo "mode=${mode}" >> "$GITHUB_OUTPUT"
 
       - uses: oven-sh/setup-bun@v2
-        if: steps.inspect.outputs.mode == 'legacy-ci' || steps.inspect.outputs.mode == 'core-ci' || steps.inspect.outputs.mode == 'full-nightly'
+        if: steps.inspect.outputs.mode == 'legacy-ci' || steps.inspect.outputs.mode == 'core-ci' || steps.inspect.outputs.mode == 'core-only-ci' || steps.inspect.outputs.mode == 'full-nightly' || steps.inspect.outputs.mode == 'cross-os-e2e-nightly'
         with:
           bun-version: '1.4.3'
 
@@ -104,7 +126,7 @@ jobs:
           path: ${{ runner.temp }}/measured-backend
 
       - uses: actions/download-artifact@v6
-        if: steps.inspect.outputs.mode == 'core-ci'
+        if: steps.inspect.outputs.mode == 'core-ci' || steps.inspect.outputs.mode == 'core-only-ci'
         with:
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
@@ -120,7 +142,7 @@ jobs:
           path: ${{ runner.temp }}/measured-backend
 
       - uses: actions/download-artifact@v6
-        if: steps.inspect.outputs.mode == 'legacy-ci' || steps.inspect.outputs.mode == 'core-ci'
+        if: steps.inspect.outputs.mode == 'legacy-ci' || steps.inspect.outputs.mode == 'core-ci' || steps.inspect.outputs.mode == 'cross-os-e2e-nightly'
         with:
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
@@ -128,7 +150,7 @@ jobs:
           path: ${{ runner.temp }}/measured-e2e
 
       - name: Validate complete source measurements and prepare review artifacts
-        if: steps.inspect.outputs.mode == 'legacy-ci' || steps.inspect.outputs.mode == 'core-ci' || steps.inspect.outputs.mode == 'full-nightly'
+        if: steps.inspect.outputs.mode == 'legacy-ci' || steps.inspect.outputs.mode == 'core-ci' || steps.inspect.outputs.mode == 'core-only-ci' || steps.inspect.outputs.mode == 'full-nightly' || steps.inspect.outputs.mode == 'cross-os-e2e-nightly'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -149,14 +171,33 @@ jobs:
               bun scripts/ci/refresh-backend-timings.ts --tier core \
                 "$RUNNER_TEMP/measured-backend" "$SOURCE_RUN" \
                 "$RUNNER_TEMP/timing-review/backend-core-test-timings.json"
-              bun scripts/ci/refresh-e2e-timings.ts \
-                "$RUNNER_TEMP/measured-e2e" "$SOURCE_RUN" \
-                "$RUNNER_TEMP/timing-review/e2e-test-timings.json"
+              if grep -q -- '--merge-base' scripts/ci/refresh-e2e-timings.ts; then
+                bun scripts/ci/refresh-e2e-timings.ts \
+                  --merge-base .github/e2e-test-timings.json \
+                  "$RUNNER_TEMP/measured-e2e" "$SOURCE_RUN" \
+                  "$RUNNER_TEMP/timing-review/e2e-test-timings.json"
+              else
+                bun scripts/ci/refresh-e2e-timings.ts \
+                  "$RUNNER_TEMP/measured-e2e" "$SOURCE_RUN" \
+                  "$RUNNER_TEMP/timing-review/e2e-test-timings.json"
+              fi
+              ;;
+            core-only-ci)
+              bun scripts/ci/refresh-backend-timings.ts --tier core \
+                "$RUNNER_TEMP/measured-backend" "$SOURCE_RUN" \
+                "$RUNNER_TEMP/timing-review/backend-core-test-timings.json"
               ;;
             full-nightly)
               bun scripts/ci/refresh-backend-timings.ts --tier all \
                 "$RUNNER_TEMP/measured-backend" "$SOURCE_RUN" \
                 "$RUNNER_TEMP/timing-review/backend-test-timings.json"
+              ;;
+            cross-os-e2e-nightly)
+              bun scripts/ci/refresh-e2e-timings.ts \
+                --source=cross-os-nightly \
+                --merge-base .github/e2e-test-timings.json \
+                "$RUNNER_TEMP/measured-e2e" "$SOURCE_RUN" \
+                "$RUNNER_TEMP/timing-review/e2e-test-timings.json"
               ;;
             *)
               echo "::error::Unexpected COLLECTION_MODE=${COLLECTION_MODE}"
@@ -165,7 +206,7 @@ jobs:
           esac
 
       - uses: actions/upload-artifact@v6
-        if: steps.inspect.outputs.mode == 'legacy-ci' || steps.inspect.outputs.mode == 'core-ci' || steps.inspect.outputs.mode == 'full-nightly'
+        if: steps.inspect.outputs.mode == 'legacy-ci' || steps.inspect.outputs.mode == 'core-ci' || steps.inspect.outputs.mode == 'core-only-ci' || steps.inspect.outputs.mode == 'full-nightly' || steps.inspect.outputs.mode == 'cross-os-e2e-nightly'
         with:
           name: reviewed-ci-timings-${{ github.event.workflow_run.id }}
           path: ${{ runner.temp }}/timing-review/

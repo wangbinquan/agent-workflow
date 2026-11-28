@@ -123,12 +123,10 @@ export function readHistoryPostgresqlCatalogs(
       return artifact
     })
 }
-/** The same reader serves disk and Bun's embedded file map; it never compiles a registry. */
-export function readSchemaHistoryFiles(
-  files: Readonly<Record<string, string>>,
-  postgresqlMajor?: number,
-  metaTables?: readonly MetaTableDeclaration[],
-): readonly HistoryVersion[] {
+function validateSchemaHistoryFileNames(files: Readonly<Record<string, string>>): {
+  readonly names: readonly string[]
+  readonly contracts: readonly string[]
+} {
   const names = Object.keys(files).sort()
   const contracts = names.filter((file) => /^\d{4,}_[a-z0-9_-]+\.contract\.json$/.test(file))
   const expectedFiles = new Set(
@@ -145,38 +143,93 @@ export function readSchemaHistoryFiles(
   }
   if (names.some((file) => !expectedFiles.has(file)))
     throw new SchemaHistoryError('artifact-set', 'unexpected history artifact')
-  const versions = contracts.map((file) => {
-    const stem = file.slice(0, -'.contract.json'.length)
-    const read = (suffix: string): unknown => {
-      const path = files[`${stem}.${suffix}.json`]
-      if (!path) throw new SchemaHistoryError('artifact-missing', `${stem}.${suffix}`)
-      return JSON.parse(readFileSync(path, 'utf8')) as unknown
-    }
-    const version = {
-      contract: read('contract'),
-      sqlite: read('sqlite-plan'),
-      postgresql: read('postgresql-plan'),
-    } as HistoryVersion
-    if (historyArtifactStem(version) !== stem) throw new SchemaHistoryError('artifact-name', file)
-    const catalogs = readHistoryPostgresqlCatalogs(files, version, metaTables)
-    const catalog =
-      postgresqlMajor === undefined
-        ? catalogs.length === 1
-          ? catalogs[0]
-          : undefined
-        : catalogs.find((entry) => entry.postgresqlMajor === postgresqlMajor)
-    if (postgresqlMajor !== undefined && !catalog)
-      throw new SchemaHistoryError('catalog-postgresql-major', String(postgresqlMajor))
-    return catalog ? { ...version, postgresqlCatalog: catalog } : version
-  })
-  if (versions.length) verifySchemaHistory(versions)
-  const freeze = (value: unknown): void => {
-    if (value === null || typeof value !== 'object') return
-    for (const child of Object.values(value)) freeze(child)
-    Object.freeze(value)
+  return { names, contracts }
+}
+function selectVersionPostgresqlCatalog(
+  files: Readonly<Record<string, string>>,
+  version: HistoryVersion,
+  postgresqlMajor?: number,
+  metaTables?: readonly MetaTableDeclaration[],
+): PostgresqlCatalogArtifact | undefined {
+  const stem = historyArtifactStem(version)
+  if (postgresqlMajor !== undefined) {
+    const name = postgresqlCatalogArtifactName(version, postgresqlMajor)
+    const path = files[name]
+    if (!path) throw new SchemaHistoryError('catalog-postgresql-major', String(postgresqlMajor))
+    const artifact = JSON.parse(readFileSync(path, 'utf8')) as PostgresqlCatalogArtifact
+    verifyPostgresqlCatalogArtifact(artifact, version.postgresql, metaTables)
+    if (name !== postgresqlCatalogArtifactName(version, artifact.postgresqlMajor))
+      throw new SchemaHistoryError('artifact-name', name)
+    return artifact
   }
-  freeze(versions)
-  return versions
+  const prefix = `${stem}.postgresql-`
+  const catalogNames = Object.keys(files)
+    .filter((name) => name.startsWith(prefix) && /\.postgresql-\d+-catalog\.json$/.test(name))
+    .sort()
+  if (catalogNames.length !== 1) return undefined
+  const onlyName = catalogNames[0]!
+  const artifact = JSON.parse(readFileSync(files[onlyName]!, 'utf8')) as PostgresqlCatalogArtifact
+  verifyPostgresqlCatalogArtifact(artifact, version.postgresql, metaTables)
+  if (onlyName !== postgresqlCatalogArtifactName(version, artifact.postgresqlMajor))
+    throw new SchemaHistoryError('artifact-name', onlyName)
+  return artifact
+}
+function readVersionArtifacts(
+  files: Readonly<Record<string, string>>,
+  contractFile: string,
+  postgresqlMajor?: number,
+  metaTables?: readonly MetaTableDeclaration[],
+): HistoryVersion {
+  const stem = contractFile.slice(0, -'.contract.json'.length)
+  const read = (suffix: string): unknown => {
+    const path = files[`${stem}.${suffix}.json`]
+    if (!path) throw new SchemaHistoryError('artifact-missing', `${stem}.${suffix}`)
+    return JSON.parse(readFileSync(path, 'utf8')) as unknown
+  }
+  const version = {
+    contract: read('contract'),
+    sqlite: read('sqlite-plan'),
+    postgresql: read('postgresql-plan'),
+  } as HistoryVersion
+  if (historyArtifactStem(version) !== stem)
+    throw new SchemaHistoryError('artifact-name', contractFile)
+  const catalog = selectVersionPostgresqlCatalog(files, version, postgresqlMajor, metaTables)
+  return catalog ? { ...version, postgresqlCatalog: catalog } : version
+}
+function deepFreeze<T>(value: T): T {
+  const freeze = (current: unknown): void => {
+    if (current === null || typeof current !== 'object') return
+    for (const child of Object.values(current)) freeze(child)
+    Object.freeze(current)
+  }
+  freeze(value)
+  return value
+}
+/** RFC-629: read and verify only the latest head version without loading historical versions or unused catalogs. */
+export function readSchemaHeadFile(
+  files: Readonly<Record<string, string>>,
+  postgresqlMajor?: number,
+  metaTables?: readonly MetaTableDeclaration[],
+): HistoryVersion {
+  const { contracts } = validateSchemaHistoryFileNames(files)
+  const latest = contracts.at(-1)
+  if (!latest) throw new SchemaHistoryError('empty', 'generate the epoch-2 baseline first')
+  const head = readVersionArtifacts(files, latest, postgresqlMajor, metaTables)
+  verifyHistoryVersion(head)
+  return deepFreeze(head)
+}
+/** The same reader serves disk and Bun's embedded file map; it never compiles a registry. */
+export function readSchemaHistoryFiles(
+  files: Readonly<Record<string, string>>,
+  postgresqlMajor?: number,
+  metaTables?: readonly MetaTableDeclaration[],
+): readonly HistoryVersion[] {
+  const { contracts } = validateSchemaHistoryFileNames(files)
+  const versions = contracts.map((file) =>
+    readVersionArtifacts(files, file, postgresqlMajor, metaTables),
+  )
+  if (versions.length) verifySchemaHistory(versions)
+  return deepFreeze(versions)
 }
 export function readSchemaHistory(
   directory: string,
@@ -247,10 +300,14 @@ export function runSchemaHistoryCommand(
     readonly registry: SchemaRegistry
     readonly directory: string
     readonly explicitEdge?: SchemaEdge
+    readonly metaTables?: readonly MetaTableDeclaration[]
   },
 ): readonly string[] {
   if (argv[0] === '--check' && argv.length === 1) {
-    verifySchemaHistory(readSchemaHistory(input.directory), input.registry)
+    const files = schemaHistoryFiles(input.directory)
+    const versions = readSchemaHistoryFiles(files)
+    verifySchemaHistory(versions, input.registry)
+    for (const version of versions) readHistoryPostgresqlCatalogs(files, version, input.metaTables)
     return []
   }
   if (argv[0] === '--baseline' && argv.length === 2)

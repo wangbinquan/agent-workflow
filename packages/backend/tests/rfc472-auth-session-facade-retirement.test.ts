@@ -57,11 +57,13 @@ function targetOf(from: string, specifier: string): string | null {
 }
 
 const importsOf = (files: readonly string[]) =>
-  files.flatMap((path) =>
-    specifiersIn(readFileSync(path, 'utf8'))
+  files.flatMap((path) => {
+    const text = readFileSync(path, 'utf8')
+    if (!text.includes('session') && !text.includes('\\u') && !text.includes('\\x')) return []
+    return specifiersIn(text)
       .filter((specifier) => targetOf(path, specifier) === RETIRED)
-      .map((specifier) => `${slash(relative(REPO_ROOT, path))} -> ${specifier}`),
-  )
+      .map((specifier) => `${slash(relative(REPO_ROOT, path))} -> ${specifier}`)
+  })
 
 /** String literals (not comments) that name the retired file by path — the shape `readFileSync(<path>)` locks use. */
 function retiredPathLiterals(path: string, text: string): string[] {

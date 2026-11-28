@@ -4,6 +4,38 @@ import { createHash } from 'node:crypto'
 import { posix, win32 } from 'node:path'
 
 export type E2EPlatform = 'linux' | 'macos' | 'windows'
+export type E2ETier = 'pr-full' | 'os-core'
+
+/**
+ * RFC-629: single-source authoritative OS-core E2E spec list (19 specs) executed on every
+ * code push on macOS (2 shards) and Windows (2 shards). Linux always executes the complete
+ * pr-full suite on every push, and macOS/Windows run the complete pr-full suite daily in
+ * `e2e-cross-os-nightly.yml`.
+ */
+export const OS_CORE_E2E_SPECS = Object.freeze([
+  'e2e/main.spec.ts',
+  'e2e/system-mocks.spec.ts',
+  'e2e/crash-recovery.spec.ts',
+  'e2e/ops-local-recovery.spec.ts',
+  'e2e/rfc294-human-gate-restart.spec.ts',
+  'e2e/rfc294-webhook-runtime-failures.spec.ts',
+  'e2e/webhook-mr-runtime-races.spec.ts',
+  'e2e/task-lifecycle-states.spec.ts',
+  'e2e/runtime-scenario-matrix.spec.ts',
+  'e2e/commit-push.spec.ts',
+  'e2e/commit-push-rejection.spec.ts',
+  'e2e/rfc319-worktree-and-commit.spec.ts',
+  'e2e/rfc321-code-push-credentials.spec.ts',
+  'e2e/repo-group-launch.spec.ts',
+  'e2e/repo-governance.spec.ts',
+  'e2e/rfc253-script-node.spec.ts',
+  'e2e/rfc264-unicode-names.spec.ts',
+  'e2e/rfc396-graph-care-repair.spec.ts',
+  'e2e/rfc319-canvas-editing-ops.spec.ts',
+] as const)
+
+const OS_CORE_E2E_SPEC_SET: ReadonlySet<string> = new Set(OS_CORE_E2E_SPECS)
+
 export interface DiscoveredE2ETest {
   id: string
   file: string
@@ -16,6 +48,7 @@ export interface E2ETimings {
 }
 export interface E2EShardPlan {
   version: 1
+  tier: E2ETier
   platform: E2EPlatform
   sourceSha: string | null
   shard: { current: number; total: number }
@@ -49,6 +82,25 @@ export function e2ePlatform(value: string): E2EPlatform {
   if (value === 'macOS' || value === 'macos') return 'macos'
   if (value === 'Windows' || value === 'windows') return 'windows'
   throw new Error(`Unknown E2E platform: ${value}`)
+}
+export function parseE2ETier(value: string): E2ETier {
+  if (value === 'pr-full' || value === 'os-core') return value
+  throw new Error(`Unknown E2E tier: ${value}`)
+}
+export function filterE2EDiscoveryByTier(
+  discovered: DiscoveredE2ETest[],
+  tier: E2ETier,
+): DiscoveredE2ETest[] {
+  const canonical = canonicalTests(discovered)
+  if (tier === 'pr-full') return canonical
+  const discoveredFiles = new Set(canonical.map((test) => e2eSpecPath(test.file)))
+  const missing = OS_CORE_E2E_SPECS.filter((spec) => !discoveredFiles.has(spec))
+  if (missing.length > 0) {
+    throw new Error(
+      `OS-core E2E discovery is missing ${missing.length} required spec(s): ${missing.join(', ')}`,
+    )
+  }
+  return canonicalTests(canonical.filter((test) => OS_CORE_E2E_SPEC_SET.has(test.file)))
 }
 export function e2eSpecPath(value: string): string {
   const path = value.replaceAll('\\', '/')
@@ -130,6 +182,7 @@ export function planE2EShards(
   current: number,
   total: number,
   sourceSha: string | null = null,
+  tier: E2ETier = 'pr-full',
 ): E2EShardPlan {
   if (
     !Number.isInteger(total) ||
@@ -139,6 +192,7 @@ export function planE2EShards(
     current > total
   )
     throw new Error('Invalid E2E shard N/M')
+  parseE2ETier(tier)
   const tests = canonicalTests(discovered)
   const files = [...new Set(tests.map((test) => e2eSpecPath(test.file)))]
   if (files.length < total) throw new Error('More E2E shards than discovered files')
@@ -165,6 +219,7 @@ export function planE2EShards(
   for (const files of assignments) files.sort()
   return {
     version: 1,
+    tier,
     platform,
     sourceSha,
     shard: { current, total },
@@ -179,6 +234,7 @@ export function planE2EShards(
 export function parseE2EShardPlan(value: unknown): E2EShardPlan {
   const data = object(value)
   if (data.version !== 1) throw new Error('Unsupported E2E shard plan version')
+  const tier: E2ETier = data.tier === undefined ? 'pr-full' : parseE2ETier(text(data.tier))
   const shard = object(data.shard)
   const current = positive(shard.current)
   const total = positive(shard.total)
@@ -215,6 +271,7 @@ export function parseE2EShardPlan(value: unknown): E2EShardPlan {
     throw new Error('Unknown timing path is outside discovery')
   return {
     version: 1,
+    tier,
     platform: e2ePlatform(text(data.platform)),
     sourceSha: data.sourceSha === null ? null : text(data.sourceSha),
     shard: { current, total },

@@ -34,127 +34,19 @@
 // W12 收口：裸驱动调用已归零；保留 exact 空账本，任何新调用都会让 CI 转红。
 // 接收者按 TypeScript 类型解析，SQL 程序 runner 的中立事务编排不属于裸驱动。
 
-import { beforeAll, describe, expect, test } from 'bun:test'
-import { existsSync, readdirSync } from 'node:fs'
+import { describe, expect, test } from 'bun:test'
+import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import ts from 'typescript'
+import {
+  BARE_TRANSACTION_DEBT,
+  TRANSACTION_PRIMITIVES,
+  countBareTransactions,
+} from '../helpers/rfc629SharedProgramRules'
+
+export { BARE_TRANSACTION_DEBT }
 
 const SRC = resolve(import.meta.dir, '..', '..', 'src')
-
-/**
- * 事务原语自己的家。**逐个具名文件，不用目录通配**——本仓的教训是「一条需要几十条豁免才能变绿
- * 的规则，豁免本身就是新的空白许可证」：目录级豁免会把该目录下未来新增的裸事务一并静默放过。
- * 每条都必须写明「为什么这一处必须直接调驱动」。
- */
-const TRANSACTION_PRIMITIVES: Readonly<Record<string, string>> = {
-  'db/txSync.ts':
-    'RFC-093 的同步事务原语 `dbTxSync` 的定义处：它就是那个包住 bun:sqlite 同步包装器的地方' +
-    '（在类型层把返回 promise 的回调塌成 never、运行期对 thenable 抛错回滚，并补 { behavior: "immediate" }）。' +
-    '它自己必须调驱动的 db.transaction，否则无从实现。它的**调用点**由 rfc359-sync-transaction-highwater 单独清点。',
-  'platform/persistence/databaseTransaction.ts':
-    'RFC-359 W2 的中立原语本体：`createPostgresqlDatabaseSession` 的 transaction / snapshotRead / ' +
-    'serializable 三处直接调 PG 驱动的 db.transaction，那正是「中立会话在 PG 上的实现」。' +
-    'SQLite 那半在同一文件里刻意**不**用驱动的 transaction，改发显式 BEGIN IMMEDIATE / COMMIT / ROLLBACK。',
-  'platform/persistence/postgresqlDatabaseClient.ts':
-    'RFC-395 I-b 原生 Bun.SQL 连接边界：先 reserve 再在同一连接 begin，嵌套事务使用原生 savepoint；连接包装器负责事务内的写入标记和部署门，并把 reserve 等待纳入已有遥测。',
-}
-
-/**
- * 判接收者的类型，不判变量名。数据库句柄有查询/写入面；中立 session 和 SQL 程序 runner
- * 只有事务编排面。TypeChecker 负责追别名、构造器属性、嵌套对象与局部类型定义，避免把一个
- * drizzle 客户端改叫 `session` 就漏计，也不再误算已经调用中立原语的 runner。
- */
-function isDatabaseHandle(type: ts.Type, checker: ts.TypeChecker): boolean {
-  if (type.isUnionOrIntersection()) {
-    return type.types.some((member) => isDatabaseHandle(member, checker))
-  }
-  // 类型解析失败不能变成静默漏计。实际生产扫描必须能解析每个事务接收者。
-  if (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) return true
-  const has = (name: string): boolean => checker.getPropertyOfType(type, name) !== undefined
-  return (
-    ['select', 'insert', 'update', 'delete'].every(has) ||
-    ['prepare', 'query', 'exec'].every(has) ||
-    has('unsafe')
-  )
-}
-
-function countBareTransactions(source: ts.SourceFile, checker: ts.TypeChecker): number {
-  let count = 0
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression
-      const receiver =
-        ts.isPropertyAccessExpression(callee) &&
-        ['transaction', 'begin', 'savepoint'].includes(callee.name.text)
-          ? callee.expression
-          : ts.isElementAccessExpression(callee) &&
-              ts.isStringLiteralLike(callee.argumentExpression) &&
-              ['transaction', 'begin', 'savepoint'].includes(callee.argumentExpression.text)
-            ? callee.expression
-            : undefined
-      if (
-        receiver !== undefined &&
-        isDatabaseHandle(checker.getTypeAtLocation(receiver), checker)
-      ) {
-        count += 1
-      }
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(source)
-  return count
-}
-
-let sourceProgram: ts.Program | undefined
-const transactionCounts = new Map<string, number>()
-
-function bareTransactionSites(rel: string): number {
-  const cached = transactionCounts.get(rel)
-  if (cached !== undefined) return cached
-  if (sourceProgram === undefined) {
-    const configPath = resolve(SRC, '..', 'tsconfig.json')
-    const config = ts.readConfigFile(configPath, ts.sys.readFile)
-    if (config.error !== undefined)
-      throw new Error(ts.flattenDiagnosticMessageText(config.error.messageText, '\n'))
-    const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, resolve(SRC, '..'))
-    sourceProgram = ts.createProgram(
-      corpusFiles().map((file) => join(SRC, file)),
-      parsed.options,
-    )
-  }
-  const source = sourceProgram.getSourceFile(join(SRC, rel))
-  if (source === undefined) throw new Error(`RFC-359 transaction corpus missing ${rel}`)
-  const count = countBareTransactions(source, sourceProgram.getTypeChecker())
-  transactionCounts.set(rel, count)
-  return count
-}
-
-/** 扫到的全部 backend 源文件——语料下限的分母（RFC-317 T13：扫空 = 假绿）。 */
-function corpusFiles(): string[] {
-  const out: string[] = []
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(join(SRC, dir), { withFileTypes: true })) {
-      const rel = dir === '' ? entry.name : `${dir}/${entry.name}`
-      if (entry.isDirectory()) walk(rel)
-      else if (entry.name.endsWith('.ts')) out.push(rel)
-    }
-  }
-  walk('')
-  return out
-}
-
-function scan(): string[] {
-  const out: string[] = []
-  for (const rel of corpusFiles()) {
-    if (rel in TRANSACTION_PRIMITIVES) continue
-    const count = bareTransactionSites(rel)
-    if (count > 0) out.push(`${rel}: ${count}`)
-  }
-  return out.sort()
-}
-
-/** W11 已清完裸驱动事务；生成器 runner 已经走中立原语，不属于驱动调用。 */
-export const BARE_TRANSACTION_DEBT: readonly string[] = []
 
 /** 内存源码变异：不改共享工作树，验证判据确实咬住裸驱动调用。 */
 function fixtureBareTransactions(body: string): number {
@@ -181,13 +73,9 @@ function fixtureBareTransactions(body: string): number {
   return countBareTransactions(source, program.getTypeChecker())
 }
 
+// RFC-629: the live full-backend `ts.Program` scan runs in
+// `architecture/rfc629-shared-program-guards.test.ts` on the shared program.
 describe('RFC-359 W5-T18 —— 裸 `db.transaction(` 只降不升', () => {
-  // 真实语料需要构造完整类型图；CI macOS 上约 15 秒。集中扫描一次，
-  // 不把 TypeScript 建图成本算进每个默认 5 秒的断言预算。
-  beforeAll(() => {
-    for (const rel of corpusFiles()) bareTransactionSites(rel)
-  }, 60_000)
-
   test.each([
     'function write(db: DatabaseClient) { db.transaction(() => 1) }',
     'function write(session: DatabaseClient) { session.transaction(() => 1) }',
@@ -220,42 +108,18 @@ describe('RFC-359 W5-T18 —— 裸 `db.transaction(` 只降不升', () => {
     ).toBe(0)
   })
 
-  test('语料非空：确实扫到了整棵 backend 源码树（扫成 0 说明扫描根失效，此刻零预言力）', () => {
-    expect(corpusFiles().length).toBeGreaterThanOrEqual(800)
-  })
-
-  test('逐文件裸调用点数与账本逐字相等（增了是新的单 provider 事务体，减了是收敛，都要改账本）', () => {
-    expect(
-      scan(),
-      '裸 `.transaction(`（驱动自带的事务面，非中立会话）的逐文件调用点数与账本不符。\n' +
-        '**增**了：有人又写了一个只能给一个 provider 跑的事务体——bun:sqlite 的 ' +
-        '`Database.transaction` 是同步包装器（async 回调在第一个 await 处被当作已返回并当场 COMMIT），' +
-        'PG 驱动的事务是 async，同一个体没法两边跑，于是这段逻辑注定要抄两遍。' +
-        '改用中立原语：`databaseSessionFor(db).transaction(async (tx) => …)`' +
-        '（只读一致性快照用 `.snapshotRead(...)`，确需谓词隔离才用 `.serializable(...)`），' +
-        '它在 SQLite 上发显式 BEGIN IMMEDIATE / COMMIT / ROLLBACK，两个 provider 语义相同。' +
-        '确有理由直调驱动（只可能是事务原语自身）就登进 TRANSACTION_PRIMITIVES 并写清理由。\n' +
-        '**减**了：收敛发生了——把账本一起改小，让这次减少留下一次有署名的提交记录。',
-    ).toEqual([...BARE_TRANSACTION_DEBT])
-  })
-
   test('账本按路径字典序、无重复（清点稳定的前提）', () => {
     const paths = BARE_TRANSACTION_DEBT.map((row) => row.slice(0, row.lastIndexOf(':')))
     expect(new Set(paths).size, '账本里有重复路径').toBe(paths.length)
     expect([...paths].sort()).toEqual(paths)
   })
 
-  test('白名单每条都是仍然存在、且仍然直调驱动的具名文件（死条目 = 空白许可证）', () => {
+  test('白名单每条都是仍然存在的具名文件并写清理由', () => {
     for (const [rel, why] of Object.entries(TRANSACTION_PRIMITIVES)) {
       expect(rel, '白名单只收具名 .ts 文件，不收目录 / 通配').toMatch(/\.ts$/)
       expect(existsSync(join(SRC, rel)), `${rel}: 白名单里的文件已不存在，必须删掉这一条`).toBe(
         true,
       )
-      expect(
-        bareTransactionSites(rel),
-        `${rel}: 这个文件已经不直调驱动的 .transaction( 了——豁免变成了空白许可证，` +
-          '会把该文件未来新增的裸事务静默放过。删掉这一条。',
-      ).toBeGreaterThan(0)
       expect(
         why.length,
         `${rel}: 白名单每条都必须写明「为什么这一处必须直接调驱动」`,

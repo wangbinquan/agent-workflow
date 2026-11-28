@@ -44,8 +44,9 @@ const frontendPkg = JSON.parse(
 const backendBunfig = readFileSync(resolve(root, 'packages', 'backend', 'bunfig.toml'), 'utf8')
 const ciEntryWorkflow = readFileSync(resolve(root, '.github', 'workflows', 'ci.yml'), 'utf8')
 const ciWorkflow = readFileSync(resolve(root, '.github', 'workflows', 'ci-work.yml'), 'utf8')
-const ciFeedbackWorkflow = readFileSync(
-  resolve(root, '.github', 'workflows', 'ci-feedback.yml'),
+// RFC-629: daily full cross-OS E2E, Windows frontend Vitest, and full-history gitleaks sweep.
+const crossOsE2eNightly = readFileSync(
+  resolve(root, '.github', 'workflows', 'e2e-cross-os-nightly.yml'),
   'utf8',
 )
 // 2026-10-14 CI 提速：macOS 后端腿从 ci.yml 移到这条 nightly，命令 / 片数 / 预算原样。
@@ -203,7 +204,7 @@ describe('repository test entrypoint', () => {
     const workflow = parse(readFileSync(resolve(root, '.github/workflows/ci-timings.yml'), 'utf8'))
     expect(workflow.concurrency).toBeUndefined()
     expect(workflow.on.workflow_run).toEqual({
-      workflows: ['CI', 'backend-full-nightly'],
+      workflows: ['CI', 'backend-full-nightly', 'e2e-cross-os-nightly'],
       types: ['completed'],
     })
     const job = workflow.jobs.collect
@@ -214,6 +215,7 @@ describe('repository test entrypoint', () => {
     )
     expect(job.if).toContain("github.event.workflow_run.name == 'CI'")
     expect(job.if).toContain("github.event.workflow_run.name == 'backend-full-nightly'")
+    expect(job.if).toContain("github.event.workflow_run.name == 'e2e-cross-os-nightly'")
     expect(job.if).toContain("github.event.workflow_run.event == 'push'")
     expect(job.if).toContain("github.event.workflow_run.event == 'schedule'")
     expect(job.if).toContain("github.event.workflow_run.event == 'workflow_dispatch'")
@@ -261,78 +263,72 @@ describe('repository test entrypoint', () => {
     }
   })
 
-  test('latest static feedback is advisory, skips pure Markdown doc commits, and never substitutes for complete CI', () => {
-    const workflow = parse(ciFeedbackWorkflow)
-    const expectedDocsIgnore = [
-      'STATE.md',
-      'CLAUDE.md',
-      'AGENTS.md',
-      'README.md',
-      'README.zh-CN.md',
-      'design/**/*.md',
-      'docs/**/*.md',
-      'proposal/**/*.md',
-    ]
-    expect(workflow.name).toBe('CI feedback')
-    expect(workflow.on.push).toEqual({
-      branches: ['main'],
-      'paths-ignore': expectedDocsIgnore,
-    })
-    expect(workflow.on.pull_request).toEqual({
-      branches: ['main'],
-      'paths-ignore': expectedDocsIgnore,
-    })
-    expect(workflow.on).toHaveProperty('workflow_dispatch')
-    expect(workflow.permissions).toEqual({ contents: 'read' })
-    expect(workflow.concurrency).toEqual({
-      group: '${{ github.workflow }}-${{ github.ref }}',
-      'cancel-in-progress': true,
-    })
-    expect(workflowJobNames(ciFeedbackWorkflow)).toEqual(['static-feedback'])
-    const job = workflow.jobs['static-feedback']
-    expect(job.name).toBe('Static feedback (advisory)')
-    expect(job['runs-on']).toBe('ubuntu-latest')
-    expect(job['timeout-minutes']).toBe(15)
-    expect(job.needs).toBeUndefined()
-    const commands = job.steps.flatMap((step: { run?: string }) =>
-      step.run === undefined ? [] : [step.run],
-    )
-    expect(commands).toEqual([
-      'bun install --frozen-lockfile',
+  test('CI feedback workflow is retired and ci-work.yml:lint runs every static gate with explicit per-PID exit checks', () => {
+    expect(existsSync(resolve(root, '.github', 'workflows', 'ci-feedback.yml'))).toBe(false)
+    expect(workflowJob(ciEntryWorkflow, 'ci-required')).not.toContain('static-feedback')
+    const lintJob = workflowJob(ciWorkflow, 'lint')
+    for (const marker of [
       'bun run format:check',
+      'bun run depcheck',
+      'bun run --filter @agent-workflow/shared test',
+      'bun run test:system-mocks',
       'bun run lint',
       'bun run typecheck',
-    ])
-    expect(workflowJob(ciEntryWorkflow, 'ci-required')).not.toContain('static-feedback')
-    expect(workflowJob(ciWorkflow, 'lint')).toContain('run: bun run format:check')
-    expect(workflowJob(ciWorkflow, 'lint')).toContain('run: bun run lint')
-    expect(workflowJob(ciWorkflow, 'lint')).toContain('run: bun run typecheck')
+      'wait "$pid_format"',
+      'wait "$pid_depcheck"',
+      'wait "$pid_shared"',
+      'wait "$pid_mocks"',
+      'wait "$pid_lint"',
+      'wait "$pid_typecheck"',
+      'exit "$failed"',
+    ]) {
+      expect(lintJob, marker).toContain(marker)
+    }
   })
 
-  test('CI and feedback share only formatting caches within the same tool/config boundary', () => {
+  test('ci-work.yml:lint keeps scoped Prettier, ESLint, and TypeScript incremental caches under node_modules/.cache', () => {
     const expectedVersion = pkg.packageManager?.match(/^bun@(\d+\.\d+\.\d+)$/)?.[1]
-    const cachePrefix =
+    const steps = parse(ciWorkflow).jobs.lint.steps as {
+      uses?: string
+      with?: { path?: string; key?: string; 'restore-keys'?: string }
+    }[]
+    const qualityCaches = steps.filter((step) => step.with?.path?.includes('node_modules/.cache/'))
+    expect(qualityCaches).toHaveLength(3)
+    const prettierPrefix =
       `prettier-v1-\${{ runner.os }}-bun-${expectedVersion}-` +
       "${{ hashFiles('bun.lock', 'package.json', 'packages/*/package.json', '**/.prettier*', '**/prettier.config.*', '!**/node_modules/**') }}-"
-    for (const [source, jobName] of [
-      [ciWorkflow, 'lint'],
-      [ciFeedbackWorkflow, 'static-feedback'],
-    ] as const) {
-      const steps = parse(source).jobs[jobName].steps as {
-        uses?: string
-        with?: { path?: string; key?: string; 'restore-keys'?: string }
-      }[]
-      const qualityCaches = steps.filter((step) =>
-        step.with?.path?.includes('node_modules/.cache/'),
-      )
-      expect(qualityCaches).toHaveLength(1)
-      expect(qualityCaches[0]?.uses).toBe('actions/cache@v6')
-      expect(qualityCaches[0]?.with).toEqual({
-        path: 'node_modules/.cache/prettier',
-        key: cachePrefix + '${{ github.sha }}',
-        'restore-keys': cachePrefix,
-      })
-    }
+    const eslintPrefix =
+      `eslint-v1-\${{ runner.os }}-bun-${expectedVersion}-` +
+      "${{ hashFiles('bun.lock', 'package.json', 'packages/*/package.json', 'eslint.config.js') }}-"
+    const tscPrefix =
+      `tsc-v1-\${{ runner.os }}-bun-${expectedVersion}-` +
+      "${{ hashFiles('bun.lock', 'package.json', 'packages/*/package.json', 'tsconfig.base.json', 'packages/*/tsconfig.json') }}-"
+    expect(qualityCaches.map((step) => ({ uses: step.uses, with: step.with }))).toEqual([
+      {
+        uses: 'actions/cache@v6',
+        with: {
+          path: 'node_modules/.cache/prettier',
+          key: prettierPrefix + '${{ github.sha }}',
+          'restore-keys': prettierPrefix,
+        },
+      },
+      {
+        uses: 'actions/cache@v6',
+        with: {
+          path: 'node_modules/.cache/eslint',
+          key: eslintPrefix + '${{ github.sha }}',
+          'restore-keys': eslintPrefix,
+        },
+      },
+      {
+        uses: 'actions/cache@v6',
+        with: {
+          path: 'node_modules/.cache/tsc',
+          key: tscPrefix + '${{ github.sha }}',
+          'restore-keys': tscPrefix,
+        },
+      },
+    ])
   })
 
   test('every Actions workflow pins the exact Bun release declared by packageManager', () => {
@@ -470,8 +466,12 @@ describe('repository test entrypoint', () => {
   test('shared and frontend gates randomize execution order', () => {
     expect(sharedPkg.scripts?.test).toBe(hardenedSharedCommand)
     expect(frontendPkg.scripts?.test).toBe(hardenedFrontendCommand)
-    expect(ciWorkflow).toContain('run: bun run --filter @agent-workflow/shared test')
-    expect(ciWorkflow).toContain('run: bun run --filter @agent-workflow/frontend test')
+    expect(workflowJob(ciWorkflow, 'lint')).toContain(
+      'bun run --filter @agent-workflow/shared test',
+    )
+    expect(workflowJob(ciWorkflow, 'test-frontend')).toContain(
+      'run: bun run --filter @agent-workflow/frontend test -- --shard=${{ matrix.shard }}/3',
+    )
   })
 
   test('CI matrices cover every declared test shard and supported OS', () => {
@@ -493,22 +493,25 @@ describe('repository test entrypoint', () => {
         os: 'ubuntu-24.04',
         shards: '[1, 2, 3]',
         total: 3,
+        tier: 'pr-full',
       },
-      // RFC-623: complete clean reporter weights permit three balanced arm64
-      // shards with fewer runner acquisitions; the original deadline remains.
+      // RFC-629: per-push macOS/Windows run the 19-spec OS-core subset across 2 shards;
+      // full 3/4-shard cross-OS pr-full sweeps run daily in e2e-cross-os-nightly.yml.
       {
         job: 'e2e-macos',
         build: 'build-binary-macos',
         os: 'macos-latest',
-        shards: '[1, 2, 3]',
-        total: 3,
+        shards: '[1, 2]',
+        total: 2,
+        tier: 'os-core',
       },
       {
         job: 'e2e-windows',
         build: 'build-binary-windows',
         os: 'windows-latest',
-        shards: '[1, 2, 3, 4]',
-        total: 4,
+        shards: '[1, 2]',
+        total: 2,
+        tier: 'os-core',
       },
     ] as const
 
@@ -601,21 +604,27 @@ describe('repository test entrypoint', () => {
     )
 
     expect(frontendJob).toContain('fail-fast: false')
-    // RFC-254 T31: the frontend leg is the first test matrix to gain Windows.
-    // It went in only after the suite was measured green on a real Windows host
-    // (702 files / 5957 tests, 0 fail); the backend matrix deliberately stays
-    // without Windows below until the same is true there.
-    // 2026-10-14 CI 提速：macOS 腿去掉（jsdom vitest 与平台基本无关）。
-    expect(frontendJob).toContain('os: [ubuntu-latest, windows-latest]')
-    expect(frontendJob).toContain('shard: [1, 2, 3]')
+    // RFC-629: per-push frontend runs on Ubuntu with dynamic shard count (3 full shards when
+    // frontend/shared/config changed, 1 contract shard for backend-only diffs); Windows 3-shard
+    // Vitest runs daily in e2e-cross-os-nightly.yml and e2e-harness.test.ts runs in windows-platform.yml.
+    expect(frontendJob).toContain('os: [ubuntu-latest]')
+    expect(frontendJob).toContain(
+      "shard: ${{ fromJSON(inputs.run_frontend_full && '[1, 2, 3]' || '[1]') }}",
+    )
     expect(occurrenceCount(frontendJob, `--shard=\${{ matrix.shard }}/3`)).toBe(1)
+    expect(frontendJob).toContain('bun scripts/ci/run-frontend-contract-tests.ts')
 
-    // RFC-254 T31 — the e2e CHAIN carries the windows leg; the unit matrices do
-    // not yet. That split is deliberate and measured, not an oversight: four
-    // Windows e2e surveys drove the suite from 213 pass / 7 fail to 219 / 2,
-    // with the last two failing on POSIX as well, while the backend suite still
-    // has ~386 failures and does not finish inside 90 minutes there. Flipping
-    // `test-backend` before that triage lands would make main red for everyone.
+    const windowsFrontendNightly = workflowJob(crossOsE2eNightly, 'test-frontend-windows')
+    expect(windowsFrontendNightly).toContain('runs-on: windows-latest')
+    expect(windowsFrontendNightly).toContain('shard: [1, 2, 3]')
+    expect(occurrenceCount(windowsFrontendNightly, `--shard=\${{ matrix.shard }}/3`)).toBe(1)
+    expect(workflowJob(crossOsE2eNightly, 'e2e-macos-full')).toContain('shard: [1, 2, 3]')
+    expect(workflowJob(crossOsE2eNightly, 'e2e-macos-full')).toContain('AW_E2E_TIER: pr-full')
+    expect(workflowJob(crossOsE2eNightly, 'e2e-macos-full')).toContain("AW_E2E_WORKERS: '3'")
+    expect(workflowJob(crossOsE2eNightly, 'e2e-windows-full')).toContain('shard: [1, 2, 3, 4]')
+    expect(workflowJob(crossOsE2eNightly, 'e2e-windows-full')).toContain('AW_E2E_TIER: pr-full')
+    expect(workflowJob(crossOsE2eNightly, 'gitleaks-full-history')).toContain('fetch-depth: 0')
+
     for (const platform of buildPlatforms) {
       const job = workflowJob(ciWorkflow, platform.job)
       expect(job).toContain('fail-fast: false')
@@ -635,12 +644,13 @@ describe('repository test entrypoint', () => {
       const job = workflowJob(ciWorkflow, platform.job)
       expect(job).toContain(`needs: ${platform.build}`)
       expect(job).toContain(
-        `if: \${{ !cancelled() && needs.${platform.build}.result == 'success' }}`,
+        `if: \${{ !cancelled() && inputs.run_e2e && needs.${platform.build}.result == 'success' }}`,
       )
       expect(job).toContain('fail-fast: false')
       expect(job).toContain(`os: [${platform.os}]`)
       expect(job).toContain(`shard: ${platform.shards}`)
       expect(job).toContain(`shards: [${platform.total}]`)
+      expect(job).toContain(`AW_E2E_TIER: ${platform.tier}`)
       expect(job).toContain(
         'name: Playwright e2e (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})',
       )
@@ -655,6 +665,7 @@ describe('repository test entrypoint', () => {
     // complete matrix denominator. Execution must not shard the selected files again.
     expect(occurrenceCount(e2eJob, '--shard=${{ matrix.shard }}/${{ matrix.shards }}')).toBe(1)
     expect(e2eJob).toContain('bun run scripts/ci/plan-e2e-shards.ts')
+    expect(e2eJob).toContain('--tier "$AW_E2E_TIER"')
     expect(occurrenceCount(e2eJob, '--list --reporter=json --project=chromium')).toBe(2)
     expect(occurrenceCount(e2eJob, '--config=playwright.ci.config.ts --project=chromium')).toBe(2)
     expect(e2eJob).not.toContain('bun run e2e -- --shard=')
@@ -937,6 +948,21 @@ describe('repository test entrypoint', () => {
     expect(workflowJobNames(visualWorkflow)).toEqual(['visual-regression'])
     expect(occurrenceCount(visualJob, 'timeout-minutes:')).toBe(1)
     expect(visualJob).toContain('timeout-minutes: 20')
+
+    const expectedCrossOsDeadlines = new Map<string, number>([
+      ['build-binary-macos', 15],
+      ['build-binary-windows', 15],
+      ['e2e-macos-full', 25],
+      ['e2e-windows-full', 25],
+      ['test-frontend-windows', 20],
+      ['gitleaks-full-history', 15],
+    ])
+    expect(workflowJobNames(crossOsE2eNightly)).toEqual([...expectedCrossOsDeadlines.keys()])
+    for (const [name, minutes] of expectedCrossOsDeadlines) {
+      const job = workflowJob(crossOsE2eNightly, name)
+      expect(occurrenceCount(job, 'timeout-minutes:')).toBe(1)
+      expect(job).toContain(`timeout-minutes: ${minutes}`)
+    }
   })
 
   test('visual regression and binary e2e do not require a globally installed opencode', () => {
@@ -982,7 +1008,9 @@ describe('repository test entrypoint', () => {
     // run still looked like "those guards had nothing to say".
     for (const job of ['build-binary', 'build-binary-macos', 'build-binary-windows']) {
       const source = workflowJob(ciWorkflow, job)
-      expect(`${job}: ${source.includes('if: ${{ !cancelled() }}')}`).toBe(`${job}: true`)
+      expect(`${job}: ${source.includes('if: ${{ !cancelled() && inputs.run_e2e }}')}`).toBe(
+        `${job}: true`,
+      )
     }
     for (const [job, build] of [
       ['e2e', 'build-binary'],
@@ -990,7 +1018,9 @@ describe('repository test entrypoint', () => {
       ['e2e-windows', 'build-binary-windows'],
     ]) {
       const source = workflowJob(ciWorkflow, job!)
-      expect(source).toContain(`if: \${{ !cancelled() && needs.${build}.result == 'success' }}`)
+      expect(source).toContain(
+        `if: \${{ !cancelled() && inputs.run_e2e && needs.${build}.result == 'success' }}`,
+      )
       expect(source).toContain(`needs: ${build}`)
     }
   })
@@ -1025,6 +1055,7 @@ describe('repository test entrypoint', () => {
     expect(Object.keys(outputs)).toEqual(expectedNeeds)
     expect(requiredJob).toContain("DETECT_CHANGES_RESULT: ${{ needs['detect-changes'].result }}")
     expect(requiredJob).toContain("CI_MODE: ${{ needs['detect-changes'].outputs.mode }}")
+    expect(requiredJob).toContain("RUN_E2E: ${{ needs['detect-changes'].outputs.run_e2e }}")
     expect(requiredJob).toContain("DOCS_FAST_GATE_RESULT: ${{ needs['docs-fast-gate'].result }}")
     expect(requiredJob).toContain("FULL_CI_RESULT: ${{ needs['full-ci'].result }}")
     expect(requiredJob).toContain('expect_result detect-changes success "$DETECT_CHANGES_RESULT"')
@@ -1033,6 +1064,15 @@ describe('repository test entrypoint', () => {
     expect(requiredJob).toContain('expect_result docs-fast-gate skipped "$DOCS_FAST_GATE_RESULT"')
     expect(requiredJob).toContain('expect_result full-ci success "$FULL_CI_RESULT"')
 
+    const conditionallySkippable = new Set([
+      'test-backend-migration',
+      'build-binary',
+      'build-binary-macos',
+      'build-binary-windows',
+      'e2e',
+      'e2e-macos',
+      'e2e-windows',
+    ])
     for (const dependency of expectedNeeds) {
       const resultEnv = `${dependency.replaceAll('-', '_').toUpperCase()}_RESULT`
       expect(outputs[dependency].value).toBe(
@@ -1041,7 +1081,7 @@ describe('repository test entrypoint', () => {
       expect(requiredJob).toContain(
         `${resultEnv}: \${{ needs['full-ci'].outputs['${dependency}'] }}`,
       )
-      if (dependency === 'test-backend-migration') {
+      if (conditionallySkippable.has(dependency)) {
         expect(requiredJob).toContain(`expect_result ${dependency} success "$${resultEnv}"`)
         expect(requiredJob).toContain(`expect_result ${dependency} skipped "$${resultEnv}"`)
       } else {
@@ -1050,6 +1090,7 @@ describe('repository test entrypoint', () => {
     }
     expect(requiredJob).toContain('if [ "$actual" != "$expected" ]; then')
     expect(requiredJob).toContain("invalid CI_MODE '${CI_MODE:-missing}'")
+    expect(requiredJob).toContain("invalid RUN_E2E '${RUN_E2E:-missing}'")
     expect(requiredJob).toContain('exit "$failed"')
   })
 

@@ -18,7 +18,6 @@ import * as domain from '@/modules/source-control/domain/mergeConflictResolution
 import * as participants from '@/modules/source-control/public/participants'
 
 const BACKEND = resolve(import.meta.dir, '..')
-const REPO = resolve(BACKEND, '..', '..')
 const SRC = join(BACKEND, 'src')
 const SC = 'modules/source-control'
 const slash = (path: string) => path.split('\\').join('/')
@@ -118,22 +117,7 @@ describe('RFC-586 —— mergeAgent 离开 services/', () => {
     expect(existsSync(join(SRC, `${NEW}.ts`))).toBe(true)
   })
 
-  test('src / tests / scripts 的全部说明符不再解析到旧路径', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(join(REPO, 'scripts')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(6000)
-    expect(
-      files.flatMap((path) =>
-        resolvedTargets(path, readFileSync(path, 'utf8'))
-          .filter((target) => target === 'src/services/mergeAgent')
-          .map((target) => `${slash(relative(REPO, path))} -> ${target}`),
-      ),
-    ).toEqual([])
-  }, 240_000)
+  // RFC-629: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('负对照：别名、相对路径、带扩展名、动态 import 与 import 类型都会被认出；新位置不算', () => {
     expect(
@@ -181,7 +165,9 @@ describe('RFC-586 —— domain 文件只取 shared 与本模块 domain', () => 
 
 describe('RFC-586 —— 冲突标记判定与模板函数', () => {
   test('residualConflictMarkers 只在新文件声明一次', () => {
-    const declaring = walk(SRC).filter((path) =>
+    const files = walk(SRC)
+    expect(files.length).toBeGreaterThanOrEqual(1500)
+    const declaring = files.filter((path) =>
       /\bfunction residualConflictMarkers\b/.test(readFileSync(path, 'utf8')),
     )
     expect(declaring.map((path) => slash(relative(SRC, path)))).toEqual([`${NEW}.ts`])

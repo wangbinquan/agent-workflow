@@ -1,6 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": "../../node_modules/.cache/tsc/system-mocks.tsbuildinfo",
     "types": ["bun"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },

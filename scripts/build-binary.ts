@@ -22,9 +22,10 @@
 //     / x86_64. (`process.arch` returns 'x64' for x86_64; we rename it.)
 
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 import { basename, dirname, join, posix, relative, resolve } from 'node:path'
 
 const repoRoot = resolve(import.meta.dirname, '..')
@@ -417,13 +418,13 @@ async function main(): Promise<void> {
   await mkdir(outDir, { recursive: true })
   const includeE2eBinary = Bun.argv.includes('--include-e2e')
 
-  // 1. Frontend → dist.
-  await buildFrontend()
-
-  // 2. Render the production embed table in memory. The source-tree stub is a
-  //    watched dev dependency and must remain byte-for-byte untouched.
-  const managedProcessLauncherSource = await buildManagedProcessLauncherSource()
-  const gitCredentialHelperSource = await buildGitCredentialHelperSource()
+  // 1-2. Overlap frontend build with both independent helper source bundles, then render the
+  //      production embed table in memory. The source-tree stub remains byte-for-byte untouched.
+  const [, managedProcessLauncherSource, gitCredentialHelperSource] = await Promise.all([
+    buildFrontend(),
+    buildManagedProcessLauncherSource(),
+    buildGitCredentialHelperSource(),
+  ])
   const generated = renderGenerated(managedProcessLauncherSource, gitCredentialHelperSource)
   const counts = generated.counts
   process.stdout.write(
@@ -450,83 +451,110 @@ async function main(): Promise<void> {
   } catch {
     /* no git — keep the fallback */
   }
-  await buildDaemonBinary({
-    outfile,
-    buildVersion,
-    generatedContents: generated.contents,
-    e2e: false,
-  })
-  const size = statSync(outfile).size
-  process.stdout.write(`\nbuilt: ${outfile} (${(size / 1024 / 1024).toFixed(1)} MiB)\n`)
   if (includeE2eBinary) {
+    // RFC-629: never overlap two in-process `Bun.build({ compile })` calls (shared cwd
+    // `.bun-build` collisions & double peak memory). Pair each in-process daemon compile
+    // with one out-of-process helper compile in its own isolated temp cwd.
+    const compileWorkRoot = mkdtempSync(join(tmpdir(), 'aw-build-compile-'))
+    const stubCwd = join(compileWorkRoot, 'stub')
+    const toolCwd = join(compileWorkRoot, 'tool')
+    try {
+      await Promise.all([
+        mkdir(stubCwd, { recursive: true }),
+        mkdir(toolCwd, { recursive: true }),
+      ])
+      await Promise.all([
+        buildDaemonBinary({
+          outfile,
+          buildVersion,
+          generatedContents: generated.contents,
+          e2e: false,
+        }),
+        // RFC-254 T28b — the e2e model stand-in compiled as one artifact for every mode.
+        run(
+          [
+            'bun',
+            'build',
+            stubEntry,
+            '--compile',
+            '--target=bun',
+            '--minify',
+            `--outfile=${stubOutfile}`,
+          ],
+          stubCwd,
+        ),
+      ])
+      const size = statSync(outfile).size
+      process.stdout.write(`\nbuilt: ${outfile} (${(size / 1024 / 1024).toFixed(1)} MiB)\n`)
+      const stubSize = statSync(stubOutfile).size
+      process.stdout.write(
+        `\nbuilt e2e stub: ${stubOutfile} (${(stubSize / 1024 / 1024).toFixed(1)} MiB)\n`,
+      )
+
+      await Promise.all([
+        buildDaemonBinary({
+          outfile: e2eOutfile,
+          buildVersion,
+          generatedContents: generated.contents,
+          e2e: true,
+        }),
+        // One additional executable covers every external CLI-shaped dependency.
+        run(
+          [
+            'bun',
+            'build',
+            systemMockToolEntry,
+            '--compile',
+            '--target=bun',
+            '--minify',
+            `--outfile=${systemMockToolOutfile}`,
+          ],
+          toolCwd,
+        ),
+      ])
+      const e2eSize = statSync(e2eOutfile).size
+      process.stdout.write(
+        `\nbuilt test-only: ${e2eOutfile} (${(e2eSize / 1024 / 1024).toFixed(1)} MiB)\n`,
+      )
+      const toolSize = statSync(systemMockToolOutfile).size
+      process.stdout.write(
+        `\nbuilt system mock tool: ${systemMockToolOutfile} (${(toolSize / 1024 / 1024).toFixed(1)} MiB)\n`,
+      )
+    } finally {
+      await rm(compileWorkRoot, { recursive: true, force: true })
+    }
+  } else {
     await buildDaemonBinary({
-      outfile: e2eOutfile,
+      outfile,
       buildVersion,
       generatedContents: generated.contents,
-      e2e: true,
+      e2e: false,
     })
-    const e2eSize = statSync(e2eOutfile).size
-    process.stdout.write(
-      `\nbuilt test-only: ${e2eOutfile} (${(e2eSize / 1024 / 1024).toFixed(1)} MiB)\n`,
-    )
-    // RFC-254 T28b — the e2e model stand-in, compiled for the same reason the
-    // daemon is: `opencodePath` must name something the OS can execute, and
-    // Windows cannot execute a `#!/bin/sh` script (nor a `.cmd` shim, which
-    // would let cmd.exe re-tokenize the argv the runner carefully built).
-    //
-    // ONE artifact for every mode. `bun build --compile` embeds a whole Bun
-    // runtime, so a binary per stub would be well over a gigabyte per CI run;
-    // the modes are bundled and `AW_STUB_MODE` selects between them.
-    await run(
-      [
-        'bun',
-        'build',
-        stubEntry,
-        '--compile',
-        '--target=bun',
-        '--minify',
-        `--outfile=${stubOutfile}`,
-      ],
-      repoRoot,
-    )
-    const stubSize = statSync(stubOutfile).size
-    process.stdout.write(
-      `\nbuilt e2e stub: ${stubOutfile} (${(stubSize / 1024 / 1024).toFixed(1)} MiB)\n`,
-    )
-    // One additional executable covers every external CLI-shaped dependency:
-    // SCIP indexers are selected from their argv, while `mcp-stdio` selects
-    // the long-lived stdio MCP server. Keeping them together avoids embedding
-    // another Bun runtime per protocol.
-    await run(
-      [
-        'bun',
-        'build',
-        systemMockToolEntry,
-        '--compile',
-        '--target=bun',
-        '--minify',
-        `--outfile=${systemMockToolOutfile}`,
-      ],
-      repoRoot,
-    )
-    const toolSize = statSync(systemMockToolOutfile).size
-    process.stdout.write(
-      `\nbuilt system mock tool: ${systemMockToolOutfile} (${(toolSize / 1024 / 1024).toFixed(1)} MiB)\n`,
-    )
+    const size = statSync(outfile).size
+    process.stdout.write(`\nbuilt: ${outfile} (${(size / 1024 / 1024).toFixed(1)} MiB)\n`)
   }
 
-  // Spot-check the binary: `--version` should print and exit 0.
-  await run([outfile, 'version'], repoRoot)
-  process.stdout.write(`\nsmoke ok: ${outfile} version\n`)
+  // Spot-check the binaries concurrently: `--version` / `version` should print and exit 0.
   if (includeE2eBinary) {
-    await run([e2eOutfile, 'version'], repoRoot)
-    process.stdout.write(`\nsmoke ok: ${e2eOutfile} version\n`)
-    // The stub answers `--version` in every mode, so this also proves the
-    // dispatcher survived compilation with its mode table intact.
-    await run([stubOutfile, '--version'], repoRoot, { AW_STUB_MODE: 'basic' })
-    process.stdout.write(`\nsmoke ok: ${stubOutfile} --version\n`)
-    await run([systemMockToolOutfile, '--version'], repoRoot)
-    process.stdout.write(`\nsmoke ok: ${systemMockToolOutfile} --version\n`)
+    await Promise.all([
+      run([outfile, 'version'], repoRoot).then(() => {
+        process.stdout.write(`\nsmoke ok: ${outfile} version\n`)
+      }),
+      run([e2eOutfile, 'version'], repoRoot).then(() => {
+        process.stdout.write(`\nsmoke ok: ${e2eOutfile} version\n`)
+      }),
+      // The stub answers `--version` in every mode, so this also proves the
+      // dispatcher survived compilation with its mode table intact.
+      run([stubOutfile, '--version'], repoRoot, { AW_STUB_MODE: 'basic' }).then(() => {
+        process.stdout.write(`\nsmoke ok: ${stubOutfile} --version\n`)
+      }),
+      run([systemMockToolOutfile, '--version'], repoRoot).then(() => {
+        process.stdout.write(`\nsmoke ok: ${systemMockToolOutfile} --version\n`)
+      }),
+    ])
+  } else {
+    await run([outfile, 'version'], repoRoot)
+    process.stdout.write(`\nsmoke ok: ${outfile} version\n`)
   }
 }
 

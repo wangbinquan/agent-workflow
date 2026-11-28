@@ -174,6 +174,7 @@ describe('RFC-361 EC-owned program validation', () => {
 async function fixture(
   source: string,
   parameters: Record<string, string | number | boolean> | null = null,
+  options?: { readonly timeoutMs?: number },
 ) {
   const appHome = mkdtempSync(join(tmpdir(), 'rfc361-fixture-'))
   roots.push(appHome)
@@ -188,6 +189,7 @@ async function fixture(
     runner: createExecutionContractProgramFixtureAdapter({
       appHome,
       scriptInterpreterOverrides: { node: process.execPath },
+      ...(options?.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     }),
   }
 }
@@ -258,11 +260,27 @@ describe('RFC-361 Task-owned real program fixture', () => {
     expect(result.checks[0]?.detail.endsWith('x'.repeat(1000))).toBe(true)
     expect(existsSync(dirname(readFileSync(marker, 'utf8')))).toBe(false)
   })
-  test('the fixed 30-second timeout returns the original check and cleans the workspace', async () => {
+  test('the default 30-second budget and real timeout termination return the original check and clean the workspace', async () => {
+    const fDefault = await fixture('process.stdout.write("ok")')
+    let observedTimeoutMs: number | undefined
+    const inspectingRunner = createExecutionContractProgramFixtureAdapter({
+      appHome: fDefault.appHome,
+      process: {
+        async run(request) {
+          observedTimeoutMs = request.timeoutMs
+          return { kind: 'completed', rawStdout: 'ok' }
+        },
+      },
+    })
+    await inspectingRunner.run({ implementation: fDefault.implementation, inputJson: '{}' })
+    expect(observedTimeoutMs).toBe(30_000)
+
     const marker = join(mkdtempSync(join(tmpdir(), 'rfc361-timeout-')), 'cwd')
     roots.push(dirname(marker))
     const f = await fixture(
       `require('node:fs').writeFileSync(${JSON.stringify(marker)},process.cwd());setInterval(()=>{},1000)`,
+      null,
+      { timeoutMs: 300 },
     )
     const result = await f.runner.run({ implementation: f.implementation, inputJson: '{}' })
     expect(result).toMatchObject({
@@ -276,7 +294,7 @@ describe('RFC-361 Task-owned real program fixture', () => {
       ],
     })
     expect(existsSync(dirname(readFileSync(marker, 'utf8')))).toBe(false)
-  }, 60_000)
+  }, 30_000)
 })
 
 // This inventory is intentionally exact. Neither EC nor its composition can rebuild providers.

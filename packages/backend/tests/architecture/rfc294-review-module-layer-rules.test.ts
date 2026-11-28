@@ -15,11 +15,8 @@
 // 存量逐条入 `MODULE_LAYER_RULE_DEBT`，只降不升；每条点名清偿波次；修掉后必须同批销账。
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
-import { backendUnits, isModuleUnit, sourceUnit, type SourceUnit } from './census'
-
-const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
+import { sourceUnit, type SourceUnit } from './census'
 
 import {
   createGateCorpus,
@@ -48,30 +45,14 @@ export function moduleLayerViolations(units: readonly SourceUnit[]): ModuleLayer
 // projection now reaches them through their own port, bound by bootstrap.
 export const MODULE_LAYER_RULE_DEBT: readonly ModuleLayerDebt[] = []
 
-const UNITS = backendUnits(REPO_ROOT).filter(isModuleUnit)
-
 function key(entry: { rule: string; file: string; specifier: string }): string {
   return `${entry.rule}|${entry.file}|${entry.specifier}`
 }
 
-describe('RFC-294 review §B2 —— 模块内分层规则（design §3 常驻规则 1～3）', () => {
-  test('语料下限：确实扫到了 modules/** 生产源码', () => {
-    expect(UNITS.length).toBeGreaterThanOrEqual(300)
-  })
-
-  test('分层违规与债务账本逐条相等（新增 ⇒ 红；修掉不销账 ⇒ 红）', () => {
-    const observed = moduleLayerViolations(UNITS).map(key).sort()
-    const ledger = MODULE_LAYER_RULE_DEBT.map(key).sort()
-    const unlisted = observed.filter((item) => !ledger.includes(item))
-    const stale = ledger.filter((item) => !observed.includes(item))
-    expect(
-      unlisted,
-      'domain/application/engine 新增了对 @/db/schema、infrastructure/** 或 adapter/vendor 的直接依赖：' +
-        '改为 application-owned port + composition 注入；确需暂留则入 MODULE_LAYER_RULE_DEBT 并点名清偿波次',
-    ).toEqual([])
-    expect(stale, '账本条目对应的违规已修掉：同批删掉该条').toEqual([])
-  })
-
+// RFC-629: the live-corpus `moduleLayerViolations` scan runs identically inside
+// `architecture/rfc376-structural-guards.test.ts` (via `gateViolationSets`); this
+// file retains the debt metadata check and all isolated negative fixtures.
+describe('RFC-294 review §B2 —— 模块内分层规则（债务账本元数据）', () => {
   test('每条债务都点名清偿波次与理由', () => {
     const bad = MODULE_LAYER_RULE_DEBT.filter(
       (entry) => !/(?:W\d|RFC-\d)/.test(entry.removeAfterWave) || entry.why.trim().length < 20,

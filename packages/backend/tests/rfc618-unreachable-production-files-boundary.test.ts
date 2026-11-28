@@ -18,14 +18,10 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, normalize, relative, resolve } from 'node:path'
 import ts from 'typescript'
 
+import { RFC618_REMOVED as REMOVED } from './helpers/rfc624MigrationReferenceRules'
+
 const BACKEND = resolve(import.meta.dir, '..')
 const SRC = join(BACKEND, 'src')
-const REMOVED = [
-  'modules/intent/domain/teaching/reconciliation',
-  'modules/resource-catalog/application/portableImportReferences',
-  'modules/resource-catalog/composition/portableImportReferences',
-  'modules/resource-catalog/infrastructure/legacy/workflow.yaml',
-] as const
 const HELPER = join(BACKEND, 'tests', 'helpers', 'intentTeachingReconciliation.ts')
 const RETIRED_FUNCTIONS = [
   'composePortableImportReferences',
@@ -97,6 +93,12 @@ function removedImports(path: string, text: string): string[] {
 
 /** Specifiers of a production file that reach the reconciliation helper under tests/. */
 function helperImports(path: string, text: string): string[] {
+  if (
+    !text.includes('intentTeachingReconciliation') &&
+    !text.includes('\\u') &&
+    !text.includes('\\x')
+  )
+    return []
   return specifiers(path, text).filter(
     (specifier) => target(path, specifier) === HELPER.replace(/\.ts$/, ''),
   )
@@ -104,6 +106,7 @@ function helperImports(path: string, text: string): string[] {
 
 /** Names of the retired functions a file declares (function, variable or export alias). */
 function retiredDeclarations(path: string, text: string): string[] {
+  if (!RETIRED_FUNCTIONS.some((name) => text.includes(name)) && !text.includes('\\u')) return []
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
   const found: string[] = []
   const visit = (node: ts.Node): void => {
@@ -129,22 +132,7 @@ describe('RFC-618 —— 四个不可达生产文件出生产树', () => {
     expect(existsSync(HELPER)).toBe(true)
   })
 
-  test('没有文件再经任何写法取四个旧位置', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(resolve(BACKEND, '../../scripts')),
-      ...walk(resolve(BACKEND, '../../tests')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(3000)
-    const leaks = files.flatMap((path) =>
-      removedImports(path, readFileSync(path, 'utf8')).map(
-        (specifier) => `${relative(BACKEND, path)} -> ${specifier}`,
-      ),
-    )
-    expect(leaks).toEqual([])
-  }, 60_000)
+  // RFC-629: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('生产树不取迁入 tests/helpers/ 的对账表，也不重新声明退役的函数', () => {
     const production = walk(SRC)

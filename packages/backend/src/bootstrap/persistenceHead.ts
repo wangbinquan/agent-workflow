@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { EPOCH2_META_TABLES } from '@/modules/system-operations/composition/schema'
 import { IS_EMBEDDED, SCHEMA_HISTORY_FILES } from '@/embed.generated'
 import {
+  readSchemaHeadFile,
   readSchemaHistoryFiles,
   schemaHistoryFiles,
   readHistoryPostgresqlCatalogs,
@@ -19,6 +20,7 @@ import {
 
 let files: Readonly<Record<string, string>> | undefined
 const histories = new Map<number | undefined, readonly HistoryVersion[]>()
+const heads = new Map<number | undefined, HistoryVersion>()
 function artifactFiles(): Readonly<Record<string, string>> {
   return (files ??= IS_EMBEDDED
     ? SCHEMA_HISTORY_FILES
@@ -30,10 +32,15 @@ export function persistenceHistory(postgresqlMajor?: number): readonly HistoryVe
   const versions = readSchemaHistoryFiles(artifactFiles(), postgresqlMajor, EPOCH2_META_TABLES)
   if (!versions.length) throw new SchemaHistoryError('empty', 'embedded epoch-2 history is missing')
   histories.set(postgresqlMajor, versions)
+  heads.set(postgresqlMajor, versions.at(-1)!)
   return versions
 }
 export function persistenceHead(postgresqlMajor?: number): HistoryVersion {
-  return persistenceHistory(postgresqlMajor).at(-1)!
+  const cached = heads.get(postgresqlMajor) ?? histories.get(postgresqlMajor)?.at(-1)
+  if (cached) return cached
+  const head = readSchemaHeadFile(artifactFiles(), postgresqlMajor, EPOCH2_META_TABLES)
+  heads.set(postgresqlMajor, head)
+  return head
 }
 export function persistencePostgresqlCatalogs() {
   return persistenceHistory().flatMap((version) =>

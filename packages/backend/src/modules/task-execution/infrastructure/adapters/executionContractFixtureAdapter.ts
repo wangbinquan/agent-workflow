@@ -7,7 +7,7 @@ import { createFileProgramToolSource } from '../local/fileProgramToolSource'
 import { createLocalScriptFixtureProcess } from '../local/localScriptFixtureProcess'
 
 /** The fixture's own run budget (the contract check is a single bounded run). */
-const FIXTURE_TIMEOUT_MS = 30_000
+export const DEFAULT_SCRIPT_FIXTURE_TIMEOUT_MS = 30_000
 
 /**
  * RFC-370 §10 V19: the program comes from the program store the deployment
@@ -20,6 +20,7 @@ export function createScriptFixtureRunner(input: {
   readonly programs?: ProgramToolSource
   readonly process?: ScriptFixtureProcess
   readonly scriptInterpreterOverrides?: Partial<Record<'bash' | 'node' | 'python', string>>
+  readonly timeoutMs?: number
 }): ScriptFixtureRunner {
   const programs =
     input.programs ??
@@ -33,6 +34,7 @@ export function createScriptFixtureRunner(input: {
         ? {}
         : { scriptInterpreterOverrides: input.scriptInterpreterOverrides },
     )
+  const timeoutMs = input.timeoutMs ?? DEFAULT_SCRIPT_FIXTURE_TIMEOUT_MS
   return {
     async run({ implementation, inputJson }) {
       const program = await programs.read(implementation)
@@ -42,7 +44,7 @@ export function createScriptFixtureRunner(input: {
         source: program.source,
         parameterValuesJson: program.parameterValuesJson,
         inputJson,
-        timeoutMs: FIXTURE_TIMEOUT_MS,
+        timeoutMs,
       })
       if (outcome.kind === 'interpreter-unavailable')
         return {

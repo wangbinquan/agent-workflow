@@ -92,7 +92,7 @@ export function installSqliteBaseline(
     database.exec(`PRAGMA foreign_keys = ${foreignKeys ? 'ON' : 'OFF'}`)
   }
 }
-function serializedBaseline(definition: BaselineDefinition): Uint8Array {
+export function serializeSqliteBaseline(definition: BaselineDefinition): Uint8Array {
   const cached = snapshots.get(definition.head)
   if (cached) return cached
   const database = new Database(':memory:')
@@ -109,12 +109,13 @@ function serializedBaseline(definition: BaselineDefinition): Uint8Array {
     database.close()
   }
 }
-/** Deserialize copies the template; connection-local FK enforcement is set on every copy. */
-export function createSqliteBaseline(
+/** Deserialize a pre-serialized SQLite baseline template and stamp per-instance metadata. */
+export function hydrateSqliteBaseline(
   definition: BaselineDefinition,
+  serialized: Uint8Array,
   options: SqliteBaselineOptions = {},
 ): Database {
-  const database = Database.deserialize(serializedBaseline(definition))
+  const database = Database.deserialize(serialized)
   const now = options.now ?? Date.now()
   const generationId = options.generationId ?? `dbg_test_${randomUUID()}`
   try {
@@ -157,4 +158,11 @@ export function createSqliteBaseline(
     database.close()
     throw error
   }
+}
+/** Deserialize copies the template; connection-local FK enforcement is set on every copy. */
+export function createSqliteBaseline(
+  definition: BaselineDefinition,
+  options: SqliteBaselineOptions = {},
+): Database {
+  return hydrateSqliteBaseline(definition, serializeSqliteBaseline(definition), options)
 }

@@ -2,6 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "baseUrl": ".",
+    "incremental": true,
+    "tsBuildInfoFile": "../../node_modules/.cache/tsc/backend.tsbuildinfo",
     "types": ["bun"],
     "lib": ["ES2022"],
     "paths": {

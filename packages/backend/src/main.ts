@@ -62,14 +62,27 @@ function isE2eBuild(): boolean {
 }
 
 function readFlag(argv: string[], name: string): string | undefined {
-  const i = argv.indexOf(name)
-  if (i < 0) return undefined
-  const next = argv[i + 1]
-  if (next === undefined) {
-    console.error(`${name} requires a value`)
-    process.exit(2)
+  const prefix = `${name}=`
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]!
+    if (arg === name) {
+      const next = argv[i + 1]
+      if (next === undefined) {
+        console.error(`${name} requires a value`)
+        process.exit(2)
+      }
+      return next
+    }
+    if (arg.startsWith(prefix)) {
+      const value = arg.slice(prefix.length)
+      if (!value) {
+        console.error(`${name} requires a value`)
+        process.exit(2)
+      }
+      return value
+    }
   }
-  return next
+  return undefined
 }
 
 function readPortFlag(argv: string[]): number | undefined {
@@ -78,6 +91,21 @@ function readPortFlag(argv: string[]): number | undefined {
   const n = Number(raw)
   if (!Number.isInteger(n) || n < 0 || n > 65535) {
     console.error(`invalid --port value: ${raw}`)
+    process.exit(2)
+  }
+  return n
+}
+
+function readPositiveIntFlag(argv: string[], name: string): number | undefined {
+  const raw = readFlag(argv, name)
+  if (raw === undefined) return undefined
+  if (!/^\d+$/.test(raw)) {
+    console.error(`invalid ${name} value: ${raw}`)
+    process.exit(2)
+  }
+  const n = Number(raw)
+  if (!Number.isSafeInteger(n) || n <= 0) {
+    console.error(`invalid ${name} value: ${raw}`)
     process.exit(2)
   }
   return n
@@ -173,7 +201,8 @@ async function main(): Promise<void> {
     }
 
     case 'stop': {
-      const result = await stopCommand()
+      const timeoutMs = readPositiveIntFlag(Bun.argv, '--timeout')
+      const result = await stopCommand(timeoutMs === undefined ? {} : { timeoutMs })
       process.stdout.write(result.message + '\n')
       // RFC-254 T7: `forced` means the daemon was killed rather than drained.
       // It exits non-zero for the same reason `timeout` does — a caller that

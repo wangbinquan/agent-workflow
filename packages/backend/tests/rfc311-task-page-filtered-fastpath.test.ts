@@ -1,4 +1,4 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 // RFC-311 G1 —— 过滤视图快路径 === 旧穷举管线。**RFC-359 W6-T27 起两个引擎各跑一遍。**
 //
 // 背景:旧管线为了回答「哪些 root 进这一页」，要先物化全部授权任务再走两条递归
@@ -24,8 +24,14 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 
 import { insertOne } from '@/platform/persistence/singleInsert'
 import type { TaskOperationsListItem } from '@agent-workflow/shared'
-import { afterAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
+import { expect, setDefaultTimeout, test } from 'bun:test'
+import {
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+  type TaskFixtureSpec,
+  type TaskRepoFixtureSpec,
+} from './helpers/model'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { buildActor, type Actor } from '../src/auth/actor'
@@ -82,13 +88,16 @@ async function seedBase(db: Db): Promise<void> {
 }
 
 async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
+  if (rows.length === 0) return
   // 迁移 0180 / 0183 的回填结果由引擎中立的复算给出（见文件头）。
   const backfill = computeForestBackfill(
     rows.map((r) => ({ id: r.id, startedAt: r.startedAt, parentTaskId: r.parent ?? null })),
   )
+  const taskRows: TaskFixtureSpec[] = []
+  const repoRows: TaskRepoFixtureSpec[] = []
+  const alertRows: PersistenceTables['lifecycleAlerts']['$inferInsert'][] = []
   for (const r of rows) {
-    const { lifecycleAlerts } = tablesOf(db)
-    await taskFixture(db, {
+    taskRows.push({
       id: r.id,
       name: `task ${r.id}`,
       workflowId: r.id.endsWith('3') ? 'wf2' : 'wf1',
@@ -116,7 +125,7 @@ async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
       branchStartedAt: backfill.branchStartedAt.get(r.id) ?? r.startedAt,
       rootTaskId: backfill.rootTaskId.get(r.id) ?? r.id,
     })
-    await taskRepoFixture(db, {
+    repoRows.push({
       taskId: r.id,
       repoIndex: 0,
       repoPath: r.repoPath,
@@ -125,7 +134,7 @@ async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
       branch: `agent-workflow/${r.id}`,
     })
     if (r.alert === true) {
-      await insertOne(db, lifecycleAlerts, {
+      alertRows.push({
         id: `al-${r.id}`,
         taskId: r.id,
         rule: 'stuck',
@@ -135,6 +144,12 @@ async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
         resolvedAt: null,
       })
     }
+  }
+  await taskFixture(db, taskRows)
+  await taskRepoFixture(db, repoRows)
+  if (alertRows.length > 0) {
+    const { lifecycleAlerts } = tablesOf(db)
+    await db.insert(lifecycleAlerts).values(alertRows)
   }
 }
 
@@ -321,44 +336,31 @@ describeEachProvider('RFC-311 G1 — filtered fast path === exhaustive pipeline'
     expect(fast.items.map((item) => item.id)).toEqual(['r615-alert-1', 'r615-alert-0'])
   })
 
-  describe('every filter combination matches page-for-page, for every actor', () => {
-    // Keep the complete 70-row forest and every page comparison. Give each
-    // actor/filter group its own default test budget instead of timing the
-    // entire matrix as one unit (the slowest actor alone approached 5 s).
-    const groups = Array.from({ length: Math.ceil(FILTER_MATRIX.length / 9) }, (_, index) =>
-      FILTER_MATRIX.slice(index * 9, (index + 1) * 9),
-    )
-    const nonEmptyByGroup = new Map<string, number>()
-    afterAll(() => {
-      expect(nonEmptyByGroup.size).toBe(3 * groups.length)
-      // Preserve the original whole-matrix negative control, independent of order.
-      expect(
-        [...nonEmptyByGroup.values()].reduce((total, count) => total + count, 0),
-      ).toBeGreaterThan(FILTER_MATRIX.length)
-    })
-    for (const who of [actor('admin', 'admin'), actor('alice'), actor('bob')])
-      for (const [index, group] of groups.entries())
-        test(`filters ${index + 1} for ${who.user.id}`, async () => {
-          const db = harness.db
-          await seedBase(db)
-          await insertForest(db, buildForest(70))
+  test('every filter combination matches page-for-page, for every actor', async () => {
+    // Share one seeded 70-row read-only forest across all 3 actors × 27 filter
+    // combinations within a single describeEachProvider lifecycle.
+    const db = harness.db
+    await seedBase(db)
+    await insertForest(db, buildForest(70))
 
-          let nonEmpty = 0
-          for (const filters of group) {
-            const fast = await collectPages(db, who, filters, 4, 'auto')
-            const slow = await collectPages(db, who, filters, 4, 'exhaustive')
-            const label = `${who.user.id} ${JSON.stringify(filters)}`
-            expect(
-              fast.items.map((i) => i.id),
-              label,
-            ).toEqual(slow.items.map((i) => i.id))
-            expect(fast.items, label).toEqual(slow.items)
-            expect(fast.facets, label).toEqual(slow.facets)
-            if (fast.items.length > 0) nonEmpty += 1
-          }
-          nonEmptyByGroup.set(`${who.user.id}:${index}`, nonEmpty)
-        })
-  })
+    let totalNonEmpty = 0
+    for (const who of [actor('admin', 'admin'), actor('alice'), actor('bob')]) {
+      for (const filters of FILTER_MATRIX) {
+        const fast = await collectPages(db, who, filters, 4, 'auto')
+        const slow = await collectPages(db, who, filters, 4, 'exhaustive')
+        const label = `${who.user.id} ${JSON.stringify(filters)}`
+        expect(
+          fast.items.map((i) => i.id),
+          label,
+        ).toEqual(slow.items.map((i) => i.id))
+        expect(fast.items, label).toEqual(slow.items)
+        expect(fast.facets, label).toEqual(slow.facets)
+        if (fast.items.length > 0) totalNonEmpty += 1
+      }
+    }
+    // Preserve the original whole-matrix negative control.
+    expect(totalNonEmpty).toBeGreaterThan(FILTER_MATRIX.length)
+  }, 60_000)
 
   test('context ancestors and branch aggregates survive the rewrite', async () => {
     // 手工构造一棵树:只有孙子匹配 ⇒ 父与祖父必须作为 context 出现在同一分支里,

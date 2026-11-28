@@ -21,7 +21,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { stopCommand } from '../src/cli/stop'
+import { DEFAULT_STOP_TIMEOUT_MS, stopCommand } from '../src/cli/stop'
 import { isProcessAlive, writePidFileForTest } from '../src/platform/execution/local/daemonLock'
 import { Paths } from '../src/platform/configuration/installationPaths'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -122,15 +122,15 @@ describe('RFC-319 OPS-007 —— 停不下来的 daemon 不许被报成优雅停
   }, 30_000)
 
   test('真跑一次 CLI：停不下来时退出码非零，输出里一个字都不说 stopped', async () => {
+    expect(DEFAULT_STOP_TIMEOUT_MS).toBe(30_000)
+
     const child = await spawnStubborn(tmp)
     const pid = child.pid
     writePidFileForTest(Paths.lock, pid)
 
     try {
-      // 这里走的是产品默认的 30s 预算（CLI 没有 --timeout 旋钮），所以这条用例本身
-      // 就要花掉 30s。它买到的是别处买不到的东西：真实退出码。
       const cli = Bun.spawn({
-        cmd: ['bun', 'run', mainPath, 'stop'],
+        cmd: ['bun', 'run', mainPath, 'stop', '--timeout', '500'],
         env: { ...(process.env as Record<string, string>), AGENT_WORKFLOW_HOME: tmp },
         stdout: 'pipe',
         stderr: 'pipe',
@@ -139,12 +139,38 @@ describe('RFC-319 OPS-007 —— 停不下来的 daemon 不许被报成优雅停
       const out = await new Response(cli.stdout).text()
 
       expect(code, `stop 以 ${code} 退出 ⇒ 脚本里的 \`stop && start\` 会把强停当成干净停机`).toBe(1)
-      expect(out).toContain('did not exit within 30000ms')
+      expect(out).toContain('did not exit within 500ms')
       expect(out.toLowerCase()).not.toContain('stopped')
     } finally {
       await reap(child)
     }
-  }, 90_000)
+  }, 30_000)
+
+  test('CLI 拒绝非法或缺失的 --timeout 参数并退出非零', async () => {
+    for (const args of [
+      ['stop', '--timeout'],
+      ['stop', '--timeout', '0'],
+      ['stop', '--timeout', '-10'],
+      ['stop', '--timeout', '1.5'],
+      ['stop', '--timeout', 'abc'],
+      ['stop', '--timeout', '1e3'],
+    ]) {
+      const cli = Bun.spawn({
+        cmd: ['bun', 'run', mainPath, ...args],
+        env: { ...(process.env as Record<string, string>), AGENT_WORKFLOW_HOME: tmp },
+        stdout: 'pipe',
+        stderr: 'pipe',
+      })
+      const [code, stdout, stderr] = await Promise.all([
+        cli.exited,
+        new Response(cli.stdout).text(),
+        new Response(cli.stderr).text(),
+      ])
+      expect(code, `args=${args.join(' ')}`).toBe(2)
+      expect(stdout.toLowerCase()).not.toContain('stopped')
+      expect(stderr).toContain('--timeout')
+    }
+  }, 30_000)
 
   test('反向自证：没有 daemon 时 stop 退出码是 0（否则上面那条「非零」是恒真的）', async () => {
     // 没有这条，「退出码为 1」可能只是因为 stop 永远 exit 1 —— 那样它什么也没锁住。

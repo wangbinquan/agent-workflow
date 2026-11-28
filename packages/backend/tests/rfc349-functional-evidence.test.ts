@@ -62,8 +62,8 @@ describe('RFC-349 T10-A functional evidence contract', () => {
 
   test('Main discovers every backend and frontend functional oracle', () => {
     expect(BUNFIG).toContain('root = "packages/backend/tests"')
-    // RFC-627: ci-work.yml partitions backend discovery across deterministic LPT tiers
-    // (`core` 16 shards + conditional `migration` 28 shards), while backend-full-nightly.yml
+    // RFC-627 / RFC-629: ci-work.yml partitions backend discovery across deterministic LPT tiers
+    // (`core` 12 shards + conditional `migration` 28 shards), while backend-full-nightly.yml
     // runs the full 44-shard dual-engine discovery; all invoke bun:test with --isolate --randomize.
     expect(CI_WORKFLOW).toContain(
       'bun scripts/ci/run-backend-shard.ts --tier=core --shard=${{ matrix.shard }}/${{ matrix.shards }} --seed="$BUN_TEST_SEED"',

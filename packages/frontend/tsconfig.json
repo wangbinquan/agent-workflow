@@ -2,6 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "baseUrl": ".",
+    "incremental": true,
+    "tsBuildInfoFile": "../../node_modules/.cache/tsc/frontend.tsbuildinfo",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "types": ["vite/client", "vitest/globals"],

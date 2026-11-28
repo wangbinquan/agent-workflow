@@ -13,7 +13,6 @@ import { dirname, join, normalize, relative, resolve } from 'node:path'
 import ts from 'typescript'
 
 const BACKEND = resolve(import.meta.dir, '..')
-const REPO = resolve(BACKEND, '..', '..')
 const SRC = join(BACKEND, 'src')
 const OLD = 'auth/secretBox'
 const CONTRACT = 'platform/contracts/secretBox'
@@ -100,6 +99,7 @@ function oldImports(path: string, text: string): string[] {
 
 /** Findings for a production file: application files taking the implementation, and any file taking the type from it. */
 function layerFindings(path: string, text: string): string[] {
+  if (!text.includes('secretBox') && !text.includes('\\u') && !text.includes('\\x')) return []
   const rel = relative(SRC, path).replaceAll('\\', '/')
   const application = /^modules\/[^/]+\/application\//.test(rel)
   return importSites(path, text).flatMap((site) => {
@@ -138,22 +138,7 @@ describe('RFC-620 —— 静态加密盒归 platform', () => {
       expect([name, impl.includes(name)]).toEqual([name, true])
   })
 
-  test('没有文件再经任何写法取旧位置', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(join(REPO, 'scripts')),
-      ...walk(join(REPO, 'tests')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(3000)
-    const leaks = files.flatMap((path) =>
-      oldImports(path, readFileSync(path, 'utf8')).map(
-        (specifier) => `${relative(BACKEND, path)} -> ${specifier}`,
-      ),
-    )
-    expect(leaks).toEqual([])
-  }, 60_000)
+  // RFC-629: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('application 不取实现，类型一律取合同', () => {
     const production = walk(SRC)

@@ -318,12 +318,62 @@ function readGolden(mode: string): Golden {
  * their diagnostic name explicitly (see `skeleton.parseInvocation`) precisely so
  * that this comparison can be exact rather than "both produced something".
  */
+const STUB_REPLAY_CONCURRENCY = 4
+
+type ReplayOutcome =
+  | { readonly ok: true; readonly result: SideResult }
+  | { readonly ok: false; readonly error: unknown }
+
+async function runSuiteReplayPool(
+  spec: ModeSpec,
+  cases: readonly DiffCase[],
+): Promise<Map<string, ReplayOutcome>> {
+  const outcomes = new Map<string, ReplayOutcome>()
+  let cursor = 0
+  const workerCount = Math.min(STUB_REPLAY_CONCURRENCY, cases.length)
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (cursor < cases.length) {
+        const current = cases[cursor++]!
+        try {
+          const result = await runSide(
+            [process.execPath, 'run', PORTED_STUB],
+            {
+              AW_STUB_MODE: spec.mode,
+              ...(current.comparesToVariant === undefined
+                ? {}
+                : { STUB_INTENT_VARIANT: current.comparesToVariant }),
+            },
+            spec,
+            current,
+          )
+          outcomes.set(current.name, { ok: true, result })
+        } catch (error) {
+          outcomes.set(current.name, { ok: false, error })
+        }
+      }
+    }),
+  )
+  return outcomes
+}
+
 function differentialSuite(spec: ModeSpec, cases: readonly DiffCase[]): void {
   const relationship = spec.nativeContract
     ? 'pins its native contract'
     : `reproduces ${spec.script}`
   describe(`RFC-254 T28b — \`${spec.mode}\` mode ${relationship}`, () => {
     const recorded: Golden = {}
+    let goldenCache: Golden | undefined
+    let replayPoolPromise: Promise<Map<string, ReplayOutcome>> | undefined
+
+    const getGolden = (): Golden => {
+      goldenCache ??= readGolden(spec.mode)
+      return goldenCache
+    }
+    const getReplayPool = (): Promise<Map<string, ReplayOutcome>> => {
+      replayPoolPromise ??= runSuiteReplayPool(spec, cases)
+      return replayPoolPromise
+    }
 
     for (const testCase of cases) {
       test(`byte-identical: ${testCase.name}`, async () => {
@@ -349,19 +399,12 @@ function differentialSuite(spec: ModeSpec, cases: readonly DiffCase[]): void {
           return
         }
 
-        const expectedRun = readGolden(spec.mode)[testCase.name]
+        const expectedRun = getGolden()[testCase.name]
         expect(expectedRun, `golden entry for "${testCase.name}"`).toBeDefined()
-        const ported = await runSide(
-          [process.execPath, 'run', PORTED_STUB],
-          {
-            AW_STUB_MODE: spec.mode,
-            ...(testCase.comparesToVariant === undefined
-              ? {}
-              : { STUB_INTENT_VARIANT: testCase.comparesToVariant }),
-          },
-          spec,
-          testCase,
-        )
+        const outcome = (await getReplayPool()).get(testCase.name)
+        expect(outcome, `replay outcome for "${testCase.name}"`).toBeDefined()
+        if (!outcome!.ok) throw outcome!.error
+        const ported = outcome!.result
 
         expect(ported.steps.length, 'step count').toBe(expectedRun!.steps.length)
         for (const [index, expected] of expectedRun!.steps.entries()) {
@@ -396,7 +439,7 @@ function differentialSuite(spec: ModeSpec, cases: readonly DiffCase[]): void {
       // and left an orphaned recording behind, which is the same "green over
       // nothing" this whole file is built to refuse.
       if (RECORDING) return
-      expect(Object.keys(readGolden(spec.mode)).sort()).toEqual(cases.map((c) => c.name).sort())
+      expect(Object.keys(getGolden()).sort()).toEqual(cases.map((c) => c.name).sort())
     })
   })
 }

@@ -55,11 +55,20 @@ const isRetired = (target: string | null) =>
   target !== null && (RETIRED as readonly string[]).includes(target)
 
 const importsOf = (files: readonly string[]) =>
-  files.flatMap((path) =>
-    specifiersIn(readFileSync(path, 'utf8'))
+  files.flatMap((path) => {
+    const text = readFileSync(path, 'utf8')
+    if (
+      !text.includes('outcome') &&
+      !text.includes('types') &&
+      !text.includes('taskExecutionResources') &&
+      !text.includes('\\u') &&
+      !text.includes('\\x')
+    )
+      return []
+    return specifiersIn(text)
       .filter((specifier) => isRetired(targetOf(path, specifier)))
-      .map((specifier) => `${slash(relative(REPO_ROOT, path))} -> ${specifier}`),
-  )
+      .map((specifier) => `${slash(relative(REPO_ROOT, path))} -> ${specifier}`)
+  })
 
 const RETIRED_PATH =
   /(?:^|[/'"@])services\/execution\/(?:outcome|types|taskExecutionResources)(?:\.ts)?$/

@@ -558,7 +558,7 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
   await expect
     .poll(async () => (await caseProjection()).detail.delivery?.status, {
       timeout: 90_000,
-      intervals: [1_000, 2_500, 5_000],
+      intervals: [200, 500, 1_000],
     })
     .toBe('active')
   const initial = (await caseProjection()).detail.delivery!
@@ -674,7 +674,7 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
       // above, the system-mock pipeline tool answered "no pipeline" with exit 4 and the case blocked
       // for good. The tool now reports that as stale input (exit 6) and the employee keeps
       // monitoring; a seed 40 s late passes locally.
-      { timeout: 180_000, intervals: [1_000, 2_500, 5_000] },
+      { timeout: 180_000, intervals: [200, 500, 1_000] },
     )
     .toMatch(/^[a-f0-9]{40}$/)
   const repaired = await caseProjection()
@@ -784,7 +784,7 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
     // no pipeline until this seed either, so the stale-input answer above keeps this wait live too.
     .poll(async () => (await caseProjection()).detail.delivery?.readyToMerge, {
       timeout: 180_000,
-      intervals: [1_000, 2_500, 5_000],
+      intervals: [200, 500, 1_000],
     })
     .toBe(true)
   await mocks.mutateCodeHost({
@@ -801,7 +801,7 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
         status: (await caseProjection()).detail.delivery?.status,
       }),
       // Same external-observation cadence as readyToMerge above.
-      { timeout: 180_000, intervals: [1_000, 2_500, 5_000] },
+      { timeout: 180_000, intervals: [200, 500, 1_000] },
     )
     .toEqual({ state: 'terminal', status: 'closed' })
   const closedProject = (await mocks.snapshot()).codeHosts.find(

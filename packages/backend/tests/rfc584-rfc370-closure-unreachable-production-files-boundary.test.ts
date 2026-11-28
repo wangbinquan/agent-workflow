@@ -13,33 +13,13 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 
+import { RFC584_RETIRED as RETIRED } from './helpers/rfc624MigrationReferenceRules'
+
 const BACKEND = resolve(import.meta.dir, '..')
 const REPO = resolve(BACKEND, '..', '..')
 const SRC = join(BACKEND, 'src')
 const slash = (path: string) => path.split('\\').join('/')
 
-/** Old location below `src` (no extension) → where it went (below the backend package, or null when deleted). */
-const RETIRED: ReadonlyArray<readonly [string, string | null]> = [
-  [
-    'modules/development-automation/infrastructure/actionWorkspace',
-    'tests/helpers/developmentActionWorkspace',
-  ],
-  [
-    'modules/development-automation/infrastructure/pipelineEvidenceImport',
-    'tests/helpers/developmentPipelineEvidenceImport',
-  ],
-  [
-    'modules/development-automation/infrastructure/verificationRunner',
-    'tests/helpers/developmentVerificationRunner',
-  ],
-  [
-    'modules/event-center/infrastructure/customEventObserverProgram',
-    'tests/helpers/customEventObserverProgram',
-  ],
-  ['modules/task-execution/composition/systemAgentRun', 'tests/helpers/preparedSystemAgentRun'],
-  ['modules/resource-catalog/infrastructure/mcpDiagnosticsEffects', null],
-  ['modules/intent/application/maintenance', null],
-]
 const OLD = new Set(RETIRED.map(([old]) => `src/${old}`))
 
 function walk(dir: string): string[] {
@@ -115,22 +95,7 @@ describe('RFC-584 —— 七个文件离开生产树', () => {
     }
   })
 
-  test('src / tests / scripts 的全部说明符不再解析到旧路径', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(join(REPO, 'scripts')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(6000)
-    expect(
-      files.flatMap((path) =>
-        resolvedTargets(path, readFileSync(path, 'utf8'))
-          .filter((target) => OLD.has(target))
-          .map((target) => `${slash(relative(REPO, path))} -> ${target}`),
-      ),
-    ).toEqual([])
-  }, 240_000)
+  // RFC-629: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('负对照：别名、相对路径、带扩展名、动态 import、mock.module 与 import 类型都会被认出；新位置与同前缀的文件不算', () => {
     expect(
@@ -159,11 +124,13 @@ describe('RFC-584 —— 生产源码不取用例辅助文件', () => {
     const files = walk(SRC)
     expect(files.length).toBeGreaterThanOrEqual(1500)
     expect(
-      files.flatMap((path) =>
-        resolvedTargets(path, readFileSync(path, 'utf8'))
+      files.flatMap((path) => {
+        const text = readFileSync(path, 'utf8')
+        if (!text.includes('tests') && !text.includes('\\u') && !text.includes('\\x')) return []
+        return resolvedTargets(path, text)
           .filter((target) => target.startsWith('tests/'))
-          .map((target) => `${slash(relative(REPO, path))} -> ${target}`),
-      ),
+          .map((target) => `${slash(relative(REPO, path))} -> ${target}`)
+      }),
     ).toEqual([])
   }, 120_000)
 

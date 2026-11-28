@@ -932,6 +932,7 @@ describe('RFC-376 counts speed bump', () => {
       ENTRIES,
       parseKnownViolations(readFileSync(resolve(ROOT, 'scripts/depcheck.ts'), 'utf8')),
       PUBLIC_CONTRACT,
+      OBSERVED,
     )
     const measured = Object.fromEntries(
       Object.entries(sets)

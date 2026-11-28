@@ -25,6 +25,10 @@ const NIGHTLY_YML = readFileSync(
   resolve(REPO_ROOT, '.github', 'workflows', 'e2e-full-nightly.yml'),
   'utf8',
 )
+const CROSS_OS_NIGHTLY_YML = readFileSync(
+  resolve(REPO_ROOT, '.github', 'workflows', 'e2e-cross-os-nightly.yml'),
+  'utf8',
+)
 
 /**
  * 剥掉整行注释后的 YAML。
@@ -42,6 +46,7 @@ const stripComments = (yaml: string): string =>
 
 const NIGHTLY_CODE = stripComments(NIGHTLY_YML)
 const CI_CODE = stripComments(CI_YML)
+const CROSS_OS_NIGHTLY_CODE = stripComments(CROSS_OS_NIGHTLY_YML)
 
 /**
  * 一段 workflow 正文里的 `bun run e2e` 调用（续行已折平）。
@@ -111,6 +116,27 @@ describe('RFC-319 —— PR 腿只跑 PR 档', () => {
         grepInvertCount(windowsCall),
         '写了两个 --grep-invert：Playwright 只认最后一个，两个排除项必须合成一条正则',
       ).toBe(1)
+      expect(windowsCall).toContain('$AW_E2E_TIER_EXCLUDE|$AW_E2E_WINDOWS_EXCLUDE')
+    }
+  })
+
+  test('RFC-629 跨 OS nightly 腿保留单条合并 --grep-invert 与 pr-full 显式分档', () => {
+    expect(CROSS_OS_NIGHTLY_YML.length).toBeGreaterThan(2_000)
+    expect(CROSS_OS_NIGHTLY_YML).toContain(`AW_E2E_TIER_EXCLUDE: '${NIGHTLY_TAG}'`)
+    expect(CROSS_OS_NIGHTLY_YML).toContain('AW_E2E_TIER: pr-full')
+    expect(CROSS_OS_NIGHTLY_CODE).toContain('--tier "$AW_E2E_TIER"')
+    const runStep = CROSS_OS_NIGHTLY_CODE.slice(
+      CROSS_OS_NIGHTLY_CODE.indexOf('Run full e2e (shard'),
+    )
+    const invocations = e2eInvocations(runStep)
+    expect(invocations).toHaveLength(4)
+    for (const call of invocations) {
+      expect(call).toContain('AW_E2E_TIER_EXCLUDE')
+    }
+    const windowsCalls = invocations.filter((call) => call.includes('AW_E2E_WINDOWS_EXCLUDE'))
+    expect(windowsCalls).toHaveLength(2)
+    for (const windowsCall of windowsCalls) {
+      expect(grepInvertCount(windowsCall)).toBe(1)
       expect(windowsCall).toContain('$AW_E2E_TIER_EXCLUDE|$AW_E2E_WINDOWS_EXCLUDE')
     }
   })

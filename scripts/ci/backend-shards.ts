@@ -8,7 +8,8 @@ export type BackendTestTier = 'core' | 'migration' | 'all'
 export const BACKEND_TEST_PATH_PATTERN =
   /^packages\/backend\/tests\/(?:[^/]+\/)*[^/]+\.(?:test|spec)\.ts$/
 
-export const BACKEND_CORE_SHARDS = 16
+export const BACKEND_CORE_SHARDS = 12
+export const LEGACY_BACKEND_CORE_SHARDS = 16
 export const BACKEND_MIGRATION_SHARDS = 28
 export const BACKEND_FULL_SHARDS = 44
 

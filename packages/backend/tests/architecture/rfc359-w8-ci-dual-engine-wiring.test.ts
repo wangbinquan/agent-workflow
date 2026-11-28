@@ -281,7 +281,7 @@ describe('RFC-359 W8 / RFC-627 —— CI 的双引擎接线', () => {
         dbName: 'rfc357',
         matrixOs: false,
         urlScope: 'job',
-        testCommandMarker: 'bun test --isolate',
+        testCommandMarker: 'scripts/ci/run-postgresql-gate.ts',
       }),
       '`test-backend-postgresql` 的 PostgreSQL 双引擎接线不完整',
     ).toBe(true)
@@ -564,7 +564,7 @@ jobs:
           dbName: 'rfc357',
           matrixOs: false,
           urlScope: 'job',
-          testCommandMarker: 'bun test --isolate',
+          testCommandMarker: 'scripts/ci/run-postgresql-gate.ts',
         },
       ),
     ).toBe(false)

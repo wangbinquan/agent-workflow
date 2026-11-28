@@ -16,16 +16,15 @@ import { drainTaskLifecycleTestEffects } from './taskLifecycleCommittedEvents'
 // 默认安装 epoch-2 head、install-only seeds 与完整 meta；只有显式历史 prefix 使用 V1。
 // SQLite 每例新建；PostgreSQL 每文件安装一次，每例恢复业务与 meta 的完整初始快照。
 
-import { queryRows } from '@/platform/persistence/queryHelpers'
-import { frozenEpoch1Registry } from '@/platform/persistence/migration/epoch1/definitions'
-import { frozenEpoch1Contract } from '@/platform/persistence/migration/epoch1/contract'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, test } from 'bun:test'
 import { SQL } from 'bun'
 import { randomUUID } from 'node:crypto'
 import { getTableName, type Table } from 'drizzle-orm'
 
+import { persistenceHead } from '@/bootstrap/persistenceHead'
 import { type DbClient, registerLegacyDaemonTestFixture } from '@/db/client'
 import type { DatabaseConfig } from '@agent-workflow/shared'
+import { EPOCH2_META_TABLES } from '@/modules/system-operations/infrastructure/persistence/migrationMetaTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { isPostgresqlSerializationFailure } from '@/platform/persistence/postgresqlSerializationRetry'
 import type { EngineCapabilities } from '@/platform/persistence/capabilities'
@@ -37,21 +36,19 @@ import {
   resetPostgresqlGenerationWriteCache,
   type PostgresqlDatabaseClient,
 } from '@/platform/persistence/postgresqlDatabaseClient'
-import { migratePostgresqlSchema } from '@/platform/persistence/migration/legacy/postgresqlMigrator'
-import {
-  createPostgresqlDatabaseRuntime,
-  type InstrumentedPostgresqlDatabaseRuntime,
-  type PostgresqlDatabaseRuntime,
-  type PostgresqlReservedConnection,
-  type PostgresqlTransactionConnection,
+import type {
+  InstrumentedPostgresqlDatabaseRuntime,
+  PostgresqlDatabaseRuntime,
+  PostgresqlReservedConnection,
+  PostgresqlTransactionConnection,
 } from '@/platform/persistence/postgresqlRuntime'
+import { digestSchemaContract } from '@/platform/persistence/schema/canonical'
+import { createTestDb } from './testDatabase'
 import {
-  createFrozenEpoch1Db,
-  createFrozenPostgresqlClient,
-  frozenTableSets,
-  FROZEN_MIGRATIONS,
-} from '../migration-freeze'
-import { createTestDb, createPostgresqlTestDatabase } from './testDatabase'
+  fixtureCacheKey,
+  materializeTestFixtureBytes,
+  TEST_FIXTURE_CACHE_ENV,
+} from './testFixtureCache'
 import {
   recordStatements as recordSqliteStatements,
   type RecordedStatement,
@@ -59,6 +56,89 @@ import {
   statementFailureCode,
   type StatementRecording,
 } from './statementRecorder'
+
+import type { queryRows as QueryRowsFn } from '@/platform/persistence/queryHelpers'
+import type { frozenEpoch1Registry as FrozenEpoch1RegistryFn } from '@/platform/persistence/migration/epoch1/definitions'
+import type { frozenEpoch1Contract as FrozenEpoch1ContractFn } from '@/platform/persistence/migration/epoch1/contract'
+import type { migratePostgresqlSchema as MigratePostgresqlSchemaFn } from '@/platform/persistence/migration/legacy/postgresqlMigrator'
+import type {
+  createFrozenEpoch1Db as CreateFrozenEpoch1DbFn,
+  createFrozenPostgresqlClient as CreateFrozenPostgresqlClientFn,
+  frozenTableSets as FrozenTableSetsFn,
+  FROZEN_MIGRATIONS as FrozenMigrationsVal,
+} from '../migration-freeze'
+import type { createPostgresqlDatabaseRuntime as CreatePostgresqlDatabaseRuntimeFn } from '@/platform/persistence/postgresqlRuntime'
+import type { createPostgresqlDatabaseClient as CreatePostgresqlDatabaseClientFn } from '@/platform/persistence/postgresqlDatabaseClient'
+import type { persistenceSchemaBinding as PersistenceSchemaBindingFn } from '@/bootstrap/persistenceSchema'
+import type { createPostgresqlTestDatabase as CreatePostgresqlTestDatabaseFn } from './testDatabase'
+
+const EPOCH2_META_DIGEST = digestSchemaContract(EPOCH2_META_TABLES)
+const POSTGRESQL_TEMPLATE_BUSY_MAX_ATTEMPTS = 6
+const POSTGRESQL_TEMPLATE_BUSY_BASE_DELAY_MS = 50
+const POSTGRESQL_TEMPLATE_DRAIN_POLL_ATTEMPTS = 40
+const POSTGRESQL_TEMPLATE_DRAIN_POLL_DELAY_MS = 25
+
+let epoch1FreezeModulesPromise:
+  | Promise<{
+      queryRows: typeof QueryRowsFn
+      frozenEpoch1Registry: typeof FrozenEpoch1RegistryFn
+      frozenEpoch1Contract: typeof FrozenEpoch1ContractFn
+      migratePostgresqlSchema: typeof MigratePostgresqlSchemaFn
+      createFrozenEpoch1Db: typeof CreateFrozenEpoch1DbFn
+      createFrozenPostgresqlClient: typeof CreateFrozenPostgresqlClientFn
+      frozenTableSets: typeof FrozenTableSetsFn
+      FROZEN_MIGRATIONS: typeof FrozenMigrationsVal
+    }>
+  | undefined
+
+function loadEpoch1FreezeModules() {
+  return (epoch1FreezeModulesPromise ??= (async () => {
+    const [queryHelpers, epoch1Defs, epoch1Contract, pgMigrator, migrationFreeze] =
+      await Promise.all([
+        import('@/platform/persistence/queryHelpers'),
+        import('@/platform/persistence/migration/epoch1/definitions'),
+        import('@/platform/persistence/migration/epoch1/contract'),
+        import('@/platform/persistence/migration/legacy/postgresqlMigrator'),
+        import('../migration-freeze'),
+      ])
+    return {
+      queryRows: queryHelpers.queryRows,
+      frozenEpoch1Registry: epoch1Defs.frozenEpoch1Registry,
+      frozenEpoch1Contract: epoch1Contract.frozenEpoch1Contract,
+      migratePostgresqlSchema: pgMigrator.migratePostgresqlSchema,
+      createFrozenEpoch1Db: migrationFreeze.createFrozenEpoch1Db,
+      createFrozenPostgresqlClient: migrationFreeze.createFrozenPostgresqlClient,
+      frozenTableSets: migrationFreeze.frozenTableSets,
+      FROZEN_MIGRATIONS: migrationFreeze.FROZEN_MIGRATIONS,
+    }
+  })())
+}
+
+let pgHarnessModulesPromise:
+  | Promise<{
+      createPostgresqlDatabaseRuntime: typeof CreatePostgresqlDatabaseRuntimeFn
+      createPostgresqlDatabaseClient: typeof CreatePostgresqlDatabaseClientFn
+      persistenceSchemaBinding: typeof PersistenceSchemaBindingFn
+      createPostgresqlTestDatabase: typeof CreatePostgresqlTestDatabaseFn
+    }>
+  | undefined
+
+function loadPostgresqlHarnessModules() {
+  return (pgHarnessModulesPromise ??= (async () => {
+    const [pgRuntime, pgClient, persistenceSchema, testDatabase] = await Promise.all([
+      import('@/platform/persistence/postgresqlRuntime'),
+      import('@/platform/persistence/postgresqlDatabaseClient'),
+      import('@/bootstrap/persistenceSchema'),
+      import('./testDatabase'),
+    ])
+    return {
+      createPostgresqlDatabaseRuntime: pgRuntime.createPostgresqlDatabaseRuntime,
+      createPostgresqlDatabaseClient: pgClient.createPostgresqlDatabaseClient,
+      persistenceSchemaBinding: persistenceSchema.persistenceSchemaBinding,
+      createPostgresqlTestDatabase: testDatabase.createPostgresqlTestDatabase,
+    }
+  })())
+}
 
 export type TestProvider = 'sqlite' | 'postgresql'
 
@@ -513,7 +593,10 @@ function registerSqlite(
         ? await createTestDb({ provider: 'sqlite', ...options })
         : undefined
     const db = (fixture?.db ??
-      createFrozenEpoch1Db(options.sqliteMigrationsFolder, options)) as DbClient
+      (await loadEpoch1FreezeModules()).createFrozenEpoch1Db(
+        options.sqliteMigrationsFolder,
+        options,
+      )) as DbClient
     state.close = async () => {
       await closeProviderFixtureApplications(db)
       await drainTaskLifecycleTestEffects(db)
@@ -562,6 +645,8 @@ interface PostgresqlSeed {
    * 见 `STABLE_SEED_MIN_BYTES`。只有 `snapshotSchema` 判定合格的表才有这一格。
    */
   stableIdentity?: string
+  /** RFC-629: marks seeds eligible for `stableIdentity` refresh on template-cloned DBs. */
+  readonly stableSeedEligible?: boolean
 }
 
 /**
@@ -778,6 +863,13 @@ type SchemaTable = Table
 
 /** 迁移刚种下的行：按外键拓扑顺序从 SQLite 内存库整表复制到 PostgreSQL。 */
 async function seedFromSqliteSnapshot(target: PersistenceDb): Promise<void> {
+  const {
+    createFrozenEpoch1Db,
+    FROZEN_MIGRATIONS,
+    frozenTableSets,
+    frozenEpoch1Registry,
+    queryRows,
+  } = await loadEpoch1FreezeModules()
   const source = createFrozenEpoch1Db(FROZEN_MIGRATIONS, { bootstrap: 'required' })
   const pending: Array<{
     name: string
@@ -1034,16 +1126,206 @@ function recordingRuntime(
  * 每次注册使用独立随机名字：Bun --isolate 仍复用 pid，超时的异步 cleanup 也可能继续执行。
  * 不重用或预先删除同 pid 的库，避免迟到的清理与下一文件互相影响。
  */
+export interface PostgresqlTemplateCloneInfo {
+  readonly templateName: string
+  readonly staticSnapshot: PostgresqlSchemaSnapshot
+}
+
+export function postgresqlTemplateCacheIdentity(sourceUrl: string): {
+  readonly key: string
+  readonly templateName: string
+  readonly inputs: {
+    readonly format: 1
+    readonly protocol: string
+    readonly host: string
+    readonly username: string
+    readonly search: string
+    readonly contractArtifactDigest: string
+    readonly contractDigest: string
+    readonly sqlitePlanDigest: string
+    readonly postgresqlPlanDigest: string
+    readonly metaDigest: string
+  }
+} {
+  const parsedUrl = new URL(sourceUrl)
+  const head = persistenceHead()
+  // RFC-629: WHATWG URL.origin is always "null" for postgresql://, and template DBs are
+  // cluster-wide (independent of pathname), so key by cluster identity + full schema digests.
+  const inputs = {
+    format: 1 as const,
+    protocol: parsedUrl.protocol,
+    host: parsedUrl.host,
+    username: parsedUrl.username,
+    search: parsedUrl.search,
+    contractArtifactDigest: head.contract.digest,
+    contractDigest: head.contract.contract.digest,
+    sqlitePlanDigest: head.sqlite.digest,
+    postgresqlPlanDigest: head.postgresql.digest,
+    metaDigest: EPOCH2_META_DIGEST,
+  }
+  const key = fixtureCacheKey('pg-epoch2-template', inputs)
+  return { key, templateName: `aw_tpl_${key.slice(0, 16)}`, inputs }
+}
+
+function postgresqlErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') return undefined
+  const record = error as {
+    readonly code?: unknown
+    readonly errno?: unknown
+    readonly cause?: unknown
+  }
+  if (typeof record.code === 'string' && record.code.length > 0) return record.code
+  if (typeof record.errno === 'string' && record.errno.length > 0) return record.errno
+  return record.cause !== undefined ? postgresqlErrorCode(record.cause) : undefined
+}
+
+export async function createPostgresqlDatabaseFromTemplateWithFallback(
+  admin: PostgresqlHarnessDropConnection,
+  databaseName: string,
+  templateName: string,
+  sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+): Promise<'cloned' | 'fallback'> {
+  for (let attempt = 1; attempt <= POSTGRESQL_TEMPLATE_BUSY_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await admin.unsafe(`create database "${databaseName}" template "${templateName}"`)
+      return 'cloned'
+    } catch (error) {
+      const code = postgresqlErrorCode(error)
+      if (code === '3D000') {
+        await admin.unsafe(`create database "${databaseName}"`)
+        return 'fallback'
+      }
+      if (code === '55006' && attempt < POSTGRESQL_TEMPLATE_BUSY_MAX_ATTEMPTS) {
+        const delayMs = POSTGRESQL_TEMPLATE_BUSY_BASE_DELAY_MS * attempt + ((attempt * 17) % 37)
+        await sleep(delayMs)
+        continue
+      }
+      if (code === '55006') {
+        await admin.unsafe(`create database "${databaseName}"`)
+        return 'fallback'
+      }
+      throw error
+    }
+  }
+  await admin.unsafe(`create database "${databaseName}"`)
+  return 'fallback'
+}
+
+async function waitForZeroPostgresqlBackends(
+  admin: PostgresqlHarnessDropConnection,
+  databaseName: string,
+): Promise<void> {
+  for (let attempt = 0; attempt < POSTGRESQL_TEMPLATE_DRAIN_POLL_ATTEMPTS; attempt += 1) {
+    const result = (await admin.unsafe(
+      `select count(*)::int as cnt from pg_stat_activity where datname = '${databaseName}' and pid <> pg_backend_pid()`,
+    )) as readonly Record<string, unknown>[]
+    const activeCount = Number(result[0]?.['cnt'] ?? 0)
+    if (activeCount === 0) return
+    await new Promise((resolve) => setTimeout(resolve, POSTGRESQL_TEMPLATE_DRAIN_POLL_DELAY_MS))
+  }
+}
+
+async function ensurePostgresqlEpoch2Template(
+  sourceUrl: string,
+): Promise<PostgresqlTemplateCloneInfo> {
+  const { templateName, inputs } = postgresqlTemplateCacheIdentity(sourceUrl)
+  const { bytes } = await materializeTestFixtureBytes({
+    kind: 'pg-epoch2-snapshot',
+    inputs,
+    buildBytes: async () => {
+      const { createPostgresqlDatabaseRuntime, createPostgresqlTestDatabase } =
+        await loadPostgresqlHarnessModules()
+      const admin = createPostgresqlHarnessDropConnection(sourceUrl)
+      try {
+        await admin.unsafe(
+          `select pg_terminate_backend(pid) from pg_stat_activity where datname = '${templateName}' and pid <> pg_backend_pid()`,
+        )
+        await waitForZeroPostgresqlBackends(admin, templateName)
+        await admin.unsafe(`drop database if exists "${templateName}"`)
+        await admin.unsafe(`create database "${templateName}"`)
+        const templateUrl = new URL(sourceUrl)
+        templateUrl.pathname = `/${templateName}`
+        const templateRuntime = createPostgresqlDatabaseRuntime({
+          config: {
+            provider: 'postgresql',
+            urlEnv: 'AW_TEST_POSTGRESQL_URL',
+            poolMax: 16,
+            connectTimeoutMs: 10_000,
+            statementTimeoutMs: 60_000,
+            idleTimeoutMs: 30_000,
+          },
+          generationId: GENERATION_ID,
+          env: { AW_TEST_POSTGRESQL_URL: templateUrl.toString() },
+        })
+        let snapshot: PostgresqlSchemaSnapshot
+        try {
+          const pool = templateRuntime.providerPool()
+          const query: RawQuery = async (text, parameters) =>
+            parameters === undefined
+              ? await pool.unsafe(text)
+              : await pool.unsafe(text, [...parameters])
+          await createPostgresqlTestDatabase(templateRuntime, { bootstrap: 'required' })
+          snapshot = await snapshotSchema(query)
+        } finally {
+          await templateRuntime.close()
+        }
+        await admin.unsafe(
+          `select pg_terminate_backend(pid) from pg_stat_activity where datname = '${templateName}' and pid <> pg_backend_pid()`,
+        )
+        await waitForZeroPostgresqlBackends(admin, templateName)
+        const serialized: PostgresqlSchemaSnapshot = {
+          tables: snapshot.tables,
+          seeds: snapshot.seeds.map((seed) => ({
+            table: seed.table,
+            schema: seed.schema,
+            rowsJson: seed.rowsJson,
+            stableSeedEligible: seed.stableIdentity !== undefined,
+          })),
+          hasLoginPolicy: snapshot.hasLoginPolicy,
+        }
+        return new TextEncoder().encode(JSON.stringify(serialized))
+      } finally {
+        await admin.close({ timeout: 5 })
+      }
+    },
+  })
+  const staticSnapshot = JSON.parse(new TextDecoder().decode(bytes)) as PostgresqlSchemaSnapshot
+  return { templateName, staticSnapshot }
+}
+
 export async function createPostgresqlFileDatabase(
   sourceUrl: string | undefined,
   ordinal = 1,
   connect: typeof createPostgresqlHarnessDropConnection = createPostgresqlHarnessDropConnection,
-): Promise<{ readonly url: string | undefined; readonly drop: () => Promise<void> }> {
+  templateOptions?: Pick<DescribeEachProviderOptions, 'sqliteMigrationsFolder'>,
+): Promise<{
+  readonly url: string | undefined
+  readonly drop: () => Promise<void>
+  readonly clonedFromTemplate?: PostgresqlTemplateCloneInfo
+}> {
   if (sourceUrl === undefined) return { url: undefined, drop: async () => undefined }
   const name = `aw_t_${String(process.pid)}_${String(ordinal)}_${randomUUID().replaceAll('-', '')}`
+  let clonedFromTemplate: PostgresqlTemplateCloneInfo | undefined
+  const shouldUseTemplate =
+    templateOptions !== undefined &&
+    templateOptions.sqliteMigrationsFolder === undefined &&
+    Boolean(process.env[TEST_FIXTURE_CACHE_ENV]) &&
+    connect === createPostgresqlHarnessDropConnection
+  const preparedTemplate = shouldUseTemplate
+    ? await ensurePostgresqlEpoch2Template(sourceUrl)
+    : undefined
   const admin = connect(sourceUrl)
   try {
-    await admin.unsafe(`create database "${name}"`)
+    if (preparedTemplate) {
+      const outcome = await createPostgresqlDatabaseFromTemplateWithFallback(
+        admin,
+        name,
+        preparedTemplate.templateName,
+      )
+      if (outcome === 'cloned') clonedFromTemplate = preparedTemplate
+    } else {
+      await admin.unsafe(`create database "${name}"`)
+    }
   } finally {
     await admin.close({ timeout: 5 })
   }
@@ -1051,6 +1333,7 @@ export async function createPostgresqlFileDatabase(
   url.pathname = `/${name}`
   return {
     url: url.toString(),
+    ...(clonedFromTemplate ? { clonedFromTemplate } : {}),
     drop: async () => {
       const connection = connect(sourceUrl)
       try {
@@ -1099,13 +1382,20 @@ interface PostgresqlHarnessDatabase {
   readonly createDropConnection: () => PostgresqlHarnessDropConnection
 }
 
-/** 每个真库都走原有的一次初始化：迁移、生成代、迁移种子与录制客户端。 */
+/** 每个真库都走原有的一次初始化：迁移、生成代、迁移种子与录制客户端；命中集群模板时直接复用克隆与静态快照。 */
 async function createPostgresqlHarnessDatabase(
   urlEnv: (typeof POSTGRESQL_URL_ENVS)[number],
   env?: Readonly<Record<string, string | undefined>>,
   phase?: ProviderHarnessLifecyclePhase,
   options: DescribeEachProviderOptions = {},
+  clonedFromTemplate?: PostgresqlTemplateCloneInfo,
 ): Promise<PostgresqlHarnessDatabase> {
+  const {
+    createPostgresqlDatabaseRuntime,
+    createPostgresqlDatabaseClient,
+    persistenceSchemaBinding,
+    createPostgresqlTestDatabase,
+  } = await loadPostgresqlHarnessModules()
   const sinks = new Set<StatementSink>()
   const sourceUrl = (env ?? process.env)[urlEnv]
   const databaseConfig = {
@@ -1135,48 +1425,73 @@ async function createPostgresqlHarnessDatabase(
     const pool = runtime.providerPool()
     const query: RawQuery = async (text, parameters) =>
       parameters === undefined ? await pool.unsafe(text) : await pool.unsafe(text, [...parameters])
-    // 与 rfc357 / rfc359 的真库用例同一套姿势：清干净、按基线迁移、自己登记一个活跃生成代
-    // （客户端的业务写围栏按 runtime.generationId 核对 database_generations）。
-    await runProviderHarnessLifecycleStep(phase, 'schema.drop-application', () =>
-      query('drop schema if exists agent_workflow cascade'),
-    )
-    await runProviderHarnessLifecycleStep(phase, 'schema.drop-metadata', () =>
-      query('drop schema if exists agent_workflow_meta cascade'),
-    )
     const applicationRuntime = recordingRuntime(runtime, sinks)
     let client: PostgresqlDatabaseClient
-    if (options.sqliteMigrationsFolder !== undefined) {
-      // An explicit historical prefix selects V1 on both engines.
-      await runProviderHarnessLifecycleStep(phase, 'schema.migrate', () =>
-        migratePostgresqlSchema({ headContract: frozenEpoch1Contract, runtime }),
-      )
-      await query(
-        'insert into "agent_workflow_meta"."logical_copy_operations" ' +
-          '(operation_id, source_generation_id, contract_digest, plan_digest, stage, created_at, updated_at) ' +
-          `values ('${OPERATION_ID}', 'dbg_each_provider_source', 'digest', 'plan', 'prepared', 1, 1)`,
-      )
-      await query(
-        'insert into "agent_workflow_meta"."database_generations" ' +
-          '(generation_id, operation_id, source_generation_id, contract_digest, state, activated_at, first_live_write_at) ' +
-          `values ('${GENERATION_ID}', '${OPERATION_ID}', 'dbg_each_provider_source', 'digest', 'active', 1, 1)`,
-      )
-      client = createFrozenPostgresqlClient(
-        applicationRuntime,
-      ) as unknown as PostgresqlDatabaseClient
-      await runProviderHarnessLifecycleStep(phase, 'fixture.seed', () =>
-        seedFromSqliteSnapshot(client),
-      )
+    let snapshot: PostgresqlSchemaSnapshot
+    if (clonedFromTemplate !== undefined && options.sqliteMigrationsFolder === undefined) {
+      // RFC-629: DB was cloned from `aw_tpl_<id>` with GENERATION_ID and epoch-2 seeds intact.
+      // Never call registerLegacyDaemonTestFixture here; beforeEach gates it on options.bootstrap.
+      client = createPostgresqlDatabaseClient(applicationRuntime, {
+        liveSchema: persistenceSchemaBinding,
+      })
+      const clonedSeeds: PostgresqlSeed[] = clonedFromTemplate.staticSnapshot.seeds.map((seed) => ({
+        table: seed.table,
+        schema: seed.schema,
+        rowsJson: seed.rowsJson,
+        stableSeedEligible: seed.stableSeedEligible,
+      }))
+      for (const seed of clonedSeeds) {
+        if (seed.stableSeedEligible) seed.stableIdentity = await seedIdentity(query, seed)
+      }
+      snapshot = {
+        tables: [...clonedFromTemplate.staticSnapshot.tables],
+        seeds: clonedSeeds,
+        hasLoginPolicy: clonedFromTemplate.staticSnapshot.hasLoginPolicy,
+      }
     } else {
-      const fixture = await runProviderHarnessLifecycleStep(
-        phase,
-        'schema.install-target-head',
-        () => createPostgresqlTestDatabase(applicationRuntime, { bootstrap: 'required' }),
+      // 与 rfc357 / rfc359 的真库用例同一套姿势：清干净、按基线迁移、自己登记一个活跃生成代
+      // （客户端的业务写围栏按 runtime.generationId 核对 database_generations）。
+      await runProviderHarnessLifecycleStep(phase, 'schema.drop-application', () =>
+        query('drop schema if exists agent_workflow cascade'),
       )
-      client = fixture.db
+      await runProviderHarnessLifecycleStep(phase, 'schema.drop-metadata', () =>
+        query('drop schema if exists agent_workflow_meta cascade'),
+      )
+      if (options.sqliteMigrationsFolder !== undefined) {
+        const { frozenEpoch1Contract, migratePostgresqlSchema, createFrozenPostgresqlClient } =
+          await loadEpoch1FreezeModules()
+        // An explicit historical prefix selects V1 on both engines.
+        await runProviderHarnessLifecycleStep(phase, 'schema.migrate', () =>
+          migratePostgresqlSchema({ headContract: frozenEpoch1Contract, runtime }),
+        )
+        await query(
+          'insert into "agent_workflow_meta"."logical_copy_operations" ' +
+            '(operation_id, source_generation_id, contract_digest, plan_digest, stage, created_at, updated_at) ' +
+            `values ('${OPERATION_ID}', 'dbg_each_provider_source', 'digest', 'plan', 'prepared', 1, 1)`,
+        )
+        await query(
+          'insert into "agent_workflow_meta"."database_generations" ' +
+            '(generation_id, operation_id, source_generation_id, contract_digest, state, activated_at, first_live_write_at) ' +
+            `values ('${GENERATION_ID}', '${OPERATION_ID}', 'dbg_each_provider_source', 'digest', 'active', 1, 1)`,
+        )
+        client = createFrozenPostgresqlClient(
+          applicationRuntime,
+        ) as unknown as PostgresqlDatabaseClient
+        await runProviderHarnessLifecycleStep(phase, 'fixture.seed', () =>
+          seedFromSqliteSnapshot(client),
+        )
+      } else {
+        const fixture = await runProviderHarnessLifecycleStep(
+          phase,
+          'schema.install-target-head',
+          () => createPostgresqlTestDatabase(applicationRuntime, { bootstrap: 'required' }),
+        )
+        client = fixture.db
+      }
+      snapshot = await runProviderHarnessLifecycleStep(phase, 'fixture.snapshot', () =>
+        snapshotSchema(query),
+      )
     }
-    const snapshot = await runProviderHarnessLifecycleStep(phase, 'fixture.snapshot', () =>
-      snapshotSchema(query),
-    )
     return {
       runtime,
       applicationBinding: Object.freeze({
@@ -1484,8 +1799,13 @@ function registerPostgresql(
   let initialization: Promise<void> | undefined
   let cleanup: Promise<void> | undefined
   let fileDatabase:
-    | { readonly url: string | undefined; readonly drop: () => Promise<void> }
+    | {
+        readonly url: string | undefined
+        readonly drop: () => Promise<void>
+        readonly clonedFromTemplate?: PostgresqlTemplateCloneInfo
+      }
     | undefined
+  const additionalFileDatabases: Array<{ readonly drop: () => Promise<void> }> = []
   let restoreUrlEnv: (() => void) | undefined
   const closeAll = () =>
     (cleanup ??= closePostgresqlHarnessDatabases(
@@ -1498,9 +1818,10 @@ function registerPostgresql(
     runProviderHarnessLifecycle(lifecycle, 'beforeAll.setup', async (phase): Promise<void> => {
       try {
         // 本文件自己的库：数据 / DDL 锁 / advisory lock 三样都随之与别的文件分开
-        // （见 createPostgresqlFileDatabase 头注）。
+        // （见 createPostgresqlFileDatabase 头注）。先捕获基础 URL 供多库复用。
+        const baseUrl = process.env[urlEnv]
         fileDatabase = await runProviderHarnessLifecycleStep(phase, 'database.create', () =>
-          createPostgresqlFileDatabase(process.env[urlEnv], databaseCount),
+          createPostgresqlFileDatabase(baseUrl, databaseCount, undefined, options),
         )
         const sourceUrl = fileDatabase.url
         // **把环境变量也指过去**：本仓有一批测试自己从 `process.env[urlEnv]` 建 PG runtime
@@ -1517,36 +1838,57 @@ function registerPostgresql(
           }
         }
         const primary = await runProviderHarnessLifecycleStep(phase, 'factory.prepare', () =>
-          createPostgresqlHarnessDatabase(urlEnv, undefined, phase, options),
+          createPostgresqlHarnessDatabase(
+            urlEnv,
+            undefined,
+            phase,
+            options,
+            fileDatabase?.clonedFromTemplate,
+          ),
         )
         databases.push(primary)
         for (let index = 1; index < databaseCount; index += 1) {
-          const name = `aw_each_provider_${randomUUID().replaceAll('-', '')}`
-          await primary.raw(`create database "${name}"`)
-          createdDatabaseNames.push(name)
-          const url = new URL(sourceUrl!)
-          url.pathname = `/${name}`
+          const extraDatabase = await createPostgresqlFileDatabase(
+            baseUrl,
+            index + 1,
+            undefined,
+            options,
+          )
+          additionalFileDatabases.push(extraDatabase)
           databases.push(
             await createPostgresqlHarnessDatabase(
               urlEnv,
-              { [urlEnv]: url.toString() },
+              { [urlEnv]: extraDatabase.url },
               undefined,
               options,
+              extraDatabase.clonedFromTemplate,
             ),
           )
         }
       } catch (error) {
+        const failures: unknown[] = [error]
         try {
           await runProviderHarnessLifecycleStep(phase, 'setup.cleanup', () => closeAll())
         } catch (cleanupError) {
-          throw new AggregateError([error, cleanupError], 'PostgreSQL harness setup cleanup failed')
+          failures.push(cleanupError)
         } finally {
           restoreUrlEnv?.()
           restoreUrlEnv = undefined
-          await fileDatabase?.drop()
+          const dropTargets = [
+            ...additionalFileDatabases.splice(0).reverse(),
+            ...(fileDatabase ? [fileDatabase] : []),
+          ]
           fileDatabase = undefined
+          for (const target of dropTargets) {
+            try {
+              await target.drop()
+            } catch (dropError) {
+              failures.push(dropError)
+            }
+          }
         }
-        throw error
+        if (failures.length === 1) throw failures[0]
+        throw new AggregateError(failures, 'PostgreSQL harness setup cleanup failed')
       }
     })
   const setupDatabases = () => (initialization ??= initializeDatabases())
@@ -1621,8 +1963,22 @@ function registerPostgresql(
         await runProviderHarnessLifecycleStep(phase, 'database.drop', async () => {
           restoreUrlEnv?.()
           restoreUrlEnv = undefined
-          await fileDatabase?.drop()
+          const dropTargets = [
+            ...additionalFileDatabases.splice(0).reverse(),
+            ...(fileDatabase ? [fileDatabase] : []),
+          ]
           fileDatabase = undefined
+          const dropErrors: unknown[] = []
+          for (const target of dropTargets) {
+            try {
+              await target.drop()
+            } catch (dropError) {
+              dropErrors.push(dropError)
+            }
+          }
+          if (dropErrors.length === 1) throw dropErrors[0]
+          if (dropErrors.length > 1)
+            throw new AggregateError(dropErrors, 'PostgreSQL file database cleanup failed')
         })
       }
     })

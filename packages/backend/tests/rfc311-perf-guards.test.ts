@@ -462,13 +462,10 @@ function percentile95(samples: readonly number[]): number {
   return sorted[index] ?? 0
 }
 
-async function capture(
+async function recordPathRun(
   harness: ProviderHarness,
-  n: number,
   path: GuardedPath,
 ): Promise<RecordedStatement[]> {
-  await clearCorpus(harness.db)
-  await seed(harness.db, n)
   const recording = harness.recordStatements()
   try {
     await path.run(harness.db)
@@ -476,6 +473,16 @@ async function capture(
     recording.stop()
   }
   return recording.statements
+}
+
+async function capture(
+  harness: ProviderHarness,
+  n: number,
+  path: GuardedPath,
+): Promise<RecordedStatement[]> {
+  await clearCorpus(harness.db)
+  await seed(harness.db, n)
+  return recordPathRun(harness, path)
 }
 
 /** RFC-395 II-b O1: assert the exact approved census cost before comparing bounded page rows. */
@@ -659,163 +666,190 @@ describeEachProvider('RFC-311 性能防护 —— 每条受防护读路径的结
     expect(Date.parse(second.generatedAt)).toBeLessThanOrEqual(secondCompletedAt)
   })
 
-  test.each(GUARDED.map((p) => [p.name, p] as const))(
+  const verifyGuardedPath = async (
+    path: GuardedPath,
+    small: readonly RecordedStatement[],
+    large: readonly RecordedStatement[],
+    caseStartedAt: number,
+  ): Promise<void> => {
+    const name = path.name
+    // ① N+1：语句条数必须与行数无关。
+    const summarize = (s: readonly RecordedStatement[]): string[] =>
+      s.map((x) => x.sql.replace(/\s+/g, ' ').slice(0, 90))
+    if (path.maxStatementsPerRow === undefined) {
+      expect(
+        large.length,
+        `${name}: 语句条数随行数增长（${SMALL} 行 ${small.length} 条 → ${LARGE} 行 ${large.length} 条）= N+1。\n` +
+          `${LARGE} 行时执行的语句：\n${summarize(large).join('\n')}`,
+      ).toBe(small.length)
+    } else {
+      // 已知仍是 O(行数) 条的 sweep：钉住比率，只许降不许升。
+      const perRow = large.length / LARGE
+      expect(
+        perRow,
+        `${name}: 每行语句数从记录的 ${path.maxStatementsPerRow} 涨到了 ${perRow.toFixed(2)}` +
+          `（${LARGE} 行发了 ${large.length} 条）。这条路径本就欠着集合化，别让它更差。`,
+      ).toBeLessThanOrEqual(path.maxStatementsPerRow)
+    }
+
+    // ④a 分块：任何**单条**语句一次取回的行数有上界。对 sweep 这是唯一可查的
+    //     「有没有分块」信号；对 list 它是④的兜底。
+    const widest = large.reduce((m, x) => Math.max(m, x.rows), 0)
+    expect(
+      widest,
+      `${name}: 有语句一次取回 ${widest} 行——这一拍把表整片搬进了内存，没有分块。`,
+    ).toBeLessThanOrEqual(MAX_CHUNK_ROWS)
+
+    // ④b 体量：取回的**总**行数不随库里行数增长。这是「无界结果集」唯一的可靠
+    //     信号，与①正交（①数**发了几条**，④数**搬回来多少行**）。
+    //     sweep 豁免——它的职责就是遍历全表，见 GuardedPath.kind 的注释。
+    const rowsOf = (s: readonly RecordedStatement[]): number => s.reduce((n, x) => n + x.rows, 0)
+    const smallCensus = path.repositoryReferenceCensus
+      ? repositoryReferenceCensusRows(small, SMALL)
+      : 0
+    const largeCensus = path.repositoryReferenceCensus
+      ? repositoryReferenceCensusRows(large, LARGE)
+      : 0
+    if ((path.kind ?? 'list') !== 'sweep')
+      expect(
+        rowsOf(large) - largeCensus,
+        `${name}: 取回行数随库增长（${SMALL} 行库取回 ${rowsOf(small)} 行 → ${LARGE} 行库取回 ${rowsOf(large)} 行）：\n` +
+          `这条路径没有上界，库长大就会把整张表搬进内存（RFC-311 的立项动机）。\n` +
+          large
+            .filter((x) => x.rows > 0)
+            .map((x) => `  ${x.rows} 行 ← ${x.sql.replace(/\s+/g, ' ').slice(0, 110)}`)
+            .join('\n'),
+      ).toBe(rowsOf(small) - smallCensus)
+
+    // ⑤ 列表查询不碰重列（详情路径豁免——它本来就是去读正文的）。
+    if ((path.kind ?? 'list') === 'list') {
+      const heavy = heavyColumns()
+      const touched = new Set<string>()
+      for (const stmt of large) {
+        for (const col of heavy) {
+          if (new RegExp(`"${col}"`).test(withoutScalarJsonReads(stmt.sql))) touched.add(col)
+        }
+      }
+      expect(
+        [...touched].sort(),
+        `${name}: 列表路径读了重列：这些字段只在详情页用，却让每一行都跟着读溢出页\n` +
+          `（RFC-311 审计的 L2「窄投影」类）。把投影收窄到列表 DTO 真正用到的列。`,
+      ).toEqual([])
+    }
+
+    // ③ 绑定参数有界（SQLite 硬上限 32766 / PostgreSQL 65535，无界 IN(…) 会在生产上直接抛）。
+    const worst = large.reduce((m, s) => Math.max(m, s.params), 0)
+    expect(
+      worst,
+      `${name}: 某条语句绑定了 ${worst} 个参数，逼近 SQLite 的 32766 上限`,
+    ).toBeLessThanOrEqual(MAX_BOUND_PARAMS)
+
+    // ② 计划审计——见 assertPlans 的注释，PostgreSQL 侧另有专门的一份。
+    if (harness.capabilities.provider === 'sqlite') await assertPlans(harness, large)
+
+    // —— AC-11 的采集面 ——
+    // P95 墙钟：两个引擎各取各的基线（RFC-359 AC-11）。只打印、不作判据。
+    const samples: number[] = []
+    for (let i = 0; i < P95_SAMPLES; i += 1) {
+      const startedAt = performance.now()
+      await path.run(harness.db)
+      samples.push(performance.now() - startedAt)
+    }
+    const engine = harness.capabilities.provider
+    if (name === 'task-operations catalog — 过滤视图（G1 快路径）') {
+      console.info(
+        `[rfc311-perf G1 samples] ${JSON.stringify({ provider: engine, samplesMs: samples })}`,
+      )
+      const binding = harness.applicationBinding
+      // PG may run before SQLite. Capture while this fixture still exists,
+      // whenever a later 50x/250ms comparison could possibly reject it.
+      if (binding.provider === 'postgresql' && Math.max(...samples) > CATASTROPHE_FLOOR_MS) {
+        const evidence = await collectG1PerformanceDiagnostics({
+          database: binding.databaseConfig,
+          statements: large,
+          samplesMs: samples,
+          deadline: caseStartedAt + 180_000,
+        })
+        console.warn(`[rfc615-g1-diagnostic] ${JSON.stringify(evidence)}`)
+      }
+    }
+    const measurement: Measurement = {
+      statements: large.length,
+      rows: rowsOf(large),
+      maxParams: worst,
+      p95Ms: percentile95(samples),
+    }
+    const byEngine = MEASURED.get(name) ?? new Map<string, Measurement>()
+    byEngine.set(engine, measurement)
+    MEASURED.set(name, byEngine)
+    console.info(
+      `[rfc311-perf ${engine}] ${name}: ${measurement.statements} 条语句 / ` +
+        `${measurement.rows} 行 / 最大 ${measurement.maxParams} 参数 / ` +
+        `P95 ${measurement.p95Ms.toFixed(2)}ms（${LARGE} 行语料）`,
+    )
+
+    // 结构成本对照。两条 lane 在同一个进程里跑，**后跑到的那一条**做比较——
+    // 这样断言与 describe / test 的执行顺序无关（CI 用 `bun test --randomize`）。
+    const sqlite = byEngine.get('sqlite')
+    const postgresql = byEngine.get('postgresql')
+    if (sqlite !== undefined && postgresql !== undefined) {
+      comparisons += 1
+      expect(
+        postgresql.statements,
+        `AC-11 (${name})：同一条路径在 PostgreSQL 上发了 ${postgresql.statements} 条语句，` +
+          `SQLite 只发 ${sqlite.statements} 条。多发的每一条在 PG 上都是一次网络往返——` +
+          `这是「PG 更慢」最直接的因，而且与机器负载无关。`,
+      ).toBeLessThanOrEqual(sqlite.statements)
+      expect(
+        postgresql.rows,
+        `AC-11 (${name})：同一条路径在 PostgreSQL 上取回 ${postgresql.rows} 行，SQLite 只取回 ${sqlite.rows} 行。`,
+      ).toBeLessThanOrEqual(sqlite.rows)
+      expect(
+        postgresql.maxParams,
+        `AC-11 (${name})：同一条路径在 PostgreSQL 上单条语句最多绑定 ${postgresql.maxParams} 个参数，` +
+          `SQLite 是 ${sqlite.maxParams} 个。`,
+      ).toBeLessThanOrEqual(sqlite.maxParams)
+      console.info(
+        `[rfc311-perf AC-11] ${name}: P95 sqlite ${sqlite.p95Ms.toFixed(2)}ms / ` +
+          `postgresql ${postgresql.p95Ms.toFixed(2)}ms（比值 ` +
+          `${(postgresql.p95Ms / Math.max(sqlite.p95Ms, 0.001)).toFixed(1)}×，只作诊断）`,
+      )
+      // 塌方探测器，不是 SLA。见 CATASTROPHE_RATIO 的注释。
+      expect(
+        postgresql.p95Ms,
+        `AC-11 塌方探测 (${name})：PostgreSQL 的 P95 ${postgresql.p95Ms.toFixed(2)}ms 是 SQLite ` +
+          `${sqlite.p95Ms.toFixed(2)}ms 的 ${(postgresql.p95Ms / Math.max(sqlite.p95Ms, 0.001)).toFixed(1)} 倍。\n` +
+          `这个倍数远超「每条语句多一次本机网络往返」能解释的范围，多半是某条查询在 PG 上\n` +
+          `退化成了全表扫描 / 每行再查一次。去看 rfc359-w6-t26-postgresql-plan-audit 的账本。`,
+      ).toBeLessThanOrEqual(Math.max(sqlite.p95Ms * CATASTROPHE_RATIO, CATASTROPHE_FLOOR_MS))
+    }
+  }
+
+  test('read-only list paths on shared SMALL/LARGE corpora', async () => {
+    const readOnlyPaths = GUARDED.filter((p) => (p.kind ?? 'list') !== 'sweep')
+    await clearCorpus(harness.db)
+    await seed(harness.db, SMALL)
+    const smallByName = new Map<string, RecordedStatement[]>()
+    for (const path of readOnlyPaths) {
+      smallByName.set(path.name, await recordPathRun(harness, path))
+    }
+
+    await clearCorpus(harness.db)
+    await seed(harness.db, LARGE)
+    for (const path of readOnlyPaths) {
+      const caseStartedAt = performance.now()
+      const large = await recordPathRun(harness, path)
+      await verifyGuardedPath(path, smallByName.get(path.name)!, large, caseStartedAt)
+    }
+  }, 180_000)
+
+  test.each(GUARDED.filter((p) => p.kind === 'sweep').map((p) => [p.name, p] as const))(
     '%s',
-    async (name, path) => {
+    async (_name, path) => {
       const caseStartedAt = performance.now()
       const small = await capture(harness, SMALL, path)
       const large = await capture(harness, LARGE, path)
-
-      // ① N+1：语句条数必须与行数无关。
-      const summarize = (s: readonly RecordedStatement[]): string[] =>
-        s.map((x) => x.sql.replace(/\s+/g, ' ').slice(0, 90))
-      if (path.maxStatementsPerRow === undefined) {
-        expect(
-          large.length,
-          `语句条数随行数增长（${SMALL} 行 ${small.length} 条 → ${LARGE} 行 ${large.length} 条）= N+1。\n` +
-            `${LARGE} 行时执行的语句：\n${summarize(large).join('\n')}`,
-        ).toBe(small.length)
-      } else {
-        // 已知仍是 O(行数) 条的 sweep：钉住比率，只许降不许升。
-        const perRow = large.length / LARGE
-        expect(
-          perRow,
-          `每行语句数从记录的 ${path.maxStatementsPerRow} 涨到了 ${perRow.toFixed(2)}` +
-            `（${LARGE} 行发了 ${large.length} 条）。这条路径本就欠着集合化，别让它更差。`,
-        ).toBeLessThanOrEqual(path.maxStatementsPerRow)
-      }
-
-      // ④a 分块：任何**单条**语句一次取回的行数有上界。对 sweep 这是唯一可查的
-      //     「有没有分块」信号；对 list 它是④的兜底。
-      const widest = large.reduce((m, x) => Math.max(m, x.rows), 0)
-      expect(
-        widest,
-        `有语句一次取回 ${widest} 行——这一拍把表整片搬进了内存，没有分块。`,
-      ).toBeLessThanOrEqual(MAX_CHUNK_ROWS)
-
-      // ④b 体量：取回的**总**行数不随库里行数增长。这是「无界结果集」唯一的可靠
-      //     信号，与①正交（①数**发了几条**，④数**搬回来多少行**）。
-      //     sweep 豁免——它的职责就是遍历全表，见 GuardedPath.kind 的注释。
-      const rowsOf = (s: readonly RecordedStatement[]): number => s.reduce((n, x) => n + x.rows, 0)
-      const smallCensus = path.repositoryReferenceCensus
-        ? repositoryReferenceCensusRows(small, SMALL)
-        : 0
-      const largeCensus = path.repositoryReferenceCensus
-        ? repositoryReferenceCensusRows(large, LARGE)
-        : 0
-      if ((path.kind ?? 'list') !== 'sweep')
-        expect(
-          rowsOf(large) - largeCensus,
-          `取回行数随库增长（${SMALL} 行库取回 ${rowsOf(small)} 行 → ${LARGE} 行库取回 ${rowsOf(large)} 行）：\n` +
-            `这条路径没有上界，库长大就会把整张表搬进内存（RFC-311 的立项动机）。\n` +
-            large
-              .filter((x) => x.rows > 0)
-              .map((x) => `  ${x.rows} 行 ← ${x.sql.replace(/\s+/g, ' ').slice(0, 110)}`)
-              .join('\n'),
-        ).toBe(rowsOf(small) - smallCensus)
-
-      // ⑤ 列表查询不碰重列（详情路径豁免——它本来就是去读正文的）。
-      if ((path.kind ?? 'list') === 'list') {
-        const heavy = heavyColumns()
-        const touched = new Set<string>()
-        for (const stmt of large) {
-          for (const col of heavy) {
-            if (new RegExp(`"${col}"`).test(withoutScalarJsonReads(stmt.sql))) touched.add(col)
-          }
-        }
-        expect(
-          [...touched].sort(),
-          `列表路径读了重列：这些字段只在详情页用，却让每一行都跟着读溢出页\n` +
-            `（RFC-311 审计的 L2「窄投影」类）。把投影收窄到列表 DTO 真正用到的列。`,
-        ).toEqual([])
-      }
-
-      // ③ 绑定参数有界（SQLite 硬上限 32766 / PostgreSQL 65535，无界 IN(…) 会在生产上直接抛）。
-      const worst = large.reduce((m, s) => Math.max(m, s.params), 0)
-      expect(
-        worst,
-        `某条语句绑定了 ${worst} 个参数，逼近 SQLite 的 32766 上限`,
-      ).toBeLessThanOrEqual(MAX_BOUND_PARAMS)
-
-      // ② 计划审计——见 assertPlans 的注释，PostgreSQL 侧另有专门的一份。
-      if (harness.capabilities.provider === 'sqlite') await assertPlans(harness, large)
-
-      // —— AC-11 的采集面 ——
-      // P95 墙钟：两个引擎各取各的基线（RFC-359 AC-11）。只打印、不作判据。
-      const samples: number[] = []
-      for (let i = 0; i < P95_SAMPLES; i += 1) {
-        const startedAt = performance.now()
-        await path.run(harness.db)
-        samples.push(performance.now() - startedAt)
-      }
-      const engine = harness.capabilities.provider
-      if (name === 'task-operations catalog — 过滤视图（G1 快路径）') {
-        console.info(
-          `[rfc311-perf G1 samples] ${JSON.stringify({ provider: engine, samplesMs: samples })}`,
-        )
-        const binding = harness.applicationBinding
-        // PG may run before SQLite. Capture while this fixture still exists,
-        // whenever a later 50x/250ms comparison could possibly reject it.
-        if (binding.provider === 'postgresql' && Math.max(...samples) > CATASTROPHE_FLOOR_MS) {
-          const evidence = await collectG1PerformanceDiagnostics({
-            database: binding.databaseConfig,
-            statements: large,
-            samplesMs: samples,
-            deadline: caseStartedAt + 180_000,
-          })
-          console.warn(`[rfc615-g1-diagnostic] ${JSON.stringify(evidence)}`)
-        }
-      }
-      const measurement: Measurement = {
-        statements: large.length,
-        rows: rowsOf(large),
-        maxParams: worst,
-        p95Ms: percentile95(samples),
-      }
-      const byEngine = MEASURED.get(name) ?? new Map<string, Measurement>()
-      byEngine.set(engine, measurement)
-      MEASURED.set(name, byEngine)
-      console.info(
-        `[rfc311-perf ${engine}] ${name}: ${measurement.statements} 条语句 / ` +
-          `${measurement.rows} 行 / 最大 ${measurement.maxParams} 参数 / ` +
-          `P95 ${measurement.p95Ms.toFixed(2)}ms（${LARGE} 行语料）`,
-      )
-
-      // 结构成本对照。两条 lane 在同一个进程里跑，**后跑到的那一条**做比较——
-      // 这样断言与 describe / test 的执行顺序无关（CI 用 `bun test --randomize`）。
-      const sqlite = byEngine.get('sqlite')
-      const postgresql = byEngine.get('postgresql')
-      if (sqlite !== undefined && postgresql !== undefined) {
-        comparisons += 1
-        expect(
-          postgresql.statements,
-          `AC-11：同一条路径在 PostgreSQL 上发了 ${postgresql.statements} 条语句，` +
-            `SQLite 只发 ${sqlite.statements} 条。多发的每一条在 PG 上都是一次网络往返——` +
-            `这是「PG 更慢」最直接的因，而且与机器负载无关。`,
-        ).toBeLessThanOrEqual(sqlite.statements)
-        expect(
-          postgresql.rows,
-          `AC-11：同一条路径在 PostgreSQL 上取回 ${postgresql.rows} 行，SQLite 只取回 ${sqlite.rows} 行。`,
-        ).toBeLessThanOrEqual(sqlite.rows)
-        expect(
-          postgresql.maxParams,
-          `AC-11：同一条路径在 PostgreSQL 上单条语句最多绑定 ${postgresql.maxParams} 个参数，` +
-            `SQLite 是 ${sqlite.maxParams} 个。`,
-        ).toBeLessThanOrEqual(sqlite.maxParams)
-        console.info(
-          `[rfc311-perf AC-11] ${name}: P95 sqlite ${sqlite.p95Ms.toFixed(2)}ms / ` +
-            `postgresql ${postgresql.p95Ms.toFixed(2)}ms（比值 ` +
-            `${(postgresql.p95Ms / Math.max(sqlite.p95Ms, 0.001)).toFixed(1)}×，只作诊断）`,
-        )
-        // 塌方探测器，不是 SLA。见 CATASTROPHE_RATIO 的注释。
-        expect(
-          postgresql.p95Ms,
-          `AC-11 塌方探测：PostgreSQL 的 P95 ${postgresql.p95Ms.toFixed(2)}ms 是 SQLite ` +
-            `${sqlite.p95Ms.toFixed(2)}ms 的 ${(postgresql.p95Ms / Math.max(sqlite.p95Ms, 0.001)).toFixed(1)} 倍。\n` +
-            `这个倍数远超「每条语句多一次本机网络往返」能解释的范围，多半是某条查询在 PG 上\n` +
-            `退化成了全表扫描 / 每行再查一次。去看 rfc359-w6-t26-postgresql-plan-audit 的账本。`,
-        ).toBeLessThanOrEqual(Math.max(sqlite.p95Ms * CATASTROPHE_RATIO, CATASTROPHE_FLOOR_MS))
-      }
+      await verifyGuardedPath(path, small, large, caseStartedAt)
     },
     180_000,
   )

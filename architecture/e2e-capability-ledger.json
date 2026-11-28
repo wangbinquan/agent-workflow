@@ -12850,11 +12850,11 @@
           "test": "RFC-396 booking journey adapts graphs, publishes the accepted candidate and observes MR merge"
         },
         {
-          "file": "e2e/rfc396-graph-development.spec.ts",
+          "file": "e2e/rfc396-graph-development-recovery.spec.ts",
           "test": "RFC-396 notification journey adapts graphs and observes MR close without merging"
         },
         {
-          "file": "e2e/rfc396-graph-development.spec.ts",
+          "file": "e2e/rfc396-graph-development-recovery.spec.ts",
           "test": "RFC-396 existing-module journey preserves the interface and adds exception rules"
         }
       ]

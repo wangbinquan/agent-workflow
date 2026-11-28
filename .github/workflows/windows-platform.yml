@@ -485,6 +485,8 @@ on:
       - 'packages/backend/tests/e2e-stub-argv-contract.test.ts'
       - 'packages/backend/tests/rfc308-workspace-exclude.test.ts'
       - 'packages/system-mocks/**'
+      - 'e2e/harness.ts'
+      - 'packages/frontend/tests/e2e-harness.test.ts'
       - 'scripts/build-binary.ts'
       - '.github/workflows/windows-platform.yml'
   pull_request:
@@ -951,6 +953,8 @@ on:
       - 'packages/backend/tests/e2e-stub-argv-contract.test.ts'
       - 'packages/backend/tests/rfc308-workspace-exclude.test.ts'
       - 'packages/system-mocks/**'
+      - 'e2e/harness.ts'
+      - 'packages/frontend/tests/e2e-harness.test.ts'
       - 'scripts/build-binary.ts'
       - '.github/workflows/windows-platform.yml'
 
@@ -1054,6 +1058,9 @@ jobs:
 
       - name: Shared package suite
         run: bun run --filter @agent-workflow/shared test
+
+      - name: E2E harness Windows contract (Vitest)
+        run: bun run --filter @agent-workflow/frontend test -- tests/e2e-harness.test.ts
 
       - name: Typecheck
         # Full backend checking exceeded V8's default ~4 GiB heap on this runner.

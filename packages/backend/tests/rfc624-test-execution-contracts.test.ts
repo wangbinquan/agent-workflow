@@ -1,6 +1,6 @@
 // RFC-624: reduce repeated preparation without changing discovery, isolation or retry budgets.
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -130,7 +130,7 @@ test('native Playwright keeps order and retries only the failing independent cas
 }, 70_000)
 
 describe('frontend source guards retain their original discovery and budgets', () => {
-  test('only the four audited source files leave the DOM project, whose setup remains intact', () => {
+  test('only audited pure-Node source files leave the DOM project, with exact include/exclude parity', () => {
     const config = frontendConfig as {
       resolve?: unknown
       test?: {
@@ -156,12 +156,23 @@ describe('frontend source guards retain their original discovery and budgets', (
     const node = projects.find((project) => project.test.name === 'source-guards')?.test
     const dom = projects.find((project) => project.test.name === 'dom')?.test
     expect(node?.environment).toBe('node')
-    expect([...(node?.include as string[])].sort()).toEqual(nodeGuards)
+    const included = [...(node?.include as string[])]
+    expect(included.length).toBeGreaterThanOrEqual(200)
+    expect(new Set(included).size).toBe(included.length)
+    for (const file of nodeGuards) expect(included).toContain(file)
+    for (const file of included) {
+      expect(file.endsWith('.test.ts')).toBe(true)
+      expect(existsSync(join(root, 'packages/frontend', file))).toBe(true)
+    }
     expect(node?.setupFiles ?? []).toEqual([])
     expect(dom?.environment).toBe('happy-dom')
     expect(dom?.setupFiles).toEqual(['./tests/setup.ts'])
     expect(dom?.environmentOptions).toEqual({ happyDOM: { url: 'http://localhost/' } })
-    for (const file of nodeGuards) expect(dom?.exclude).toContain(file)
+    const domExclude = dom?.exclude as string[]
+    const domCustomExclude = domExclude.filter(
+      (entry) => entry.startsWith('tests/') || entry.startsWith('src/'),
+    )
+    expect([...domCustomExclude].sort()).toEqual([...included].sort())
     expect(dom?.include).toBeUndefined()
   })
 })

@@ -99,7 +99,7 @@ describe('RFC-627 backend tiering and PostgreSQL coverage invariants', () => {
     expect(strandedPurePg).toEqual([])
   })
 
-  test('TEST_BACKEND_POSTGRESQL_FILES (16 files) all exist and match ci-work.yml:test-backend-postgresql verbatim', () => {
+  test('TEST_BACKEND_POSTGRESQL_FILES (16 files) all exist and drive ci-work.yml:test-backend-postgresql via run-postgresql-gate.ts', () => {
     expect(TEST_BACKEND_POSTGRESQL_FILES).toHaveLength(16)
     for (const file of TEST_BACKEND_POSTGRESQL_FILES) {
       expect(existsSync(resolve(ROOT, file)), `missing PG gate file: ${file}`).toBe(true)
@@ -111,10 +111,9 @@ describe('RFC-627 backend tiering and PostgreSQL coverage invariants', () => {
     }[]
     const pgTestStep = pgSteps.find((step) => step.name?.includes('Test real PostgreSQL parity'))
     expect(pgTestStep?.run).toBeDefined()
-    const workflowFiles = [
-      ...(pgTestStep!.run!.matchAll(/packages\/backend\/tests\/[A-Za-z0-9_./-]+\.test\.ts/g) ?? []),
-    ].map((m) => m[0])
-    expect(workflowFiles).toEqual([...TEST_BACKEND_POSTGRESQL_FILES])
+    expect(pgTestStep!.run!).toContain('bun scripts/ci/run-postgresql-gate.ts --concurrency=3')
+    const gateScript = readFileSync(resolve(ROOT, 'scripts/ci/run-postgresql-gate.ts'), 'utf8')
+    expect(gateScript).toContain("import { TEST_BACKEND_POSTGRESQL_FILES } from './backend-shards'")
   })
 
   test('docs-fast-gate executes all 23 existing backend files under sqlite and 2 existing shared files via shared filter', () => {
@@ -157,7 +156,7 @@ describe('RFC-627 backend tiering and PostgreSQL coverage invariants', () => {
 })
 
 describe('RFC-627 LPT shard planning and wrapper self-verification', () => {
-  test('plans deterministic exact-once shards across core (16), migration (28), and all (44) and pins opencode tests to shard 1', () => {
+  test('plans deterministic exact-once shards across core (12), migration (28), and all (44) and pins opencode tests to shard 1', () => {
     const all = discoverBackendTests(ROOT)
     for (const pinned of SHARD_1_PINNED_FILES) {
       expect(existsSync(resolve(ROOT, pinned)), pinned).toBe(true)

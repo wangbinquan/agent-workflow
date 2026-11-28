@@ -16,22 +16,13 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 
+import { RFC585_MOVED as MOVED } from './helpers/rfc624MigrationReferenceRules'
+
 const BACKEND = resolve(import.meta.dir, '..')
-const REPO = resolve(BACKEND, '..', '..')
 const SRC = join(BACKEND, 'src')
 const SC = 'modules/source-control'
 const slash = (path: string) => path.split('\\').join('/')
 
-/** Old location below `src` (no extension) → new location below `src`. */
-const MOVED: ReadonlyArray<readonly [string, string]> = [
-  ['platform/workspace/local/isolation', `${SC}/infrastructure/local/nodeIsolation`],
-  [
-    'platform/workspace/local/isolationReferences',
-    `${SC}/infrastructure/local/isolationReferences`,
-  ],
-  ['platform/workspace/local/submoduleParams', `${SC}/infrastructure/local/submoduleParams`],
-  ['services/gitSubmodule', `${SC}/infrastructure/local/gitSubmodule`],
-]
 const OLD = new Set(MOVED.map(([old]) => `src/${old}`))
 /** The native implementation functions Task Execution's view used to fall back to. */
 const NATIVE_FALLBACKS = [
@@ -130,22 +121,7 @@ describe('RFC-585 —— 四个文件离开 platform/ 与 services/', () => {
     }
   })
 
-  test('src / tests / scripts 的全部说明符不再解析到旧路径', () => {
-    const files = [
-      ...walk(SRC),
-      ...walk(join(BACKEND, 'tests')),
-      ...walk(join(BACKEND, 'scripts')),
-      ...walk(join(REPO, 'scripts')),
-    ]
-    expect(files.length).toBeGreaterThanOrEqual(6000)
-    expect(
-      files.flatMap((path) =>
-        resolvedTargets(path, readFileSync(path, 'utf8'))
-          .filter((target) => OLD.has(target))
-          .map((target) => `${slash(relative(REPO, path))} -> ${target}`),
-      ),
-    ).toEqual([])
-  }, 240_000)
+  // RFC-629: this rule's full-corpus scan is registered in architecture/rfc624-migration-reference-guard.test.ts.
 
   test('负对照：别名、相对路径、带扩展名、动态 import、mock.module 与 import 类型都会被认出；新位置与同目录的文件不算', () => {
     expect(
@@ -172,11 +148,14 @@ describe('RFC-585 —— task-execution 不取 source-control 的实现', () => 
     const files = walk(join(SRC, 'modules', 'task-execution'))
     expect(files.length).toBeGreaterThan(300)
     expect(
-      files.flatMap((path) =>
-        resolvedTargets(path, readFileSync(path, 'utf8'))
+      files.flatMap((path) => {
+        const text = readFileSync(path, 'utf8')
+        if (!text.includes('source-control') && !text.includes('\\u') && !text.includes('\\x'))
+          return []
+        return resolvedTargets(path, text)
           .filter((target) => target.startsWith(`src/${SC}/infrastructure/`))
-          .map((target) => `${slash(relative(SRC, path))} -> ${target}`),
-      ),
+          .map((target) => `${slash(relative(SRC, path))} -> ${target}`)
+      }),
     ).toEqual([])
   }, 120_000)
 
@@ -217,11 +196,13 @@ describe('RFC-585 —— platform 不取 services/', () => {
     const files = walk(join(SRC, 'platform'))
     expect(files.length).toBeGreaterThan(300)
     expect(
-      files.flatMap((path) =>
-        resolvedTargets(path, readFileSync(path, 'utf8'))
+      files.flatMap((path) => {
+        const text = readFileSync(path, 'utf8')
+        if (!text.includes('services') && !text.includes('\\u') && !text.includes('\\x')) return []
+        return resolvedTargets(path, text)
           .filter((target) => target.startsWith('src/services/'))
-          .map((target) => `${slash(relative(SRC, path))} -> ${target}`),
-      ),
+          .map((target) => `${slash(relative(SRC, path))} -> ${target}`)
+      }),
     ).toEqual([])
   }, 120_000)
 
