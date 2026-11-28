@@ -1,0 +1,1321 @@
+<title>运行观测改版原型</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one working column (max 1220px). Chrome on top is always the same three rows — scope bar, time
+   controls, seven aspect tabs — and every aspect page follows one rhythm: tiles, a split card beside a trend
+   card, then one "break down by" table. Every table, chart and timeline scrolls inside its own wrapper, so the
+   page body never scrolls sideways. Tokens mirror the product's styles.css, chart tokens included. */
+:root{
+  --font-ui:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --bg:#f8f9fb;--panel:#ffffff;--border:#e3e5ea;--border-strong:#a9aeb9;--text:#1f2328;--muted:#5b6271;
+  --accent:#1f5fda;--accent-fill:#1f5fda;--on-accent:#ffffff;--accent-wash:#eaf0fc;
+  --success-fg:#1b6d34;--success-bg:#e8f1ea;--success-border:#9cc3a8;
+  --warn-fg:#844700;--warn-bg:#f3ede5;--warn-border:#cdb292;
+  --danger-fg:#b42318;--danger-bg:#f8e9e7;--danger-border:#e0a59f;
+  --info-fg:#1d5d9f;--info-bg:#e8eff6;--info-border:#9db9d6;
+  --neutral-bg:#eef0f3;
+  --c1:#257de0;--c2:#f47230;--c3:#00b894;--c4:#f2a600;--c5:#ee7fac;--c-other:#b4b9c2;
+  --c-ink:#0b0b0b;--c-other-ink:#0b0b0b;
+  --heat-1:#cce3fd;--heat-2:#84b9f3;--heat-3:#338ced;--heat-4:#1b64be;--heat-5:#0e3d7e;
+  --heat-ink-1:#10141a;--heat-ink-2:#10141a;--heat-ink-3:#10141a;--heat-ink-4:#ffffff;--heat-ink-5:#ffffff;
+  --grid:#e7e9ee;--axis:#c2c6ce;--shadow:0 8px 24px rgba(16,24,40,.14);
+  --st-good:#0aac23;--st-warn:#fbb315;--st-crit:#dc3c3d;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#15181d;--panel:#1c2028;--border:#2a2f38;--border-strong:#566070;--text:#e6e7ea;--muted:#95a0b3;
+    --accent:#8eb8ff;--accent-fill:#2759a5;--on-accent:#ffffff;--accent-wash:#232d40;
+    --success-fg:#66d17a;--success-bg:#1f2f29;--success-border:#356246;
+    --warn-fg:#ffc25c;--warn-bg:#2f2a22;--warn-border:#6b5630;
+    --danger-fg:#ff8b8b;--danger-bg:#33252a;--danger-border:#7a4448;
+    --info-fg:#8eb8ff;--info-bg:#232d3d;--info-border:#3d557a;
+    --neutral-bg:#262b34;
+    --c1:#338ced;--c2:#e76624;--c3:#00a888;--c4:#d28e05;--c5:#e24d8b;--c-other:#5a6270;
+    --c-ink:#0b0b0b;--c-other-ink:#ffffff;
+    --heat-1:#0e3d7e;--heat-2:#1b64be;--heat-3:#338ced;--heat-4:#84b9f3;--heat-5:#cce3fd;
+    --heat-ink-1:#eef1f6;--heat-ink-2:#ffffff;--heat-ink-3:#0b0b0b;--heat-ink-4:#0b0b0b;--heat-ink-5:#0b0b0b;
+    --grid:#2a2f38;--axis:#454c59;--shadow:0 8px 24px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#15181d;--panel:#1c2028;--border:#2a2f38;--border-strong:#566070;--text:#e6e7ea;--muted:#95a0b3;
+  --accent:#8eb8ff;--accent-fill:#2759a5;--on-accent:#ffffff;--accent-wash:#232d40;
+  --success-fg:#66d17a;--success-bg:#1f2f29;--success-border:#356246;
+  --warn-fg:#ffc25c;--warn-bg:#2f2a22;--warn-border:#6b5630;
+  --danger-fg:#ff8b8b;--danger-bg:#33252a;--danger-border:#7a4448;
+  --info-fg:#8eb8ff;--info-bg:#232d3d;--info-border:#3d557a;
+  --neutral-bg:#262b34;
+  --c1:#338ced;--c2:#e76624;--c3:#00a888;--c4:#d28e05;--c5:#e24d8b;--c-other:#5a6270;
+  --c-ink:#0b0b0b;--c-other-ink:#ffffff;
+  --heat-1:#0e3d7e;--heat-2:#1b64be;--heat-3:#338ced;--heat-4:#84b9f3;--heat-5:#cce3fd;
+  --heat-ink-1:#eef1f6;--heat-ink-2:#ffffff;--heat-ink-3:#0b0b0b;--heat-ink-4:#0b0b0b;--heat-ink-5:#0b0b0b;
+  --grid:#2a2f38;--axis:#454c59;--shadow:0 8px 24px rgba(0,0,0,.5);
+}
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--font-ui);font-size:14px;line-height:1.5}
+.wrap{max-width:1220px;margin:0 auto;padding-block:20px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:14px}
+.stack{display:flex;flex-direction:column;gap:14px;min-width:0}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-width:0}
+.row--between{justify-content:space-between}
+.muted{color:var(--muted)}
+.small{font-size:12px}
+p,h1,h2,h3,h4,ul,dl,dd{margin:0}
+ul{padding:0;list-style:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button{font:inherit;color:inherit}
+
+/* prototype note */
+.proto{display:flex;flex-direction:column;gap:8px;padding:10px 14px;border:1px solid var(--info-border);border-radius:6px;background:var(--info-bg);color:var(--info-fg);font-size:13px}
+.proto strong{font-weight:600}
+.proto details summary{cursor:pointer}
+.proto .tbl{margin-top:8px;color:var(--text)}
+
+/* page chrome */
+.crumb{font-size:12px;color:var(--muted)}
+.page-title{font-size:22px;font-weight:600;line-height:1.3;text-wrap:balance}
+.scope{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:10px 12px;background:var(--panel);border:1px solid var(--border);border-radius:10px;min-width:0}
+.scope__label{font-size:12px;color:var(--muted);margin-right:2px}
+.scope__sep{color:var(--muted)}
+.scope__seg{display:inline-flex;align-items:center;gap:4px;max-width:100%;background:var(--neutral-bg);border:1px solid var(--border);border-radius:6px;padding:3px 9px;font-size:13px;font-weight:600;cursor:pointer;min-width:0}
+.scope__seg>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scope__seg:hover{border-color:var(--accent)}
+.scope__seg--here{background:var(--accent-wash);border-color:var(--accent);color:var(--accent)}
+.scope__seg--add{background:transparent;border-style:dashed;font-weight:500;color:var(--muted)}
+.scope__gap{flex:1 1 12px}
+.scope__only{display:inline-flex;align-items:center;gap:2px;background:var(--warn-bg);border:1px solid var(--warn-border);color:var(--warn-fg);border-radius:6px;padding:3px 4px 3px 9px;font-size:13px;font-weight:600;max-width:100%}
+.scope__only>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scope__x{background:none;border:0;padding:0 5px;cursor:pointer;font-size:15px;line-height:1;color:inherit}
+.basis{font-size:12px;color:var(--muted)}
+.menu{position:fixed;z-index:60;min-width:220px;max-width:min(340px,calc(100vw - 16px));max-height:min(420px,70vh);overflow:auto;padding:6px;background:var(--panel);border:1px solid var(--border-strong);border-radius:8px;box-shadow:var(--shadow)}
+.menu__group{padding:8px 8px 2px;font-size:11px;font-weight:600;color:var(--muted)}
+.menu__item{display:flex;justify-content:space-between;gap:12px;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:6px 8px;font-size:13px;cursor:pointer}
+.menu__item:hover,.menu__item:focus-visible{background:var(--accent-wash)}
+.menu__item[aria-current="true"]{color:var(--accent);font-weight:600}
+.menu__item small{color:var(--muted);white-space:nowrap}
+.tabs{display:flex;gap:4px;min-width:0;border-bottom:1px solid var(--border);overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
+.tabs__tab{flex:0 0 auto;background:none;border:0;padding:7px 14px;font-size:14px;line-height:1.25;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tabs__tab:hover{color:var(--text)}
+.tabs__tab--active,.tabs__tab--active:hover{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.segmented{display:inline-flex;flex-wrap:wrap;border-radius:6px;background:var(--accent-wash);padding:2px;gap:2px;max-width:100%}
+.segmented__option{flex:0 1 auto;border:0;background:transparent;color:var(--text);font-size:13px;font-weight:600;padding:4px 10px;border-radius:4px;cursor:pointer;line-height:1.25;white-space:nowrap}
+.segmented__option:hover{background:var(--panel)}
+.segmented__option--active,.segmented__option--active:hover{background:var(--accent-fill);color:var(--on-accent)}
+.btn{display:inline-flex;align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--border-strong);border-radius:6px;padding:4px 10px;font-size:13px;color:var(--text);line-height:1.2;white-space:nowrap;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.linklike{background:none;border:0;padding:0;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-size:inherit;text-align:left}
+a{color:var(--accent);text-underline-offset:2px}
+
+/* cards and tiles */
+.card{display:flex;flex-direction:column;gap:12px;padding:16px;background:var(--panel);border:1px solid var(--border);border-radius:10px;min-width:0}
+.card__head{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-start;justify-content:space-between}
+.card__title{font-size:14px;font-weight:600;line-height:1.45;text-wrap:balance}
+.card__sub{font-size:12px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,172px),1fr));gap:12px}
+.kpi{display:flex;flex-direction:column;gap:2px;padding:14px 16px;background:var(--panel);border:1px solid var(--border);border-radius:10px;min-width:0;text-align:left}
+button.kpi{cursor:pointer}
+button.kpi:hover{border-color:var(--accent)}
+.kpi__label{font-size:12px;color:var(--muted)}
+.kpi__value{font-size:22px;font-weight:600;line-height:1.25;overflow-wrap:anywhere}
+.kpi__detail{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.kpi__delta{font-size:12px;font-weight:600;margin-top:2px}
+.kpi__delta--good{color:var(--success-fg)}
+.kpi__delta--bad{color:var(--danger-fg)}
+.kpi__delta--neutral{color:var(--muted)}
+.kpi__go{font-size:12px;color:var(--accent);margin-top:2px}
+.notice{padding:10px 14px;border:1px solid var(--info-border);border-radius:6px;background:var(--info-bg);color:var(--info-fg);font-size:13px}
+.live{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--panel)}
+.live__label{font-size:12px;font-weight:600;color:var(--muted);margin-right:4px}
+.live__item{display:inline-flex;align-items:baseline;gap:6px;background:var(--neutral-bg);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:13px;cursor:pointer}
+.live__item:hover{border-color:var(--accent)}
+.live__item b{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.live__item--warn{background:var(--warn-bg);border-color:var(--warn-border);color:var(--warn-fg)}
+.live__item--danger{background:var(--danger-bg);border-color:var(--danger-border);color:var(--danger-fg)}
+
+/* tables */
+.tbl{overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:var(--panel)}
+.tbl table{width:100%;border-collapse:collapse}
+.tbl th,.tbl td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
+.tbl th{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;background:var(--panel)}
+.tbl th button{background:none;border:0;padding:0;font-size:12px;font-weight:600;color:inherit;cursor:pointer}
+.tbl th button:hover{color:var(--accent)}
+.tbl tr:last-child>td{border-bottom:0}
+.tbl td.num,.tbl th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tbl tbody tr.is-link{cursor:pointer}
+.tbl tbody tr.is-link:hover>td{background:var(--accent-wash)}
+.tbl td.name{min-width:170px;font-weight:500}
+.tbl td.name small{display:block;font-weight:400;color:var(--muted)}
+.tbl tfoot td{font-weight:600;border-top:1px solid var(--border-strong);border-bottom:0;background:var(--bg)}
+.chip{display:inline-flex;align-items:center;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:500;border:1px solid transparent;white-space:nowrap}
+.chip--success{background:var(--success-bg);color:var(--success-fg);border-color:var(--success-border)}
+.chip--warn{background:var(--warn-bg);color:var(--warn-fg);border-color:var(--warn-border)}
+.chip--danger{background:var(--danger-bg);color:var(--danger-fg);border-color:var(--danger-border)}
+.chip--info{background:var(--info-bg);color:var(--info-fg);border-color:var(--info-border)}
+.chip--neutral{background:var(--neutral-bg);color:var(--muted);border-color:var(--border)}
+
+/* one whole split into parts */
+.segbar{display:flex;gap:2px;height:28px;min-width:0}
+.segbar__seg{flex:0 0 auto;min-width:3px;border:0;border-radius:4px;display:flex;align-items:center;padding:0 8px;font-size:12px;font-weight:600;white-space:nowrap;cursor:default;overflow:hidden}
+.segbar__seg.is-tight{padding:0}
+.segbar__seg.is-tight>span{visibility:hidden;width:0}
+.segbar--thin{height:8px;min-width:110px}
+.segbar--thin .segbar__seg{padding:0;min-width:2px}
+.fill-c1{background:var(--c1);color:var(--c-ink)}.fill-c2{background:var(--c2);color:var(--c-ink)}
+.fill-c3{background:var(--c3);color:var(--c-ink)}.fill-c4{background:var(--c4);color:var(--c-ink)}
+.fill-c5{background:var(--c5);color:var(--c-ink)}.fill-other{background:var(--c-other);color:var(--c-other-ink)}
+.fill-good{background:var(--st-good);color:#ffffff}.fill-warn{background:var(--st-warn);color:#0b0b0b}.fill-crit{background:var(--st-crit);color:#ffffff}
+.fill-wait{background:repeating-linear-gradient(135deg,var(--c-other) 0 4px,transparent 4px 8px);color:var(--text);box-shadow:inset 0 0 0 1px var(--border-strong)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px}
+.legend li{display:inline-flex;align-items:center;gap:6px;min-width:0}
+.legend i{flex:0 0 auto;width:10px;height:10px;border-radius:2px}
+.legend--stack{flex-direction:column;gap:6px}
+.legend--stack li{justify-content:space-between;gap:12px}
+.legend--stack li>span:first-child{display:inline-flex;align-items:center;gap:6px;min-width:0}
+.legend__val{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.meter{display:flex;align-items:center;gap:8px;min-width:110px}
+.meter__track{flex:1 1 auto;height:8px;min-width:40px}
+.meter__bar{display:block;height:8px;background:var(--c1);border-radius:0 4px 4px 0;min-width:2px}
+.meter__val{flex:0 0 auto;width:38px;text-align:right;font-variant-numeric:tabular-nums}
+
+/* column charts */
+.cols{display:flex;gap:0;align-items:stretch;height:200px;min-width:0;overflow-x:auto}
+.cols__col{flex:1 0 38px;max-width:96px;display:grid;grid-template-rows:minmax(0,1fr) auto;gap:6px;background:none;border:0;padding:0;cursor:default}
+.cols__track{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;border-bottom:1px solid var(--axis);min-height:0}
+.cols__val{font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cols__bar{width:22px;height:calc((100% - 22px) * var(--r));min-height:2px;background:var(--c1);border-radius:4px 4px 0 0;display:flex;flex-direction:column-reverse;gap:2px;overflow:hidden}
+.cols__bar--stack{background:none}
+.cols__bar--stack>i{display:block;flex:0 0 auto;min-height:1px}
+.cols__bar--gap{background:none;border:1px dashed var(--axis);height:6px}
+.cols__lab{font-size:11px;color:var(--muted);text-align:center;white-space:nowrap}
+
+/* stage strip (stands in for the workflow canvas / duty map / member table) */
+.strip{display:flex;gap:6px;align-items:stretch;overflow-x:auto;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
+.strip__arrow{align-self:center;color:var(--muted);flex:0 0 auto}
+.strip__node{flex:0 0 132px;display:flex;flex-direction:column;gap:1px;padding:8px 10px;text-align:left;border:1px solid var(--border-strong);border-radius:8px;background:var(--panel);color:var(--text);cursor:pointer}
+.strip__node:hover{outline:2px solid var(--accent);outline-offset:1px}
+.strip__name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.strip__kind{font-size:10px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.strip__val{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.heat-1.heat-1{background:var(--heat-1);color:var(--heat-ink-1)}.heat-2.heat-2{background:var(--heat-2);color:var(--heat-ink-2)}
+.heat-3.heat-3{background:var(--heat-3);color:var(--heat-ink-3)}.heat-4.heat-4{background:var(--heat-4);color:var(--heat-ink-4)}
+.heat-5.heat-5{background:var(--heat-5);color:var(--heat-ink-5)}
+.scale{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.scale__steps{display:inline-flex;gap:2px}
+.scale__steps i{width:22px;height:10px;border-radius:2px}
+
+/* one run on a time axis */
+.tl{overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:var(--panel)}
+.tl__in{min-width:720px;padding:10px 12px 6px}
+.tl__row{display:grid;grid-template-columns:128px minmax(0,1fr);gap:10px;align-items:center;min-height:30px;border-bottom:1px solid var(--grid)}
+.tl__row:last-child{border-bottom:0}
+.tl__name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tl__track{position:relative;height:18px}
+.tl__bar{position:absolute;top:0;height:18px;min-width:4px;border:0;border-radius:4px;padding:0;cursor:default}
+.tl__bar--failed{box-shadow:inset 0 0 0 2px var(--danger-fg)}
+.tl__bar--open{border-right:3px dashed var(--text)}
+.tl__axis{position:relative;height:22px;margin-left:138px}
+.tl__tick{position:absolute;top:4px;font-size:11px;color:var(--muted);white-space:nowrap;transform:translateX(-50%)}
+.tl__tick:first-child{transform:none}
+.tl__tick:last-child{transform:translateX(-100%)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px 16px}
+.facts dt{font-size:12px;color:var(--muted)}
+.facts dd{font-size:14px;font-weight:600}
+
+/* hints */
+.hints{display:flex;flex-direction:column;gap:8px}
+.hint{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
+.hint__title{font-size:13px;font-weight:600}
+.hint__body{grid-column:2;font-size:12px;color:var(--muted)}
+.hint__go{grid-row:1 / span 2;grid-column:3}
+@media (max-width:560px){.hint{grid-template-columns:auto minmax(0,1fr)}.hint__go{grid-row:auto;grid-column:2}}
+
+/* tooltip */
+.tip{position:fixed;z-index:70;pointer-events:none;max-width:280px;padding:6px 9px;border-radius:6px;background:var(--text);color:var(--panel);font-size:12px;line-height:1.4;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+.tip__v{font-weight:600;font-variant-numeric:tabular-nums}
+.tip__l{opacity:.82}
+@media (prefers-reduced-motion:no-preference){.segmented__option,.btn,.tabs__tab,.menu__item{transition:background-color .12s ease,color .12s ease,border-color .12s ease}}
+</style>
+
+<div class="wrap">
+  <aside class="proto" aria-label="原型说明">
+    <div class="row row--between">
+      <span><strong>页面原型 · 全部为示例数据。</strong> 先选“范围”（看什么），再选“关注面”（关心什么）；表里的每一行都能点进去。</span>
+      <span class="row">
+        <span>查看身份</span>
+        <span id="role-seg"></span>
+      </span>
+    </div>
+    <details>
+      <summary>原来五个页签里的内容，现在在哪</summary>
+      <div class="tbl"><table style="min-width:560px"><thead><tr><th scope="col">原来</th><th scope="col">现在</th></tr></thead><tbody id="map-rows"></tbody></table></div>
+    </details>
+  </aside>
+
+  <header class="row row--between">
+    <div>
+      <p class="crumb">运行与仓库 / 运行观测与统计</p>
+      <h1 class="page-title">运行观测与统计</h1>
+    </div>
+    <div class="row" id="time-controls"></div>
+  </header>
+
+  <div class="scope" id="scope" aria-label="范围"></div>
+  <p class="basis" id="basis"></p>
+  <nav class="tabs" id="tabs" aria-label="关注面"></nav>
+  <main id="view" class="stack"></main>
+</div>
+<div id="tip" class="tip" hidden></div>
+
+<script>
+(function () {
+'use strict';
+/* ================= helpers ================= */
+const $ = (sel, root) => (root || document).querySelector(sel);
+function build(el, attrs, kids) {
+  if (attrs) for (const k of Object.keys(attrs)) {
+    const v = attrs[k];
+    if (v == null || v === false) continue;
+    if (k === 'class') el.setAttribute('class', v);
+    else if (k === 'text') el.textContent = v;
+    else if (k.slice(0, 2) === 'on') el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  (function add(list) {
+    for (const kid of list) {
+      if (kid == null || kid === false) continue;
+      if (Array.isArray(kid)) add(kid);
+      else el.appendChild(kid.nodeType ? kid : document.createTextNode(String(kid)));
+    }
+  })(kids);
+  return el;
+}
+const h = (tag, attrs, ...kids) => build(document.createElement(tag), attrs, kids);
+
+const MIN = 60000, HOUR = 3600000, DAY = 86400000;
+/* A fixed "now" keeps the sample data identical on every load: 2026-11-27 18:30 at UTC+8. */
+const NOW = Date.UTC(2026, 10, 27, 10, 30);
+const pad = (n) => String(n).padStart(2, '0');
+function when(ts) { const d = new Date(ts + 8 * HOUR); return pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) + ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()); }
+function dayLabel(ts) { const d = new Date(ts + 8 * HOUR); return pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()); }
+function hourLabel(ts) { const d = new Date(ts + 8 * HOUR); return pad(d.getUTCHours()) + ' 时'; }
+function dur(ms) {
+  if (ms == null) return '—';
+  const sec = ms / 1000;
+  if (sec < 60) return Math.max(1, Math.round(sec)) + ' 秒';
+  const min = sec / 60;
+  if (min < 60) return Math.round(min) + ' 分';
+  const hh = Math.floor(min / 60), m = Math.round(min % 60);
+  if (hh < 24) return hh + ' 小时' + (m ? ' ' + m + ' 分' : '');
+  const d = Math.floor(hh / 24), rh = hh % 24;
+  return d + ' 天' + (rh ? ' ' + rh + ' 小时' : '');
+}
+function tok(n) {
+  if (n == null) return '—';
+  if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 1 : 2).replace(/\.?0+$/, '') + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(n >= 1e5 ? 0 : 1).replace(/\.0$/, '') + 'K';
+  return String(Math.round(n));
+}
+const full = (n) => Math.round(n).toLocaleString('en-US');
+function cny(v) { return v == null ? '—' : '¥' + (v >= 1000 ? Math.round(v).toLocaleString('en-US') : v.toFixed(2)); }
+function pct(v) { return v == null ? '—' : Math.round(v * 100) + '%'; }
+function num1(v) { return v == null ? '—' : String(Math.round(v * 10) / 10); }
+const ratio = (a, b) => (b > 0 ? a / b : null);
+function quantile(list, p) {
+  if (!list.length) return null;
+  const sorted = list.slice().sort((a, b) => a - b);
+  return sorted[Math.max(0, Math.ceil(p * sorted.length) - 1)];
+}
+const sum4 = (t) => t[0] + t[1] + t[2] + t[3];
+
+/* ================= sample world ================= */
+let seed = 20261127;
+function R() { seed = (seed + 0x6D2B79F5) >>> 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
+const rand = (a, b) => a + (b - a) * R();
+const logRand = (a, b) => Math.exp(rand(Math.log(a), Math.log(b)));
+const pick = (list) => list[Math.floor(R() * list.length)];
+
+const TYPES = { workflow: '工作流', workgroup: '工作组', employee: '数字员工', agent: '直接运行 Agent', platform: '任务之外的平台调用' };
+const NOUN = { workflow: '任务', workgroup: '任务', employee: '交办', agent: '任务', platform: '调用' };
+const MODELS = {
+  opus: { name: 'Claude Code · opus', price: [35, 3.5, 44, 175] },
+  sonnet: { name: 'Claude Code · sonnet', price: [7, 0.7, 8.8, 35] },
+  haiku: { name: 'Claude Code · haiku', price: [1.8, 0.18, 2.2, 9] },
+  qwen: { name: 'OpenCode · qwen-coder', price: [2, 0.4, 2, 8] },
+};
+const AGENTS = {
+  analyst: { model: 'sonnet' }, architect: { model: 'opus' }, coder: { model: 'sonnet' }, auditor: { model: 'opus' },
+  fixer: { model: 'sonnet' }, tester: { model: 'haiku' }, writer: { model: 'haiku' }, debugger: { model: 'qwen' },
+  leader: { model: 'opus' }, perf: { model: 'sonnet' }, system: { model: 'haiku', name: '系统 Agent' },
+};
+const OWNERS = { zm: '张敏', lh: '李航', wl: '王磊', cj: '陈静' };
+const OWNER_KEYS = Object.keys(OWNERS);
+const ORIGINS = { manual: '手动', scheduled: '定时', event: '事件', webhook: 'Webhook', api: 'API' };
+const CAUSES = { first: ['首次执行', 'c1'], rework: ['评审返工', 'c2'], clarify: ['反问后续跑', 'c3'], retry: ['失败重试', 'c4'], rerun: ['其它重跑', 'c5'], system: ['系统工作', 'other'] };
+const SYS = { distill: '记忆提取', narrative: '变更导读', commit: '提交推送', merge: '合并冲突解决', smoke: '运行时冒烟', mcp: 'MCP 连通测试' };
+const GATES = { review: ['评审', '等待评审', 'c2'], clarify: ['反问', '等待反问回答', 'c3'], completion: ['完成确认', '等待完成确认', 'c4'], delivery: ['人类成员交付', '等待人类成员交付', 'c5'], approval: ['外部审批', '等待外部审批', 'c2'], blocked: ['阻塞', '阻塞', 'c4'] };
+const CODES = ['runner-timeout', 'envelope-missing', 'runtime-exit', 'model-overloaded', 'worktree-conflict'];
+const STATUS = { succeeded: ['成功', 'success'], failed: ['失败', 'danger'], canceled: ['已取消', 'neutral'], interrupted: ['已中断', 'warn'], active: ['进行中', 'info'] };
+
+const CAPS = {
+  wf1: { type: 'workflow', name: '需求开发', rate: 1.0, origins: ['manual', 'manual', 'manual', 'api', 'event'],
+    names: ['登录页改版', '订单导出', '权限分档', '消息通知', '搜索优化', '报表下钻', '批量导入', '审计日志'],
+    stages: [
+      { k: 'clarify', n: '需求澄清', agent: 'analyst', tok: 60, min: 4, clarify: { p: 0.7, wait: [5, 240] } },
+      { k: 'design', n: '方案设计', agent: 'architect', tok: 180, min: 9 },
+      { k: 'review1', n: '方案评审', gate: 'review', about: 'design', reject: 0.35, wait: [10, 600] },
+      { k: 'code', n: '编码', agent: 'coder', tok: 520, min: 22, fail: 0.08 },
+      { k: 'audit', n: '代码审计', agent: 'auditor', tok: 260, min: 8, fail: 0.05 },
+      { k: 'fix', n: '修复', agent: 'fixer', tok: 210, min: 10, fail: 0.06 },
+      { k: 'review2', n: '验收评审', gate: 'review', about: 'fix', reject: 0.3, wait: [10, 400] },
+    ],
+    sys: [['commit', 1, 18, 1.5], ['narrative', 0.8, 45, 2], ['distill', 0.5, 30, 1.5], ['merge', 0.12, 90, 4]] },
+  wf2: { type: 'workflow', name: '缺陷修复', rate: 1.5, origins: ['manual', 'manual', 'webhook', 'event', 'api'],
+    names: ['支付回调超时', '列表分页错位', '导出乱码', '登录态丢失', '定时任务重复', '缓存未失效', '文件上传失败'],
+    stages: [
+      { k: 'locate', n: '缺陷定位', agent: 'debugger', tok: 90, min: 5, fail: 0.1 },
+      { k: 'fix', n: '修复', agent: 'coder', tok: 240, min: 12, fail: 0.12 },
+      { k: 'test', n: '回归测试', agent: 'tester', tok: 80, min: 6, fail: 0.15 },
+      { k: 'review', n: '修复评审', gate: 'review', about: 'fix', reject: 0.5, wait: [3, 60] },
+    ],
+    sys: [['commit', 1, 14, 1.2], ['distill', 0.4, 25, 1.2]] },
+  wf3: { type: 'workflow', name: '代码审计', rate: 0.7, origins: ['scheduled', 'scheduled', 'manual'],
+    names: ['每周全量审计', '订单模块审计', '支付模块审计', '公共组件审计'],
+    stages: [
+      { k: 'split', n: '切分范围', agent: 'analyst', tok: 30, min: 2 },
+      { k: 'audit', n: '分片审计', agent: 'auditor', tok: 420, min: 14, fail: 0.22 },
+      { k: 'summary', n: '汇总报告', agent: 'writer', tok: 60, min: 3 },
+    ],
+    sys: [['distill', 0.3, 30, 1.5]] },
+  wf4: { type: 'workflow', name: '发布说明', rate: 0.3, origins: ['scheduled', 'manual'],
+    names: ['周发布说明', '补丁版本说明', '月度更新摘要'],
+    stages: [
+      { k: 'collect', n: '收集变更', agent: 'analyst', tok: 40, min: 3 },
+      { k: 'write', n: '撰写', agent: 'writer', tok: 90, min: 5 },
+      { k: 'review', n: '发布评审', gate: 'review', about: 'write', reject: 0.2, wait: [60, 3200] },
+    ],
+    sys: [['narrative', 0.6, 30, 1.5]] },
+  wg1: { type: 'workgroup', name: '架构评审组', rate: 0.4, origins: ['manual', 'manual', 'api'],
+    names: ['网关拆分方案', '消息队列选型', '多租户隔离', '存储分层', '灰度发布方案'],
+    stages: [
+      { k: 'leader', n: '组长（Leader）', agent: 'leader', tok: 70, min: 3 },
+      { k: 'm1', n: '成员 · 方案设计', agent: 'architect', tok: 150, min: 8, fail: 0.08 },
+      { k: 'm2', n: '成员 · 性能评估', agent: 'perf', tok: 110, min: 7, fail: 0.06 },
+      { k: 'mh', n: '成员 · 人类架构师', human: true, wait: [10, 180] },
+      { k: 'completion', n: '完成确认', gate: 'completion' },
+    ] },
+  wg2: { type: 'workgroup', name: '文档协作组', rate: 0.25, origins: ['manual', 'scheduled'],
+    names: ['接口文档整理', '上手指南', '运维手册', '常见问题'],
+    stages: [
+      { k: 'leader', n: '组长（Leader）', agent: 'leader', tok: 50, min: 2 },
+      { k: 'm1', n: '成员 · 撰写', agent: 'writer', tok: 80, min: 5, fail: 0.05 },
+      { k: 'm2', n: '成员 · 校对', agent: 'analyst', tok: 50, min: 3 },
+      { k: 'completion', n: '完成确认', gate: 'completion' },
+    ] },
+  de1: { type: 'employee', name: '合并请求值守', rate: 0.3, origins: ['event', 'webhook', 'manual'],
+    names: ['处理评审意见', '跟进合并请求', '修复流水线失败', '同步目标分支'],
+    stages: [
+      { k: 'analyze', n: '分析意见', agent: 'analyst', tok: 90, min: 5 },
+      { k: 'change', n: '修改代码', agent: 'coder', tok: 280, min: 14, fail: 0.1, block: 0.25 },
+      { k: 'selftest', n: '自测', agent: 'tester', tok: 70, min: 6, fail: 0.12 },
+      { k: 'approval', n: '提交评审', gate: 'approval', about: 'change', reject: 0.25, wait: [20, 600] },
+      { k: 'merge', n: '合入', agent: 'coder', tok: 20, min: 2 },
+    ] },
+  de2: { type: 'employee', name: '流水线修复', rate: 0.2, origins: ['event', 'webhook'],
+    names: ['单测失败', '构建超时', '依赖下载失败', '格式检查失败'],
+    stages: [
+      { k: 'diagnose', n: '定位失败原因', agent: 'debugger', tok: 110, min: 6, fail: 0.1 },
+      { k: 'patch', n: '修复', agent: 'coder', tok: 200, min: 10, fail: 0.1, block: 0.15 },
+      { k: 'verify', n: '验证', agent: 'tester', tok: 60, min: 8, fail: 0.2 },
+    ] },
+  ag1: { type: 'agent', name: 'coder', rate: 0.12, origins: ['manual', 'api'], names: ['临时改一处配置', '补一个脚本', '重命名字段'],
+    stages: [{ k: 'run', n: '执行', agent: 'coder', tok: 150, min: 7, fail: 0.06 }] },
+  ag2: { type: 'agent', name: 'analyst', rate: 0.08, origins: ['manual'], names: ['读一份日志', '整理需求要点'],
+    stages: [{ k: 'run', n: '执行', agent: 'analyst', tok: 70, min: 4 }] },
+  pf1: { type: 'platform', name: '运行时冒烟', rate: 0.5, origins: ['manual'], names: ['运行时冒烟'], stages: [{ k: 'call', n: '调用', agent: 'system', tok: 6, min: 0.5, sys: 'smoke', fail: 0.08 }] },
+  pf2: { type: 'platform', name: 'MCP 连通测试', rate: 0.3, origins: ['manual'], names: ['MCP 连通测试'], stages: [{ k: 'call', n: '调用', agent: 'system', tok: 4, min: 0.3, sys: 'mcp', fail: 0.15 }] },
+  pf3: { type: 'platform', name: '记忆提取', rate: 0.4, origins: ['scheduled'], names: ['记忆提取'], stages: [{ k: 'call', n: '调用', agent: 'system', tok: 35, min: 1.5, sys: 'distill', fail: 0.03 }] },
+};
+const stageOf = (capId, k) => CAPS[capId].stages.find((st) => st.k === k) || (k === 'system' ? { k: 'system', n: '系统工作' } : { k, n: k });
+
+function splitTok(total) {
+  const a = rand(0.16, 0.26), c = rand(0.05, 0.1), o = rand(0.08, 0.15);
+  return [Math.round(total * a), Math.round(total * (1 - a - c - o)), Math.round(total * c), Math.round(total * o)];
+}
+function price(t, model) { const p = MODELS[model].price; return (t[0] * p[0] + t[1] * p[1] + t[2] * p[2] + t[3] * p[3]) / 1e6; }
+
+function exec(u, st, cause, ctx, factor) {
+  if (ctx.done) return 'stop';
+  const model = st.model || AGENTS[st.agent].model, f = factor || 1;
+  const ms = st.min * MIN * rand(0.55, 1.7) * f, total = st.tok * 1000 * rand(0.6, 1.6) * f;
+  const t0 = ctx.t;
+  let t1 = t0 + ms, running = false, frac = 1;
+  if (t1 > NOW) { frac = (NOW - t0) / ms; t1 = NOW; running = true; }
+  const t = splitTok(total * frac);
+  const failed = !running && R() < (cause === 'retry' ? 0.35 : st.fail || 0);
+  u.parts.push({ stage: st.k, agent: st.agent, model, cause, sys: st.sys || null, t0, t1, running, failed, code: failed ? pick(CODES) : null, tok: t, cost: price(t, model) });
+  ctx.t = t1;
+  if (running) { ctx.done = true; u.state = 'running'; return 'stop'; }
+  return failed ? 'failed' : 'ok';
+}
+function runStage(u, st, cause, ctx, factor) {
+  let r = exec(u, st, cause, ctx, factor);
+  if (r === 'failed') {
+    ctx.t += rand(0.2, 1.5) * MIN;
+    r = exec(u, st, 'retry', ctx, factor);
+    if (r === 'failed') { finish(u, ctx, 'failed'); return false; }
+  }
+  return r === 'ok';
+}
+function gate(u, spec, ctx) {
+  if (ctx.done) return null;
+  const wait = ctx.hold ? 400 * DAY : logRand(spec.wait[0], spec.wait[1]) * MIN * (R() < 0.05 ? 5 : 1);
+  const t0 = ctx.t, t1 = t0 + wait;
+  const g = { stage: spec.stage, about: spec.about, kind: spec.kind, round: spec.round || 1, t0, t1, who: pick(OWNER_KEYS), outcome: null, comments: 0 };
+  u.gates.push(g);
+  if (t1 > NOW) { g.t1 = null; ctx.done = true; ctx.t = NOW; u.state = 'waiting'; return null; }
+  ctx.t = t1;
+  return g;
+}
+function finish(u, ctx, status) { ctx.done = true; u.status = status; u.state = null; u.end = ctx.t; }
+function checkpoint(u, ctx, i) {
+  if (ctx.done) return false;
+  if (ctx.cancelAt === i) { finish(u, ctx, 'canceled'); return false; }
+  if (ctx.interruptAt === i) { ctx.done = true; u.status = 'interrupted'; u.state = null; u.frozenAt = ctx.t; return false; }
+  return true;
+}
+function systemWork(u, cap, ctx) {
+  for (const [kind, p, tk, min] of cap.sys || []) {
+    if (ctx.done) return;
+    if (R() < p) exec(u, { k: 'system', agent: 'system', tok: tk, min, sys: kind }, 'system', ctx, 1);
+  }
+}
+const BUILD = {
+  workflow(u, cap, ctx) {
+    const ease = u.ver === 3 ? 0.7 : 1;
+    for (let i = 0; i < cap.stages.length; i++) {
+      const st = cap.stages[i];
+      if (!checkpoint(u, ctx, i)) return;
+      if (st.gate === 'review') {
+        const target = cap.stages.find((x) => x.k === st.about);
+        for (let round = 1; round <= 3; round++) {
+          const g = gate(u, { stage: st.k, about: st.about, kind: 'review', wait: st.wait, round }, ctx);
+          if (!g) return;
+          const rejected = round < 3 && R() < st.reject * ease * (round === 1 ? 1 : 0.5);
+          g.outcome = rejected ? (R() < 0.75 ? 'iterated' : 'rejected') : 'approved';
+          g.comments = rejected ? 2 + Math.floor(R() * 5) : Math.floor(R() * 2);
+          if (!rejected) break;
+          if (!runStage(u, target, 'rework', ctx, 0.7)) return;
+        }
+        continue;
+      }
+      if (!runStage(u, st, 'first', ctx, 1)) return;
+      if (st.clarify && R() < st.clarify.p) {
+        const rounds = R() < 0.3 ? 2 : 1;
+        for (let r = 1; r <= rounds; r++) {
+          const g = gate(u, { stage: st.k, about: st.k, kind: 'clarify', wait: st.clarify.wait, round: r }, ctx);
+          if (!g) return;
+          g.outcome = 'answered'; g.comments = 2 + Math.floor(R() * 4);
+          if (!runStage(u, st, 'clarify', ctx, 0.5)) return;
+        }
+      }
+      if (R() < 0.02) { if (!runStage(u, st, 'rerun', ctx, 0.8)) return; }
+    }
+    systemWork(u, cap, ctx);
+    if (!ctx.done) finish(u, ctx, 'succeeded');
+  },
+  agent(u, cap, ctx) { BUILD.workflow(u, cap, ctx); },
+  platform(u, cap, ctx) {
+    const r = exec(u, cap.stages[0], 'system', ctx, 1);
+    if (r !== 'stop') finish(u, ctx, r === 'ok' ? 'succeeded' : 'failed');
+  },
+  workgroup(u, cap, ctx) {
+    const leader = cap.stages[0], members = cap.stages.filter((st) => st.k[0] === 'm');
+    let rounds = 2 + Math.floor(R() * 3);
+    for (let r = 1; r <= rounds; r++) {
+      if (!checkpoint(u, ctx, r)) return;
+      if (!runStage(u, leader, 'first', ctx, 1)) return;
+      const first = Math.floor(R() * members.length), count = R() < 0.55 ? 2 : 1;
+      for (let j = 0; j < count; j++) {
+        const m = members[(first + j) % members.length];
+        if (m.human) { const g = gate(u, { stage: m.k, about: m.k, kind: 'delivery', wait: m.wait, round: r }, ctx); if (!g) return; g.outcome = 'delivered'; } else if (!runStage(u, m, 'first', ctx, 1)) return;
+      }
+      if (r === rounds) {
+        const g = gate(u, { stage: 'completion', about: 'leader', kind: 'completion', wait: [3, 60], round: 1 }, ctx);
+        if (!g) return;
+        if (R() < 0.2 && rounds < 5) { g.outcome = 'rejected'; g.comments = 1 + Math.floor(R() * 3); rounds++; } else g.outcome = 'approved';
+      }
+    }
+    u.rounds = rounds;
+    finish(u, ctx, 'succeeded');
+  },
+  employee(u, cap, ctx) {
+    for (let i = 0; i < cap.stages.length; i++) {
+      const st = cap.stages[i];
+      if (!checkpoint(u, ctx, i)) return;
+      if (st.gate === 'approval') {
+        const target = cap.stages.find((x) => x.k === st.about);
+        for (let round = 1; round <= 2; round++) {
+          const g = gate(u, { stage: st.k, about: st.about, kind: 'approval', wait: st.wait, round }, ctx);
+          if (!g) return;
+          const rejected = round < 2 && R() < st.reject;
+          g.outcome = rejected ? 'iterated' : 'approved'; g.comments = rejected ? 1 + Math.floor(R() * 4) : 0;
+          if (!rejected) break;
+          if (!runStage(u, target, 'rework', ctx, 0.6)) return;
+        }
+        continue;
+      }
+      if (!runStage(u, st, 'first', ctx, 1)) return;
+      if (st.block && R() < st.block) { const g = gate(u, { stage: st.k, about: st.k, kind: 'blocked', wait: [20, 500], round: 1 }, ctx); if (!g) return; g.outcome = 'unblocked'; u.blocked = true; }
+    }
+    const x = R();
+    u.outcome = x < 0.66 ? 'merged' : x < 0.84 ? 'nochange' : 'other';
+    finish(u, ctx, u.outcome === 'other' ? 'canceled' : 'succeeded');
+  },
+};
+
+let seq = 0;
+function makeUnit(capId, start, age, hold) {
+  const cap = CAPS[capId];
+  const versioned = cap.type === 'workflow' || cap.type === 'employee';
+  const u = { id: 'r' + String(++seq).padStart(4, '0'), cap: capId, type: cap.type, start, end: null, status: 'active', state: 'running', outcome: null,
+    parts: [], gates: [], retries: 0, ops: 0, alerts: [], ver: versioned ? (age > 120 ? 1 : age > 45 ? 2 : 3) : 1,
+    origin: pick(cap.origins), owner: pick(OWNER_KEYS), name: pick(cap.names) };
+  const ctx = { t: start + rand(0.2, 4) * MIN, done: false, hold: !!hold };
+  if (cap.type !== 'platform' && !hold) {
+    const roll = R();
+    if (roll < 0.05) ctx.cancelAt = 1 + Math.floor(R() * (cap.stages.length - 1));
+    else if (roll < 0.075) ctx.interruptAt = 1 + Math.floor(R() * (cap.stages.length - 1));
+  }
+  BUILD[cap.type](u, cap, ctx);
+  const endT = u.end == null ? NOW : u.end;
+  u.lead = endT - u.start;
+  u.auto = u.parts.reduce((a, p) => a + (p.t1 - p.t0), 0);
+  u.waits = {}; u.wait = 0;
+  for (const g of u.gates) { const w = (g.t1 == null ? NOW : g.t1) - g.t0; u.waits[g.kind] = (u.waits[g.kind] || 0) + w; u.wait += w; }
+  u.other = Math.max(0, u.lead - u.auto - u.wait);
+  u.tokens = u.parts.reduce((a, p) => a + sum4(p.tok), 0);
+  u.cost = u.parts.reduce((a, p) => a + p.cost, 0);
+  if (u.status === 'failed' && u.type === 'employee') u.outcome = 'failed';
+  if (u.status !== 'active' && u.type !== 'platform') { if (R() < 0.04) u.retries = 1; if (R() < 0.03) u.ops = 1; }
+  u.firstPass = u.status === 'succeeded' && u.retries === 0 && !u.blocked && !u.parts.some((p) => p.cause === 'rework' || p.cause === 'retry' || p.failed);
+  u.interv = u.gates.filter((g) => g.t1 != null).length + u.retries + u.ops;
+  if (u.state === 'waiting') { const g = u.gates[u.gates.length - 1]; if (NOW - g.t0 > 2 * DAY) u.alerts.push({ rule: '等待人工超过 48 小时', sev: '提醒', open: true, at: g.t0 + 2 * DAY }); }
+  if (u.status === 'interrupted') u.alerts.push({ rule: '任务中断后未恢复', sev: '提醒', open: NOW - u.frozenAt < 30 * DAY, at: u.frozenAt });
+  if (u.status === 'failed' && R() < 0.3) u.alerts.push({ rule: '节点长时间无输出', sev: '错误', open: false, at: u.end });
+  return u;
+}
+const UNITS = [];
+(function generate() {
+  const dayStart = NOW - (NOW % DAY);
+  for (const capId of Object.keys(CAPS)) {
+    const cap = CAPS[capId];
+    for (let age = 179; age >= 0; age--) {
+      let n = Math.floor(cap.rate) + (R() < cap.rate - Math.floor(cap.rate) ? 1 : 0);
+      if (R() < 0.15) n += 1;
+      const weekday = new Date(dayStart - age * DAY + 8 * HOUR).getUTCDay();
+      if ((weekday === 0 || weekday === 6) && R() < 0.7) n = 0;
+      for (let i = 0; i < n; i++) {
+        const start = dayStart - age * DAY + rand(1, 13) * HOUR;
+        if (start < NOW - 5 * MIN) UNITS.push(makeUnit(capId, start, age));
+      }
+    }
+  }
+  for (const [capId, minutes] of [['wf1', 16], ['wf2', 5], ['wg1', 9], ['wf3', 7]]) UNITS.push(makeUnit(capId, NOW - minutes * MIN, 0));
+  for (const [capId, hours] of [['wf4', 74], ['de1', 30], ['wg1', 5], ['wf1', 52]]) UNITS.push(makeUnit(capId, NOW - hours * HOUR, Math.floor(hours / 24), true));
+  UNITS.sort((a, b) => b.start - a.start);
+})();
+const UNIT_BY_ID = new Map(UNITS.map((u) => [u.id, u]));
+
+/* ================= measures: one function for every scope ================= */
+/* `pred` narrows to a part of each run (one stage, Agent, model, cause or kind of system work);
+   without it the numbers are about whole runs. */
+function measure(units, pred, gpred) {
+  const M = { n: 0, succ: 0, fail: 0, cancel: 0, interrupted: 0, active: 0, running: 0, waiting: 0, leads: [], leadSum: 0, autoSum: 0, waitSum: 0, otherSum: 0, waits: {},
+    tok: [0, 0, 0, 0], cost: 0, endedN: 0, endedTok: 0, endedCost: 0, cause: {}, sys: {}, execs: 0, execFail: 0, retries: 0, execMs: [], execMsSum: 0,
+    fp: 0, interv: 0, manual: 0, ops: 0, rv: { rounds: 0, first: 0, firstPass: 0, rej: 0, waits: [], comments: 0 }, cl: { rounds: 0, units: 0, waits: [] },
+    gk: {}, open: [], alerts: [], alertsOpen: 0, codes: {}, calls: 0, merged: 0, nochange: 0, blocked: 0, rounds: [], outcomes: {} };
+  for (const u of units) {
+    const parts = pred ? u.parts.filter((p) => pred(p, u)) : u.parts;
+    const gates = pred ? (gpred ? u.gates.filter((g) => gpred(g, u)) : []) : u.gates;
+    if (pred && !parts.length && !gates.length) continue;
+    const isRun = u.type !== 'platform';
+    if (isRun) {
+      M.n++;
+      if (u.status === 'succeeded') M.succ++; else if (u.status === 'failed') M.fail++; else if (u.status === 'canceled') M.cancel++;
+      else if (u.status === 'interrupted') M.interrupted++; else { M.active++; M[u.state]++; }
+      if (u.outcome) M.outcomes[u.outcome] = (M.outcomes[u.outcome] || 0) + 1;
+      if (u.blocked) M.blocked++;
+      if (u.rounds) M.rounds.push(u.rounds);
+    } else M.calls++;
+    if (!pred && isRun && u.status === 'succeeded') {
+      M.leads.push(u.lead); M.leadSum += u.lead; M.autoSum += u.auto; M.waitSum += u.wait; M.otherSum += u.other;
+      for (const k of Object.keys(u.waits)) M.waits[k] = (M.waits[k] || 0) + u.waits[k];
+      if (u.firstPass) M.fp++;
+    }
+    let ut = 0, uc = 0;
+    for (const p of parts) {
+      const tt = sum4(p.tok);
+      for (let i = 0; i < 4; i++) M.tok[i] += p.tok[i];
+      ut += tt; uc += p.cost; M.cost += p.cost;
+      const c = M.cause[p.cause] || (M.cause[p.cause] = { tok: 0, cost: 0, ms: 0, n: 0 });
+      c.tok += tt; c.cost += p.cost; c.ms += p.t1 - p.t0; c.n++;
+      if (p.sys) { const sk = M.sys[p.sys] || (M.sys[p.sys] = { tok: 0, cost: 0, n: 0 }); sk.tok += tt; sk.cost += p.cost; sk.n++; }
+      M.execs++; M.execMsSum += p.t1 - p.t0;
+      if (p.failed) { M.execFail++; M.codes[p.code] = (M.codes[p.code] || 0) + 1; }
+      if (p.cause === 'retry') M.retries++;
+      if (!p.running) M.execMs.push(p.t1 - p.t0);
+    }
+    if (isRun && u.status !== 'active' && u.status !== 'interrupted') { M.endedN++; M.endedTok += ut; M.endedCost += uc; if (!pred) M.interv += u.interv; }
+    if (!pred) { M.manual += u.retries; M.ops += u.ops; }
+    let asked = false;
+    for (const g of gates) {
+      const w = (g.t1 == null ? NOW : g.t1) - g.t0;
+      const k = M.gk[g.kind] || (M.gk[g.kind] = { rounds: 0, waits: [], total: 0, open: 0, rej: 0, judged: 0 });
+      if (g.t1 == null) { k.open++; M.open.push({ u, g, w }); continue; }
+      k.rounds++; k.waits.push(w); k.total += w;
+      if (g.kind === 'review' || g.kind === 'completion' || g.kind === 'approval') { k.judged++; if (g.outcome !== 'approved') k.rej++; }
+      if (g.kind === 'review') { M.rv.rounds++; M.rv.waits.push(w); M.rv.comments += g.comments; if (g.round === 1) { M.rv.first++; if (g.outcome === 'approved') M.rv.firstPass++; } if (g.outcome !== 'approved') M.rv.rej++; }
+      if (g.kind === 'clarify') { M.cl.rounds++; M.cl.waits.push(w); asked = true; }
+    }
+    if (asked) M.cl.units++;
+    for (const a of u.alerts) { if (a.open) M.alertsOpen++; M.alerts.push({ u, a }); }
+  }
+  M.ended = M.succ + M.fail + M.cancel;
+  M.successRate = ratio(M.succ, M.ended);
+  M.leadP50 = quantile(M.leads, 0.5); M.leadP90 = quantile(M.leads, 0.9);
+  M.flowEff = ratio(M.autoSum, M.leadSum); M.waitShare = ratio(M.waitSum, M.leadSum); M.otherShare = ratio(M.otherSum, M.leadSum);
+  M.tokens = sum4(M.tok);
+  M.perTok = M.endedN ? M.endedTok / M.endedN : null; M.perCost = M.endedN ? M.endedCost / M.endedN : null;
+  M.fpRate = ratio(M.fp, M.succ);
+  M.intervPer = M.endedN ? M.interv / M.endedN : null;
+  M.execFailRate = ratio(M.execFail, M.execs); M.retryRate = ratio(M.retries, M.execs);
+  M.execP50 = quantile(M.execMs, 0.5); M.execP90 = quantile(M.execMs, 0.9);
+  const waste = ['rework', 'retry', 'rerun'].reduce((a, k) => a + (M.cause[k] ? M.cause[k].tok : 0), 0);
+  M.wasteShare = ratio(waste, M.tokens);
+  M.wasteExecShare = ratio(['rework', 'retry', 'rerun'].reduce((a, k) => a + (M.cause[k] ? M.cause[k].n : 0), 0), M.execs);
+  M.sysShare = ratio(M.cause.system ? M.cause.system.tok : 0, M.tokens);
+  M.rv.firstPassRate = ratio(M.rv.firstPass, M.rv.first); M.rv.rejRate = ratio(M.rv.rej, M.rv.rounds);
+  M.rv.waitP50 = quantile(M.rv.waits, 0.5); M.rv.waitP90 = quantile(M.rv.waits, 0.9);
+  M.cl.waitP50 = quantile(M.cl.waits, 0.5);
+  M.gateRounds = Object.keys(M.gk).reduce((a, k) => a + M.gk[k].rounds, 0);
+  M.gateWaits = Object.keys(M.gk).reduce((a, k) => a.concat(M.gk[k].waits), []);
+  M.gateJudged = Object.keys(M.gk).reduce((a, k) => a + M.gk[k].judged, 0);
+  M.gateRej = Object.keys(M.gk).reduce((a, k) => a + M.gk[k].rej, 0);
+  M.open.sort((a, b) => b.w - a.w);
+  return M;
+}
+
+/* ================= state, scope and routing ================= */
+const ASPECTS = [['overview', '概况'], ['cost', '成本'], ['time', '效率'], ['quality', '质量'], ['human', '人工介入'], ['stability', '稳定性'], ['records', '明细']];
+const ASPECT_NAME = Object.fromEntries(ASPECTS);
+const RANGES = { '24h': ['近 24 小时', DAY], '7d': ['近 7 天', 7 * DAY], '30d': ['近 30 天', 30 * DAY], '90d': ['近 90 天', 90 * DAY] };
+const state = { aspect: 'overview', type: null, cap: null, run: null, slice: null, range: '30d', compare: 'off', role: 'manager', by: {}, trend: {}, filter: 'all', sort: { key: 'start', dir: -1 }, more: 25 };
+
+const agentOfStage = (capId, k) => { const st = CAPS[capId].stages.find((x) => x.k === k); return st ? st.agent || null : null; };
+const DIMS = {
+  type: { label: '能力类型', grain: 'unit', key: (u) => u.type, name: (k) => TYPES[k] },
+  cap: { label: '能力', grain: 'unit', key: (u) => u.cap, name: (k) => CAPS[k].name, sub: (k) => TYPES[CAPS[k].type] },
+  unit: { label: '任务与交办', grain: 'unit', key: (u) => u.id, name: (k) => UNIT_BY_ID.get(k).name, sub: (k) => { const u = UNIT_BY_ID.get(k); return CAPS[u.cap].name + ' · ' + when(u.start); } },
+  origin: { label: '来源', grain: 'unit', key: (u) => (u.type === 'platform' ? null : u.origin), name: (k) => ORIGINS[k] },
+  owner: { label: '发起人', grain: 'unit', key: (u) => u.owner, name: (k) => OWNERS[k] },
+  ver: { label: '版本', grain: 'unit', key: (u) => 'v' + u.ver, name: (k) => '第 ' + k.slice(1) + ' 版' },
+  stage: { label: '环节', grain: 'part', key: (p) => p.stage, gateMatch: (g, u, v) => g.stage === v || g.about === v, name: (k) => stageOf(state.cap, k).n },
+  agent: { label: 'Agent', grain: 'part', key: (p) => p.agent, gateMatch: (g, u, v) => agentOfStage(u.cap, g.about) === v, name: (k) => AGENTS[k].name || k },
+  model: { label: '模型', grain: 'part', key: (p) => p.model, name: (k) => MODELS[k].name },
+  cause: { label: '执行原因', grain: 'part', key: (p) => p.cause, name: (k) => CAUSES[k][0] },
+  sys: { label: '系统工作', grain: 'part', key: (p) => p.sys, name: (k) => SYS[k] },
+  gate: { label: '人工门的种类', grain: 'gate', name: (k) => GATES[k][0] },
+  who: { label: '处理人', grain: 'gate', name: (k) => OWNERS[k] },
+};
+function noun() { return state.type ? NOUN[state.type] : '任务与交办'; }
+function one() { return state.type ? NOUN[state.type] : '任务或交办'; }
+function inScope(u) { if (state.run) return u.id === state.run; if (state.cap) return u.cap === state.cap; if (state.type) return u.type === state.type; return true; }
+function inRole(u) { return state.role === 'manager' || u.owner === 'zm'; }
+function sliceValid(sl) {
+  if (!sl || !DIMS[sl.dim] || DIMS[sl.dim].grain === 'gate') return false;
+  if (sl.dim === 'stage') return !!state.cap && (CAPS[state.cap].stages.some((st) => st.k === sl.value) || sl.value === 'system');
+  if (sl.dim === 'owner' && state.role !== 'manager') return false;
+  if (sl.dim === 'ver') return !!state.cap && /^v[123]$/.test(sl.value);
+  const table = { agent: AGENTS, model: MODELS, cause: CAUSES, sys: SYS, origin: ORIGINS, owner: OWNERS }[sl.dim];
+  return !!table && !!table[sl.value];
+}
+function hashFor() {
+  let s = state.aspect + '-' + (state.run ? 'r-' + state.run : state.cap ? 'c-' + state.cap : state.type ? 't-' + state.type : 'all');
+  if (state.slice && !state.run) s += '-s-' + state.slice.dim + '-' + state.slice.value;
+  return '#' + s;
+}
+function parseHash() {
+  const parts = location.hash.replace(/^#/, '').split('-');
+  if (!ASPECT_NAME[parts[0]]) return;
+  state.aspect = parts[0]; state.type = state.cap = state.run = state.slice = null;
+  let i = 1;
+  if (parts[i] === 'all') i += 1;
+  else if (parts[i] === 't' && TYPES[parts[i + 1]]) { state.type = parts[i + 1]; i += 2; }
+  else if (parts[i] === 'c' && CAPS[parts[i + 1]]) { state.cap = parts[i + 1]; state.type = CAPS[state.cap].type; i += 2; }
+  else if (parts[i] === 'r' && UNIT_BY_ID.has(parts[i + 1])) { const u = UNIT_BY_ID.get(parts[i + 1]); state.run = u.id; state.cap = u.cap; state.type = u.type; i += 2; }
+  if (parts[i] === 's') { const sl = { dim: parts[i + 1], value: parts[i + 2] }; if (sliceValid(sl)) state.slice = sl; }
+}
+function go(patch) {
+  Object.assign(state, patch);
+  if (state.run) { const u = UNIT_BY_ID.get(state.run); state.cap = u.cap; state.type = u.type; state.slice = null; }
+  else if (state.cap) state.type = CAPS[state.cap].type;
+  if (!sliceValid(state.slice)) state.slice = null;
+  if ('aspect' in patch || 'run' in patch || 'cap' in patch || 'type' in patch || 'slice' in patch) state.more = 25;
+  const target = hashFor();
+  if (location.hash !== target) { try { history.replaceState(null, '', target); } catch (e) { location.hash = target; } }
+  render();
+}
+
+/* ================= small pieces ================= */
+const tip = $('#tip');
+function showTip(el, lines, ev) {
+  tip.replaceChildren(...lines.map((l, i) => h('div', { class: i === 0 ? 'tip__v' : 'tip__l', text: l })));
+  tip.hidden = false;
+  const r = el.getBoundingClientRect();
+  let x = ev ? ev.clientX + 12 : r.left + r.width / 2, y = ev ? ev.clientY + 14 : r.bottom + 8;
+  const w = tip.offsetWidth, hh = tip.offsetHeight;
+  if (x + w > window.innerWidth - 8) x = window.innerWidth - w - 8;
+  if (y + hh > window.innerHeight - 8) y = (ev ? ev.clientY : r.top) - hh - 10;
+  tip.style.left = Math.max(8, x) + 'px'; tip.style.top = Math.max(8, y) + 'px';
+}
+const hideTip = () => { tip.hidden = true; };
+function bindTip(el, lines) {
+  el.addEventListener('pointermove', (e) => showTip(el, lines, e));
+  el.addEventListener('pointerleave', hideTip);
+  el.addEventListener('focus', () => showTip(el, lines));
+  el.addEventListener('blur', hideTip);
+  return el;
+}
+let openMenu = null;
+function closeMenu() { if (openMenu) { openMenu.remove(); openMenu = null; } }
+function menu(anchor, items) {
+  if (openMenu && openMenu.anchor === anchor) { closeMenu(); return; }
+  closeMenu();
+  const el = h('div', { class: 'menu', role: 'menu' }, items.map((it) => (it.group
+    ? h('div', { class: 'menu__group', text: it.group })
+    : h('button', { type: 'button', class: 'menu__item', role: 'menuitem', 'aria-current': it.current ? 'true' : null, onclick: () => { closeMenu(); it.pick(); } }, h('span', { text: it.label }), it.note ? h('small', { text: it.note }) : null))));
+  document.body.appendChild(el);
+  const r = anchor.getBoundingClientRect();
+  let x = r.left, y = r.bottom + 4;
+  if (x + el.offsetWidth > window.innerWidth - 8) x = window.innerWidth - el.offsetWidth - 8;
+  if (y + el.offsetHeight > window.innerHeight - 8) y = Math.max(8, r.top - el.offsetHeight - 4);
+  el.style.left = Math.max(8, x) + 'px'; el.style.top = y + 'px';
+  el.anchor = anchor; openMenu = el;
+  const first = el.querySelector('.menu__item');
+  if (first) first.focus();
+}
+document.addEventListener('pointerdown', (e) => { if (openMenu && !openMenu.contains(e.target) && !(e.target.closest && e.target.closest('[data-menu]'))) closeMenu(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+window.addEventListener('scroll', closeMenu);
+window.addEventListener('resize', closeMenu);
+
+function seg(label, options, value, onPick) {
+  return h('span', { class: 'segmented', role: 'group', 'aria-label': label }, options.map((o) => h('button', { type: 'button', class: 'segmented__option' + (o[0] === value ? ' segmented__option--active' : ''), 'aria-pressed': String(o[0] === value), text: o[1], onclick: () => onPick(o[0]) })));
+}
+const chip = (kind, text) => h('span', { class: 'chip chip--' + kind, text });
+const statusChip = (u) => chip(STATUS[u.status][1], u.status === 'active' ? (u.state === 'waiting' ? '等人处理' : '运行中') : STATUS[u.status][0]);
+function card(opts, ...kids) {
+  return h('section', { class: 'card' }, h('div', { class: 'card__head' }, h('div', null, h('h3', { class: 'card__title', text: opts.title }), opts.sub ? h('p', { class: 'card__sub', text: opts.sub }) : null), opts.actions || null), kids);
+}
+const empty = (text) => h('p', { class: 'muted small', text });
+function deltaOf(t) {
+  if (state.run || state.compare !== 'period' || t.cur == null || t.prev == null) return null;
+  let d, text;
+  if (t.kind === 'rate') { d = Math.round((t.cur - t.prev) * 100); text = Math.abs(d) + ' 个百分点'; } else { if (!t.prev) return null; d = Math.round(((t.cur - t.prev) / t.prev) * 100); text = Math.abs(d) + '%'; }
+  if (d === 0) return h('p', { class: 'kpi__delta kpi__delta--neutral', text: '与上一期持平' });
+  const tone = !t.better ? 'neutral' : (d > 0) === (t.better === 'up') ? 'good' : 'bad';
+  return h('p', { class: 'kpi__delta kpi__delta--' + tone, text: (d > 0 ? '▲ 升 ' : '▼ 降 ') + text + ' · 较上一期' + (tone === 'good' ? '（变好）' : tone === 'bad' ? '（变差）' : '') });
+}
+function kpis(items) {
+  return h('div', { class: 'kpis' }, items.map((t) => {
+    const kids = [h('p', { class: 'kpi__label', text: t.label }), h('p', { class: 'kpi__value', text: t.value }), t.detail ? h('p', { class: 'kpi__detail', text: t.detail }) : null, deltaOf(t), t.go ? h('p', { class: 'kpi__go', text: '看' + ASPECT_NAME[t.go] + ' ›' }) : null];
+    return t.go ? h('button', { type: 'button', class: 'kpi', onclick: () => go({ aspect: t.go }) }, kids) : h('div', { class: 'kpi' }, kids);
+  }));
+}
+const T = (label, value, detail, cur, prev, kind, better, goTo) => ({ label, value, detail, cur, prev, kind, better, go: goTo });
+function segbar(parts, thin) {
+  const shown = parts.filter((p) => p.amount > 0), total = shown.reduce((a, p) => a + p.amount, 0);
+  if (!total) return empty('没有可用的样本');
+  return h('div', { class: 'segbar' + (thin ? ' segbar--thin' : ''), role: 'img', 'aria-label': shown.map((p) => p.name + ' ' + pct(p.amount / total)).join('，') }, shown.map((p) => {
+    const share = p.amount / total;
+    const b = h('button', { type: 'button', class: 'segbar__seg fill-' + p.fill, style: 'width:calc(' + (share * 100).toFixed(3) + '% - 2px)', 'aria-label': p.name + '：' + p.text + ' · ' + pct(share), tabindex: thin ? '-1' : '0' }, thin ? null : h('span', { text: pct(share) }));
+    return bindTip(b, [p.text + ' · ' + pct(share), p.name]);
+  }));
+}
+function legendStack(parts) {
+  const shown = parts.filter((p) => p.amount > 0), total = shown.reduce((a, p) => a + p.amount, 0);
+  return h('ul', { class: 'legend legend--stack' }, shown.map((p) => h('li', null, h('span', null, h('i', { class: 'fill-' + p.fill }), h('span', { text: p.name })), h('span', { class: 'legend__val', text: p.text + ' · ' + pct(p.amount / total) }))));
+}
+const legendRow = (items) => h('ul', { class: 'legend' }, items.map((p) => h('li', null, h('i', { class: 'fill-' + p[0] }), h('span', { text: p[1] }))));
+function fitSegLabels() {
+  document.querySelectorAll('.segbar:not(.segbar--thin) .segbar__seg').forEach((b) => { b.classList.remove('is-tight'); const span = b.firstElementChild; if (span && span.scrollWidth + 16 > b.clientWidth) b.classList.add('is-tight'); });
+}
+function meter(share) { return h('div', { class: 'meter' }, h('span', { class: 'meter__track' }, h('span', { class: 'meter__bar', style: 'width:' + Math.max(1, (share || 0) * 100) + '%' })), h('span', { class: 'meter__val', text: pct(share) })); }
+/* cols: [{label, num}], rows: [{cells, pick}], foot: cells */
+function table(cols, rows, opts) {
+  const o = opts || {};
+  const cell = (c, i, tag) => { const col = cols[i] || {}; const attrs = { class: (col.num ? 'num' : i === 0 ? 'name' : '') || null }; return h(tag, attrs, c == null ? '—' : c); };
+  return h('div', { class: 'tbl' }, h('table', { style: 'min-width:' + (o.minWidth || 640) + 'px' },
+    h('thead', null, h('tr', null, cols.map((c) => h('th', { class: c.num ? 'num' : null, scope: 'col' }, c.sort ? h('button', { type: 'button', onclick: () => o.onSort(c.sort), 'aria-label': '按' + c.label + '排序' }, c.label + (o.sorted && o.sorted.key === c.sort ? (o.sorted.dir < 0 ? ' ▼' : ' ▲') : '')) : c.label)))),
+    h('tbody', null, rows.length ? rows.map((r) => h('tr', r.pick ? { class: 'is-link', tabindex: '0', onclick: r.pick, onkeydown: (e) => { if (e.key === 'Enter') r.pick(); } } : null, r.cells.map((c, i) => cell(c, i, 'td')))) : h('tr', null, h('td', { colspan: String(cols.length), class: 'muted', text: o.empty || '这个范围里没有数据' }))),
+    o.foot ? h('tfoot', null, h('tr', null, o.foot.map((c, i) => cell(c, i, 'td')))) : null));
+}
+const nameCell = (name, sub) => [name, sub ? h('small', { text: sub }) : null];
+function axisTop(maxV) { if (!(maxV > 0)) return 1; const raw = maxV / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p; const step = (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; return Math.ceil(maxV / step) * step; }
+/* items: [{label, value|null, text, stack?: [{fill, amount}], note}] */
+function columns(items, title) {
+  const top = axisTop(Math.max(0, ...items.map((i) => i.value || 0)));
+  return h('div', { class: 'cols', role: 'group', 'aria-label': title }, items.map((it) => {
+    const bar = it.value == null ? h('span', { class: 'cols__bar cols__bar--gap' })
+      : it.stack ? h('span', { class: 'cols__bar cols__bar--stack', style: '--r:' + (it.value / top).toFixed(4) }, it.stack.filter((s) => s.amount > 0).map((s) => h('i', { class: 'fill-' + s.fill, style: 'height:' + ((s.amount / it.value) * 100).toFixed(2) + '%' })))
+        : h('span', { class: 'cols__bar', style: '--r:' + (it.value / top).toFixed(4) });
+    const col = h('button', { type: 'button', class: 'cols__col', 'aria-label': it.label + '：' + it.text }, h('span', { class: 'cols__track' }, h('span', { class: 'cols__val', text: it.value == null ? '' : it.text }), bar), h('span', { class: 'cols__lab', text: it.label }));
+    return bindTip(col, [it.text, it.label + (it.note ? ' · ' + it.note : '')]);
+  }));
+}
+
+/* ================= the numbers for the current scope ================= */
+function context() {
+  const span = RANGES[state.range][1], to = NOW, from = NOW - span;
+  const sl = state.slice, dim = sl ? DIMS[sl.dim] : null;
+  const unitOk = (u) => inScope(u) && inRole(u) && (!dim || dim.grain !== 'unit' || dim.key(u) === sl.value);
+  const pred = dim && dim.grain === 'part' ? (p, u) => dim.key(p, u) === sl.value : null;
+  const gpred = pred && dim.gateMatch ? (g, u) => dim.gateMatch(g, u, sl.value) : null;
+  const all = UNITS.filter(unitOk);
+  const units = all.filter((u) => u.start >= from && u.start < to);
+  const prev = all.filter((u) => u.start >= from - span && u.start < from);
+  const live = all.filter((u) => u.status === 'active' || u.status === 'interrupted');
+  const platform = state.type === 'platform';
+  return { from, to, span, pred, gpred, units, live, M: measure(units, pred, gpred), P: measure(prev, pred, gpred), L: measure(live, pred, gpred), grain: pred || platform ? 'part' : 'unit', platform };
+}
+function breakdown(c, dimKey) {
+  const dim = DIMS[dimKey], rows = [];
+  if (dim.grain === 'unit') {
+    const groups = new Map();
+    for (const u of c.units) { const k = dim.key(u); if (k == null) continue; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(u); }
+    for (const [k, list] of groups) rows.push({ key: k, name: dim.name(k), sub: dim.sub ? dim.sub(k) : null, M: measure(list, c.pred, c.gpred), open: c.L.open.filter((o) => dim.key(o.u) === k).length });
+    return rows.filter((r) => !c.pred || r.M.execs + r.M.gateRounds > 0);
+  }
+  const keys = new Set();
+  for (const u of c.units) {
+    for (const p of u.parts) { if (c.pred && !c.pred(p, u)) continue; const k = dim.key(p, u); if (k != null) keys.add(k); }
+    if (dimKey === 'stage' && !c.pred) for (const g of u.gates) keys.add(g.stage);
+  }
+  for (const k of keys) rows.push({ key: k, name: dim.name(k), sub: dim.sub ? dim.sub(k) : null, M: measure(c.units, (p, u) => (!c.pred || c.pred(p, u)) && dim.key(p, u) === k, dim.gateMatch ? (g, u) => dim.gateMatch(g, u, k) : null), open: 0 });
+  if (dimKey === 'stage') { const order = CAPS[state.cap].stages.map((st) => st.k); rows.sort((a, b) => (order.indexOf(a.key) < 0 ? 99 : order.indexOf(a.key)) - (order.indexOf(b.key) < 0 ? 99 : order.indexOf(b.key))); }
+  return rows;
+}
+function dimsFor(aspect, c) {
+  const list = [];
+  if (!state.type) list.push('type');
+  if (!state.cap) list.push('cap');
+  if (state.cap && !c.platform) list.push('stage');
+  if (aspect === 'human') list.unshift('gate');
+  list.push('agent', 'model');
+  if (!c.platform) list.push('cause');
+  if (aspect === 'cost') { list.push('sys'); if (!c.platform) list.push('unit'); }
+  if (!c.platform) list.push('origin');
+  if (state.role === 'manager') list.push(aspect === 'human' ? 'who' : 'owner');
+  if (state.cap && (state.type === 'workflow' || state.type === 'employee')) list.push('ver');
+  const used = state.slice ? state.slice.dim : null;
+  return list.filter((d) => d !== used && !(c.grain === 'part' && (d === 'gate' || d === 'who')) && !(used && DIMS[used].grain === 'part' && d === 'unit'));
+}
+function pickRow(dimKey, key) {
+  if (dimKey === 'type') return () => go({ type: key, cap: null, run: null });
+  if (dimKey === 'cap') return () => go({ cap: key, run: null });
+  if (dimKey === 'unit') return () => go({ run: key, aspect: 'overview' });
+  if (DIMS[dimKey].grain === 'gate') return null;
+  return () => go({ slice: { dim: dimKey, value: key } });
+}
+function buckets(c) {
+  const [count, size, lab] = { '24h': [8, 3 * HOUR, hourLabel], '7d': [7, DAY, dayLabel], '30d': [10, 3 * DAY, dayLabel], '90d': [13, 7 * DAY, dayLabel] }[state.range];
+  const out = [];
+  for (let i = 0; i < count; i++) { const from = c.to - (count - i) * size, to = from + size; out.push({ label: lab(from), M: measure(c.units.filter((u) => u.start >= from && u.start < to), c.pred, c.gpred) }); }
+  return out;
+}
+const TOKEN_CLASSES = [['输入', 'c1'], ['缓存读取', 'c2'], ['缓存写入', 'c3'], ['输出', 'c4']];
+const TRENDS = {
+  unit: {
+    overview: [['runs', '数量', (M) => M.n, String], ['success', '成功率', (M) => M.successRate, pct], ['cost', '成本', (M) => M.cost, cny]],
+    cost: [['tokens', 'Token（四类）', (M) => M.tokens, tok, true], ['cost', '成本', (M) => M.cost, cny], ['per', '每个的成本', (M) => M.perCost, cny]],
+    time: [['lead', '总历时中位数', (M) => M.leadP50, dur], ['wait', '等人占比', (M) => M.waitShare, pct]],
+    quality: [['fp', '一次通过率', (M) => M.fpRate, pct], ['success', '成功率', (M) => M.successRate, pct]],
+    human: [['wait', '等人占比', (M) => M.waitShare, pct], ['interv', '每个的人工介入', (M) => M.intervPer, num1]],
+    stability: [['fail', '执行失败率', (M) => M.execFailRate, pct], ['retry', '失败重试率', (M) => M.retryRate, pct]],
+  },
+  part: {
+    overview: [['execs', '执行次数', (M) => M.execs, String], ['cost', '成本', (M) => M.cost, cny]],
+    cost: [['tokens', 'Token（四类）', (M) => M.tokens, tok, true], ['cost', '成本', (M) => M.cost, cny]],
+    time: [['exec', '执行时长中位数', (M) => M.execP50, dur]],
+    quality: [['waste', '返工与重试的执行占比', (M) => M.wasteExecShare, pct]],
+    human: [['rounds', '人工门轮次', (M) => M.gateRounds, String]],
+    stability: [['fail', '执行失败率', (M) => M.execFailRate, pct], ['retry', '失败重试率', (M) => M.retryRate, pct]],
+  },
+};
+function trendCard(aspect, c) {
+  const options = TRENDS[c.grain][aspect];
+  let metric = options.find((o) => o[0] === state.trend[aspect]) || options[0];
+  const items = buckets(c).map((b) => {
+    const v = metric[2](b.M);
+    return { label: b.label, value: v == null || (b.M.n + b.M.calls === 0 && metric[0] !== 'runs' && metric[0] !== 'execs') ? null : v, text: v == null ? '没有样本' : metric[3](v), stack: metric[4] ? TOKEN_CLASSES.map((t, i) => ({ fill: t[1], amount: b.M.tok[i] })) : null };
+  });
+  return card({ title: '变化 · ' + metric[1], sub: '按' + (c.grain === 'unit' ? noun() : '所属' + noun()) + '开始的时间分段', actions: options.length > 1 ? seg('趋势指标', options.map((o) => [o[0], o[1]]), metric[0], (v) => { state.trend[aspect] = v; render(); }) : null },
+    columns(items, metric[1]), metric[4] ? legendRow(TOKEN_CLASSES.map((t) => [t[1], t[0]])) : null);
+}
+
+/* ================= tiles ================= */
+function outcomeLine(M) { return '成功 ' + M.succ + ' · 失败 ' + M.fail + ' · 取消 ' + M.cancel + ' · 中断 ' + M.interrupted + ' · 进行中 ' + M.active; }
+function topCode(M) { const list = Object.keys(M.codes).sort((a, b) => M.codes[b] - M.codes[a]); return list.length ? list[0] + '（' + M.codes[list[0]] + ' 次）' : '没有失败'; }
+function tiles(aspect, c) {
+  const M = c.M, P = c.P, L = c.L, n = noun(), run = c.platform ? '调用' : '执行';
+  if (c.grain === 'part') {
+    const involved = c.platform ? null : T('涉及的' + n, String(M.n), '至少有一次相关执行', M.n, P.n, 'amount', null);
+    const gateP50 = quantile(M.gateWaits, 0.5);
+    return {
+      overview: [involved, T(run + '次数', String(M.execs), null, M.execs, P.execs, 'amount', null, c.platform ? 'records' : null), T('成本', cny(M.cost), tok(M.tokens) + ' Token', M.cost, P.cost, 'amount', 'down', 'cost'), T(run + '时长', dur(M.execP50), '中位数；P90 ' + dur(M.execP90), M.execP50, P.execP50, 'amount', 'down', 'time'), T(run + '失败率', pct(M.execFailRate), M.execFail + ' 次失败', M.execFailRate, P.execFailRate, 'rate', 'down', 'stability'), c.platform ? null : T('返工与重试', pct(M.wasteExecShare), '占全部执行次数', M.wasteExecShare, P.wasteExecShare, 'rate', 'down', 'quality')],
+      cost: [T('成本', cny(M.cost), null, M.cost, P.cost, 'amount', 'down'), T('Token', tok(M.tokens), TOKEN_CLASSES.map((t, i) => t[0] + ' ' + tok(M.tok[i])).join(' · '), M.tokens, P.tokens, 'amount', 'down'), T('每次' + run + '的成本', cny(M.execs ? M.cost / M.execs : null), '均值', M.execs ? M.cost / M.execs : null, P.execs ? P.cost / P.execs : null, 'amount', 'down'), c.platform ? null : T('返工与重试的 Token', pct(M.wasteShare), '评审返工、失败重试、其它重跑', M.wasteShare, P.wasteShare, 'rate', 'down')],
+      time: [T(run + '时长', dur(M.execP50), '中位数', M.execP50, P.execP50, 'amount', 'down'), T(run + '时长 P90', dur(M.execP90), '最慢的一成', M.execP90, P.execP90, 'amount', 'down'), c.platform ? null : T('每个' + one() + '执行几次', num1(M.n ? M.execs / M.n : null), '含返工与重试', null, null), T(run + '时长合计', dur(M.execMsSum), null, null, null)],
+      quality: [T('返工与重试', pct(M.wasteExecShare), '占全部执行次数', M.wasteExecShare, P.wasteExecShare, 'rate', 'down'), T('产出被打回', pct(ratio(M.gateRej, M.gateJudged)), M.gateJudged ? M.gateJudged + ' 轮评审或确认' : '这部分没有评审', ratio(M.gateRej, M.gateJudged), ratio(P.gateRej, P.gateJudged), 'rate', 'down'), T('返工与重试的 Token', pct(M.wasteShare), null, M.wasteShare, P.wasteShare, 'rate', 'down')],
+      human: [T('相关的人工门', M.gateRounds + ' 轮', c.gpred ? '评审它的产出、回答它的反问' : '这个切面没有对应的人工门', M.gateRounds, P.gateRounds, 'amount', null), T('等待', dur(gateP50), '中位数；P90 ' + dur(quantile(M.gateWaits, 0.9)), gateP50, quantile(P.gateWaits, 0.5), 'amount', 'down'), T('现在等人处理', String(L.open.length), L.open.length ? '最久已等 ' + dur(L.open[0].w) : '没有', null, null)],
+      stability: [T(run + '失败率', pct(M.execFailRate), M.execFail + ' 次失败 / ' + M.execs + ' 次', M.execFailRate, P.execFailRate, 'rate', 'down'), T('失败重试率', pct(M.retryRate), M.retries + ' 次重试', M.retryRate, P.retryRate, 'rate', 'down'), T('主要失败码', topCode(M).split('（')[0], topCode(M), null, null)],
+    }[aspect].filter(Boolean);
+  }
+  const employee = state.type === 'employee', group = state.type === 'workgroup';
+  const meanRounds = M.rounds.length ? M.rounds.reduce((a, b) => a + b, 0) / M.rounds.length : null;
+  return {
+    overview: [T(n + '数', String(M.n), outcomeLine(M), M.n, P.n, 'amount', null, 'records'), T('成功率', pct(M.successRate), '成功 ÷ 已结束（成功、失败、取消）', M.successRate, P.successRate, 'rate', 'up', 'quality'), T('成本', cny(M.cost), tok(M.tokens) + ' Token', M.cost, P.cost, 'amount', 'down', 'cost'), T('总历时', dur(M.leadP50), '成功的' + n + '，中位数；P90 ' + dur(M.leadP90), M.leadP50, P.leadP50, 'amount', 'down', 'time'), T('等人占比', pct(M.waitShare), '等人时间 ÷ 总历时', M.waitShare, P.waitShare, 'rate', 'down', 'human'), T('执行失败率', pct(M.execFailRate), M.execFail + ' 次失败 / ' + M.execs + ' 次执行', M.execFailRate, P.execFailRate, 'rate', 'down', 'stability')],
+    cost: [T('成本', cny(M.cost), '这些' + n + '到现在为止的全部消耗', M.cost, P.cost, 'amount', 'down'), T('Token', tok(M.tokens), TOKEN_CLASSES.map((t, i) => t[0] + ' ' + tok(M.tok[i])).join(' · '), M.tokens, P.tokens, 'amount', 'down'), T('每个' + one() + '的成本', cny(M.perCost), '已结束的 ' + M.endedN + ' 个，均值；' + tok(M.perTok) + ' Token', M.perCost, P.perCost, 'amount', 'down'), T('返工与重试', pct(M.wasteShare), '评审返工、失败重试、其它重跑占 Token 的比例', M.wasteShare, P.wasteShare, 'rate', 'down'), T('系统工作', pct(M.sysShare), '平台自己发起的调用占 Token 的比例', M.sysShare, P.sysShare, 'rate', null)],
+    time: [T('总历时', dur(M.leadP50), '成功的 ' + M.succ + ' 个' + n + '，中位数', M.leadP50, P.leadP50, 'amount', 'down'), T('总历时 P90', dur(M.leadP90), '最慢的一成', M.leadP90, P.leadP90, 'amount', 'down'), T('流动效率', pct(M.flowEff), '自动执行时长 ÷ 总历时', M.flowEff, P.flowEff, 'rate', 'up'), T('等人占比', pct(M.waitShare), '等人时间 ÷ 总历时', M.waitShare, P.waitShare, 'rate', 'down'), group ? T('轮数', num1(meanRounds), '每个任务的均值', null, null) : T('排队与中断', pct(M.otherShare), '既不在执行也不在等人', M.otherShare, P.otherShare, 'rate', 'down')],
+    quality: [T('成功率', pct(M.successRate), '成功 ' + M.succ + ' ÷ 已结束 ' + M.ended, M.successRate, P.successRate, 'rate', 'up'), T('一次通过率', pct(M.fpRate), '成功的' + n + '里，没有返工、重试和失败', M.fpRate, P.fpRate, 'rate', 'up'),
+      employee ? T('合入率', pct(ratio(M.outcomes.merged || 0, M.ended)), '已合入 ÷ 已结束的交办', ratio(M.outcomes.merged || 0, M.ended), ratio(P.outcomes.merged || 0, P.ended), 'rate', 'up') : T('评审首轮通过率', pct(M.rv.firstPassRate), M.rv.first + ' 次首轮评审', M.rv.firstPassRate, P.rv.firstPassRate, 'rate', 'up'),
+      employee ? T('阻塞率', pct(ratio(M.blocked, M.n)), '阻塞过的交办占比', ratio(M.blocked, M.n), ratio(P.blocked, P.n), 'rate', 'down') : T('评审不通过', pct(M.rv.rejRate), M.rv.rounds + ' 轮评审；每轮 ' + num1(M.rv.rounds ? M.rv.comments / M.rv.rounds : null) + ' 条意见', M.rv.rejRate, P.rv.rejRate, 'rate', 'down'),
+      T('返工与重试', pct(M.wasteShare), '占 Token 的比例', M.wasteShare, P.wasteShare, 'rate', 'down')],
+    human: [T('现在等人处理', String(L.open.length), L.open.length ? '最久已等 ' + dur(L.open[0].w) + '；不受时间范围影响' : '没有', null, null), T('每个' + one() + '的人工介入', num1(M.intervPer) + ' 次', '人工门轮次 + 人工重试 + 续跑与取消', M.intervPer, P.intervPer, 'amount', 'down'), T('等人占比', pct(M.waitShare), '等人时间 ÷ 总历时', M.waitShare, P.waitShare, 'rate', 'down'), T('评审等待', dur(M.rv.waitP50), '中位数；P90 ' + dur(M.rv.waitP90), M.rv.waitP50, P.rv.waitP50, 'amount', 'down'), T('反问回答', dur(M.cl.waitP50), M.cl.rounds + ' 轮；' + M.cl.units + ' 个' + n + '问过', M.cl.waitP50, P.cl.waitP50, 'amount', 'down'), T('人工重试与续跑', String(M.manual + M.ops), '人工重试 ' + M.manual + ' · 续跑与修复 ' + M.ops, null, null)],
+    stability: [T('执行失败率', pct(M.execFailRate), M.execFail + ' 次失败 / ' + M.execs + ' 次执行', M.execFailRate, P.execFailRate, 'rate', 'down'), T('失败重试率', pct(M.retryRate), M.retries + ' 次自动重试', M.retryRate, P.retryRate, 'rate', 'down'), T('失败的' + n, String(M.fail), '重试后仍然失败', M.fail, P.fail, 'amount', 'down'), T('已中断', String(M.interrupted), '中断后还没恢复或取消', M.interrupted, P.interrupted, 'amount', 'down'), T('未解决告警', String(L.alertsOpen), '不受时间范围影响', null, null)],
+  }[aspect];
+}
+
+/* ================= cards ================= */
+function splitCard(aspect, c) {
+  const M = c.M, n = noun();
+  if (aspect === 'cost' || (c.grain === 'part' && aspect !== 'time' && aspect !== 'stability' && aspect !== 'human')) {
+    const parts = Object.keys(CAUSES).map((k) => ({ name: CAUSES[k][0], fill: CAUSES[k][1], amount: M.cause[k] ? M.cause[k].tok : 0, text: tok(M.cause[k] ? M.cause[k].tok : 0) + ' · ' + cny(M.cause[k] ? M.cause[k].cost : 0) }));
+    const kinds = Object.keys(M.sys).sort((a, b) => M.sys[b].tok - M.sys[a].tok).map((k) => SYS[k] + ' ' + tok(M.sys[k].tok)).join('、');
+    return card({ title: 'Token 花在哪里', sub: '按这次执行的原因拆分，各项相加等于合计 ' + tok(M.tokens) }, segbar(parts), legendStack(parts), kinds && !c.pred ? h('p', { class: 'small muted', text: '系统工作是平台自己发起的调用：' + kinds + '。' }) : null);
+  }
+  if (aspect === 'time' && c.grain === 'unit') {
+    const kinds = Object.keys(M.waits).sort((a, b) => M.waits[b] - M.waits[a]);
+    const fills = ['c2', 'c3', 'c4', 'c5'];
+    const per = (ms) => (M.succ ? ms / M.succ : 0);
+    const parts = [{ name: '自动执行', fill: 'c1', amount: per(M.autoSum), text: dur(per(M.autoSum)) }];
+    kinds.slice(0, 4).forEach((k, i) => parts.push({ name: GATES[k][1], fill: fills[i], amount: per(M.waits[k]), text: dur(per(M.waits[k])) }));
+    const rest = kinds.slice(4).reduce((a, k) => a + M.waits[k], 0);
+    if (rest > 0) parts.push({ name: '其它等待', fill: 'wait', amount: per(rest), text: dur(per(rest)) });
+    parts.push({ name: '排队与中断', fill: 'other', amount: per(M.otherSum), text: dur(per(M.otherSum)) });
+    return card({ title: '时间花在哪里', sub: '平均每个成功的' + n + '，总历时 ' + dur(per(M.leadSum)) + '（' + M.succ + ' 个样本）' }, segbar(parts), legendStack(parts));
+  }
+  if (aspect === 'time') {
+    const rows = Object.keys(CAUSES).filter((k) => M.cause[k]).map((k) => ({ name: CAUSES[k][0], fill: CAUSES[k][1], amount: M.cause[k].ms, text: dur(M.cause[k].ms) }));
+    return card({ title: '执行时长花在哪里', sub: '按这次执行的原因拆分' }, segbar(rows), legendStack(rows));
+  }
+  if (aspect === 'quality') {
+    const good = M.fp, reworked = M.succ - M.fp;
+    const parts = [{ name: '一次通过', fill: 'good', amount: good, text: good + ' 个' }, { name: '成功，但有返工或重试', fill: 'c4', amount: reworked, text: reworked + ' 个' }, { name: '失败', fill: 'crit', amount: M.fail, text: M.fail + ' 个' }, { name: '已取消', fill: 'other', amount: M.cancel, text: M.cancel + ' 个' }];
+    return card({ title: '已结束的' + n + '怎么收场', sub: '共 ' + M.ended + ' 个；进行中和已中断的不在里面' }, segbar(parts), legendStack(parts));
+  }
+  if (aspect === 'human') {
+    const kinds = Object.keys(M.gk).filter((k) => M.gk[k].total > 0).sort((a, b) => M.gk[b].total - M.gk[a].total);
+    const fills = ['c1', 'c2', 'c3', 'c4', 'c5', 'other'];
+    const parts = kinds.map((k, i) => ({ name: GATES[k][1], fill: fills[Math.min(i, 5)], amount: M.gk[k].total, text: dur(M.gk[k].total) + ' · ' + M.gk[k].rounds + ' 轮' }));
+    return card({ title: '等人的时间花在哪类人工门上', sub: '已处理完的轮次，等待时间合计' }, segbar(parts), legendStack(parts));
+  }
+  if (aspect === 'stability') {
+    const codes = Object.keys(M.codes).sort((a, b) => M.codes[b] - M.codes[a]).slice(0, 6);
+    return card({ title: '主要失败码', sub: M.execFail + ' 次失败的执行' }, codes.length ? columns(codes.map((k) => ({ label: k, value: M.codes[k], text: M.codes[k] + ' 次' })), '主要失败码') : empty('这个范围里没有失败的执行'));
+  }
+  const parts = [{ name: '成功', fill: 'good', amount: M.succ, text: M.succ + ' 个' }, { name: '失败', fill: 'crit', amount: M.fail, text: M.fail + ' 个' }, { name: '已取消', fill: 'other', amount: M.cancel, text: M.cancel + ' 个' }, { name: '已中断', fill: 'warn', amount: M.interrupted, text: M.interrupted + ' 个' }, { name: '进行中', fill: 'c1', amount: M.active, text: M.active + ' 个' }];
+  return card({ title: n + '的结局', sub: '这段时间开始的 ' + M.n + ' 个' + n }, segbar(parts), legendStack(parts));
+}
+function hintsCard(c) {
+  const caps = state.cap ? [state.cap] : Object.keys(CAPS).filter((k) => CAPS[k].type !== 'platform' && (!state.type || CAPS[k].type === state.type));
+  const out = [];
+  for (const k of caps) {
+    const M = state.cap ? c.M : measure(c.units.filter((u) => u.cap === k), null, null), n = NOUN[CAPS[k].type];
+    const add = (weight, title, body, aspect) => out.push({ weight, cap: k, title: (state.cap ? '' : CAPS[k].name + '：') + title, body, aspect });
+    if (M.succ >= 5 && M.waitShare >= 0.5) add(M.waitShare, '大部分时间在等人', '等人时间占总历时的 ' + pct(M.waitShare) + '，自动执行只占 ' + pct(M.flowEff) + '。', 'human');
+    if (M.rv.rounds >= 5 && M.rv.rejRate >= 0.3) add(M.rv.rejRate + 0.2, '评审经常不通过', M.rv.rounds + ' 轮评审里有 ' + pct(M.rv.rejRate) + ' 没有通过。', 'quality');
+    if (M.succ >= 5 && M.fpRate != null && M.fpRate <= 0.4) add(1 - M.fpRate, '很少一次通过', '成功的' + n + '里只有 ' + pct(M.fpRate) + ' 没有返工也没有重试。', 'quality');
+    if (M.execs >= 10 && M.retryRate >= 0.08) add(M.retryRate * 4, '失败重试偏多', M.execs + ' 次执行里有 ' + M.retries + ' 次是失败后的自动重试。', 'stability');
+    if (M.tokens > 0 && M.wasteShare >= 0.2) add(M.wasteShare + 0.1, '返工与重试花了不少 Token', pct(M.wasteShare) + ' 的 Token 花在评审返工、失败重试和其它重跑上。', 'cost');
+    if (CAPS[k].type === 'employee' && M.n >= 5 && M.blocked / M.n >= 0.1) add(M.blocked / M.n + 0.3, '经常被阻塞', M.n + ' 次交办里有 ' + M.blocked + ' 次被阻塞过。', 'human');
+  }
+  out.sort((a, b) => b.weight - a.weight);
+  /* across capabilities: one hint per capability and one per kind, so the list reads as four different leads */
+  const seen = new Set(), kinds = new Set();
+  const list = (state.cap ? out : out.filter((x) => { const kind = x.title.split('：')[1]; if (seen.has(x.cap) || kinds.has(kind)) return false; seen.add(x.cap); kinds.add(kind); return true; })).slice(0, 4);
+  return card({ title: '值得关注', sub: '按规则从上面的数字里挑出来的；样本太少的不提示' }, list.length ? h('div', { class: 'hints' }, list.map((x) => h('div', { class: 'hint' }, chip('warn', '提示'), h('p', { class: 'hint__title', text: x.title }), h('p', { class: 'hint__body', text: x.body }), h('button', { type: 'button', class: 'btn hint__go', text: '看' + ASPECT_NAME[x.aspect] + ' ›', onclick: () => go({ cap: x.cap, run: null, aspect: x.aspect }) })))) : empty('没有需要提示的地方'));
+}
+function liveStrip(c) {
+  const L = c.L;
+  const item = (cls, count, label, onclick) => h('button', { type: 'button', class: 'live__item' + (cls ? ' live__item--' + cls : ''), onclick }, h('b', { text: String(count) }), h('span', { text: label }));
+  return h('div', { class: 'live', 'aria-label': '当前' }, h('span', { class: 'live__label', text: '当前（不受时间范围影响）' }),
+    item('', L.running, '运行中', () => { state.filter = 'active'; go({ aspect: 'records' }); }),
+    item(L.open.length ? 'warn' : '', L.open.length, '等人处理' + (L.open.length ? '，最久 ' + dur(L.open[0].w) : ''), () => go({ aspect: 'human' })),
+    item(L.interrupted ? 'warn' : '', L.interrupted, '已中断', () => { state.filter = 'active'; go({ aspect: 'records' }); }),
+    item(L.alertsOpen ? 'danger' : '', L.alertsOpen, '未解决告警', () => go({ aspect: 'stability' })));
+}
+const HEAT = {
+  overview: ['成本', (M) => M.cost, cny], cost: ['成本', (M) => M.cost, cny],
+  time: ['耗时', (M) => (M.execs ? M.execP50 : quantile(M.gateWaits, 0.5)), dur],
+  quality: ['返工与重试的执行占比', (M) => (M.execs ? M.wasteExecShare : ratio(M.gateRej, M.gateJudged)), pct],
+  human: ['等人时间', (M) => Object.keys(M.gk).reduce((a, k) => a + M.gk[k].total, 0), dur],
+  stability: ['执行失败率', (M) => M.execFailRate, pct],
+};
+function stageStrip(aspect, c) {
+  const rows = breakdown(c, 'stage'), spec = HEAT[aspect];
+  const values = rows.map((r) => spec[1](r.M)), distinct = [...new Set(values.filter((v) => v != null && v > 0))].sort((a, b) => a - b);
+  const level = (v) => (v == null || v <= 0 ? 0 : distinct.length === 1 ? 3 : 1 + Math.round((4 * distinct.indexOf(v)) / (distinct.length - 1)));
+  const kindOf = (k) => { const st = stageOf(state.cap, k); return st.gate ? '人工门 · ' + GATES[st.gate][0] : st.human ? '人类成员' : st.agent ? 'Agent · ' + st.agent : '平台'; };
+  const type = CAPS[state.cap].type;
+  return card({ title: '环节一览 · ' + spec[0], sub: (type === 'workflow' ? '正式页面里这里是工作流画布' : type === 'employee' ? '正式页面里这里是职责图' : '正式页面里这里是成员表') + '，按当前关注面的指标着色；点一个环节就只看它' },
+    h('div', { class: 'strip' }, rows.map((r, i) => [i > 0 && type !== 'workgroup' ? h('span', { class: 'strip__arrow', 'aria-hidden': 'true', text: '→' }) : null,
+      h('button', { type: 'button', class: 'strip__node' + (level(values[i]) ? ' heat-' + level(values[i]) : ''), onclick: () => go({ slice: { dim: 'stage', value: r.key } }) }, h('span', { class: 'strip__name', text: r.name }), h('span', { class: 'strip__kind', text: kindOf(r.key) }), h('span', { class: 'strip__val', text: values[i] == null || values[i] <= 0 ? '—' : spec[2](values[i]) }))])),
+    h('div', { class: 'scale' }, h('span', { text: '低' }), h('span', { class: 'scale__steps' }, [1, 2, 3, 4, 5].map((i) => h('i', { class: 'heat-' + i }))), h('span', { text: '高' })));
+}
+function dimTable(aspect, c, dimKey) {
+  const rows = breakdown(c, dimKey), n = noun(), part = c.grain === 'part' || DIMS[dimKey].grain === 'part', run = c.platform ? '调用' : '执行';
+  const total = c.M;
+  const N = (label) => ({ label, num: true });
+  let cols, cells, sortBy, foot = null;
+  const first = { label: DIMS[dimKey].label };
+  if (part) {
+    const spec = {
+      overview: [[N('涉及的' + n), N(run + '次数'), N(run + '失败率'), N(run + '时长'), N('Token'), N('成本'), { label: '成本占比' }], (M) => [M.n, M.execs, pct(M.execFailRate), dur(M.execP50), tok(M.tokens), cny(M.cost), meter(ratio(M.cost, total.cost))], (M) => M.cost],
+      cost: [[N(run + '次数'), N('输入'), N('缓存读取'), N('缓存写入'), N('输出'), N('Token'), N('成本'), { label: '成本占比' }], (M) => [M.execs, tok(M.tok[0]), tok(M.tok[1]), tok(M.tok[2]), tok(M.tok[3]), tok(M.tokens), cny(M.cost), meter(ratio(M.cost, total.cost))], (M) => M.cost],
+      time: [[N(run + '次数'), N(run + '时长'), N('P90'), N('每个' + one() + '执行几次'), { label: '占执行时长' }], (M) => [M.execs, dur(M.execP50), dur(M.execP90), num1(M.n ? M.execs / M.n : null), meter(ratio(M.execMsSum, total.execMsSum))], (M) => M.execMsSum],
+      quality: [[N(run + '次数'), N('返工与重试'), N('产出被打回'), N('评审与确认'), N('返工与重试的 Token')], (M) => [M.execs, pct(M.wasteExecShare), pct(ratio(M.gateRej, M.gateJudged)), M.gateJudged ? M.gateJudged + ' 轮' : '—', pct(M.wasteShare)], (M) => M.wasteExecShare || 0],
+      human: [[N('人工门轮次'), N('等待'), N('P90'), N('不通过'), N('等待合计')], (M) => [M.gateRounds, dur(quantile(M.gateWaits, 0.5)), dur(quantile(M.gateWaits, 0.9)), pct(ratio(M.gateRej, M.gateJudged)), dur(M.gateWaits.reduce((a, b) => a + b, 0))], (M) => M.gateWaits.reduce((a, b) => a + b, 0)],
+      stability: [[N(run + '次数'), N('失败'), N(run + '失败率'), N('失败重试'), { label: '主要失败码' }], (M) => [M.execs, M.execFail, pct(M.execFailRate), M.retries, topCode(M)], (M) => M.execFailRate || 0],
+    }[aspect];
+    const drop = c.platform || c.single ? ({ overview: [0], time: [3] }[aspect] || []) : [];
+    cols = [first].concat(spec[0].filter((x, i) => !drop.includes(i))); cells = (M, r) => spec[1](M, r).filter((x, i) => !drop.includes(i)); sortBy = spec[2];
+    if (aspect === 'cost') foot = ['合计', total.execs, tok(total.tok[0]), tok(total.tok[1]), tok(total.tok[2]), tok(total.tok[3]), tok(total.tokens), cny(total.cost), ''];
+  } else {
+    const spec = {
+      overview: [[N(n + '数'), N('成功率'), N('总历时'), N('等人占比'), N('一次通过率'), N('每个的成本'), N('成本')], (M) => [M.n || (M.calls ? M.calls + ' 次调用' : 0), pct(M.successRate), dur(M.leadP50), pct(M.waitShare), pct(M.fpRate), cny(M.perCost), cny(M.cost)], (M) => M.cost],
+      cost: [[N(n + '数'), N('Token'), N('成本'), { label: '成本占比' }, N('每个的成本'), N('返工与重试')], (M) => [M.n || (M.calls ? M.calls + ' 次调用' : 0), tok(M.tokens), cny(M.cost), meter(ratio(M.cost, total.cost)), cny(M.perCost), pct(M.wasteShare)], (M) => M.cost],
+      time: [[N(n + '数'), N('总历时'), N('P90'), N('流动效率'), N('等人占比'), N('排队与中断')], (M) => [M.n, dur(M.leadP50), dur(M.leadP90), pct(M.flowEff), pct(M.waitShare), pct(M.otherShare)], (M) => M.leadP50 || 0],
+      quality: [[N(n + '数'), N('成功率'), N('一次通过率'), N('评审首轮通过'), N('评审不通过'), N('返工与重试')], (M) => [M.n, pct(M.successRate), pct(M.fpRate), pct(M.rv.firstPassRate), pct(M.rv.rejRate), pct(M.wasteShare)], (M) => 1 - (M.fpRate == null ? 1 : M.fpRate)],
+      human: [[N(n + '数'), N('每个的人工介入'), N('等人占比'), N('评审等待'), N('反问回答'), N('现在等人')], (M, r) => [M.n, num1(M.intervPer), pct(M.waitShare), dur(M.rv.waitP50), dur(M.cl.waitP50), r.open], (M) => M.waitShare || 0],
+      stability: [[N(n + '数'), N('失败'), N('已中断'), N('执行失败率'), N('失败重试率'), { label: '主要失败码' }], (M) => [M.n, M.fail, M.interrupted, pct(M.execFailRate), pct(M.retryRate), topCode(M)], (M) => M.execFailRate || 0],
+    }[aspect];
+    cols = [first].concat(spec[0]); cells = spec[1]; sortBy = spec[2];
+    if (aspect === 'cost') foot = ['合计', total.n, tok(total.tokens), cny(total.cost), '', cny(total.perCost), pct(total.wasteShare)];
+  }
+  if (dimKey !== 'stage') rows.sort((a, b) => sortBy(b.M) - sortBy(a.M));
+  const shown = dimKey === 'unit' ? rows.slice(0, 12) : rows;
+  return [table(cols, shown.map((r) => ({ cells: [nameCell(r.name, r.sub)].concat(cells(r.M, r)), pick: pickRow(dimKey, r.key) })), { minWidth: 720, foot }),
+    dimKey === 'unit' && rows.length > 12 ? h('p', { class: 'small muted', text: '只列出成本最高的 12 个；全部在“明细”里。' }) : null];
+}
+function gateTable(c, dimKey) {
+  const groups = new Map(), open = new Map();
+  for (const u of c.units) for (const g of u.gates) { if (g.t1 == null) continue; const k = dimKey === 'gate' ? g.kind : g.who; if (!groups.has(k)) groups.set(k, { waits: [], judged: 0, rej: 0, comments: 0 }); const x = groups.get(k); x.waits.push(g.t1 - g.t0); x.comments += g.comments; if (g.kind === 'review' || g.kind === 'completion' || g.kind === 'approval') { x.judged++; if (g.outcome !== 'approved') x.rej++; } }
+  for (const o of c.L.open) { const k = dimKey === 'gate' ? o.g.kind : o.g.who; open.set(k, (open.get(k) || 0) + 1); if (!groups.has(k)) groups.set(k, { waits: [], judged: 0, rej: 0, comments: 0 }); }
+  const rows = [...groups].sort((a, b) => b[1].waits.reduce((x, y) => x + y, 0) - a[1].waits.reduce((x, y) => x + y, 0));
+  return table([{ label: DIMS[dimKey].label }, { label: '轮次', num: true }, { label: '等待', num: true }, { label: 'P90', num: true }, { label: '等待合计', num: true }, { label: '不通过', num: true }, { label: '现在等人', num: true }],
+    rows.map(([k, x]) => ({ cells: [DIMS[dimKey].name(k), x.waits.length, dur(quantile(x.waits, 0.5)), dur(quantile(x.waits, 0.9)), dur(x.waits.reduce((a, b) => a + b, 0)), pct(ratio(x.rej, x.judged)), open.get(k) || 0] })), { minWidth: 680 });
+}
+function byCard(aspect, c) {
+  const dims = dimsFor(aspect, c);
+  if (!dims.length) return null;
+  const dimKey = dims.includes(state.by[aspect]) ? state.by[aspect] : dims[0];
+  const gateDim = DIMS[dimKey].grain === 'gate';
+  return card({ title: '按' + DIMS[dimKey].label + '看', sub: gateDim ? '人工门自己的统计' : '点一行，范围就收窄到它', actions: seg('按什么看', dims.map((d) => [d, DIMS[d].label]), dimKey, (v) => { state.by[aspect] = v; render(); }) }, gateDim ? gateTable(c, dimKey) : dimTable(aspect, c, dimKey));
+}
+function openGatesCard(c) {
+  const rows = c.L.open.slice(0, 12);
+  return card({ title: '现在在等谁', sub: '还没处理的人工门，等得最久的在前；不受时间范围影响' }, table([{ label: '任务或交办' }, { label: '能力' }, { label: '环节' }, { label: '种类' }, { label: '已等待', num: true }, { label: '等谁处理' }],
+    rows.map((o) => ({ cells: [nameCell(o.u.name, when(o.u.start) + ' 开始'), CAPS[o.u.cap].name, stageOf(o.u.cap, o.g.stage).n, chip('warn', GATES[o.g.kind][0]), dur(o.w), state.role === 'manager' ? OWNERS[o.g.who] : '任务成员'], pick: () => go({ run: o.u.id, aspect: 'human' }) })), { minWidth: 700, empty: '现在没有等人处理的' }));
+}
+function alertsCard(c) {
+  const rows = c.L.alerts.filter((x) => x.a.open).concat(c.M.alerts.filter((x) => !x.a.open)).sort((a, b) => Number(b.a.open) - Number(a.a.open) || b.a.at - a.a.at).slice(0, 10);
+  return card({ title: '告警', sub: '未解决的在前；任务页上的同一批告警' }, table([{ label: '规则' }, { label: '级别' }, { label: '任务或交办' }, { label: '发现时间', num: true }, { label: '状态' }],
+    rows.map((x) => ({ cells: [x.a.rule, chip(x.a.sev === '错误' ? 'danger' : 'warn', x.a.sev), nameCell(x.u.name, CAPS[x.u.cap].name), when(x.a.at), x.a.open ? chip('danger', '未解决') : chip('neutral', '已解决')], pick: () => go({ run: x.u.id, aspect: 'stability' }) })), { minWidth: 640, empty: '没有告警' }));
+}
+/* What was actually spent inside the window, by the time each call happened — whenever its run began. */
+function accrualCard(c) {
+  const sl = state.slice, dim = sl ? DIMS[sl.dim] : null;
+  const unitOk = (u) => inScope(u) && inRole(u) && (!dim || dim.grain !== 'unit' || dim.key(u) === sl.value);
+  const [count, size, lab] = { '24h': [8, 3 * HOUR, hourLabel], '7d': [7, DAY, dayLabel], '30d': [10, 3 * DAY, dayLabel], '90d': [13, 7 * DAY, dayLabel] }[state.range];
+  const origin = c.to - count * size, sums = Array.from({ length: count }, (x, i) => ({ label: lab(origin + i * size), tok: [0, 0, 0, 0], cost: 0 }));
+  let cost = 0, tokens = 0, calls = 0, earlier = 0, earlierRuns = new Set();
+  for (const u of UNITS) {
+    if (!unitOk(u)) continue;
+    for (const p of u.parts) {
+      if (p.t0 < c.from || p.t0 >= c.to || (c.pred && !c.pred(p, u))) continue;
+      cost += p.cost; tokens += sum4(p.tok); calls += 1;
+      if (u.start < c.from) { earlier += p.cost; earlierRuns.add(u.id); }
+      const b = sums[Math.max(0, Math.min(count - 1, Math.floor((p.t0 - origin) / size)))];
+      b.cost += p.cost; for (let i = 0; i < 4; i++) b.tok[i] += p.tok[i];
+    }
+  }
+  const later = c.M.cost - (cost - earlier);
+  return card({ title: '期间实际消耗', sub: '另一种口径：按调用发生的时间算，不管它属于哪天开始的' + noun() },
+    h('dl', { class: 'facts' }, [['期间实际消耗', cny(cost)], ['Token', tok(tokens)], ['调用', calls + ' 次'], ['其中来自更早开始的' + noun(), cny(earlier) + '（' + earlierRuns.size + ' 个）']].map((f) => h('div', null, h('dt', { text: f[0] }), h('dd', { text: f[1] })))),
+    columns(sums.map((b) => ({ label: b.label, value: b.cost, text: cny(b.cost), note: tok(sum4(b.tok)) + ' Token' })), '每段时间实际发生的消耗'),
+    h('p', { class: 'small muted', text: '和上面“成本”的关系：上面的 ' + cny(c.M.cost) + ' 是这段时间开始的' + noun() + '到现在为止的全部消耗。它不含更早开始的' + noun() + '在这段时间里花的 ' + cny(earlier) + (later > 0.005 ? '，但包含这些' + noun() + '在时间范围结束后继续花的部分' : '') + '。' }));
+}
+const timeBar = (u) => segbar([{ name: '自动执行', fill: 'c1', amount: u.auto, text: dur(u.auto) }, { name: '等人', fill: 'c2', amount: u.wait, text: dur(u.wait) }, { name: '排队与中断', fill: 'other', amount: u.other, text: dur(u.other) }], true);
+function unitsCard(c) {
+  const n = noun();
+  if (c.grain === 'part') {
+    const calls = [];
+    for (const u of c.units) for (const p of u.parts) if (!c.pred || c.pred(p, u)) calls.push({ u, p });
+    calls.sort((a, b) => b.p.t0 - a.p.t0);
+    return card({ title: '调用明细', sub: '共 ' + calls.length + ' 次' + (c.platform ? '调用' : '执行') + '，最近的在前' }, table([{ label: '开始', num: true }, { label: c.platform ? '类别' : '任务或交办' }, { label: '环节' }, { label: '原因' }, { label: 'Agent' }, { label: '模型' }, { label: '状态' }, { label: '耗时', num: true }, { label: 'Token', num: true }, { label: '成本', num: true }],
+      calls.slice(0, state.more).map((x) => ({ cells: [when(x.p.t0), nameCell(x.u.name, c.platform ? null : CAPS[x.u.cap].name), x.p.sys ? SYS[x.p.sys] : stageOf(x.u.cap, x.p.stage).n, CAUSES[x.p.cause][0], x.p.agent, MODELS[x.p.model].name, x.p.failed ? chip('danger', '失败') : x.p.running ? chip('info', '运行中') : chip('success', '完成'), dur(x.p.t1 - x.p.t0), full(sum4(x.p.tok)), cny(x.p.cost)], pick: c.platform ? null : () => go({ run: x.u.id, aspect: 'records' }) })), { minWidth: 980 }),
+      calls.length > state.more ? h('button', { type: 'button', class: 'btn', text: '再显示 25 条', onclick: () => { state.more += 25; render(); } }) : null);
+  }
+  const keep = { all: () => true, active: (u) => u.status === 'active' || u.status === 'interrupted', succeeded: (u) => u.status === 'succeeded', bad: (u) => u.status === 'failed' || u.status === 'canceled' }[state.filter];
+  const pool = state.filter === 'active' ? c.live : c.units;
+  const sorters = { start: (u) => u.start, lead: (u) => u.lead, cost: (u) => u.cost, interv: (u) => u.interv };
+  const list = pool.filter(keep).slice().sort((a, b) => (sorters[state.sort.key](a) - sorters[state.sort.key](b)) * state.sort.dir);
+  const cols = [{ label: n === '任务与交办' ? '任务或交办' : n }, state.cap ? null : { label: '能力' }, { label: '状态' }, { label: '来源' }, state.role === 'manager' ? { label: '发起人' } : null, { label: '开始', num: true, sort: 'start' }, { label: '总历时', num: true, sort: 'lead' }, { label: '时间花在哪' }, { label: 'Token', num: true }, { label: '成本', num: true, sort: 'cost' }, { label: '人工介入', num: true, sort: 'interv' }, { label: '一次通过' }].filter(Boolean);
+  const rows = list.slice(0, state.more).map((u) => ({ cells: [nameCell(u.name, u.id), state.cap ? null : CAPS[u.cap].name, statusChip(u), ORIGINS[u.origin], state.role === 'manager' ? OWNERS[u.owner] : null, when(u.start), dur(u.lead), timeBar(u), tok(u.tokens), cny(u.cost), u.interv, u.status === 'succeeded' ? (u.firstPass ? '是' : '否') : '—'].filter((x, i) => !((i === 1 && state.cap) || (i === 4 && state.role !== 'manager'))), pick: () => go({ run: u.id, aspect: 'overview' }) }));
+  return card({ title: n + '明细', sub: (state.filter === 'active' ? '所有还没结束的，不受时间范围影响；' : '') + '共 ' + list.length + ' 个；点一行看它的全过程，点表头排序', actions: seg('状态', [['all', '全部'], ['active', '进行中'], ['succeeded', '成功'], ['bad', '未成功']], state.filter, (v) => { state.filter = v; state.more = 25; render(); }) },
+    table(cols, rows, { minWidth: 1040, sorted: state.sort, onSort: (key) => { state.sort = state.sort.key === key ? { key, dir: -state.sort.dir } : { key, dir: -1 }; render(); } }),
+    list.length > state.more ? h('button', { type: 'button', class: 'btn', text: '再显示 25 个', onclick: () => { state.more += 25; render(); } }) : null);
+}
+
+/* ================= views ================= */
+function viewAggregate() {
+  const c = context(), a = state.aspect, out = [];
+  if (state.role === 'member') out.push(h('p', { class: 'notice', text: '你只能看到自己发起或参与的任务；按人拆分的统计不显示。' }));
+  if (a === 'records') return out.concat(unitsCard(c));
+  if (c.platform && (a === 'quality' || a === 'human')) return out.concat(h('p', { class: 'notice', text: '任务之外的平台调用没有评审、返工和人工门，“' + ASPECT_NAME[a] + '”这一面不适用。' }));
+  if (a === 'overview' && c.grain === 'unit') out.push(liveStrip(c));
+  if (a === 'human' && c.grain === 'unit') out.push(openGatesCard(c));
+  out.push(kpis(tiles(a, c)));
+  if (a === 'overview' && c.grain === 'unit') out.push(hintsCard(c));
+  out.push(h('div', { class: 'grid2' }, splitCard(a, c), trendCard(a, c)));
+  if (state.cap && !c.platform && !c.pred && CAPS[state.cap].stages.length > 1) out.push(stageStrip(a, c));
+  out.push(byCard(a, c));
+  if (a === 'cost' && !c.platform) out.push(accrualCard(c));
+  if (a === 'stability' && c.grain === 'unit') out.push(alertsCard(c));
+  return out;
+}
+const CAUSE_LEGEND = Object.keys(CAUSES).map((k) => [CAUSES[k][1], CAUSES[k][0]]).concat([['wait', '等人']]);
+function timeline(u) {
+  const end = u.end == null ? NOW : u.end, span = Math.max(1, end - u.start);
+  const order = CAPS[u.cap].stages.map((st) => st.k).concat(['system']);
+  const keys = order.filter((k) => u.parts.some((p) => p.stage === k) || u.gates.some((g) => g.stage === k));
+  const pos = (t0, t1) => 'left:' + (((t0 - u.start) / span) * 100).toFixed(3) + '%;width:' + (((t1 - t0) / span) * 100).toFixed(3) + '%';
+  const rows = keys.map((k) => h('div', { class: 'tl__row' }, h('span', { class: 'tl__name', text: stageOf(u.cap, k).n }), h('div', { class: 'tl__track' },
+    u.parts.filter((p) => p.stage === k).map((p) => bindTip(h('button', { type: 'button', class: 'tl__bar fill-' + CAUSES[p.cause][1] + (p.failed ? ' tl__bar--failed' : '') + (p.running ? ' tl__bar--open' : ''), style: pos(p.t0, p.t1), 'aria-label': CAUSES[p.cause][0] + '，' + dur(p.t1 - p.t0) + (p.failed ? '，失败' : '') }), [CAUSES[p.cause][0] + (p.failed ? ' · 失败（' + p.code + '）' : p.running ? ' · 运行中' : ''), when(p.t0) + ' 起，' + dur(p.t1 - p.t0), p.agent + ' · ' + MODELS[p.model].name, tok(sum4(p.tok)) + ' Token · ' + cny(p.cost)])),
+    u.gates.filter((g) => g.stage === k).map((g) => { const t1 = g.t1 == null ? NOW : g.t1; return bindTip(h('button', { type: 'button', class: 'tl__bar fill-wait' + (g.t1 == null ? ' tl__bar--open' : ''), style: pos(g.t0, t1), 'aria-label': GATES[g.kind][1] + '，' + dur(t1 - g.t0) }), [GATES[g.kind][1] + ' · 第 ' + g.round + ' 轮' + (g.t1 == null ? ' · 还在等' : ''), when(g.t0) + ' 起，' + dur(t1 - g.t0), g.t1 == null ? '还没有处理' : '结果：' + ({ approved: '通过', iterated: '要求修改', rejected: '打回', answered: '已回答', delivered: '已交付', unblocked: '已解除' }[g.outcome] || g.outcome)]); }))));
+  return h('div', { class: 'tl' }, h('div', { class: 'tl__in' }, rows, h('div', { class: 'tl__axis' }, [0, 0.25, 0.5, 0.75, 1].map((f) => h('span', { class: 'tl__tick', style: 'left:' + f * 100 + '%', text: when(u.start + span * f) })))));
+}
+function viewRun() {
+  const u = UNIT_BY_ID.get(state.run), a = state.aspect, n = NOUN[u.type], out = [];
+  const M = measure([u], null, null);
+  const stages = () => { state.cap = u.cap; const c = { units: [u], pred: null, gpred: null, L: M, M, grain: 'unit', platform: false, single: true }; return c; };
+  out.push(card({ title: u.name, sub: n + ' ' + u.id + ' · ' + CAPS[u.cap].name, actions: h('span', { class: 'row' }, statusChip(u), h('button', { type: 'button', class: 'btn', text: '打开' + n + '页 ↗', title: '正式页面里会跳到这个' + n + '自己的页面' })) },
+    h('dl', { class: 'facts' }, [['来源', ORIGINS[u.origin]], ['发起人', state.role === 'manager' ? OWNERS[u.owner] : '我'], ['开始', when(u.start)], ['结束', u.end == null ? '还没结束' : when(u.end)], ['版本', u.type === 'workflow' || u.type === 'employee' ? '第 ' + u.ver + ' 版' : '—'], ['一次通过', u.status === 'succeeded' ? (u.firstPass ? '是' : '否') : '—']].map((f) => h('div', null, h('dt', { text: f[0] }), h('dd', { text: f[1] }))))));
+  const c = stages();
+  const callsTable = () => table([{ label: '开始', num: true }, { label: '环节' }, { label: '原因' }, { label: 'Agent' }, { label: '模型' }, { label: '状态' }, { label: '耗时', num: true }, { label: '输入', num: true }, { label: '缓存读取', num: true }, { label: '缓存写入', num: true }, { label: '输出', num: true }, { label: '成本', num: true }],
+    u.parts.map((p) => ({ cells: [when(p.t0), p.sys ? SYS[p.sys] : stageOf(u.cap, p.stage).n, CAUSES[p.cause][0], p.agent, MODELS[p.model].name, p.failed ? chip('danger', '失败 · ' + p.code) : p.running ? chip('info', '运行中') : chip('success', '完成'), dur(p.t1 - p.t0), full(p.tok[0]), full(p.tok[1]), full(p.tok[2]), full(p.tok[3]), cny(p.cost)] })), { minWidth: 1040, foot: ['合计', '', '', '', '', '', dur(u.auto), full(M.tok[0]), full(M.tok[1]), full(M.tok[2]), full(M.tok[3]), cny(M.cost)] });
+  const gatesTable = () => table([{ label: '环节' }, { label: '种类' }, { label: '轮次', num: true }, { label: '开始等', num: true }, { label: '等了多久', num: true }, { label: '结果' }, { label: '意见或问题', num: true }, { label: '处理人' }],
+    u.gates.map((g) => ({ cells: [stageOf(u.cap, g.stage).n, GATES[g.kind][0], g.round, when(g.t0), dur((g.t1 == null ? NOW : g.t1) - g.t0), g.t1 == null ? chip('warn', '还在等') : { approved: '通过', iterated: '要求修改', rejected: '打回', answered: '已回答', delivered: '已交付', unblocked: '已解除' }[g.outcome], g.comments || '—', state.role === 'manager' ? OWNERS[g.who] : '任务成员'] })), { minWidth: 760, empty: '这个' + n + '没有经过人工门' });
+  const timeParts = [{ name: '自动执行', fill: 'c1', amount: u.auto, text: dur(u.auto) }].concat(Object.keys(u.waits).map((k, i) => ({ name: GATES[k][1], fill: ['c2', 'c3', 'c4', 'c5'][i % 4], amount: u.waits[k], text: dur(u.waits[k]) })), [{ name: '排队与中断', fill: 'other', amount: u.other, text: dur(u.other) }]);
+  const causeParts = Object.keys(CAUSES).map((k) => ({ name: CAUSES[k][0], fill: CAUSES[k][1], amount: M.cause[k] ? M.cause[k].tok : 0, text: tok(M.cause[k] ? M.cause[k].tok : 0) + ' · ' + cny(M.cause[k] ? M.cause[k].cost : 0) }));
+  const tl = () => card({ title: '全过程', sub: '每一行是一个环节；色块是一次执行，斜纹是在等人。悬停看详情' }, timeline(u), legendRow(CAUSE_LEGEND));
+  const byStage = (aspect) => card({ title: '按环节看' }, dimTable(aspect, c, 'stage'));
+  if (a === 'overview') {
+    out.push(kpis([T('总历时', dur(u.lead), u.end == null ? '到现在为止' : '开始到结束', null, null, null, null, 'time'), T('自动执行', dur(u.auto), '占 ' + pct(ratio(u.auto, u.lead)), null, null, null, null, 'time'), T('等人', dur(u.wait), u.gates.length + ' 轮人工门', null, null, null, null, 'human'), T('成本', cny(u.cost), tok(u.tokens) + ' Token', null, null, null, null, 'cost'), T('执行次数', String(M.execs), '其中返工与重试 ' + ((M.cause.rework ? M.cause.rework.n : 0) + (M.cause.retry ? M.cause.retry.n : 0) + (M.cause.rerun ? M.cause.rerun.n : 0)) + ' 次', null, null, null, null, 'quality'), T('失败与告警', M.execFail + ' · ' + u.alerts.length, M.execFail + ' 次执行失败，' + u.alerts.length + ' 条告警', null, null, null, null, 'stability')]));
+    out.push(tl()); out.push(byStage('overview'));
+  } else if (a === 'cost') {
+    out.push(kpis(tiles('cost', { M, P: M, L: M, grain: 'part', platform: false, pred: null }).slice(0, 2).concat([T('返工与重试', pct(M.wasteShare), '占 Token 的比例'), T('系统工作', pct(M.sysShare), '平台自己发起的调用')])));
+    out.push(card({ title: 'Token 花在哪里', sub: '按这次执行的原因拆分' }, segbar(causeParts), legendStack(causeParts)));
+    out.push(byStage('cost'));
+  } else if (a === 'time') {
+    out.push(kpis([T('总历时', dur(u.lead)), T('自动执行', dur(u.auto), '流动效率 ' + pct(ratio(u.auto, u.lead))), T('等人', dur(u.wait), '占 ' + pct(ratio(u.wait, u.lead))), T('排队与中断', dur(u.other), '占 ' + pct(ratio(u.other, u.lead)))]));
+    out.push(card({ title: '时间花在哪里' }, segbar(timeParts), legendStack(timeParts))); out.push(tl()); out.push(byStage('time'));
+  } else if (a === 'quality') {
+    out.push(kpis([T('结局', STATUS[u.status][0], u.type === 'employee' && u.outcome ? { merged: '已合入', nochange: '无需修改', other: '其他结束', failed: '执行失败' }[u.outcome] : null), T('一次通过', u.status === 'succeeded' ? (u.firstPass ? '是' : '否') : '—', '没有返工、重试和失败'), T('返工与重试', pct(M.wasteExecShare), '占执行次数'), T('评审与确认', M.gateJudged + ' 轮', '其中 ' + M.gateRej + ' 轮没有通过')]));
+    out.push(byStage('quality')); out.push(card({ title: '评审、确认与反问' }, gatesTable()));
+  } else if (a === 'human') {
+    out.push(kpis([T('人工介入', u.interv + ' 次', '人工门轮次 + 人工重试 + 续跑与取消'), T('等人', dur(u.wait), '占总历时 ' + pct(ratio(u.wait, u.lead))), T('现在等人处理', String(M.open.length), M.open.length ? '已等 ' + dur(M.open[0].w) : '没有')]));
+    out.push(card({ title: '人工门的每一轮' }, gatesTable())); out.push(tl());
+  } else if (a === 'stability') {
+    out.push(kpis([T('执行失败', String(M.execFail), M.execs + ' 次执行'), T('失败重试', String(M.retries)), T('人工重试与续跑', String(u.retries + u.ops)), T('告警', String(u.alerts.length), u.alerts.filter((x) => x.open).length + ' 条未解决')]));
+    out.push(byStage('stability'));
+    out.push(card({ title: '告警' }, table([{ label: '规则' }, { label: '级别' }, { label: '发现时间', num: true }, { label: '状态' }], u.alerts.map((x) => ({ cells: [x.rule, x.sev, when(x.at), x.open ? chip('danger', '未解决') : chip('neutral', '已解决')] })), { minWidth: 520, empty: '这个' + n + '没有告警' })));
+  } else {
+    out.push(card({ title: '调用明细', sub: '每个运行时进程一行；这里显示完整数字' }, callsTable()));
+  }
+  return out;
+}
+
+/* ================= chrome ================= */
+function countIn(pred) { const from = NOW - RANGES[state.range][1]; return UNITS.filter((u) => u.start >= from && inRole(u) && pred(u)).length; }
+function renderScope() {
+  const bar = $('#scope'), kids = [h('span', { class: 'scope__label', text: '范围' })];
+  const segBtn = (text, here, onGo, items) => h('button', { type: 'button', class: 'scope__seg' + (here ? ' scope__seg--here' : ''), 'data-menu': items ? '' : null, title: text, onclick: (e) => (items && here ? menu(e.currentTarget, items()) : onGo()) }, h('span', { text }), items && here ? h('span', { 'aria-hidden': 'true', text: '▾' }) : null);
+  const sep = () => h('span', { class: 'scope__sep', 'aria-hidden': 'true', text: '›' });
+  const typeItems = () => Object.keys(TYPES).map((k) => ({ label: TYPES[k], note: countIn((u) => u.type === k) + ' 个', current: k === state.type, pick: () => go({ type: k, cap: null, run: null }) }));
+  const capItems = (type) => Object.keys(CAPS).filter((k) => CAPS[k].type === type).map((k) => ({ label: CAPS[k].name, note: countIn((u) => u.cap === k) + ' 个', current: k === state.cap, pick: () => go({ cap: k, run: null }) }));
+  const allItems = () => Object.keys(TYPES).reduce((list, t) => list.concat([{ group: TYPES[t] }, { label: '全部' + TYPES[t], note: countIn((u) => u.type === t) + ' 个', pick: () => go({ type: t, cap: null, run: null }) }], capItems(t)), []);
+  const runItems = () => UNITS.filter((u) => u.cap === state.cap && inRole(u)).slice(0, 12).map((u) => ({ label: u.name, note: when(u.start), current: u.id === state.run, pick: () => go({ run: u.id, aspect: state.aspect }) }));
+  kids.push(segBtn('全部', !state.type, () => go({ type: null, cap: null, run: null }), null));
+  if (state.type) { kids.push(sep(), segBtn(TYPES[state.type], !state.cap, () => go({ cap: null, run: null }), typeItems)); }
+  if (state.cap) { kids.push(sep(), segBtn(CAPS[state.cap].name, !state.run, () => go({ run: null }), () => capItems(state.type))); }
+  if (state.run) { const u = UNIT_BY_ID.get(state.run); kids.push(sep(), segBtn(NOUN[u.type] + ' · ' + u.name, true, () => {}, runItems)); }
+  if (!state.run) {
+    const label = !state.type ? '选择范围' : !state.cap ? '选择具体的' + (state.type === 'platform' ? '类别' : TYPES[state.type]) : state.type === 'platform' ? null : '选择' + NOUN[state.type];
+    if (label) kids.push(sep(), h('button', { type: 'button', class: 'scope__seg scope__seg--add', 'data-menu': '', onclick: (e) => menu(e.currentTarget, !state.type ? allItems() : !state.cap ? capItems(state.type) : runItems()) }, h('span', { text: label }), h('span', { 'aria-hidden': 'true', text: '▾' })));
+    kids.push(h('span', { class: 'scope__gap' }));
+    if (state.slice) {
+      const d = DIMS[state.slice.dim];
+      kids.push(h('span', { class: 'scope__only' }, h('span', { text: '只看 ' + d.label + '：' + d.name(state.slice.value) }), h('button', { type: 'button', class: 'scope__x', 'aria-label': '取消只看', text: '×', onclick: () => go({ slice: null }) })));
+    } else if (state.type !== 'platform') {
+      const items = () => {
+        const list = [];
+        const push = (dim, table) => { list.push({ group: DIMS[dim].label }); for (const k of Object.keys(table)) list.push({ label: DIMS[dim].name(k), pick: () => go({ slice: { dim, value: k } }) }); };
+        if (state.cap) { list.push({ group: '环节' }); for (const st of CAPS[state.cap].stages) list.push({ label: st.n, pick: () => go({ slice: { dim: 'stage', value: st.k } }) }); }
+        push('agent', AGENTS); push('model', MODELS); push('cause', CAUSES); push('origin', ORIGINS);
+        if (state.role === 'manager') push('owner', OWNERS);
+        return list;
+      };
+      kids.push(h('button', { type: 'button', class: 'scope__seg scope__seg--add', 'data-menu': '', onclick: (e) => menu(e.currentTarget, items()) }, h('span', { text: '＋ 只看某个 Agent、模型、来源…' })));
+    }
+  }
+  bar.replaceChildren(...kids);
+}
+function renderChrome() {
+  $('#role-seg').replaceChildren(seg('查看身份', [['manager', '管理者'], ['member', '普通成员']], state.role, (v) => go({ role: v })));
+  const tc = $('#time-controls');
+  if (state.run) tc.replaceChildren(h('span', { class: 'muted small', text: '单个任务或交办看的是它的全过程，没有时间范围' }));
+  else tc.replaceChildren(seg('时间范围', Object.keys(RANGES).map((k) => [k, RANGES[k][0]]), state.range, (v) => go({ range: v })), seg('对比', [['off', '不对比'], ['period', '对比上一期']], state.compare, (v) => go({ compare: v })));
+  renderScope();
+  const n = noun();
+  $('#basis').textContent = state.run ? '下面是这一个' + n + '从开始到现在的全过程。' : state.type === 'platform' ? '统计' + RANGES[state.range][0] + '开始的、不属于任何任务的平台调用。' : '统计' + RANGES[state.range][0] + '开始的' + n + '，以及它们到现在为止的消耗、时长和人工介入。更早开始、还没结束的，在“当前”和“明细 › 进行中”里。';
+  $('#tabs').replaceChildren(...ASPECTS.map((a) => h('button', { type: 'button', class: 'tabs__tab' + (a[0] === state.aspect ? ' tabs__tab--active' : ''), 'aria-current': a[0] === state.aspect ? 'page' : null, text: a[1], onclick: () => go({ aspect: a[0] }) })));
+}
+function render() {
+  closeMenu(); hideTip();
+  renderChrome();
+  const kids = state.run ? viewRun() : viewAggregate();
+  $('#view').replaceChildren(...[].concat(kids).filter(Boolean));
+  fitSegLabels();
+}
+const MAP = [['总览 · 四张指标卡', '范围“全部” › 概况'], ['总览 · 按天的 Token 柱图', '成本 › 变化'], ['总览 · Token 最多的任务与 Agent', '成本 › 按任务与交办看、按 Agent 看'], ['总览 · 业务与系统消耗拆分', '成本 › Token 花在哪里、按系统工作看'], ['任务 · 任务表', '明细'], ['任务 · 点进一个任务（泳道、调用表）', '范围选到这个任务 › 概况、明细'], ['Agent 与模型', '任何一个面 › 按 Agent 看、按模型看；点一行就只看它'], ['系统执行', '范围选“任务之外的平台调用”；任务里的系统工作在 成本 › 按系统工作看'], ['过程度量 · 能力列表', '范围“全部”或某一类 › 概况 › 按能力看'], ['过程度量 · 概览', '范围选到这个能力 › 概况、效率、成本'], ['过程度量 · 阶段分析、成员、职责图', '范围选到这个能力 › 每个面里的“环节一览”和“按环节看”'], ['过程度量 · 人工介入', '人工介入'], ['过程度量 · 任务明细、交办明细', '明细；点一行进入它的全过程'], ['过程度量 · 提升点', '概况 › 值得关注'], ['任务详情页、交办页', '新增“查看观测”，直接落到这个任务的范围']];
+$('#map-rows').replaceChildren(...MAP.map((m) => h('tr', null, h('td', { text: m[0] }), h('td', { text: m[1] }))));
+window.addEventListener('hashchange', () => { parseHash(); render(); });
+window.addEventListener('resize', fitSegLabels);
+parseHash();
+render();
+
+})();
+</script>
