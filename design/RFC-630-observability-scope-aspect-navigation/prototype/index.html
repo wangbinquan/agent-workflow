@@ -104,6 +104,9 @@ button{font:inherit;color:inherit}
 .segmented__option--active,.segmented__option--active:hover{background:var(--accent-fill);color:var(--on-accent)}
 .btn{display:inline-flex;align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--border-strong);border-radius:6px;padding:4px 10px;font-size:13px;color:var(--text);line-height:1.2;white-space:nowrap;cursor:pointer}
 .btn:hover{border-color:var(--accent)}
+.field{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.dt{font:inherit;font-size:13px;color:var(--text);background:var(--panel);border:1px solid var(--border-strong);border-radius:6px;padding:3px 8px;max-width:100%}
+.field-error{font-size:12px;color:var(--danger-fg)}
 .linklike{background:none;border:0;padding:0;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px;font-size:inherit;text-align:left}
 a{color:var(--accent);text-underline-offset:2px}
 
@@ -241,7 +244,7 @@ button.kpi:hover{border-color:var(--accent)}
 <div class="wrap">
   <aside class="proto" aria-label="原型说明">
     <div class="row row--between">
-      <span><strong>页面原型 · 全部为示例数据。</strong> 先选“范围”（看什么），再选“关注面”（关心什么）；表里的每一行都能点进去。</span>
+      <span><strong>页面原型 · 全部为示例数据。</strong> 先选“范围”（看什么），再选“关注面”（关心什么）；表里的每一行都能点进去。时间可以用快捷项，也可以自定义起止。</span>
       <span class="row">
         <span>查看身份</span>
         <span id="role-seg"></span>
@@ -336,7 +339,7 @@ const rand = (a, b) => a + (b - a) * R();
 const logRand = (a, b) => Math.exp(rand(Math.log(a), Math.log(b)));
 const pick = (list) => list[Math.floor(R() * list.length)];
 
-const TYPES = { workflow: '工作流', workgroup: '工作组', employee: '数字员工', agent: '直接运行 Agent', platform: '任务之外的平台调用' };
+const TYPES = { workflow: '工作流', workgroup: '工作组', employee: '数字员工', agent: '单代理', platform: '任务之外的平台调用' };
 const NOUN = { workflow: '任务', workgroup: '任务', employee: '交办', agent: '任务', platform: '调用' };
 const MODELS = {
   opus: { name: 'Claude Code · opus', price: [35, 3.5, 44, 175] },
@@ -353,7 +356,7 @@ const OWNERS = { zm: '张敏', lh: '李航', wl: '王磊', cj: '陈静' };
 const OWNER_KEYS = Object.keys(OWNERS);
 const ORIGINS = { manual: '手动', scheduled: '定时', event: '事件', webhook: 'Webhook', api: 'API' };
 const CAUSES = { first: ['首次执行', 'c1'], rework: ['评审返工', 'c2'], clarify: ['反问后续跑', 'c3'], retry: ['失败重试', 'c4'], rerun: ['其它重跑', 'c5'], system: ['系统工作', 'other'] };
-const SYS = { distill: '记忆提取', narrative: '变更导读', commit: '提交推送', merge: '合并冲突解决', smoke: '运行时冒烟', mcp: 'MCP 连通测试' };
+const SYS = { distill: '记忆提取', narrative: '变更导读', commit: '提交推送', merge: '合并冲突解决', smoke: '运行时探测', mcp: 'MCP 测试' };
 const GATES = { review: ['评审', '等待评审', 'c2'], clarify: ['反问', '等待反问回答', 'c3'], completion: ['完成确认', '等待完成确认', 'c4'], delivery: ['人类成员交付', '等待人类成员交付', 'c5'], approval: ['外部审批', '等待外部审批', 'c2'], blocked: ['阻塞', '阻塞', 'c4'] };
 const CODES = ['runner-timeout', 'envelope-missing', 'runtime-exit', 'model-overloaded', 'worktree-conflict'];
 const STATUS = { succeeded: ['成功', 'success'], failed: ['失败', 'danger'], canceled: ['已取消', 'neutral'], interrupted: ['已中断', 'warn'], active: ['进行中', 'info'] };
@@ -433,8 +436,8 @@ const CAPS = {
     stages: [{ k: 'run', n: '执行', agent: 'coder', tok: 150, min: 7, fail: 0.06 }] },
   ag2: { type: 'agent', name: 'analyst', rate: 0.08, origins: ['manual'], names: ['读一份日志', '整理需求要点'],
     stages: [{ k: 'run', n: '执行', agent: 'analyst', tok: 70, min: 4 }] },
-  pf1: { type: 'platform', name: '运行时冒烟', rate: 0.5, origins: ['manual'], names: ['运行时冒烟'], stages: [{ k: 'call', n: '调用', agent: 'system', tok: 6, min: 0.5, sys: 'smoke', fail: 0.08 }] },
-  pf2: { type: 'platform', name: 'MCP 连通测试', rate: 0.3, origins: ['manual'], names: ['MCP 连通测试'], stages: [{ k: 'call', n: '调用', agent: 'system', tok: 4, min: 0.3, sys: 'mcp', fail: 0.15 }] },
+  pf1: { type: 'platform', name: '运行时探测', rate: 0.5, origins: ['manual'], names: ['运行时探测'], stages: [{ k: 'call', n: '调用', agent: 'system', tok: 6, min: 0.5, sys: 'smoke', fail: 0.08 }] },
+  pf2: { type: 'platform', name: 'MCP 测试', rate: 0.3, origins: ['manual'], names: ['MCP 测试'], stages: [{ k: 'call', n: '调用', agent: 'system', tok: 4, min: 0.3, sys: 'mcp', fail: 0.15 }] },
   pf3: { type: 'platform', name: '记忆提取', rate: 0.4, origins: ['scheduled'], names: ['记忆提取'], stages: [{ k: 'call', n: '调用', agent: 'system', tok: 35, min: 1.5, sys: 'distill', fail: 0.03 }] },
 };
 const stageOf = (capId, k) => CAPS[capId].stages.find((st) => st.k === k) || (k === 'system' ? { k: 'system', n: '系统工作' } : { k, n: k });
@@ -729,6 +732,19 @@ const DIMS = {
   gate: { label: '人工门的种类', grain: 'gate', name: (k) => GATES[k][0] },
   who: { label: '处理人', grain: 'gate', name: (k) => OWNERS[k] },
 };
+const toLocal = (ms) => new Date(ms + 8 * HOUR).toISOString().slice(0, 16);
+const fromLocal = (text) => Date.parse(text + ':00.000Z') - 8 * HOUR;
+function windowNow() {
+  if (state.range === 'custom') { const to = Math.min(state.to, NOW); return { from: state.from, to, label: ' ' + when(state.from) + ' 至 ' + when(to) + ' 之间' }; }
+  return { from: NOW - RANGES[state.range][1], to: NOW, label: RANGES[state.range][0] };
+}
+/* Bucket width follows the length of the window; the actual-spend chart stays daily for longer. */
+function bucketsOf(from, to, actual) {
+  const span = to - from;
+  const [size, lab] = span <= 12 * HOUR ? [HOUR, hourLabel] : span <= 4 * DAY ? [3 * HOUR, hourLabel] : span <= (actual ? 62 : 14) * DAY ? [DAY, dayLabel] : [7 * DAY, dayLabel];
+  const count = Math.max(1, Math.ceil(span / size));
+  return { size, count, lab, origin: to - count * size };
+}
 function noun() { return state.type ? NOUN[state.type] : '任务与交办'; }
 function one() { return state.type ? NOUN[state.type] : '任务或交办'; }
 function inScope(u) { if (state.run) return u.id === state.run; if (state.cap) return u.cap === state.cap; if (state.type) return u.type === state.type; return true; }
@@ -878,7 +894,7 @@ function columns(items, title) {
 
 /* ================= the numbers for the current scope ================= */
 function context() {
-  const span = RANGES[state.range][1], to = NOW, from = NOW - span;
+  const w = windowNow(), to = w.to, from = w.from, span = to - from;
   const sl = state.slice, dim = sl ? DIMS[sl.dim] : null;
   const unitOk = (u) => inScope(u) && inRole(u) && (!dim || dim.grain !== 'unit' || dim.key(u) === sl.value);
   const pred = dim && dim.grain === 'part' ? (p, u) => dim.key(p, u) === sl.value : null;
@@ -930,9 +946,9 @@ function pickRow(dimKey, key) {
   return () => go({ slice: { dim: dimKey, value: key } });
 }
 function buckets(c) {
-  const [count, size, lab] = { '24h': [8, 3 * HOUR, hourLabel], '7d': [7, DAY, dayLabel], '30d': [10, 3 * DAY, dayLabel], '90d': [13, 7 * DAY, dayLabel] }[state.range];
+  const { count, size, lab, origin } = bucketsOf(c.from, c.to, false);
   const out = [];
-  for (let i = 0; i < count; i++) { const from = c.to - (count - i) * size, to = from + size; out.push({ label: lab(from), M: measure(c.units.filter((u) => u.start >= from && u.start < to), c.pred, c.gpred) }); }
+  for (let i = 0; i < count; i++) { const from = origin + i * size, to = from + size; out.push({ label: lab(from), M: measure(c.units.filter((u) => u.start >= from && u.start < to), c.pred, c.gpred) }); }
   return out;
 }
 const TOKEN_CLASSES = [['输入', 'c1'], ['缓存读取', 'c2'], ['缓存写入', 'c3'], ['输出', 'c4']];
@@ -990,7 +1006,7 @@ function tiles(aspect, c) {
     time: [T('总历时', dur(M.leadP50), '成功的 ' + M.succ + ' 个' + n + '，中位数', M.leadP50, P.leadP50, 'amount', 'down'), T('总历时 P90', dur(M.leadP90), '最慢的一成', M.leadP90, P.leadP90, 'amount', 'down'), T('流动效率', pct(M.flowEff), '自动执行时长 ÷ 总历时', M.flowEff, P.flowEff, 'rate', 'up'), T('等人占比', pct(M.waitShare), '等人时间 ÷ 总历时', M.waitShare, P.waitShare, 'rate', 'down'), group ? T('轮数', num1(meanRounds), '每个任务的均值', null, null) : T('排队与中断', pct(M.otherShare), '既不在执行也不在等人', M.otherShare, P.otherShare, 'rate', 'down')],
     quality: [T('成功率', pct(M.successRate), '成功 ' + M.succ + ' ÷ 已结束 ' + M.ended, M.successRate, P.successRate, 'rate', 'up'), T('一次通过率', pct(M.fpRate), '成功的' + n + '里，没有返工、重试和失败', M.fpRate, P.fpRate, 'rate', 'up'),
       employee ? T('合入率', pct(ratio(M.outcomes.merged || 0, M.ended)), '已合入 ÷ 已结束的交办', ratio(M.outcomes.merged || 0, M.ended), ratio(P.outcomes.merged || 0, P.ended), 'rate', 'up') : T('评审首轮通过率', pct(M.rv.firstPassRate), M.rv.first + ' 次首轮评审', M.rv.firstPassRate, P.rv.firstPassRate, 'rate', 'up'),
-      employee ? T('阻塞率', pct(ratio(M.blocked, M.n)), '阻塞过的交办占比', ratio(M.blocked, M.n), ratio(P.blocked, P.n), 'rate', 'down') : T('评审不通过', pct(M.rv.rejRate), M.rv.rounds + ' 轮评审；每轮 ' + num1(M.rv.rounds ? M.rv.comments / M.rv.rounds : null) + ' 条意见', M.rv.rejRate, P.rv.rejRate, 'rate', 'down'),
+      employee ? T('阻塞率', pct(ratio(M.blocked, M.n)), '阻塞过的交办占比', ratio(M.blocked, M.n), ratio(P.blocked, P.n), 'rate', 'down') : T('评审打回率', pct(M.rv.rejRate), M.rv.rounds + ' 轮评审；每轮 ' + num1(M.rv.rounds ? M.rv.comments / M.rv.rounds : null) + ' 条意见', M.rv.rejRate, P.rv.rejRate, 'rate', 'down'),
       T('返工与重试', pct(M.wasteShare), '占 Token 的比例', M.wasteShare, P.wasteShare, 'rate', 'down')],
     human: [T('现在等人处理', String(L.open.length), L.open.length ? '最久已等 ' + dur(L.open[0].w) + '；不受时间范围影响' : '没有', null, null), T('每个' + one() + '的人工介入', num1(M.intervPer) + ' 次', '人工门轮次 + 人工重试 + 续跑与取消', M.intervPer, P.intervPer, 'amount', 'down'), T('等人占比', pct(M.waitShare), '等人时间 ÷ 总历时', M.waitShare, P.waitShare, 'rate', 'down'), T('评审等待', dur(M.rv.waitP50), '中位数；P90 ' + dur(M.rv.waitP90), M.rv.waitP50, P.rv.waitP50, 'amount', 'down'), T('反问回答', dur(M.cl.waitP50), M.cl.rounds + ' 轮；' + M.cl.units + ' 个' + n + '问过', M.cl.waitP50, P.cl.waitP50, 'amount', 'down'), T('人工重试与续跑', String(M.manual + M.ops), '人工重试 ' + M.manual + ' · 续跑与修复 ' + M.ops, null, null)],
     stability: [T('执行失败率', pct(M.execFailRate), M.execFail + ' 次失败 / ' + M.execs + ' 次执行', M.execFailRate, P.execFailRate, 'rate', 'down'), T('失败重试率', pct(M.retryRate), M.retries + ' 次自动重试', M.retryRate, P.retryRate, 'rate', 'down'), T('失败的' + n, String(M.fail), '重试后仍然失败', M.fail, P.fail, 'amount', 'down'), T('已中断', String(M.interrupted), '中断后还没恢复或取消', M.interrupted, P.interrupted, 'amount', 'down'), T('未解决告警', String(L.alertsOpen), '不受时间范围影响', null, null)],
@@ -1045,7 +1061,7 @@ function hintsCard(c) {
     const M = state.cap ? c.M : measure(c.units.filter((u) => u.cap === k), null, null), n = NOUN[CAPS[k].type];
     const add = (weight, title, body, aspect) => out.push({ weight, cap: k, title: (state.cap ? '' : CAPS[k].name + '：') + title, body, aspect });
     if (M.succ >= 5 && M.waitShare >= 0.5) add(M.waitShare, '大部分时间在等人', '等人时间占总历时的 ' + pct(M.waitShare) + '，自动执行只占 ' + pct(M.flowEff) + '。', 'human');
-    if (M.rv.rounds >= 5 && M.rv.rejRate >= 0.3) add(M.rv.rejRate + 0.2, '评审经常不通过', M.rv.rounds + ' 轮评审里有 ' + pct(M.rv.rejRate) + ' 没有通过。', 'quality');
+    if (M.rv.rounds >= 5 && M.rv.rejRate >= 0.3) add(M.rv.rejRate + 0.2, '产出常被打回', M.rv.rounds + ' 轮评审里有 ' + pct(M.rv.rejRate) + ' 被打回。', 'quality');
     if (M.succ >= 5 && M.fpRate != null && M.fpRate <= 0.4) add(1 - M.fpRate, '很少一次通过', '成功的' + n + '里只有 ' + pct(M.fpRate) + ' 没有返工也没有重试。', 'quality');
     if (M.execs >= 10 && M.retryRate >= 0.08) add(M.retryRate * 4, '失败重试偏多', M.execs + ' 次执行里有 ' + M.retries + ' 次是失败后的自动重试。', 'stability');
     if (M.tokens > 0 && M.wasteShare >= 0.2) add(M.wasteShare + 0.1, '返工与重试花了不少 Token', pct(M.wasteShare) + ' 的 Token 花在评审返工、失败重试和其它重跑上。', 'cost');
@@ -1055,7 +1071,7 @@ function hintsCard(c) {
   /* across capabilities: one hint per capability and one per kind, so the list reads as four different leads */
   const seen = new Set(), kinds = new Set();
   const list = (state.cap ? out : out.filter((x) => { const kind = x.title.split('：')[1]; if (seen.has(x.cap) || kinds.has(kind)) return false; seen.add(x.cap); kinds.add(kind); return true; })).slice(0, 4);
-  return card({ title: '值得关注', sub: '按规则从上面的数字里挑出来的；样本太少的不提示' }, list.length ? h('div', { class: 'hints' }, list.map((x) => h('div', { class: 'hint' }, chip('warn', '提示'), h('p', { class: 'hint__title', text: x.title }), h('p', { class: 'hint__body', text: x.body }), h('button', { type: 'button', class: 'btn hint__go', text: '看' + ASPECT_NAME[x.aspect] + ' ›', onclick: () => go({ cap: x.cap, run: null, aspect: x.aspect }) })))) : empty('没有需要提示的地方'));
+  return card({ title: '提升点', sub: '按规则从上面的数字里挑出来的；样本太少的不提示' }, list.length ? h('div', { class: 'hints' }, list.map((x) => h('div', { class: 'hint' }, chip('warn', '提示'), h('p', { class: 'hint__title', text: x.title }), h('p', { class: 'hint__body', text: x.body }), h('button', { type: 'button', class: 'btn hint__go', text: '看' + ASPECT_NAME[x.aspect] + ' ›', onclick: () => go({ cap: x.cap, run: null, aspect: x.aspect }) })))) : empty('没有需要提示的地方'));
 }
 function liveStrip(c) {
   const L = c.L;
@@ -1096,7 +1112,7 @@ function dimTable(aspect, c, dimKey) {
       cost: [[N(run + '次数'), N('输入'), N('缓存读取'), N('缓存写入'), N('输出'), N('Token'), N('成本'), { label: '成本占比' }], (M) => [M.execs, tok(M.tok[0]), tok(M.tok[1]), tok(M.tok[2]), tok(M.tok[3]), tok(M.tokens), cny(M.cost), meter(ratio(M.cost, total.cost))], (M) => M.cost],
       time: [[N(run + '次数'), N(run + '时长'), N('P90'), N('每个' + one() + '执行几次'), { label: '占执行时长' }], (M) => [M.execs, dur(M.execP50), dur(M.execP90), num1(M.n ? M.execs / M.n : null), meter(ratio(M.execMsSum, total.execMsSum))], (M) => M.execMsSum],
       quality: [[N(run + '次数'), N('返工与重试'), N('产出被打回'), N('评审与确认'), N('返工与重试的 Token')], (M) => [M.execs, pct(M.wasteExecShare), pct(ratio(M.gateRej, M.gateJudged)), M.gateJudged ? M.gateJudged + ' 轮' : '—', pct(M.wasteShare)], (M) => M.wasteExecShare || 0],
-      human: [[N('人工门轮次'), N('等待'), N('P90'), N('不通过'), N('等待合计')], (M) => [M.gateRounds, dur(quantile(M.gateWaits, 0.5)), dur(quantile(M.gateWaits, 0.9)), pct(ratio(M.gateRej, M.gateJudged)), dur(M.gateWaits.reduce((a, b) => a + b, 0))], (M) => M.gateWaits.reduce((a, b) => a + b, 0)],
+      human: [[N('人工门轮次'), N('等待'), N('P90'), N('打回率'), N('等待合计')], (M) => [M.gateRounds, dur(quantile(M.gateWaits, 0.5)), dur(quantile(M.gateWaits, 0.9)), pct(ratio(M.gateRej, M.gateJudged)), dur(M.gateWaits.reduce((a, b) => a + b, 0))], (M) => M.gateWaits.reduce((a, b) => a + b, 0)],
       stability: [[N(run + '次数'), N('失败'), N(run + '失败率'), N('失败重试'), { label: '主要失败码' }], (M) => [M.execs, M.execFail, pct(M.execFailRate), M.retries, topCode(M)], (M) => M.execFailRate || 0],
     }[aspect];
     const drop = c.platform || c.single ? ({ overview: [0], time: [3] }[aspect] || []) : [];
@@ -1107,8 +1123,8 @@ function dimTable(aspect, c, dimKey) {
       overview: [[N(n + '数'), N('成功率'), N('总历时'), N('等人占比'), N('一次通过率'), N('每个的成本'), N('成本')], (M) => [M.n || (M.calls ? M.calls + ' 次调用' : 0), pct(M.successRate), dur(M.leadP50), pct(M.waitShare), pct(M.fpRate), cny(M.perCost), cny(M.cost)], (M) => M.cost],
       cost: [[N(n + '数'), N('Token'), N('成本'), { label: '成本占比' }, N('每个的成本'), N('返工与重试')], (M) => [M.n || (M.calls ? M.calls + ' 次调用' : 0), tok(M.tokens), cny(M.cost), meter(ratio(M.cost, total.cost)), cny(M.perCost), pct(M.wasteShare)], (M) => M.cost],
       time: [[N(n + '数'), N('总历时'), N('P90'), N('流动效率'), N('等人占比'), N('排队与中断')], (M) => [M.n, dur(M.leadP50), dur(M.leadP90), pct(M.flowEff), pct(M.waitShare), pct(M.otherShare)], (M) => M.leadP50 || 0],
-      quality: [[N(n + '数'), N('成功率'), N('一次通过率'), N('评审首轮通过'), N('评审不通过'), N('返工与重试')], (M) => [M.n, pct(M.successRate), pct(M.fpRate), pct(M.rv.firstPassRate), pct(M.rv.rejRate), pct(M.wasteShare)], (M) => 1 - (M.fpRate == null ? 1 : M.fpRate)],
-      human: [[N(n + '数'), N('每个的人工介入'), N('等人占比'), N('评审等待'), N('反问回答'), N('现在等人')], (M, r) => [M.n, num1(M.intervPer), pct(M.waitShare), dur(M.rv.waitP50), dur(M.cl.waitP50), r.open], (M) => M.waitShare || 0],
+      quality: [[N(n + '数'), N('成功率'), N('一次通过率'), N('评审首轮通过率'), N('评审打回率'), N('返工与重试')], (M) => [M.n, pct(M.successRate), pct(M.fpRate), pct(M.rv.firstPassRate), pct(M.rv.rejRate), pct(M.wasteShare)], (M) => 1 - (M.fpRate == null ? 1 : M.fpRate)],
+      human: [[N(n + '数'), N('每个的人工介入'), N('等人占比'), N('评审等待'), N('反问回答')], (M) => [M.n, num1(M.intervPer), pct(M.waitShare), dur(M.rv.waitP50), dur(M.cl.waitP50)], (M) => M.waitShare || 0],
       stability: [[N(n + '数'), N('失败'), N('已中断'), N('执行失败率'), N('失败重试率'), { label: '主要失败码' }], (M) => [M.n, M.fail, M.interrupted, pct(M.execFailRate), pct(M.retryRate), topCode(M)], (M) => M.execFailRate || 0],
     }[aspect];
     cols = [first].concat(spec[0]); cells = spec[1]; sortBy = spec[2];
@@ -1124,8 +1140,8 @@ function gateTable(c, dimKey) {
   for (const u of c.units) for (const g of u.gates) { if (g.t1 == null) continue; const k = dimKey === 'gate' ? g.kind : g.who; if (!groups.has(k)) groups.set(k, { waits: [], judged: 0, rej: 0, comments: 0 }); const x = groups.get(k); x.waits.push(g.t1 - g.t0); x.comments += g.comments; if (g.kind === 'review' || g.kind === 'completion' || g.kind === 'approval') { x.judged++; if (g.outcome !== 'approved') x.rej++; } }
   for (const o of c.L.open) { const k = dimKey === 'gate' ? o.g.kind : o.g.who; open.set(k, (open.get(k) || 0) + 1); if (!groups.has(k)) groups.set(k, { waits: [], judged: 0, rej: 0, comments: 0 }); }
   const rows = [...groups].sort((a, b) => b[1].waits.reduce((x, y) => x + y, 0) - a[1].waits.reduce((x, y) => x + y, 0));
-  return table([{ label: DIMS[dimKey].label }, { label: '轮次', num: true }, { label: '等待', num: true }, { label: 'P90', num: true }, { label: '等待合计', num: true }, { label: '不通过', num: true }, { label: '现在等人', num: true }],
-    rows.map(([k, x]) => ({ cells: [DIMS[dimKey].name(k), x.waits.length, dur(quantile(x.waits, 0.5)), dur(quantile(x.waits, 0.9)), dur(x.waits.reduce((a, b) => a + b, 0)), pct(ratio(x.rej, x.judged)), open.get(k) || 0] })), { minWidth: 680 });
+  return table([{ label: DIMS[dimKey].label }, { label: '轮次', num: true }, { label: '等待', num: true }, { label: 'P90', num: true }, { label: '等待合计', num: true }, { label: '打回率', num: true }],
+    rows.map(([k, x]) => ({ cells: [DIMS[dimKey].name(k), x.waits.length, dur(quantile(x.waits, 0.5)), dur(quantile(x.waits, 0.9)), dur(x.waits.reduce((a, b) => a + b, 0)), pct(ratio(x.rej, x.judged))] })), { minWidth: 680 });
 }
 function byCard(aspect, c) {
   const dims = dimsFor(aspect, c);
@@ -1148,8 +1164,8 @@ function alertsCard(c) {
 function accrualCard(c) {
   const sl = state.slice, dim = sl ? DIMS[sl.dim] : null;
   const unitOk = (u) => inScope(u) && inRole(u) && (!dim || dim.grain !== 'unit' || dim.key(u) === sl.value);
-  const [count, size, lab] = { '24h': [8, 3 * HOUR, hourLabel], '7d': [7, DAY, dayLabel], '30d': [10, 3 * DAY, dayLabel], '90d': [13, 7 * DAY, dayLabel] }[state.range];
-  const origin = c.to - count * size, sums = Array.from({ length: count }, (x, i) => ({ label: lab(origin + i * size), tok: [0, 0, 0, 0], cost: 0 }));
+  const { count, size, lab, origin } = bucketsOf(c.from, c.to, true);
+  const sums = Array.from({ length: count }, (x, i) => ({ label: lab(origin + i * size), tok: [0, 0, 0, 0], cost: 0 }));
   let cost = 0, tokens = 0, calls = 0, earlier = 0, earlierRuns = new Set();
   for (const u of UNITS) {
     if (!unitOk(u)) continue;
@@ -1259,7 +1275,7 @@ function viewRun() {
 }
 
 /* ================= chrome ================= */
-function countIn(pred) { const from = NOW - RANGES[state.range][1]; return UNITS.filter((u) => u.start >= from && inRole(u) && pred(u)).length; }
+function countIn(pred) { const w = windowNow(); return UNITS.filter((u) => u.start >= w.from && u.start < w.to && inRole(u) && pred(u)).length; }
 function renderScope() {
   const bar = $('#scope'), kids = [h('span', { class: 'scope__label', text: '范围' })];
   const segBtn = (text, here, onGo, items) => h('button', { type: 'button', class: 'scope__seg' + (here ? ' scope__seg--here' : ''), 'data-menu': items ? '' : null, title: text, onclick: (e) => (items && here ? menu(e.currentTarget, items()) : onGo()) }, h('span', { text }), items && here ? h('span', { 'aria-hidden': 'true', text: '▾' }) : null);
@@ -1297,10 +1313,26 @@ function renderChrome() {
   $('#role-seg').replaceChildren(seg('查看身份', [['manager', '管理者'], ['member', '普通成员']], state.role, (v) => go({ role: v })));
   const tc = $('#time-controls');
   if (state.run) tc.replaceChildren(h('span', { class: 'muted small', text: '单个任务或交办看的是它的全过程，没有时间范围' }));
-  else tc.replaceChildren(seg('时间范围', Object.keys(RANGES).map((k) => [k, RANGES[k][0]]), state.range, (v) => go({ range: v })), seg('对比', [['off', '不对比'], ['period', '对比上一期']], state.compare, (v) => go({ compare: v })));
+  else {
+    const pick = (v) => { if (v === 'custom' && state.from == null) { state.to = NOW; state.from = NOW - 14 * DAY; } state.rangeError = null; go({ range: v }); };
+    const kids = [seg('时间范围', Object.keys(RANGES).map((k) => [k, RANGES[k][0]]).concat([['custom', '自定义']]), state.range, pick)];
+    if (state.range === 'custom') {
+      const start = h('input', { type: 'datetime-local', class: 'dt', id: 'range-from', value: toLocal(state.from) });
+      const end = h('input', { type: 'datetime-local', class: 'dt', id: 'range-to', value: toLocal(state.to) });
+      const apply = () => {
+        const a = fromLocal(start.value), b = fromLocal(end.value);
+        state.rangeError = !(a < b) ? '结束时间要晚于开始时间' : b - a > 366 * DAY ? '最长 366 天' : null;
+        if (!state.rangeError) { state.from = a; state.to = b; }
+        render();
+      };
+      kids.push(h('label', { class: 'field' }, '开始', start), h('label', { class: 'field' }, '结束', end), h('button', { type: 'button', class: 'btn', text: '应用', onclick: apply }), state.rangeError ? h('span', { class: 'field-error', role: 'alert', text: state.rangeError }) : null);
+    }
+    kids.push(seg('对比', [['off', '不对比'], ['period', '对比上一期']], state.compare, (v) => go({ compare: v })));
+    tc.replaceChildren(...kids.filter(Boolean));
+  }
   renderScope();
   const n = noun();
-  $('#basis').textContent = state.run ? '下面是这一个' + n + '从开始到现在的全过程。' : state.type === 'platform' ? '统计' + RANGES[state.range][0] + '开始的、不属于任何任务的平台调用。' : '统计' + RANGES[state.range][0] + '开始的' + n + '，以及它们到现在为止的消耗、时长和人工介入。更早开始、还没结束的，在“当前”和“明细 › 进行中”里。';
+  $('#basis').textContent = state.run ? '下面是这一个' + n + '从开始到现在的全过程。' : state.type === 'platform' ? '统计' + windowNow().label + '开始的、不属于任何任务的平台调用。' : '统计' + windowNow().label + '开始的' + n + '，以及它们到现在为止的消耗、时长和人工介入。更早开始、还没结束的，在“当前”和“明细 › 进行中”里。';
   $('#tabs').replaceChildren(...ASPECTS.map((a) => h('button', { type: 'button', class: 'tabs__tab' + (a[0] === state.aspect ? ' tabs__tab--active' : ''), 'aria-current': a[0] === state.aspect ? 'page' : null, text: a[1], onclick: () => go({ aspect: a[0] }) })));
 }
 function render() {
@@ -1310,7 +1342,7 @@ function render() {
   $('#view').replaceChildren(...[].concat(kids).filter(Boolean));
   fitSegLabels();
 }
-const MAP = [['总览 · 四张指标卡', '范围“全部” › 概况'], ['总览 · 按天的 Token 柱图', '成本 › 变化'], ['总览 · Token 最多的任务与 Agent', '成本 › 按任务与交办看、按 Agent 看'], ['总览 · 业务与系统消耗拆分', '成本 › Token 花在哪里、按系统工作看'], ['任务 · 任务表', '明细'], ['任务 · 点进一个任务（泳道、调用表）', '范围选到这个任务 › 概况、明细'], ['Agent 与模型', '任何一个面 › 按 Agent 看、按模型看；点一行就只看它'], ['系统执行', '范围选“任务之外的平台调用”；任务里的系统工作在 成本 › 按系统工作看'], ['过程度量 · 能力列表', '范围“全部”或某一类 › 概况 › 按能力看'], ['过程度量 · 概览', '范围选到这个能力 › 概况、效率、成本'], ['过程度量 · 阶段分析、成员、职责图', '范围选到这个能力 › 每个面里的“环节一览”和“按环节看”'], ['过程度量 · 人工介入', '人工介入'], ['过程度量 · 任务明细、交办明细', '明细；点一行进入它的全过程'], ['过程度量 · 提升点', '概况 › 值得关注'], ['任务详情页、交办页', '新增“查看观测”，直接落到这个任务的范围']];
+const MAP = [['总览 · 四张指标卡', '范围“全部” › 概况'], ['总览 · 按天的 Token 柱图', '成本 › 变化'], ['总览 · Token 最多的任务与 Agent', '成本 › 按任务与交办看、按 Agent 看'], ['总览 · 业务与系统消耗拆分', '成本 › Token 花在哪里、按系统工作看'], ['任务 · 任务表', '明细'], ['任务 · 点进一个任务（泳道、调用表）', '范围选到这个任务 › 概况、明细'], ['Agent 与模型', '任何一个面 › 按 Agent 看、按模型看；点一行就只看它'], ['系统执行', '范围选“任务之外的平台调用”；任务里的系统工作在 成本 › 按系统工作看'], ['过程度量 · 能力列表', '范围“全部”或某一类 › 概况 › 按能力看'], ['过程度量 · 概览', '范围选到这个能力 › 概况、效率、成本'], ['过程度量 · 阶段分析、成员、职责图', '范围选到这个能力 › 每个面里的“环节一览”和“按环节看”'], ['过程度量 · 人工介入', '人工介入'], ['过程度量 · 任务明细、交办明细', '明细；点一行进入它的全过程'], ['过程度量 · 提升点', '概况 › 提升点'], ['任务详情页、交办页', '新增“查看观测”，直接落到这个任务的范围']];
 $('#map-rows').replaceChildren(...MAP.map((m) => h('tr', null, h('td', { text: m[0] }), h('td', { text: m[1] }))));
 window.addEventListener('hashchange', () => { parseHash(); render(); });
 window.addEventListener('resize', fitSegLabels);
