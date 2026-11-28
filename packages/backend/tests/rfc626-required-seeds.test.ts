@@ -5,9 +5,13 @@
 // policy) and never for the cutover row of each committed-event family, so a source without
 // one of those passed the conversion and failed validation. The list is now derived from the
 // target schema: the target view gives the seed keys of a table, the presence lookup registers
-// every row of the seeded tables, and the rule of the family cutovers checks like the others.
-// A missing seed row is a table-level block, and stays one under automatic resolution: there
-// is no row to set aside and no release works without it.
+// every row of the seeded tables, and under automatic resolution the rule of the family
+// cutovers checks like the others. A missing seed row is a table-level block, and stays one
+// under automatic resolution: there is no row to set aside and no release works without it.
+// The manual flow does not check the family routes in the conversion (its plan stays as it was
+// before RFC-626; validation reports a missing route): CI on PostgreSQL showed that sources built
+// from the released baseline DDL alone hold no routes, and the manual-flow suites that convert
+// such sources expect no block from them.
 import { describe, expect, test } from 'bun:test'
 import { persistenceSchema } from '@/bootstrap/persistenceSchema'
 import { familyCutoversRule } from '@/platform/persistence/migration/archives/familyCutovers'
@@ -193,16 +197,23 @@ describe('RFC-626 a seed row the source does not have', () => {
   const routesOnly = [noteRule('users'), noteRule('auth_login_policy'), familyCutoversRule]
   const modes = [undefined, 'automatic'] as const
 
-  test('a family whose cutover row is missing blocks the table, under automatic resolution as well', async () => {
-    for (const resolution of modes) {
-      const { sink, summary } = await convert(routesOnly, routes.slice(0, 3).map(route), resolution)
-      expect(summary.status).toBe('blocked')
-      expect(distinct(summary.blocks)).toEqual([
-        missing(CUTOVERS, { producer: 'collaboration', family: 'questions' }),
-      ])
-      // Nothing was set aside for it: there is no row to set aside.
-      expect([...sink.units.values()].flatMap((unit) => unit.archives)).toEqual([])
-      if (resolution) expect(summary.resolutions!.setAside).toEqual({ total: 0, rows: [] })
+  test('under automatic resolution a family whose cutover row is missing blocks the table', async () => {
+    const { sink, summary } = await convert(routesOnly, routes.slice(0, 3).map(route), 'automatic')
+    expect(summary.status).toBe('blocked')
+    expect(distinct(summary.blocks)).toEqual([
+      missing(CUTOVERS, { producer: 'collaboration', family: 'questions' }),
+    ])
+    // Nothing was set aside for it: there is no row to set aside.
+    expect([...sink.units.values()].flatMap((unit) => unit.archives)).toEqual([])
+    expect(summary.resolutions!.setAside).toEqual({ total: 0, rows: [] })
+  })
+
+  test('the manual flow converts the routes it has and blocks nothing for a missing one', async () => {
+    for (const present of [routes.slice(0, 3), []]) {
+      const { sink, summary } = await convert(routesOnly, present.map(route))
+      expect(summary.blocks).toEqual([])
+      expect(summary.status).toBe('converted')
+      expect(sink.rows(CUTOVERS)).toHaveLength(present.length)
     }
   })
 

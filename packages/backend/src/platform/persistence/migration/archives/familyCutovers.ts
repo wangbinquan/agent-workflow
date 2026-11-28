@@ -20,8 +20,13 @@ export const familyCutoversRule: ConversionRule = {
   lookups: [seedPresence.key],
   unit: { kind: 'source-chunk', table },
   convert(unit, ctx) {
-    // RFC-626 §3.3: the cutover row of every event family is a seed of the target schema.
-    checkSeedPresence(table, ctx)
+    // RFC-626 §3.3: the cutover row of every event family is a seed of the target schema, which
+    // target validation requires; the conversion never writes install seeds. The automatic
+    // upgrade checks the routes here, so a source without one ends with that route named
+    // instead of failing validation after the whole conversion. The manual flow keeps its plan
+    // as it was (no block): validation still reports a missing route there. PostgreSQL sources
+    // built from the released baseline DDL alone have no routes at all.
+    if (ctx.resolution === 'automatic') checkSeedPresence(table, ctx)
     for (const row of unit.rows.get(table)!) {
       ctx.out.record(
         {

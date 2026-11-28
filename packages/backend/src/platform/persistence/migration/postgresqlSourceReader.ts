@@ -198,18 +198,28 @@ export function openEpoch1PostgresqlSource(input: {
    * is the one it was confirmed at, measured (and remembered) otherwise.
    */
   const measure = async (session: PostgresqlReservedConnection, observed: SourceObservation) => {
-    const { content } = await settleContentIdentity({
-      watch,
-      key: watchKey!,
-      evidence: observed.evidence,
-      measure: () =>
-        postgresqlSourceContentDigest(
-          session,
-          observed.fingerprint,
-          observed.identities,
-          input.onMeasure,
-        ),
-    })
+    const digest = () =>
+      postgresqlSourceContentDigest(
+        session,
+        observed.fingerprint,
+        observed.identities,
+        input.onMeasure,
+      )
+    // RFC-626 §4.1: row counts and sequence values stand for the content only in a session that
+    // lent its watch — the automatic upgrade, which holds the daemon lock from its first step, so
+    // nothing writes the old database. A reader without one (the manual flow plans and backs up
+    // while writers may still run) measures every time: an UPDATE changes neither a row count nor
+    // a sequence value.
+    const content = input.watch
+      ? (
+          await settleContentIdentity({
+            watch,
+            key: watchKey!,
+            evidence: observed.evidence,
+            measure: digest,
+          })
+        ).content
+      : await digest()
     const generation =
       observed.activeGeneration ?? input.sourceGenerationId ?? `dbg_epoch1_${content.slice(7, 31)}`
     if (input.sourceGenerationId && generation !== input.sourceGenerationId)
