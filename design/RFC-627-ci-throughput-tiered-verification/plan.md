@@ -1,6 +1,6 @@
 # RFC-627 实施计划
 
-状态：In Progress（2026-11-27，设计门第三轮 `PASS WITH FINDINGS`〔0 P0 / 2 P1 / 1 P2〕且全部 findings 已采纳修订，用户 2026-11-27 回复「批准实施」；执行严格遵守 `CLAUDE.md` 硬规则：先完成全部脚本、工作流、文档与测试用例编写，再集中验证与过实现门）。
+状态：Done（2026-11-28，T1–T9 全部完成并通过四档 hosted CI 实测验收，完整数据与保留项见 [acceptance.md](./acceptance.md)）。
 
 ## 1. 任务分解
 
@@ -26,12 +26,12 @@
   - [x] 所有新增与更新的后端 CI 测试文件（`rfc627-*`、`root-test-entrypoint`、`rfc615-ci-calculation-admission`、`rfc359-w8-ci-dual-engine-wiring`、`rfc349-postgresql-hosted-evidence`、`rfc349-functional-evidence`、`ci-e2e-shards`、`ci-backend-timing-refresh`、`ci-e2e-timing-refresh`、`ci-design-link-selection`、`ci-workflow-path-filters`、`test-suite-policy`、`rfc-index-status-drift`、`rfc317-*`）在 `--isolate` 下全部通过。
   - [x] `docs-fast-gate` 的 23 个后端文件（190 pass / 0 fail）与 2 个 shared 文件（19 pass / 0 fail，经 `--filter @agent-workflow/shared`）全部真实执行并通过。
 - [x] **实现门**：由本 session 派生只读 subagent 独立检视完整实现与测试（只审功能，禁止碰安全），结论 `PASS WITH FINDINGS`（0 P0 / 3 P1 / 2 P2）；已全部核实并修复 3 项 P1（补齐 `conversion.ts`/`*Schema.ts`/`fixtures/release-upgrade/`/`fixtures/shipped-migrations/`/`content/inventory/`/`historyRestriction.ts` 全量触发与结构不变量守卫、实证并新增真实 Bun 1.4.3 `--timings` 含 0 用例纯 PG 文件集成用例、`planBackendShards` 与 `runBackendShard` 空分片 fail-closed）及 2 项 P2（`ci-timings.yml` 收紧 `skip-docs-only` 为零 artifact + POSIX `grep -Ec`、`plan-backend-shards.ts` `--output` 缺参校验与文档口径同步）。
-- [ ] **Hosted 实测验收**：
-  - [x] 实现提交本身自动触发 `mode=full` 并在主 CI 全绿通过（SHA `f74f5f370f581e41285aa7746ef67b5cdbc243d5`，`CI` run `46085767786` 70/70 全绿、端到端约 28.9 分钟；`ci-timings` run `46088340261` 29 秒产出首份 2,768 文件 `backend-core-test-timings.json`，`unmeasured=[]`）。
-  - [ ] 后续一次纯文档提交触发 `mode=docs-only` 绿灯通过，`ci-timings.yml` 干净跳过、`ci-feedback.yml` 不空跑。
-  - [ ] 一次真实非迁移代码提交验证 `mode=standard` 16 片核心 + 增强 PG 门禁 + E2E（macOS 3 worker）全绿通过，并记录真实 runner-分钟与分片时长分布。
-  - [ ] 手动触发一次 `backend-full-nightly.yml` 验证 44 片全量双引擎 + `--coverage` + Codecov 与 `ci-timings.yml` 收集通过。
-  - [ ] 将完整 exact-SHA 与实测数据写入 `acceptance.md`，确认无虚假归因与未明风险隐瞒后关闭 RFC-627。
+- [x] **Hosted 实测验收**：
+  - [x] 实现提交本身自动触发 `mode=full` 并在主 CI 全绿通过（SHA `f74f5f370f581e41285aa7746ef67b5cdbc243d5`，`CI` run `46085767786` 70/70 首次全绿、端到端 28m 36s、444.98 runner-min；`CI feedback` run `46085767676` 成功；`ci-timings` run `46088340261` 29s 产出首份 2,768 文件 `backend-core-test-timings.json`，`unmeasured=[]`）。
+  - [x] 后续一次纯文档提交触发 `mode=docs-only` 绿灯通过（SHA `44a1284ea465bc259db92474e0b3fd7a1e558717`，`CI` run `46088552576` 3/3 首次全绿、端到端 1m 53s、1.68 runner-min〔−99.7%〕，实跑 Lychee + 23 后端 190 pass + 2 shared 19 pass；`ci-timings` run `46088727578` 以 `skip-docs-only` 干净跳过；`ci-feedback` 0 次触发）。
+  - [x] 一次非迁移提交验证 `mode=standard` 全绿通过（SHA `f601eed3c2cf732061f90c066b6fefef95c250b1` 合入首份核心计时权重，`CI` run `46089416710` 42/42 首次全绿、端到端 21m 23s、248.00 runner-min〔−55.7%〕；16 片 SQLite 核心全在 4m 50s–7m 18s 且仅 shard 1 装 `opencode`；16 文件真 PG 门禁 423 pass / 9m 19s；macOS 3-worker E2E 三片 10m 55s–13m 40s 零重试；`ci-timings` run `46091278899` 21s `core-ci` 通过）。
+  - [x] 手动触发 `backend-full-nightly.yml` 验证 44 片全量双引擎 + `--coverage` + Codecov 与 `ci-timings.yml` 收集通过（SHA `f601eed3c2cf732061f90c066b6fefef95c250b1`，run `46091340641` 44/44 首次全绿、端到端 28m 28s、416.53 runner-min、单片 7m 17s–11m 44s；`ci-timings` run `46093762080` 26s `full-nightly` 产出 3,144 文件完整计时且不刷新 E2E）。
+  - [x] 将完整 exact-SHA、实测数据、初始负样本（`41407582` / `46079919995`）与剩余风险如实写入 [acceptance.md](./acceptance.md) 并关闭 RFC-627。
 
 ## 3. 设计门记录
 
