@@ -1,0 +1,39 @@
+{
+  "formatVersion": 1,
+  "scenario": "schedule",
+  "base": "v0.19.2",
+  "providers": [
+    "sqlite",
+    "postgresql"
+  ],
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-626-upgrade-no-refusal-minimal-time/design.md §3.4 row 5",
+      "design/RFC-626-upgrade-no-refusal-minimal-time/proposal.md §5 A8",
+      "packages/backend/db/migrations/0080_rfc159_scheduled_tasks.sql"
+    ],
+    "note": "An enabled schedule whose launch payload was cut off (not valid JSON). launch_payload is plain text in the old schema of both providers, so the old daemon stored and kept it."
+  },
+  "rows": [
+    {
+      "op": "clone",
+      "table": "scheduled_tasks",
+      "from": {
+        "id": "01K398000087AABFA8C89D9C8E"
+      },
+      "values": {
+        "id": "01K3986260SC00000000000001",
+        "name": "rfc626 schedule with a truncated payload",
+        "launch_payload": "{\"workflowId\":\"01K398000045B34F16DB605A06\",\"inputs\":",
+        "enabled": 1,
+        "next_run_at": 1778459700000,
+        "last_run_at": null,
+        "last_status": null,
+        "last_error": null,
+        "last_task_id": null
+      },
+      "why": "v2-boot-schedule-*: the payload cannot be parsed"
+    }
+  ]
+}

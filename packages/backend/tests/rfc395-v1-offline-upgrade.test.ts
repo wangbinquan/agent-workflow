@@ -11,6 +11,7 @@ import {
   upgradeEpoch1Copy,
   type OfflinePostgresqlDatabase,
 } from '@/platform/persistence/migration/offlineSourceUpgrade'
+import { captureSourceDispositionRows } from '@/platform/persistence/migration/sourceDispositionEvidence'
 import { openEpoch1SqliteSource } from '@/platform/persistence/migration/sqliteSourceReader'
 import { sourceFilesDigest } from '@/platform/persistence/migration/sourceReader'
 import { SourceBlockedError } from '@/platform/persistence/migration/sourceTypes'
@@ -134,6 +135,14 @@ describeV1Providers('RFC-395 V1 offline source upgrade', (h) => {
         storageClass: 'integer',
         value: { type: 'integer', value: '9007199254740993' },
       })
+      // RFC-626 §4.1: the upgrade no longer returns the pre-upgrade capture; its caller
+      // (`freeze/sourceAccess.ts`) captures the retired rows once, before upgrading a copy.
+      // Capture them here the same way, then upgrade, and assert the same evidence.
+      const evidence = await captureSourceDispositionRows(
+        source,
+        expected,
+        mkdtempSync(join(h.operationRoot, 'pre-upgrade-')),
+      )
       const copy = await upgradeEpoch1Copy({
         source,
         expected,
@@ -142,7 +151,7 @@ describeV1Providers('RFC-395 V1 offline source upgrade', (h) => {
       })
       try {
         expect(copy.after.tableRows.recent_repos).toBeUndefined()
-        const archive = copy.sourceEvidence.find((entry) => entry.table.table === 'recent_repos')!
+        const archive = evidence.find((entry) => entry.table.table === 'recent_repos')!
         expect(archive.rows).toBe(1)
         expect(JSON.parse(readFileSync(archive.chunks[0]!.path, 'utf8')).sourceDigest).toBe(
           original.sourceDigest,

@@ -70,29 +70,38 @@ function unfinishedRound(values: DecodedSourceRow): boolean {
 }
 export function unfinishedCodeWork(row: SourceRow, ctx: RuleContext): ConversionBlock | null {
   const v = row.values
+  // RFC-626 §3.4 row 8: a row the frozen codec could not decode (only automatic resolution
+  // hands one to the history rule) cannot prove its work ended, so it counts as unfinished and
+  // takes the upgrade's acknowledgement like any other unfinished row.
+  const undecoded = row.codecFailure !== undefined
   let unfinished: boolean
   switch (row.table) {
     case 'code_ai_attempts':
       unfinished =
-        !['validated', 'failed', 'interrupted'].includes(String(v.status)) || v.ended_at === null
+        undecoded ||
+        !['validated', 'failed', 'interrupted'].includes(String(v.status)) ||
+        v.ended_at === null
       break
     case 'code_findings':
       return null
     case 'code_round_stages':
       unfinished =
+        undecoded ||
         !['done', 'failed', 'skipped', 'inherited'].includes(String(v.status)) ||
         v.ended_at === null
       break
     case 'code_trigger_deliveries':
       return null
     case 'code_work_items':
-      unfinished = !ctx.lookup(HISTORY_ADOPTIONS).get(row.encodedKey) && unfinishedItem(v)
+      unfinished =
+        undecoded || (!ctx.lookup(HISTORY_ADOPTIONS).get(row.encodedKey) && unfinishedItem(v))
       break
     case 'code_work_rounds':
-      unfinished = !ctx.lookup(HISTORY_ADOPTIONS).get(row.encodedKey) && unfinishedRound(v)
+      unfinished =
+        undecoded || (!ctx.lookup(HISTORY_ADOPTIONS).get(row.encodedKey) && unfinishedRound(v))
       break
     case 'legacy_code_work_item_links':
-      unfinished = adoptionFailure(row, ctx.lookup) !== null
+      unfinished = undecoded || adoptionFailure(row, ctx.lookup) !== null
       break
     default:
       return null

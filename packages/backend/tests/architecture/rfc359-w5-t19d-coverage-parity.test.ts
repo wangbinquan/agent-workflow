@@ -299,7 +299,11 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // RFC-398 design §11 (+1 SQLite ref, no drive): the V9 codec-correction regression runs on
   // both providers through `describeV1Providers`; it names the SQLite reader only in a
   // type-only cast for the file-copy overload of `upgradeEpoch1Copy`.
-  'platform/persistence/migration/SourceReader: sqlite 13/11, postgresql 4/4',
+  // RFC-626 (+2/+2 SQLite, +1/+1 PostgreSQL): `rfc626-source-readers-upgrade` drives both readers
+  // (identity reused across a session, scratch reuse on PostgreSQL); `rfc626-sqlite-source-identity`
+  // is SQLite by nature — data_version and the identity of the file as another process changes or
+  // replaces it. Both sides grew; the gap widened by one.
+  'platform/persistence/migration/SourceReader: sqlite 15/13, postgresql 5/5',
   // RFC-395 relocates the existing PostgreSQL DDL compiler (and its old references)
   // alongside the new SQLite compiler; equivalence tests drive both explicit plans.
   // RFC-395 batched epoch-2 copy (+1 PostgreSQL ref): the regression for the
@@ -307,7 +311,9 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // RFC-615: the invocation-scope regression adds one PostgreSQL ref via its existing facade.
   // Its paired SQLite compiler regression directly verifies stored head/edge DDL, projected row
   // contracts and rejection of a real column change. SQLite gains one ref/drive; the ref gap stays 25.
-  'platform/persistence/schema/Plan: sqlite 9/8, postgresql 34/7',
+  // RFC-626 (+1 PostgreSQL ref, no drive): `rfc626-postgresql-scratch-copy` imports the plan type
+  // to hand the scripted target an empty plan; no new plan criterion.
+  'platform/persistence/schema/Plan: sqlite 9/8, postgresql 35/7',
 ]
 
 /** plan §5 T19d 的「阈值」：两侧 ref 差到这个数就算倒挂，要么补测试、要么进下面的观察名单。 */
@@ -357,9 +363,11 @@ export const INVERTED_PAIRS: readonly string[] = [
   // 同上：原文件落位使这一既有引用差首次进入观察名单，阈值保持不变。
   // RFC-398 design §3.8 / §5 / §7.6: paired bridge plus native WAL witness; §11: one
   // type-only reference from the dual-provider codec-correction regression (see above).
-  'platform/persistence/migration/SourceReader: 13 vs 4',
+  // RFC-626: 13 vs 4 → 15 vs 5, see the coverage row above.
+  'platform/persistence/migration/SourceReader: 15 vs 5',
   // RFC-615: direct SQLite plan/row-bridge coverage compensates the new PG fixture reference; gap stays 25.
-  'platform/persistence/schema/Plan: 9 vs 34',
+  // RFC-626: one type-only PostgreSQL reference more (see above).
+  'platform/persistence/schema/Plan: 9 vs 35',
 ]
 
 interface Side {

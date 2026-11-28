@@ -2,6 +2,7 @@ import type { ConversionTargetConnection } from '@/platform/persistence/migratio
 import type { SchemaRegistry } from '@/platform/persistence/schema/registry'
 import type { MigrationMetaReadPort } from '../../application/ports/epochSwitch'
 import { createMigrationMetaStore } from './metaStore'
+import { readLoadRejections } from './loadRejections'
 
 /** Expose only reads to trace; transaction and receipt writers remain in infrastructure. */
 export function createMigrationTraceStore(input: {
@@ -21,6 +22,7 @@ export function createMigrationTraceStore(input: {
     restrictions: meta.restrictions,
     blocks: meta.blocks,
     records: meta.records,
+    loadRejections: (runId) => readLoadRejections(meta, runId),
     identityHighWater: meta.identityHighWater,
     archive: meta.archive,
     probeTarget: meta.probeTarget,

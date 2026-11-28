@@ -25,7 +25,8 @@ function copies(...tables: string[]): ConversionContribution {
 test('all 176 reused targets retain named columns; the five domain exceptions are not generic claims', () => {
   const reused = roster.filter((entry) => entry.definition === 'reused')
   expect(reused).toHaveLength(176)
-  expect(genericCopyTables).toHaveLength(169)
+  // RFC-626: skill_operations and skill_operation_locks moved to the skill rule (169 → 167).
+  expect(genericCopyTables).toHaveLength(167)
   const reordered = drift.differences.filter((entry) => entry.kind === 'column-order')
   expect(reordered).toHaveLength(42)
   for (const entry of reordered.filter((entry) =>
@@ -92,7 +93,7 @@ test('each enum and bool on all reused definitions is rejected by the injected t
 })
 
 describeV2Providers('RFC-395 V2 generic copy', (h) => {
-  test('169 registered generic copies and the named-column copier preserve values without row dispositions', async () => {
+  test('167 registered generic copies and the named-column copier preserve values without row dispositions', async () => {
     await h.install()
     await ensureIdentitySeeds(h)
     await h.write('runtimes', [
@@ -142,7 +143,7 @@ describeV2Providers('RFC-395 V2 generic copy', (h) => {
       const sink = new V2MemorySink()
       const summary = await runConversion({ ...input, source }, sink)
       expect(summary.status).toBe('converted')
-      expect(summary.tableReceipts).toHaveLength(170)
+      expect(summary.tableReceipts).toHaveLength(168)
       expect(sink.rows('runtimes')).toEqual(
         expect.arrayContaining(
           before.map((row) => (row.id === 'copy-runtime' ? { ...row, temperature: -0 } : row)),

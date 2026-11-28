@@ -14,7 +14,9 @@ import type {
   ArtifactReceipt,
   ArchiveRef,
   ConversionBlock,
+  ConversionResolution,
   EncodedKey,
+  LoadRejectionDecision,
   MigrationRecord,
   RowDisposition,
   SourcePhase,
@@ -22,6 +24,8 @@ import type {
   TargetRef,
   UnitRef,
 } from '@/platform/persistence/migration/conversion/types'
+import type { PreparedConversion } from '@/platform/persistence/migration/conversion/engine'
+import type { ReferenceKeepPolicy } from '@/platform/persistence/migration/conversion/rule'
 import type {
   ContentRootSpec,
   ConversionRunRequest,
@@ -152,17 +156,41 @@ export interface SourceSnapshotRequest {
   readonly emptyTables: readonly EmptyTableDecision[]
   readonly operationRoot: string
   readonly artifacts?: EpochSwitchArtifactPort
+  /**
+   * RFC-626: `automatic` for the automatic upgrade. The source access then keeps what the
+   * physical source can hold instead of failing on it (rows whose foreign key dangles in the
+   * old database, values the logical codec rejects while copying), reuses the frozen copy of
+   * the run, and leaves the decision about such data to the conversion.
+   */
+  readonly resolution?: ConversionResolution
 }
 export interface FrozenSourceExpected {
   readonly watermark: string
   readonly preUpgradeWatermark: string | null
   readonly sourceGenerationId: string
 }
+/**
+ * RFC-626: what the read-only check before an automatic upgrade found out about the source.
+ * It opens the source, identifies its structure from the catalog and the migration journal
+ * without counting rows, and measures the live data (not the file size).
+ */
+export type SourcePrecheck =
+  | { readonly ok: true; readonly liveBytes: number }
+  | {
+      readonly ok: false
+      /** `unreadable`: cannot be opened or read. `structure`: not a released structure. */
+      readonly reason: 'unreadable' | 'structure'
+      /** One sentence a person can act on; names the objects that differ. */
+      readonly message: string
+      readonly detail: JsonObject
+    }
 export interface EpochSourcePort {
   discover(input: SourceSnapshotRequest): Promise<FrozenSourceHandle>
   freeze(
     input: SourceSnapshotRequest & { readonly expected?: FrozenSourceExpected },
   ): Promise<FrozenSourceHandle>
+  /** RFC-626: writes nothing under the operation root and creates no database. */
+  precheck?(input: SourceSnapshotRequest): Promise<SourcePrecheck>
 }
 export interface EpochBackupPort {
   create(input: {
@@ -172,6 +200,8 @@ export interface EpochBackupPort {
     readonly contentManifest?: FreezeContentManifest | null
     readonly postgresqlArchive?: SourceArchiveInput
     readonly artifacts?: EpochSwitchArtifactPort
+    /** RFC-626: see `SourceSnapshotRequest.resolution`. */
+    readonly resolution?: ConversionResolution
   }): Promise<SwitchBackupReceipt>
   matches(receipt: SwitchBackupReceipt, frozenWatermark: string): Promise<boolean>
 }
@@ -190,10 +220,23 @@ export interface ContentInventoryPort {
     readonly root: ContentRootSpec
     readonly destination: string
   }): Promise<FreezeContentManifest>
+  /**
+   * RFC-626 §4.4: the manifest this very object captured into `destination`, handed over once.
+   * The plan step and the execution step of an automatic upgrade run in one process; the
+   * execution step takes what the plan step listed instead of parsing its file — 170 MB on
+   * the reference installation — into a second copy. Null when this object did not write that
+   * file (another process did, or the listing was taken again): the caller then reads the file.
+   */
+  takeCaptured?(destination: string): FreezeContentManifest | null
   open(input: {
     readonly manifest: FreezeContentManifest
     readonly root: ContentRootSpec
     readonly source: FrozenSourceHandle
+    /**
+     * RFC-626: with `automatic` a receipt that registers content as missing is not compared
+     * with the disk when the inventory is verified; a receipt that registers bytes still is.
+     */
+    readonly resolution?: ConversionResolution
   }): Promise<VerifiableContentInventory>
 }
 export interface TargetGenerationPort {
@@ -224,20 +267,43 @@ export interface TargetGenerationPort {
     readonly location: EpochTargetLocation
     readonly destination: string
   }): Promise<void>
+  /**
+   * RFC-626: retire a generation by the identity the journal stored for it. Unlike `open` it
+   * does not require the generation to match this binary's target contract: a binary with a
+   * different contract has to be able to give up the half-built target of its predecessor.
+   * Touches migration metadata only.
+   */
+  retire(input: {
+    readonly generationId: string
+    readonly provider: DatabaseProvider
+    readonly location: EpochTargetLocation
+  }): Promise<'retired' | 'already-retired' | 'written' | 'absent'>
 }
 export interface TargetGenerationHandle {
   readonly generationId: string
   readonly provider: DatabaseProvider
   openRun(
     row: MigrationRunInit,
+    /** RFC-626: `automatic` returns refused rows to the engine instead of recording load blocks. */
+    options?: { readonly resolution?: ConversionResolution },
   ): ConversionSink & { loadBlocks(): Promise<readonly ConversionBlock[]> }
-  finalize(input: { readonly runId: string }): Promise<TargetFinalizeReport>
+  finalize(input: {
+    readonly runId: string
+    /**
+     * RFC-626: resolve references to rows that are not in the target instead of reporting
+     * them: a reference with a keep policy is cleared or re-pointed, any other referring row
+     * is moved to the archive. The report then lists what was done.
+     */
+    readonly dangling?: { readonly policies: readonly ReferenceKeepPolicy[] }
+  }): Promise<TargetFinalizeReport>
   validate(input: {
     readonly runId: string
     readonly preflight: SourcePreflight
     readonly preUpgrade: SourcePreflight | null
     readonly inventory: VerifiableContentInventory
     readonly probes: readonly ReadOnlyProbe[]
+    /** RFC-626: the report of the finalize that just ran; without it validation finalizes again. */
+    readonly finalized?: TargetFinalizeReport
   }): Promise<ValidationReport>
   exportReceipts(input: {
     readonly runId: string
@@ -260,6 +326,13 @@ export interface ConversionPort {
   readonly bootUpgradeEnvironment?: BootUpgradeEnvironmentPort
   dryRun(input: ConversionRunRequest): Promise<DryRunResult>
   run(input: ConversionRunRequest, sink: ConversionSink): Promise<ConversionSummary>
+  /**
+   * RFC-626: stage the source and fix the plan (with automatic resolution: find the tasks the
+   * conversion ends) before a target run is registered; `run` on the result converts.
+   */
+  prepare?(input: ConversionRunRequest): Promise<PreparedConversion>
+  /** RFC-626: the keep policies of the assembled contributions, for the finalize step. */
+  readonly references?: readonly ReferenceKeepPolicy[]
 }
 export interface ActivationPort {
   activate(input: {
@@ -320,6 +393,11 @@ export interface MigrationMetaReadPort {
     readonly unitId?: string
   }): Promise<readonly MigrationBlockRecord[]>
   records(runId: string): AsyncIterable<MigrationRecord>
+  /**
+   * RFC-626: the refusals each committed unit set rows aside for, by unit id, as persisted.
+   * A replay applies them verbatim; without the capability it converts as if none was refused.
+   */
+  loadRejections?(runId: string): Promise<ReadonlyMap<string, readonly LoadRejectionDecision[]>>
   identityHighWater(runId: string): Promise<readonly FoldedIdentityHighWater[]>
   archive(input: {
     readonly runId: string
@@ -337,4 +415,19 @@ export interface TraceSourceProbePort {
 }
 export interface TraceReplayPort {
   replay(input: TraceInput & { readonly run: MigrationRun }): Promise<MigrationTraceResult>
+}
+/**
+ * RFC-626 §3.5: what the automatic session measures before it records a new upgrade. Every
+ * member only reads: nothing is created under the home or the operation directory.
+ */
+export interface AutoUpgradeEnvironmentPort {
+  /** Free bytes of the file system the operation directory will be created on; null when unknown. */
+  availableBytes(operationRoot: string): Promise<number | null>
+  /**
+   * An estimate of how many content files the inventory will list. Bounded: it must not walk
+   * every file, because the check it serves has to answer within seconds for any amount of data.
+   */
+  contentFiles(root: ContentRootSpec): Promise<number>
+  /** False when the artifact store on that file system has to copy instead of linking. Default true. */
+  artifactHardLinks?(operationRoot: string): Promise<boolean>
 }

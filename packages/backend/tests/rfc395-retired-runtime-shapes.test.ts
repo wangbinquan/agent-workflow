@@ -17,6 +17,8 @@ import {
   writerDrainRule,
 } from '@/platform/persistence/migration/archives/writerDrain'
 import { runConversion } from '@/platform/persistence/migration/conversion/engine'
+// RFC-626 §3.3: the cutover rule checks the target's seed rows through the generic lookup.
+import { seedPresence } from '@/platform/persistence/migration/conversion/generic/seedPresence'
 import { eq, sql } from 'drizzle-orm'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -94,8 +96,11 @@ describeV2Providers('RFC-395 frozen retired-shape admission evidence', (h) => {
     'source family %s is preserved in receipt and never silently promoted',
     async (mode) => {
       await h.install()
+      // RFC-626 §3.3: every route the target seeds must stay in the source (the cutover rule
+      // checks them, and a missing one blocks the whole table), so only the route under test
+      // is replaced.
       await h.sourceHarness.native.execute(
-        `DELETE FROM ${h.sourceHarness.table('committed_event_family_cutovers')}`,
+        `DELETE FROM ${h.sourceHarness.table('committed_event_family_cutovers')} WHERE producer = 'collaboration' AND family = 'review'`,
       )
       const values = frozenValues('committed_event_family_cutovers', {
         producer: 'collaboration',
@@ -106,13 +111,24 @@ describeV2Providers('RFC-395 frozen retired-shape admission evidence', (h) => {
         change_ref: 'raw\nreference',
       })
       await h.write('committed_event_family_cutovers', [values])
-      const input = await h.input([{ rules: [familyCutoversRule], lookups: [], validators: [] }])
+      const input = await h.input([
+        { rules: [familyCutoversRule], lookups: [seedPresence], validators: [] },
+      ])
       try {
         const sink = new V2MemorySink()
         const result = await runConversion(input, sink)
+        const route = () =>
+          sink
+            .rows('committed_event_family_cutovers')
+            .filter((row) => row.producer === 'collaboration' && row.family === 'review')
+        const chunk = await input.source.readChunk('committed_event_family_cutovers', null, 100)
+        const index = chunk.decodedRows.findIndex(
+          (row) => row.producer === 'collaboration' && row.family === 'review',
+        )
+        expect(index).toBeGreaterThan(-1)
         if (mode === 'dispatchable') {
           expect(result.blocks).toEqual([])
-          expect(sink.rows('committed_event_family_cutovers')).toEqual([
+          expect(route()).toEqual([
             {
               producer: 'collaboration',
               family: 'review',
@@ -125,20 +141,15 @@ describeV2Providers('RFC-395 frozen retired-shape admission evidence', (h) => {
           expect(result.blocks).toContainEqual(
             expect.objectContaining({ code: 'v2-family-cutover-not-dispatchable' }),
           )
-          expect(sink.rows('committed_event_family_cutovers')).toEqual([])
+          expect(route()).toEqual([])
         }
         expect([...sink.units.values()].flatMap((unit) => unit.records)).toContainEqual(
           expect.objectContaining({
             kind: 'family-cutover-source',
-            payload: expect.objectContaining({
-              original: (await input.source.readChunk('committed_event_family_cutovers', null, 1))
-                .rows[0],
-            }),
+            payload: expect.objectContaining({ original: chunk.rows[index] }),
           }),
         )
-        expect(
-          (await input.source.readChunk('committed_event_family_cutovers', null, 1)).decodedRows[0],
-        ).toEqual(values)
+        expect(chunk.decodedRows[index]).toEqual(values)
       } finally {
         await input.source.close()
       }

@@ -66,17 +66,27 @@ describeRfc398Postgresql('fresh PostgreSQL startup', () => {
   }, 180_000)
 })
 
+// RFC-626 changed the automatic half of this pair. A plan blocked by data (the stranded legacy
+// work the `blocked` fixture adds) is no longer refused: the upgrade acknowledges it and carries
+// on (design §3.1, §3.4; the release matrix seeds under fixtures/release-upgrade/rfc626 cover
+// it). What still refuses is the environment, checked before anything is recorded (§3.5): here a
+// table no released version creates. That refusal leaves no session record and no operation.
 for (const manual of [true, false])
-  test(`start ${manual ? 'manual mode' : 'blocked plan'} refuses without changing source`, async () => {
-    const f = await autoUpgradeFixture({ manual, blocked: !manual })
+  test(`start ${manual ? 'manual mode' : 'unreleased structure'} refuses without changing source`, async () => {
+    const f = await autoUpgradeFixture({ manual, unreleasedTable: !manual })
     try {
       const before = readFileSync(join(f.home, 'db.sqlite'))
       const process = f.start()
       expect(await process.exited).toBe(1)
       expect(readFileSync(join(f.home, 'db.sqlite'))).toEqual(before)
       expect(existsSync(join(f.home, 'database-generation.json'))).toBe(false)
-      expect(process.error).toContain(manual ? 'db migration plan' : 'acknowledge')
-      expect(f.sessions()).toHaveLength(manual ? 0 : 1)
+      if (manual) expect(process.error).toContain('db migration plan')
+      else {
+        expect(process.error).toContain('does not have the structure a released version writes')
+        expect(process.error).toContain('rfc626_unreleased')
+      }
+      expect(f.sessions()).toHaveLength(0)
+      expect(f.journals()).toHaveLength(0)
     } finally {
       await f.close()
     }

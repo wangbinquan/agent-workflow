@@ -7,16 +7,18 @@ import {
   readFileSync,
   readdirSync,
   statSync,
-  writeFileSync,
   rmSync,
 } from 'node:fs'
 import { join } from 'node:path'
+import { createSha256DigestBuilder } from '@/platform/contracts/hash'
 import { canonicalSchemaJson, digestSchemaContract } from '../../schema/canonical'
+import type { ConversionResolution } from '../conversion/types'
 import { vacuumSqliteInto, quickCheckSqlite } from '../legacy/sqliteSnapshot'
 import { readDbMigrationIdentity, writeManifest } from '../legacy/backupManifest'
 import { exportEpoch1PostgresqlSource } from '../postgresqlSourceExport'
 import { sourceFilesDigest } from '../sourceReader'
 import { sqliteContentDigest } from '../rawSourceReader'
+import type { SourceMeasurementObserver } from '../sourceTypes'
 import type {
   FreezeContentManifest,
   FrozenSourceHandle,
@@ -27,6 +29,9 @@ import type {
 import { resolvePostgresqlSourceArchive, type PostgresqlBackupArchive } from './postgresqlArchive'
 import { frozenSourceDetails } from './sourceAccess'
 import { assertDiskBudget } from './diskBudget'
+import { shareFile } from './shareFile'
+import { createFileDigestInput } from '../fileDigestInput'
+import { writeContentManifest } from '@/platform/content/inventory/manifest'
 import {
   atomicSourceFile,
   persistSourceDirectory,
@@ -63,7 +68,10 @@ export async function materializeSwitchBackup(
 
 function copyBackupContent(root: string, manifest: FreezeContentManifest | null): void {
   if (!manifest) return
-  writeFileSync(join(root, 'content-manifest.json'), canonicalSchemaJson(manifest))
+  // RFC-626 §4.7: the same bytes as `canonicalSchemaJson(manifest)`, written piece by piece.
+  // As one string the listing of the reference installation (828 thousand files) is 170 MB,
+  // on top of a sorted copy of every entry made to produce it.
+  writeContentManifest(join(root, 'content-manifest.json'), manifest)
   const home = manifest.roots[0]
   if (!home) return
   for (const name of ['skills', 'config.json']) {
@@ -71,7 +79,11 @@ function copyBackupContent(root: string, manifest: FreezeContentManifest | null)
     if (existsSync(path))
       cpSync(path, join(root, name), { recursive: true, preserveTimestamps: true })
   }
-  const listed = new Map(manifest.files.map((entry) => [entry.path, entry]))
+  // Only what was copied is looked up; run files, the bulk of a listing, are not part of it.
+  const copied = manifest.files.filter(
+    (entry) => entry.path.startsWith('skills/') || entry.path === 'config.json',
+  )
+  const listed = new Map(copied.map((entry) => [entry.path, entry]))
   const verify = (relative: string) => {
     const destination = join(root, relative)
     if (statSync(destination).isDirectory()) {
@@ -90,9 +102,7 @@ function copyBackupContent(root: string, manifest: FreezeContentManifest | null)
       throw new Error('switch-backup-content-changed')
   }
   for (const name of ['skills', 'config.json']) if (existsSync(join(root, name))) verify(name)
-  for (const entry of manifest.files.filter(
-    (entry) => entry.path.startsWith('skills/') || entry.path === 'config.json',
-  ))
+  for (const entry of copied)
     if (!existsSync(join(root, entry.path))) throw new Error('switch-backup-content-missing')
 }
 
@@ -149,8 +159,60 @@ interface FileBackupInput {
   readonly destination: string
   readonly frozen: FrozenSourceHandle
   readonly contentManifest: FreezeContentManifest | null
+  /**
+   * RFC-626 §4.5: with `automatic` the frozen copy itself becomes the backup. It already is a
+   * `VACUUM INTO` copy of the old database whose content identity was computed at the freeze,
+   * so it is linked into the backup instead of being copied and measured once more.
+   */
+  readonly resolution?: ConversionResolution
+  /** Replaceable so tests can stand in for a filesystem that refuses hard links. */
+  readonly link?: (existingPath: string, newPath: string) => void
+  /** Replaceable so tests can stand in for a filesystem that cannot clone (macOS). */
+  readonly clone?: (existingPath: string, newPath: string) => void
+  /** Replaceable so tests can exercise both ways of sharing the file on one machine. */
+  readonly platform?: NodeJS.Platform
+  /** RFC-626 §7: told for each whole-database digest an operator backup is compared by. */
+  readonly onMeasure?: SourceMeasurementObserver
+}
+async function fileDigest(path: string): Promise<string> {
+  const hash = createSha256DigestBuilder()
+  await createFileDigestInput().update(hash, path)
+  return `sha256:${hash.digestHex()}`
+}
+function writeFileBackupManifest(path: string, target: string, createdAt: number): void {
+  const migration = readDbMigrationIdentity(target)
+  if (!migration) throw new Error('switch-backup-migration-identity-unavailable')
+  writeManifest(path, {
+    manifestVersion: 1,
+    kind: 'pre-migration',
+    createdAt,
+    appVersion: 'rfc395-epoch-switch',
+    includesWorktrees: false,
+    migration,
+  })
 }
 function createFileBackup(input: FileBackupInput): Promise<SwitchBackupReceipt> {
+  if (input.resolution === 'automatic')
+    return createBackup({
+      ...input,
+      source: input.frozen,
+      kind: 'sqlite-vacuum',
+      async write(path, createdAt) {
+        const frozenCopy = frozenSourceDetails(input.frozen).sqlitePath
+        if (!frozenCopy) throw new Error('switch-backup-sqlite-source-required')
+        const target = join(path, 'db.sqlite')
+        // A link or a clone is the frozen copy itself; only an ordinary copy needs room of
+        // its own and has to be proven by its bytes.
+        const shared = shareFile(frozenCopy, target, {
+          ...(input.platform ? { platform: input.platform } : {}),
+          ...(input.link ? { link: input.link } : {}),
+          ...(input.clone ? { clone: input.clone } : {}),
+        })
+        if (shared === 'copied' && (await fileDigest(frozenCopy)) !== (await fileDigest(target)))
+          throw new Error('switch-backup-source-differs')
+        writeFileBackupManifest(path, target, createdAt)
+      },
+    })
   return createBackup({
     ...input,
     source: input.frozen,
@@ -170,22 +232,16 @@ function createFileBackup(input: FileBackupInput): Promise<SwitchBackupReceipt> 
       // RFC-398 allow-list: target is the VACUUM INTO output created just above.
       const backupDatabase = new Database(target, { readonly: true })
       try {
-        if (sqliteContentDigest(expectedDatabase) !== sqliteContentDigest(backupDatabase))
+        if (
+          sqliteContentDigest(expectedDatabase, input.onMeasure) !==
+          sqliteContentDigest(backupDatabase, input.onMeasure)
+        )
           throw new Error('switch-backup-source-differs')
       } finally {
         expectedDatabase.close()
         backupDatabase.close()
       }
-      const migration = readDbMigrationIdentity(target)
-      if (!migration) throw new Error('switch-backup-migration-identity-unavailable')
-      writeManifest(path, {
-        manifestVersion: 1,
-        kind: 'pre-migration',
-        createdAt,
-        appVersion: 'rfc395-epoch-switch',
-        includesWorktrees: false,
-        migration,
-      })
+      writeFileBackupManifest(path, target, createdAt)
     },
   })
 }
@@ -197,6 +253,12 @@ interface LogicalBackupInput {
   readonly chunkRows: number
   readonly contentManifest?: FreezeContentManifest | null
   readonly archive?: PostgresqlBackupArchive
+  /**
+   * RFC-626 §3.3: with `automatic` the export carries rows by the transport value rule, which
+   * keeps what the physical columns hold instead of failing on a value the logical codec
+   * rejects. The manifest then says so, and whoever reads the backup reads it by that rule.
+   */
+  readonly resolution?: ConversionResolution
 }
 export function createSwitchBackup(
   input: FileBackupInput | LogicalBackupInput,
@@ -213,8 +275,21 @@ export function createSwitchBackup(
         artifactRoot: join(path, 'database/logical'),
         operationId: input.operationId,
         chunkRows: input.chunkRows,
+        resolution: input.resolution,
         ...input.archive,
       })
+      // A manifest without the field is read by the strict rule, so it is written only when
+      // the export actually used the other one.
+      const database = {
+        format: 'agent-workflow-logical-database-v1' as const,
+        provider: 'postgresql' as const,
+        sourceGenerationId: details.originalPreflight.sourceGenerationId,
+        schemaDigest: details.originalPreflight.contract!.digest,
+        logicalPath: 'database/logical' as const,
+        envelopeFileDigest: receipt.envelopeFileDigest,
+        rawSqlitePath: null,
+        ...(receipt.valueRule === 'transport' ? { valueRule: 'transport' as const } : {}),
+      }
       writeManifest(path, {
         manifestVersion: 2,
         kind: 'pre-migration',
@@ -222,15 +297,7 @@ export function createSwitchBackup(
         appVersion: 'rfc395-epoch-switch',
         includesWorktrees: false,
         migration: { lastHash: null, lastCreatedAt: null },
-        database: {
-          format: 'agent-workflow-logical-database-v1',
-          provider: 'postgresql',
-          sourceGenerationId: details.originalPreflight.sourceGenerationId,
-          schemaDigest: details.originalPreflight.contract!.digest,
-          logicalPath: 'database/logical',
-          envelopeFileDigest: receipt.envelopeFileDigest,
-          rawSqlitePath: null,
-        },
+        database,
       })
     },
   })

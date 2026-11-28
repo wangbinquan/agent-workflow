@@ -50,6 +50,10 @@ export async function composePostgresqlArchiveSource(input: {
   const assertOpen = () => {
     if (closed) throw new SourceBlockedError('Source reader is closed')
   }
+  // RFC-626 §4.6: the composed preflight carries the whole contract; encode it for comparison
+  // once instead of on every check. The archive reader answers its own check from a cache that
+  // holds only while the archive directory is unchanged.
+  const preflightDigest = digestSchemaContract(preflight)
   const reader: VersionedSourceReader = {
     kind: physical.kind,
     async preflight() {
@@ -58,7 +62,7 @@ export async function composePostgresqlArchiveSource(input: {
     },
     async assertUnchanged(expected) {
       assertOpen()
-      if (digestSchemaContract(expected) !== digestSchemaContract(preflight))
+      if (expected !== preflight && digestSchemaContract(expected) !== preflightDigest)
         throw new SourceBlockedError('PostgreSQL archive source preflight differs from the plan')
       await input.source.assertUnchanged(physical)
       await input.archive.assertUnchanged(archive)

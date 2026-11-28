@@ -66,6 +66,21 @@ export const contentSourceTables = [
   ...contentTableSpecs.map((spec) => spec.table),
   'hosted_object_publications',
 ]
+/**
+ * RFC-626 §3.4 row 2b①: the columns in which a row registers the digest and size of the bytes
+ * its reference names, besides the reference itself. When the bytes are kept as found on disk
+ * these take the measured facts too: the gate reader and the publication probe compare them
+ * with the reference and with the content object.
+ */
+export const registeredByteColumns: Readonly<
+  Record<string, { readonly sha256: string; readonly size: string }>
+> = {
+  collaboration_gate_artifacts: { sha256: 'sha256', size: 'byte_size' },
+  development_object_artifacts: { sha256: 'digest', size: 'size' },
+  hosted_node_event_archives: { sha256: 'digest', size: 'size' },
+  hosted_object_publications: { sha256: 'sha256', size: 'size' },
+  hosted_task_artifacts: { sha256: 'digest', size: 'size' },
+}
 
 export interface ContentSourceFacts {
   readonly reviewObjects: ReadonlyMap<string, ContentRef>

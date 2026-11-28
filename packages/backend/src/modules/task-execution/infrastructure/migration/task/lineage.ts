@@ -4,6 +4,7 @@ import {
   type LookupBuilder,
 } from '@/platform/persistence/migration/conversion/lookups'
 import type { SourceRow } from '@/platform/persistence/migration/conversion/types'
+import { TASK_ROW_UNUSABLE, unusableTaskSourceValue } from './usability'
 import { text, nullableText, pick } from './values'
 
 export interface TaskLineage {
@@ -76,7 +77,15 @@ export const taskLineageLookup: LookupBuilder<TaskLineage> = {
   dependsOn: [PARENT_RUN_SLOT],
   build(staged, put, lookups) {
     const tasks = new Map<string, SourceRow>()
-    for (const row of staged.rows('tasks'))
+    for (const row of staged.rows('tasks')) {
+      // RFC-626: a row the task facts skip is blocked whole, like an undecodable one; its
+      // children must not derive their lineage from it.
+      const unusable = unusableTaskSourceValue(row)
+      const codecFailure =
+        row.codecFailure ??
+        (unusable
+          ? { message: `${TASK_ROW_UNUSABLE}: ${unusable.column}`, columns: [unusable.column] }
+          : undefined)
       tasks.set(text(row, 'id'), {
         table: row.table,
         phase: row.phase,
@@ -92,8 +101,9 @@ export const taskLineageLookup: LookupBuilder<TaskLineage> = {
           'workflow_version',
           'launch_origin',
         ]),
-        ...(row.codecFailure ? { codecFailure: row.codecFailure } : {}),
+        ...(codecFailure ? { codecFailure } : {}),
       })
+    }
     const resolved = new Map<string, TaskLineage>()
     const visiting = new Set<string>()
     const resolve = (id: string): TaskLineage | undefined => {

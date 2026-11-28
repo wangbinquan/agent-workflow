@@ -1,12 +1,19 @@
 import { encodeMigrationKey } from '@/platform/persistence/migration/conversion/migrationKey'
 import { valueDigest } from '@/platform/persistence/migration/conversion/digest'
-import type { RowDisposition, TargetRef } from '@/platform/persistence/migration/conversion/types'
+import {
+  RESOLUTION_CODES,
+  type JsonValue,
+  type RowDisposition,
+  type TargetRef,
+} from '@/platform/persistence/migration/conversion/types'
 import type {
+  FinalizeDisposition,
   MigrationTraceResult,
   MigrationUnit,
   MigrationUnitSource,
   TraceInput,
 } from '@/platform/persistence/migration/run/types'
+import { FINALIZE_REFERENCE_CODE } from '@/platform/persistence/migration/target/dangling'
 import type {
   MigrationMetaReadPort,
   TraceReplayPort,
@@ -89,6 +96,54 @@ export function createMigrationTraceQuery(deps: {
       }
     }
     const unit = units.find((unit) => unit.unitId === matched?.unitId)
+    // RFC-626: two kinds of decision records explain a row beyond its unit receipt — what
+    // ending its task rewrote on it, and what finalizing the target did to the rows it became.
+    const finalized: FinalizeDisposition[] = []
+    let settlement: MigrationTraceResult['settlement']
+    for await (const record of deps.meta.records(run.runId)) {
+      if (record.kind !== 'decision') continue
+      const payload =
+        record.payload && typeof record.payload === 'object' && !Array.isArray(record.payload)
+          ? (record.payload as { readonly [key: string]: JsonValue })
+          : null
+      if (!payload) continue
+      if (record.code === FINALIZE_REFERENCE_CODE) {
+        const entry = payload as unknown as FinalizeDisposition
+        finalized.push({
+          targetTable: entry.targetTable,
+          targetKey: entry.targetKey,
+          foreignKey: entry.foreignKey,
+          references: entry.references,
+          action: entry.action,
+          archive: entry.archive,
+        })
+      } else if (
+        record.code === RESOLUTION_CODES.taskSettled &&
+        payload.sourceTable === input.table &&
+        payload.sourceKey === sourceKey &&
+        payload.sourcePhase === sourcePhase
+      )
+        settlement = {
+          taskId: String(payload.taskId),
+          cause: String(payload.cause),
+          columns: payload.columns ?? null,
+        }
+    }
+    const finalizedFor = (target: TargetRef) =>
+      finalized.filter(
+        (entry) => entry.targetTable === target.table && entry.targetKey === target.key,
+      )
+    const explained = (result: MigrationTraceResult): MigrationTraceResult =>
+      !finalized.length && !settlement
+        ? result
+        : {
+            ...result,
+            targets: result.targets.map((target) => {
+              const applied = finalizedFor(target)
+              return applied.length ? { ...target, finalized: applied } : target
+            }),
+            ...(settlement ? { settlement } : {}),
+          }
     const blockRecords = await deps.meta.blocks({ runId: run.runId })
     const exactLoadBlock = blockRecords.some(
       ({ origin, unitId, block }) =>
@@ -129,7 +184,28 @@ export function createMigrationTraceQuery(deps: {
       if (targets.some((entry) => entry.table === target.table && entry.key === target.key))
         continue
       const present = await deps.meta.probeTarget(target)
-      if (dispositions.length || present) targets.push({ ...target, probed: true, present })
+      // A row finalize moved to the archive is no longer there, and is still this row's target.
+      if (dispositions.length || present || finalizedFor(target).length)
+        targets.push({ ...target, probed: true, present })
+    }
+    // RFC-626 §3.3: guessing targets from the source key finds only the rows that keep it. A
+    // row of a rule that derives other keys (a run and its input rows) may have lost one of
+    // those to finalize while the row itself is still there, so when the run has finalize
+    // dispositions only rows kept as they are take the short way; the rest are replayed for
+    // their complete set of targets.
+    // Rows of this unit that carry a disposition of their own (set aside, blocked) are not on
+    // this path. Of the rest, only a unit without converted rows holds nothing but rows kept
+    // as they are.
+    const keptAsIs = matched !== undefined && matched.counts.converted === 0
+    if (
+      finalized.length &&
+      !dispositions.length &&
+      matched &&
+      unit?.outcome === 'committed' &&
+      !keptAsIs
+    ) {
+      if (!deps.replay) throw new Error('v3-trace-replay-required')
+      return explained(await deps.replay.replay({ ...input, run }))
     }
     // Membership needs exact evidence; an interval also contains keys absent from the source.
     if (
@@ -145,20 +221,21 @@ export function createMigrationTraceQuery(deps: {
       if (matched) {
         if (!deps.replay) throw new Error('v3-trace-replay-required')
         const replayed = await deps.replay.replay({ ...input, run })
-        if (replayed.proof === 'not-found' || unit?.outcome !== 'load-blocked') return replayed
-        return {
+        if (replayed.proof === 'not-found' || unit?.outcome !== 'load-blocked')
+          return explained(replayed)
+        return explained({
           ...replayed,
           class: 'blocked',
           targets: [],
           blocks: blockRecords
             .filter(({ unitId }) => unitId === matched!.unitId)
             .map(({ block }) => block),
-        }
+        })
       }
       proof = 'not-found'
     }
     if (proof === 'not-found' && input.replay && deps.replay)
-      return deps.replay.replay({ ...input, run })
+      return explained(await deps.replay.replay({ ...input, run }))
     const artifacts = []
     if (matched)
       for await (const artifact of deps.meta.artifacts({
@@ -198,7 +275,7 @@ export function createMigrationTraceQuery(deps: {
         : proof !== 'not-found' && classes.length === 1
           ? classes[0]!
           : null)
-    return {
+    return explained({
       runId: run.runId,
       ...source,
       proof,
@@ -224,6 +301,6 @@ export function createMigrationTraceQuery(deps: {
       restrictions,
       blocks,
       archive: dispositions.find((row) => row.archive)?.archive ?? null,
-    }
+    })
   }
 }

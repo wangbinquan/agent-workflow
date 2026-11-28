@@ -161,6 +161,9 @@ export async function q3SwitchFixture(h: V3Harness, restore = false) {
     async discard() {
       throw new Error('Q3 phase suite never discards its native target')
     },
+    async retire() {
+      throw new Error('Q3 phase suite never retires its native target')
+    },
   }
   if (restore) {
     const root = join(f.root, 'backup')

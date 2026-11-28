@@ -6014,14 +6014,25 @@ value, expected 1`）说明漂移不止在**路径**，还在**请求体形状**
 - **做法**：在「读很多条不同的语句」与「改结构」交替的循环里，读用 `database.prepare(sql)` 加 `finalize()`（仓内例子：
   `platform/persistence/migration/supportedSources.ts` 的 `readOnce`）。只读不改结构的路径不受影响，继续用 `query()`。
 
-## 给几个 GB 的文件算摘要别用流：常驻内存会多出 GB 级的一截（RFC-626 实测，2026-11-27）
+## 常驻内存的一次上跳，先用小基准单独复现再归因（RFC-626 实撞，2026-11-27）
 
-- **现象**：升级过程的常驻内存在算备份文件摘要的那十来秒里上跳约 1.9 GB（3.7 GB 的文件，`createReadStream` 逐块喂给哈希）。
-  每个分块是一个新的缓冲区，读得比回收快，而这段代码不回到事件循环、也不触发整堆回收。
-- **做法**：用一个固定大小的缓冲区同步读（`openSync` / `readSync` 循环，每读一段让出一次事件循环）。仓内统一入口是
-  `platform/persistence/migration/fileDigestInput.ts`（`createFileDigestInput()`，4 MiB 缓冲区，可连续用于多个文件）。
+- **踩法**：升级的常驻内存在备份那几秒里上跳约 1.9 GB，那一步恰好在给 3.7 GB 的文件流式算摘要，于是归因给了读取流，
+  改成固定缓冲区并写进了文档。之后单独量：同一台机器上对 3.5 GB 文件流式算摘要，最大常驻只有 59 MB（固定 4 MiB 缓冲区 24 MB，
+  后者快约 1.5 倍）。换掉之后那一步照样上跳。真正的原因在同一时段的另一件事：执行步把计划步刚写出的 177 MB 内容清单（82.8 万条）
+  重新解析成第二份对象，备份又用 `canonicalSchemaJson` 把它整份序列化一遍（排序拷贝每个条目，再拼成一个字符串）——
+  小基准里序列化一次就让常驻多出约 0.6 GB。
+- **做法**：看到常驻内存的台阶，先把那一刻在做的几件事各自写成几十行的小脚本单独量（`/usr/bin/time -l` 加 `process.memoryUsage()`），
+  确认是哪一件再改、再写文档。回收时机也会改变读数：一次碰巧发生的完整回收能把台阶抹掉，去掉别处的垃圾之后台阶反而出现。
 - **量内存时的连带坑**：macOS 上 `/usr/bin/time -l` 的 `maximum resident set size` 把运行时预留但没写过的页、已释放未归还的页都算进去，
   与「实际用了多少」可以差几个 GB；要看实际用量取同一份输出里的 `peak memory footprint`。两者都报，别只报一个。
+
+## `agent-workflow <子命令> --help` 不是帮助：`start --help` 会直接启动守护进程（RFC-626 实撞，2026-11-27）
+
+- **现象**：想看 `start` 的参数，执行了 `agent-workflow start --help | head -20`。子命令不认 `--help`，进程照常启动——没设
+  `AGENT_WORKFLOW_HOME` 时用的是默认家目录 `~/.agent-workflow`，也就是本机的开发环境：拿锁、开库、跑完全部启动步骤、开始监听，
+  直到 `head` 关掉管道才退出。启动步骤会写库（内置岗位模板、启动恢复任务等）。
+- **做法**：查参数读源码（`packages/backend/src/cli/` 与 `bootstrap/daemonStart.ts`），不要对二进制试 `--help`。在测试用的二进制上运行任何子命令，
+  命令行里都显式带 `AGENT_WORKFLOW_HOME=<一次性目录>`。
 
 ## 本机 GitLab 是明文 HTTP 时，数字员工推送报“could not read Password”（2026-11-27 实撞）
 

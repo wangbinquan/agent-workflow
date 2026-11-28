@@ -6,7 +6,7 @@ import {
 } from '@/modules/task-execution/infrastructure/migration/run/sequence'
 import { planNodeRunSeqBackfill } from '@/modules/task-execution/infrastructure/migration/run/legacySequencePlan'
 import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/infrastructure/migration/oracle/snapshot'
-import { sourceRow } from './helpers/rfc395V2/runFixtures'
+import { runSource } from './helpers/rfc395V2/runFixtures'
 
 describe('RFC-395 frozen sequence conversion', () => {
   test('empty and mixed plans retain the frozen ID ordering', () => {
@@ -55,8 +55,10 @@ describe('RFC-395 frozen sequence conversion', () => {
     expect(new Set(result.seqById.values()).size).toBe(source.length)
   })
   test('invalid conversion remains local to its task and preserves the global allocation plan', () => {
+    // RFC-626: the planner skips a run whose number columns are unusable, so the fixture
+    // rows carry every column of a real run (runSource) instead of only id, task and seq.
     const row = (id: string, task: string, seq: number | null) =>
-      sourceRow('node_runs', { id, task_id: task, seq })
+      runSource(id, { task_id: task, seq })
     const plans = planRunSequences(
       [row('a', 'bad', 1), row('b', 'bad', 1), row('c', 'good', null)],
       [],

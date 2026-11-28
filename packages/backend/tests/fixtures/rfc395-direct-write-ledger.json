@@ -116,6 +116,7 @@
     "rfc395-v2-run-split.test.ts": "historical-schema",
     "rfc395-w2fix-nb-regressions.test.ts": "target-model-contract",
     "rfc395-workflow-index-target.test.ts": "target-model-contract",
+    "rfc626-source-readers-upgrade.test.ts": "historical-schema",
     "upgrade-rolling.test.ts": "historical-schema",
     "wg-readonly-claim-and-pause-reason.test.ts": "target-runtime-state"
   },

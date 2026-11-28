@@ -2,10 +2,20 @@ import type { ConversionContribution } from '@/platform/persistence/migration/co
 import { taskConversionRule } from './rule'
 import { taskFactsLookup, taskMountsLookup, taskIsolationLookup } from './lookups'
 import { taskLineageLookup } from './lineage'
-import { taskWorkspacePreparationValidator, hostedWorkspaceCommandValidator } from './validators'
+import {
+  taskWorkspacePreparationValidator,
+  hostedWorkspaceCommandValidator,
+  unusableTaskRowValidator,
+  unusableTaskRepoRowValidator,
+} from './validators'
 
 export const conversion: ConversionContribution = {
   rules: [taskConversionRule],
   lookups: [taskFactsLookup, taskMountsLookup, taskIsolationLookup, taskLineageLookup],
-  validators: [taskWorkspacePreparationValidator, hostedWorkspaceCommandValidator],
+  validators: [
+    taskWorkspacePreparationValidator,
+    hostedWorkspaceCommandValidator,
+    unusableTaskRowValidator,
+    unusableTaskRepoRowValidator,
+  ],
 }

@@ -33,15 +33,42 @@ export function withCanonicalFragmentCache<T>(cache: CanonicalFragmentCache, wor
   }
 }
 
+/**
+ * RFC-626 §4.3: sorted key lists by the keys an object enumerates. Collation is the costly
+ * part of canonical JSON, and the rows a conversion serializes share a handful of key sets,
+ * so the plain path sorts each set once. Bounded: a document used as a dictionary has
+ * arbitrary keys, and those are sorted directly instead of filling the table.
+ */
+const PLAIN_KEY_ORDER_LIMIT = 8192
+const PLAIN_KEY_ORDER_MAX_KEYS = 64
+const plainKeyOrders = new Map<string, readonly string[]>()
+
+function sortedKeys(keys: readonly string[]): readonly string[] {
+  if (keys.length < 2) return keys
+  if (keys.length > PLAIN_KEY_ORDER_MAX_KEYS) return [...keys].sort((a, b) => a.localeCompare(b))
+  const signature = JSON.stringify(keys)
+  let order = plainKeyOrders.get(signature)
+  if (order === undefined) {
+    order = [...keys].sort((a, b) => a.localeCompare(b))
+    if (plainKeyOrders.size >= PLAIN_KEY_ORDER_LIMIT) plainKeyOrders.clear()
+    plainKeyOrders.set(signature, order)
+  }
+  return order
+}
+
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize)
   if (value !== null && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .filter(([, entry]) => entry !== undefined)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, entry]) => [key, canonicalize(entry)]),
-    )
+    const record = value as Record<string, unknown>
+    // Same pairs in the same order as sorting the defined entries: the sort is stable, so
+    // leaving out the undefined ones afterwards keeps the order of the rest. Built with
+    // fromEntries, which defines own properties — an assignment would not for `__proto__`.
+    const pairs: [string, unknown][] = []
+    for (const key of sortedKeys(Object.keys(record))) {
+      const entry = record[key]
+      if (entry !== undefined) pairs.push([key, canonicalize(entry)])
+    }
+    return Object.fromEntries(pairs)
   }
   return value
 }

@@ -132,11 +132,11 @@ export function skillBootEnvironment(): BootUpgradeEnvironmentContribution {
   return {
     id: 'resource-catalog/boot-skills',
     async capture(input) {
-      const skills = await bootSourceRows(input.source, 'skills')
-      const versions = await bootSourceRows(input.source, 'skill_versions')
-      const entries = await bootSourceRows(input.source, 'skill_content_entries')
-      const operations = await bootSourceRows(input.source, 'skill_operations')
-      const locks = await bootSourceRows(input.source, 'skill_operation_locks')
+      const skills = await bootSourceRows(input.source, 'skills', input)
+      const versions = await bootSourceRows(input.source, 'skill_versions', input)
+      const entries = await bootSourceRows(input.source, 'skill_content_entries', input)
+      const operations = await bootSourceRows(input.source, 'skill_operations', input)
+      const locks = await bootSourceRows(input.source, 'skill_operation_locks', input)
       const owners = new Map<string, Set<string>>()
       const facts: SkillBootFact[] = []
       for (const skill of skills) {

@@ -11913,6 +11913,7 @@ export const zhCN: Resources = {
         daemonRestart__hint: '点「继续执行」从中断处恢复（开启自动恢复后会自动续跑）。',
         orphanReconcile: '服务运行期间检测到任务失联，已标记为中断。',
         canceledByUser: '任务已被手动取消。',
+        endedByUpgrade: '升级时结束：旧版本的运行记录无法在新版本继续。',
         schedulerError: '调度器内部错误导致任务失败。',
         schedulerStalled: '调度停滞：有节点长时间无法推进。',
         schedulerStalled__hint: '用「诊断」查看阻塞原因，或重启 daemon 后恢复任务。',

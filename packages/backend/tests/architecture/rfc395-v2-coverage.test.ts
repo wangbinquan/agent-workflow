@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { writerDrainLookup } from '@/platform/persistence/migration/archives/writerDrain'
 import { buildLookups } from '@/platform/persistence/migration/conversion/lookups'
+import { seedPresence } from '@/platform/persistence/migration/conversion/generic/seedPresence'
 import { createStagingStore } from '@/platform/persistence/migration/conversion/staging'
 import { conversionContributions } from '@/bootstrap/conversionRules'
 import { persistenceSchema } from '@/bootstrap/persistenceSchema'
@@ -112,7 +113,8 @@ describe('RFC-395 V2 source coverage', () => {
     const sources = frozenEpoch1Contract.tables.map((table) => table.id)
     expect(sources).toHaveLength(222)
     expect(dispositions.map((table) => table.table).sort()).toEqual([...sources].sort())
-    expect(genericCopyTables).toHaveLength(169)
+    // RFC-626: skill_operations and skill_operation_locks moved to the skill rule (169 → 167).
+    expect(genericCopyTables).toHaveLength(167)
     expect(coverageViolations(resolve(frozenCatalog('sqlite')).rules, sources)).toEqual([])
   })
   test('frozen PostgreSQL claims only present tables and explicitly packages all six expected absences', async () => {
@@ -144,7 +146,8 @@ describe('RFC-395 V2 source coverage', () => {
     try {
       // Even an empty history must prove the global writer-drain fact. Use the
       // production lookup builder; an absent global row remains a visible block.
-      const lookup = await buildLookups([writerDrainLookup], staged)
+      // RFC-626 §3.3: the cutover rule also reads the generic seed-presence lookup.
+      const lookup = await buildLookups([writerDrainLookup, seedPresence], staged)
       for (const rule of resolved.rules.filter((rule) => rule.ref.id.startsWith('history/'))) {
         const collector = createUnitCollector({
           rule,
@@ -159,6 +162,7 @@ describe('RFC-395 V2 source coverage', () => {
           {
             sourceVersion: catalog.sourceVersion,
             sourceProvider: 'postgresql',
+            resolution: 'operator',
             sourceGenerationId: catalog.sourceGenerationId,
             preflight: catalog,
             planTime: 123,

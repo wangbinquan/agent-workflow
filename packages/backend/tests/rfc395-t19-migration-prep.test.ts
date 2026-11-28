@@ -3,11 +3,14 @@
 // shard assignment and overran one shard's 15-minute budget in runs 40513660126 and 40521324441).
 import { expect, test } from 'bun:test'
 import {
+  constants,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -310,47 +313,94 @@ test('T19 replans delete superseded manifests but retain the exact approved plan
   }
 })
 
+// RFC-626 §4.5 changed what "snapshot independence" means for a registered file. Elsewhere than
+// macOS it enters the store as a hard link, so the stored version is the registered file itself:
+// it stays as it was when the file is replaced by rename (which is how the upgrade writes every
+// registered file), while bytes written into it in place reach the store, which then refuses
+// them rather than handing them out. Only a file of its own — a clone (macOS) or an ordinary
+// copy (where neither works) — is independent of a write in place to its origin. Each way runs
+// here on any machine: the platform and the link or clone are injected.
+const T19_SHARING = [
+  {
+    label: 'linked',
+    inPlace: false,
+    open: (root: string) => createLocalEpochArtifacts(root, 'linux'),
+  },
+  {
+    label: 'cloned',
+    inPlace: true,
+    open: (root: string) =>
+      createLocalEpochArtifacts(root, 'darwin', undefined, (existing, target) =>
+        copyFileSync(existing, target, constants.COPYFILE_EXCL),
+      ),
+  },
+  {
+    label: 'copied',
+    inPlace: true,
+    open: (root: string) =>
+      createLocalEpochArtifacts(root, 'linux', () => {
+        throw Object.assign(new Error('EXDEV: cross-device link not permitted'), { code: 'EXDEV' })
+      }),
+  },
+] as const
+
 test('T19 local clone-or-copy preserves bytes, digests and snapshot independence; streams still work', async () => {
-  const root = mkdtempSync(join(tmpdir(), 't19p-clone-'))
-  try {
-    const bytes = Buffer.alloc(4 * 1024 * 1024, 123)
-    const source = join(root, 'source.sqlite')
-    writeFileSync(source, bytes)
-    const port = createLocalEpochArtifacts(join(root, 'operation'))
-    const digest = await port.putFile!('backup/db.sqlite', source)
-    expect(digest).toBe(bytesDigest(bytes))
-    writeFileSync(source, 'changed after snapshot')
-    const materialized = await port.get('backup/db.sqlite', digest)
-    expect(readFileSync(materialized)).toEqual(bytes)
-    writeFileSync(materialized, 'changed materialization')
-    expect(readFileSync(await port.get('backup/db.sqlite', digest))).toEqual(bytes)
-    const directory = join(root, 'input')
-    mkdirSync(directory)
-    writeFileSync(join(directory, 'db.sqlite'), bytes)
-    let fileCalls = 0
-    await persistSourceDirectory(
-      {
-        ...port,
-        async putFile(name, path) {
-          fileCalls++
-          return port.putFile!(name, path)
+  for (const sharing of T19_SHARING) {
+    const root = mkdtempSync(join(tmpdir(), `t19p-clone-${sharing.label}-`))
+    try {
+      const bytes = Buffer.alloc(4 * 1024 * 1024, 123)
+      const source = join(root, 'source.sqlite')
+      writeFileSync(source, bytes)
+      const port = sharing.open(join(root, 'operation'))
+      const digest = await port.putFile!('backup/db.sqlite', source)
+      expect(digest).toBe(bytesDigest(bytes))
+      // Replaced by rename after the snapshot: the registered version is untouched either way.
+      writeFileSync(`${source}.next`, 'changed after snapshot')
+      renameSync(`${source}.next`, source)
+      const materialized = await port.get('backup/db.sqlite', digest)
+      expect(readFileSync(materialized)).toEqual(bytes)
+      writeFileSync(materialized, 'changed materialization')
+      expect(readFileSync(await port.get('backup/db.sqlite', digest))).toEqual(bytes)
+      // Rewritten in place after the snapshot: only a file of its own is unaffected.
+      const other = join(root, 'other.sqlite')
+      const otherBytes = Buffer.alloc(64 * 1024, 45)
+      writeFileSync(other, otherBytes)
+      const otherDigest = await port.putFile!('backup/other.sqlite', other)
+      writeFileSync(other, 'changed in place after snapshot')
+      if (sharing.inPlace)
+        expect(readFileSync(await port.get('backup/other.sqlite', otherDigest))).toEqual(otherBytes)
+      else
+        await expect(port.get('backup/other.sqlite', otherDigest)).rejects.toMatchObject({
+          code: 'v3-artifact-digest-mismatch',
+        })
+      const directory = join(root, 'input')
+      mkdirSync(directory)
+      writeFileSync(join(directory, 'db.sqlite'), bytes)
+      let fileCalls = 0
+      await persistSourceDirectory(
+        {
+          ...port,
+          async putFile(name, path) {
+            fileCalls++
+            return port.putFile!(name, path)
+          },
         },
-      },
-      'directory',
-      directory,
-    )
-    expect(fileCalls).toBe(1)
-    const streamed = await port.put(
-      'stream',
-      (async function* () {
-        yield bytes.subarray(0, 100)
-        yield bytes.subarray(100)
-      })(),
-    )
-    expect(streamed).toBe(digest)
-    expect(readFileSync(await port.get('stream', streamed))).toEqual(bytes)
-  } finally {
-    rmSync(root, { recursive: true, force: true })
+        'directory',
+        directory,
+      )
+      expect(fileCalls).toBe(1)
+      const streamed = await port.put(
+        'stream',
+        (async function* () {
+          yield bytes.subarray(0, 100)
+          yield bytes.subarray(100)
+        })(),
+      )
+      expect(streamed).toBe(digest)
+      expect(readFileSync(await port.get('stream', streamed))).toEqual(bytes)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   }
 })
 

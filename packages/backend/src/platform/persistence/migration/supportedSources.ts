@@ -1,8 +1,9 @@
 // RFC-395 II-b V1: one frozen SQLite replay, every prefix, exact physical identification.
 import { Database } from 'bun:sqlite'
-import { sortHistoryCatalog } from '../schema/history/catalogModel'
+import { sortHistoryCatalog, type CatalogEntry } from '../schema/history/catalogModel'
 import type { DatabaseProvider } from '../databaseProviders'
 import { canonicalSchemaJson } from '../schema/canonical'
+import { sqliteCatalogEntries } from '../sqlite/historyCatalog'
 import {
   collectSqliteHistoryCatalog,
   readPostgresqlMajor,
@@ -165,25 +166,165 @@ function observed0141Catalog(prefix: HistoryCatalog): HistoryCatalog {
     reference.close()
   }
 }
+/** A row of `sqlite_schema`, and whether the history catalog lists it. */
+interface SqliteSchemaRow {
+  readonly type: string
+  readonly name: string
+  readonly tbl_name: string
+  readonly sql: string | null
+  /** The history catalog's own filter, evaluated by SQLite: 1 when it lists the row. */
+  readonly listed: number
+}
+/** Every schema row, in the history catalog's order. */
+const SQLITE_SCHEMA_ROWS =
+  "SELECT type, name, tbl_name, sql, name NOT LIKE 'sqlite_%' AS listed FROM sqlite_schema ORDER BY type, name"
+/**
+ * Runs one statement without `Database.query`'s statement cache. The prefix compiler applies
+ * DDL after every read, and a connection holding a thousand cached statements runs that DDL
+ * about ten times slower (measured: 6.9 s against 0.6 s for the frozen chain).
+ */
+function readOnce(database: Database, sql: string): Record<string, unknown>[] {
+  const statement = database.prepare(sql)
+  try {
+    return statement.all() as Record<string, unknown>[]
+  } finally {
+    statement.finalize()
+  }
+}
+/**
+ * The catalog entries of one relation — every schema row whose `tbl_name` it is, and for a table
+ * its columns, foreign keys and indexes — read exactly as `collectSqliteHistoryCatalog` reads them
+ * for the whole database. Unsorted. `rows` are the relation's schema rows.
+ */
+function collectSqliteRelation(
+  database: Database,
+  rows: readonly SqliteSchemaRow[],
+): CatalogEntry[] {
+  return sqliteCatalogEntries(
+    rows.filter((row) => row.listed),
+    (sql) => readOnce(database, sql),
+  )
+}
+/** The catalog of one prefix and what it was read from. */
+interface PrefixCatalog {
+  readonly catalog: HistoryCatalog
+  /** Per relation (`tbl_name`): the type, name and stored SQL text of each of its schema rows. */
+  readonly definitions: ReadonlyMap<string, string>
+  /** No two entries compare equal: the order is the only one the collector's sort can give. */
+  readonly strict: boolean
+}
+/**
+ * The catalog after every prefix of the frozen SQLite chain. RFC-626 §3.5: the precheck that
+ * refuses a database with a structure no release wrote took more than ten seconds, most of them
+ * here, when every prefix was collected and normalised in full.
+ *
+ * Every entry the history catalog holds for a relation — its schema rows, and for a table the
+ * columns, foreign keys and indexes SQLite reports — follows from the SQL text SQLite stores for
+ * that relation's own schema rows (the table, its indexes, triggers and automatic indexes): a
+ * change elsewhere that touches it (renaming a table it references, say) rewrites that text too.
+ * So after each migration only the relations whose stored text changed are read again; every
+ * other relation keeps the entries, and the very entry objects, of the prefix before.
+ *
+ * The result is the one `collectSqliteHistoryCatalog` gives after each prefix, entry for entry,
+ * in its order, with every equal entry shared across prefixes. The collector sorts by
+ * `localeCompare` of the canonical text, which may call two different texts equal; the
+ * incremental order is used only while no two entries compare equal — then it is the only
+ * possible order — and a prefix where two do is collected in full by the collector itself.
+ * `tests/rfc626-source-catalog-prefixes.test.ts` compares every prefix with a full collection.
+ *
+ * `database` is an empty connection with the migration journal; `each` is told the catalog
+ * after the first `through` migrations, for every prefix in turn.
+ */
+export function compileSqlitePrefixCatalogs(
+  database: Database,
+  migrations: readonly FrozenEpoch1History['sqlite'][number][],
+  each: (through: number, catalog: HistoryCatalog) => void,
+): void {
+  // Intern unchanged entries: retain prefix arrays without duplicating catalog strings.
+  const entries = new Map<string, CatalogEntry>()
+  const keys = new Map<CatalogEntry, string>()
+  const intern = (entry: CatalogEntry): CatalogEntry => {
+    const key = canonicalSchemaJson(entry)
+    const shared = entries.get(key)
+    if (shared) return shared
+    entries.set(key, entry)
+    keys.set(entry, key)
+    return entry
+  }
+  // The comparison `sortHistoryCatalog` sorts by.
+  const order = (a: CatalogEntry, b: CatalogEntry) => keys.get(a)!.localeCompare(keys.get(b)!)
+  const strictlyOrdered = (catalog: HistoryCatalog) =>
+    catalog.every((entry, index) => index === 0 || order(catalog[index - 1]!, entry) < 0)
+  /** The catalog when only `changed` relations differ from `previous`; null on a tie. */
+  const incremental = (
+    previous: PrefixCatalog,
+    relations: ReadonlyMap<string, readonly SqliteSchemaRow[]>,
+    changed: ReadonlySet<string>,
+  ): HistoryCatalog | null => {
+    if (!changed.size) return [...previous.catalog]
+    const kept = previous.catalog.filter((entry) => !changed.has(entry.relation))
+    const added = [...changed]
+      .flatMap((name) => {
+        const rows = relations.get(name)
+        return rows ? collectSqliteRelation(database, rows).map(intern) : []
+      })
+      .sort(order)
+    if (!strictlyOrdered(added)) return null
+    // Each new entry goes where a binary search puts it among the kept ones. The kept entries are
+    // strictly ordered, so a search that never meets an equal entry proves the whole result is.
+    const catalog: CatalogEntry[] = []
+    let from = 0
+    for (const entry of added) {
+      let low = from
+      let high = kept.length
+      while (low < high) {
+        const middle = (low + high) >>> 1
+        const compared = order(kept[middle]!, entry)
+        if (compared === 0) return null
+        if (compared < 0) low = middle + 1
+        else high = middle
+      }
+      while (from < low) catalog.push(kept[from++]!)
+      catalog.push(entry)
+    }
+    while (from < kept.length) catalog.push(kept[from++]!)
+    return catalog
+  }
+  let previous: PrefixCatalog = { catalog: [], definitions: new Map(), strict: true }
+  for (let through = 1; through <= migrations.length; through += 1) {
+    applyFrozenSqliteMigrations(database, [migrations[through - 1]!])
+    const relations = new Map<string, SqliteSchemaRow[]>()
+    for (const row of readOnce(database, SQLITE_SCHEMA_ROWS) as unknown as SqliteSchemaRow[]) {
+      const rows = relations.get(row.tbl_name)
+      if (rows) rows.push(row)
+      else relations.set(row.tbl_name, [row])
+    }
+    const definitions = new Map(
+      [...relations].map(([name, rows]) => [
+        name,
+        JSON.stringify(rows.map((row) => [row.type, row.name, row.sql])),
+      ]),
+    )
+    const changed = new Set<string>()
+    for (const [name, definition] of definitions)
+      if (previous.definitions.get(name) !== definition) changed.add(name)
+    for (const name of previous.definitions.keys()) if (!definitions.has(name)) changed.add(name)
+    const quick = previous.strict ? incremental(previous, relations, changed) : null
+    const catalog = quick ?? collectSqliteHistoryCatalog(database).map(intern)
+    previous = { catalog, definitions, strict: quick !== null || strictlyOrdered(catalog) }
+    each(through, catalog)
+  }
+}
 function compileSqlitePrefixes(history: FrozenEpoch1History): readonly SupportedSourceContract[] {
   const cached = sqliteCatalogs.get(history.chainDigest)
   if (cached) return cached
   const database = new Database(':memory:')
   const sources: SupportedSourceContract[] = []
-  // Intern unchanged entries: retain prefix arrays without duplicating catalog strings.
-  const entries = new Map<string, HistoryCatalog[number]>()
   const head = history.postgresql.head.contract
   try {
     database.exec('PRAGMA foreign_keys = OFF')
     createFrozenSqliteJournal(database)
-    for (let through = 1; through <= history.sqlite.length; through += 1) {
-      applyFrozenSqliteMigrations(database, [history.sqlite[through - 1]!])
-      const catalog = collectSqliteHistoryCatalog(database).map((entry) => {
-        const key = canonicalSchemaJson(entry)
-        const shared = entries.get(key) ?? entry
-        entries.set(key, shared)
-        return shared
-      })
+    compileSqlitePrefixCatalogs(database, history.sqlite, (through, catalog) => {
       const versionIndex = history.postgresql.versions.findIndex(
         (version) => version.sqliteMigrations.length === through,
       )
@@ -224,7 +365,7 @@ function compileSqlitePrefixes(history: FrozenEpoch1History): readonly Supported
             'mcp_runtime_test_create_receipts',
           ],
         })
-    }
+    })
   } finally {
     database.close()
   }

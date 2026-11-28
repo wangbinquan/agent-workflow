@@ -40,10 +40,15 @@ export function identityHighWaterRecord(
   sequenceValue?: string,
 ): Extract<MigrationRecord, { kind: 'identity-high-water' }> {
   const original = ctx.preUpgradePreflight ?? ctx.preflight
+  // A recorded sequence value that is not an integer is left out instead of failing the whole
+  // conversion on `BigInt`: the row that carries it is blocked (or, with automatic resolution,
+  // set aside) by the metadata rule, and the high water then rests on the rows themselves.
+  const integer = (value: unknown): bigint[] =>
+    /^-?\d+$/.test(String(value)) ? [BigInt(String(value))] : []
   const sequences = original.identityHighWater
     .filter((entry) => entry.table === table && (entry.column === column || entry.column === null))
-    .map((entry) => BigInt(entry.value))
-  if (sequenceValue !== undefined) sequences.push(BigInt(sequenceValue))
+    .flatMap((entry) => integer(entry.value))
+  if (sequenceValue !== undefined) sequences.push(...integer(sequenceValue))
   const rowMaximum = maximum === null ? null : BigInt(maximum)
   const values = [...sequences, ...(rowMaximum === null ? [] : [rowMaximum])]
   const value = values.length ? values.reduce((a, b) => (a > b ? a : b)) : 0n

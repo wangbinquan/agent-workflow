@@ -19,13 +19,23 @@ function sqlText(value: string): string {
     .join('')
     .replace(/;$/, '')
 }
-export function collectSqliteHistoryCatalog(database: Database): HistoryCatalog {
-  const objects = database
-    .query<
-      { type: string; name: string; tbl_name: string; sql: string | null },
-      []
-    >("SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name")
-    .all()
+/** A row of `sqlite_schema` the history catalog lists. */
+export interface SqliteSchemaObject {
+  readonly type: string
+  readonly name: string
+  readonly tbl_name: string
+  readonly sql: string | null
+}
+/**
+ * The catalog entries of the given schema rows and, for every table among them, of its columns,
+ * foreign keys and indexes as SQLite reports them. Unsorted. `read` runs one statement: the
+ * whole-database collector goes through the connection's statement cache, a caller that
+ * applies DDL between reads does not (RFC-626, `migration/supportedSources.ts`).
+ */
+export function sqliteCatalogEntries(
+  objects: readonly SqliteSchemaObject[],
+  read: (sql: string) => Record<string, unknown>[],
+): CatalogEntry[] {
   const entries: CatalogEntry[] = objects.map((row) => ({
     kind: row.type,
     relation: row.tbl_name,
@@ -33,31 +43,21 @@ export function collectSqliteHistoryCatalog(database: Database): HistoryCatalog 
     definition: sqlText(row.sql ?? ''),
   }))
   for (const table of objects.filter((row) => row.type === 'table')) {
-    for (const row of database.query(`PRAGMA table_xinfo(${quote(table.name)})`).all() as Record<
-      string,
-      unknown
-    >[])
+    for (const row of read(`PRAGMA table_xinfo(${quote(table.name)})`))
       entries.push({
         kind: 'column',
         relation: table.name,
         name: String(row.name),
         definition: canonicalSchemaJson(row),
       })
-    const fks = database.query(`PRAGMA foreign_key_list(${quote(table.name)})`).all() as Record<
-      string,
-      unknown
-    >[]
-    for (const row of fks)
+    for (const row of read(`PRAGMA foreign_key_list(${quote(table.name)})`))
       entries.push({
         kind: 'fk',
         relation: table.name,
         name: `${String(row.id)}:${String(row.seq)}`,
         definition: canonicalSchemaJson(row),
       })
-    for (const row of database.query(`PRAGMA index_list(${quote(table.name)})`).all() as Record<
-      string,
-      unknown
-    >[]) {
+    for (const row of read(`PRAGMA index_list(${quote(table.name)})`)) {
       const { seq: _seq, ...shape } = row
       entries.push({
         kind: 'index-shape',
@@ -65,10 +65,21 @@ export function collectSqliteHistoryCatalog(database: Database): HistoryCatalog 
         name: String(row.name),
         definition: canonicalSchemaJson({
           ...shape,
-          columns: database.query(`PRAGMA index_xinfo(${quote(String(row.name))})`).all(),
+          columns: read(`PRAGMA index_xinfo(${quote(String(row.name))})`),
         }),
       })
     }
   }
-  return sorted(entries)
+  return entries
+}
+export function collectSqliteHistoryCatalog(database: Database): HistoryCatalog {
+  const objects = database
+    .query<
+      SqliteSchemaObject,
+      []
+    >("SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name")
+    .all()
+  return sorted(
+    sqliteCatalogEntries(objects, (sql) => database.query(sql).all() as Record<string, unknown>[]),
+  )
 }

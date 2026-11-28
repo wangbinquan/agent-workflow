@@ -1,0 +1,50 @@
+{
+  "formatVersion": 1,
+  "scenario": "cached-repos",
+  "base": "v0.19.2",
+  "providers": [
+    "sqlite",
+    "postgresql"
+  ],
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-626-upgrade-no-refusal-minimal-time/design.md §3.4 row 4, §3.3「升级后的服务必须能启动」(备份准备)",
+      "design/RFC-626-upgrade-no-refusal-minimal-time/proposal.md §5 A9",
+      "packages/backend/src/services/repoCredentials.ts (aw-legacy-url-hex-v1: escrow, AES-256-GCM iv|ciphertext|tag in base64)"
+    ],
+    "note": "Two cached repositories whose address cannot be recovered: one sealed under a key this installation does not have (the ledger's secret.key stays; the value is 36 bytes of iv, ciphertext and tag that no key of this home opens), and one still in the migration escrow format with a damaged hex body. Both have no redacted display yet, which is the state in which v0.19.2's first boot would have sealed or repaired them."
+  },
+  "rows": [
+    {
+      "op": "clone",
+      "table": "cached_repos",
+      "from": {
+        "id": "01K39800006904DCBDB1794059"
+      },
+      "values": {
+        "id": "01K3986260CR00000000000001",
+        "url_hash": "6260000000000000000000000000000000000000000000000000000000000c71",
+        "url_enc": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB",
+        "url_redacted": null,
+        "local_path": "<AW_HOME>/repositories/rfc626-sealed-under-another-key"
+      },
+      "why": "v2-boot-url-decode-unproven: sealed, but not with this installation's key"
+    },
+    {
+      "op": "clone",
+      "table": "cached_repos",
+      "from": {
+        "id": "01K39800006904DCBDB1794059"
+      },
+      "values": {
+        "id": "01K3986260CR00000000000002",
+        "url_hash": "6260000000000000000000000000000000000000000000000000000000000c72",
+        "url_enc": "aw-legacy-url-hex-v1:not-a-hex-escrow",
+        "url_redacted": null,
+        "local_path": "<AW_HOME>/repositories/rfc626-damaged-escrow"
+      },
+      "why": "v2-boot-url-escrow-invalid: escrow prefix with a body that is not hex"
+    }
+  ]
+}

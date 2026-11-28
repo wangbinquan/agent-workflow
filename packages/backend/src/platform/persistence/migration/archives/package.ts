@@ -5,6 +5,42 @@ import { bytesDigest } from '../conversion/digest'
 import { canonicalValue, encodeMigrationKey } from '../conversion/migrationKey'
 import type { RuleContext } from '../conversion/rule'
 import type { SourceRow, TargetRow } from '../conversion/types'
+import type { LogicalCodec, LogicalTableContract } from '../../schema/contractTypes'
+import type { CanonicalLogicalValue } from '../legacy/logicalDatabaseArtifact'
+
+/** The canonical cell each logical codec writes for a non-NULL value. */
+const codecCells: Readonly<Record<LogicalCodec, CanonicalLogicalValue['type']>> = {
+  boolean: 'boolean',
+  'epoch-milliseconds': 'integer',
+  integer: 'integer',
+  'json-text': 'text',
+  'opaque-bytes': 'bytes',
+  real: 'real',
+  text: 'text',
+  'text-identity': 'text',
+}
+/**
+ * RFC-626 §3.4 row 8: whether a row the frozen codec rejected can still go into its history
+ * package as it was read. The new version validates every packaged cell and projects the
+ * records of its query tables by column type when it builds the history index at startup, and
+ * it does not start when that fails. A rejected cell that still has its column's type — JSON
+ * text that does not parse — reads back; one of another type (text in an integer column, a
+ * NULL in a required column, a real that is not finite) does not, and its row is set aside
+ * instead so the package stays readable.
+ */
+export function historyRecordReadable(
+  row: SourceRow,
+  contract: LogicalTableContract | undefined,
+): boolean {
+  if (!row.codecFailure) return true
+  if (!contract) return false
+  return row.codecFailure.columns.every((name) => {
+    const index = contract.columns.findIndex((column) => column.name === name)
+    const cell = index < 0 ? undefined : row.canonical.values[index]
+    if (!cell || cell.type !== codecCells[contract.columns[index]!.logicalCodec]) return false
+    return cell.type !== 'real' || Number.isFinite(Number(cell.value))
+  })
+}
 
 export function encodeHistoryPackage(input: {
   readonly sourceGeneration: string

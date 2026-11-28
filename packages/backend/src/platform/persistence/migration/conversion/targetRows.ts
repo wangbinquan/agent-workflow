@@ -6,12 +6,15 @@ import { canonicalSchemaJson } from '../../schema/canonical'
 import { evaluateExpression, isTypedExpression, sqlTruth } from './expressionEvaluator'
 import { BLOCK_CODES, ConversionContractError } from './blockCodes'
 import { canonicalValue, encodeMigrationKey } from './migrationKey'
+import { requiredSeedKeysByTable } from './requiredSeeds'
 import type { EncodedKey, TargetRow, TargetValue } from './types'
 
 export interface TargetRegistryView {
   readonly tables: readonly TableDefinition[]
   table(name: string): TableDefinition
   key(table: string, row: TargetRow): EncodedKey
+  /** RFC-626: keys of the seed rows the target schema declares for a table; empty for most. */
+  seedKeys(table: string): readonly EncodedKey[]
 }
 export function targetRegistryView(registry: SchemaRegistry): TargetRegistryView {
   const tables = registry.tables.map((table) => resolveColumnUniqueNulls(registry, table))
@@ -21,6 +24,7 @@ export function targetRegistryView(registry: SchemaRegistry): TargetRegistryView
     if (!definition) throw new ConversionContractError('v2-unknown-target', name)
     return definition
   }
+  const seeds = requiredSeedKeysByTable(registry)
   return {
     tables,
     table,
@@ -29,6 +33,7 @@ export function targetRegistryView(registry: SchemaRegistry): TargetRegistryView
         name,
         table(name).primaryKey.map((column) => canonicalValue(row[column]!)),
       ),
+    seedKeys: (name) => seeds.get(name) ?? [],
   }
 }
 export class TargetRowError extends ConversionContractError {

@@ -1,0 +1,203 @@
+{
+  "formatVersion": 1,
+  "scenario": "skills",
+  "base": "v0.19.2",
+  "providers": [
+    "sqlite",
+    "postgresql"
+  ],
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-626-upgrade-no-refusal-minimal-time/design.md §3.4 rows 3a-3c, §3.3「升级后的服务必须能启动」",
+      "design/RFC-626-upgrade-no-refusal-minimal-time/proposal.md §5 A3, §6 item 2",
+      "packages/backend/db/migrations/0090_rfc170_skills_storage_acl.sql",
+      "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillOpRecovery.ts (reserve: fs-published precedes db-committed)"
+    ],
+    "note": "Skills a v0.19.2 home can hold after files were removed or a daemon was killed: a skill whose live directory is gone but whose version snapshot remains, a skill whose version snapshot is gone, a creation (reserve) killed after publishing its files and before committing (an active operation row and its lock), and a never-published empty skill that an agent still names. One agent references the skill that loses its version snapshot, and a workflow uses that agent. The skill that loses only its live directory is restored by the new version itself: its first start copies the live files back from the version snapshot and verifies it again (skillVersion.ts reconcileSkillLiveFiles, skillBootVerify.ts). The SKILL.md bytes are the released ledger's, so the version row's content hash (copied from the ledger) matches the snapshot that remains."
+  },
+  "rows": [
+    {
+      "op": "clone",
+      "table": "skills",
+      "from": {
+        "id": "01K398000032C1CF49A2FEEE26"
+      },
+      "values": {
+        "id": "01K3986260SK00000000000001",
+        "name": "rfc626-skill-main-missing",
+        "managed_path": "<AW_HOME>/skills/01K3986260SK00000000000001/files"
+      },
+      "why": "§3.4 row 3a v2-boot-skill-main-missing: live directory deleted, version snapshot still on disk"
+    },
+    {
+      "op": "clone",
+      "table": "skill_versions",
+      "from": {
+        "id": "01K39800007B78E21C429AD95B"
+      },
+      "values": {
+        "id": "01K3986260SK00000000000101",
+        "skill_id": "01K3986260SK00000000000001",
+        "files_path": "<AW_HOME>/skills/01K3986260SK00000000000001/versions/v1/files"
+      },
+      "why": "its version 1, whose snapshot remains"
+    },
+    {
+      "op": "clone",
+      "table": "skills",
+      "from": {
+        "id": "01K398000032C1CF49A2FEEE26"
+      },
+      "values": {
+        "id": "01K3986260SK00000000000002",
+        "name": "rfc626-skill-snapshot-missing",
+        "managed_path": "<AW_HOME>/skills/01K3986260SK00000000000002/files"
+      },
+      "why": "§3.4 row 3a v2-boot-skill-snapshot-missing: live directory present, version snapshot deleted"
+    },
+    {
+      "op": "clone",
+      "table": "skill_versions",
+      "from": {
+        "id": "01K39800007B78E21C429AD95B"
+      },
+      "values": {
+        "id": "01K3986260SK00000000000102",
+        "skill_id": "01K3986260SK00000000000002",
+        "files_path": "<AW_HOME>/skills/01K3986260SK00000000000002/versions/v1/files"
+      },
+      "why": "its version 1, whose snapshot directory is not on disk"
+    },
+    {
+      "op": "clone",
+      "table": "skills",
+      "from": {
+        "id": "01K398000032C1CF49A2FEEE26"
+      },
+      "values": {
+        "id": "01K3986260SK00000000000003",
+        "name": "rfc626-skill-create-halfway",
+        "managed_path": "<AW_HOME>/skills/01K3986260SK00000000000003/files",
+        "reservation_state": "reserving",
+        "content_version": 1,
+        "version_state": "legacy-unbackfilled"
+      },
+      "why": "§3.4 row 3c: a creation the old daemon was killed in (reservation never became ready)"
+    },
+    {
+      "op": "clone",
+      "table": "skill_operations",
+      "from": {
+        "op_id": "01K3980000B5F217FAAC134C68"
+      },
+      "values": {
+        "op_id": "01K3986260SK00000000000203",
+        "skill_id": "01K3986260SK00000000000003",
+        "kind": "reserve",
+        "phase": "fs-published",
+        "active": 1,
+        "staging_path": null,
+        "backup_path": null,
+        "candidate_path": null,
+        "candidate_fingerprint": null,
+        "backup_fingerprint": null,
+        "target_version": null,
+        "generation": null,
+        "precondition_json": "{\"name\":\"rfc626-skill-create-halfway\"}"
+      },
+      "why": "the active reserve operation, stopped before db-committed (recovery direction: rollback)"
+    },
+    {
+      "op": "clone",
+      "table": "skill_operation_locks",
+      "from": {
+        "locked_skill_id": "01K3980000DE1E7ED000000000"
+      },
+      "values": {
+        "locked_skill_id": "01K3986260SK00000000000003",
+        "op_id": "01K3986260SK00000000000203"
+      },
+      "why": "the lock the operation still holds"
+    },
+    {
+      "op": "clone",
+      "table": "skills",
+      "from": {
+        "id": "01K398000032C1CF49A2FEEE26"
+      },
+      "values": {
+        "id": "01K3986260SK00000000000004",
+        "name": "rfc626-skill-never-published",
+        "managed_path": "<AW_HOME>/skills/01K3986260SK00000000000004/files",
+        "reservation_state": "ready",
+        "content_version": 1,
+        "version_state": "legacy-unbackfilled"
+      },
+      "why": "§3.4 row 3b v2-boot-skill-husk-references: no version, no content, still named by an agent"
+    },
+    {
+      "op": "clone",
+      "table": "agents",
+      "from": {
+        "id": "01K39800008C70B25CBBBE8E79"
+      },
+      "values": {
+        "id": "01K3986260SK00000000000011",
+        "name": "rfc626-quarantined-skill-agent",
+        "skills": "[{\"kind\":\"managed\",\"skillId\":\"01K3986260SK00000000000002\"}]"
+      },
+      "why": "proposal §5 A3: the agent stays and launching it reports the quarantined skill (the one whose snapshot is gone, which stays quarantined)"
+    },
+    {
+      "op": "clone",
+      "table": "agents",
+      "from": {
+        "id": "01K39800008C70B25CBBBE8E79"
+      },
+      "values": {
+        "id": "01K3986260SK00000000000012",
+        "name": "rfc626-never-published-skill-agent",
+        "skills": "[{\"kind\":\"managed\",\"skillId\":\"01K3986260SK00000000000004\"}]"
+      },
+      "why": "the reference that makes the empty skill a referenced husk"
+    },
+    {
+      "op": "clone",
+      "table": "workflows",
+      "from": {
+        "id": "01K398000045B34F16DB605A06"
+      },
+      "values": {
+        "id": "01K3986260SK00000000000021",
+        "name": "rfc626-quarantined-skill-workflow"
+      },
+      "replace": {
+        "definition": [
+          [
+            "\"agentName\":\"upgrade-writer\"",
+            "\"agentName\":\"rfc626-quarantined-skill-agent\""
+          ]
+        ]
+      },
+      "why": "the released review workflow, its worker played by the agent with the quarantined skill"
+    }
+  ],
+  "content": [
+    {
+      "path": "skills/01K3986260SK00000000000001/versions/v1/files/SKILL.md",
+      "utf8": "# Release upgrade skill\n\nKeep the historical document and review outcome.\n",
+      "sha256": "155a2f68503d1eeb9d60ec428d5669c9b7a913cac0975c7ff84390e7a07e7f38"
+    },
+    {
+      "path": "skills/01K3986260SK00000000000002/files/SKILL.md",
+      "utf8": "# Release upgrade skill\n\nKeep the historical document and review outcome.\n",
+      "sha256": "155a2f68503d1eeb9d60ec428d5669c9b7a913cac0975c7ff84390e7a07e7f38"
+    },
+    {
+      "path": "skills/01K3986260SK00000000000003/files/SKILL.md",
+      "utf8": "# Release upgrade skill\n\nKeep the historical document and review outcome.\n",
+      "sha256": "155a2f68503d1eeb9d60ec428d5669c9b7a913cac0975c7ff84390e7a07e7f38"
+    }
+  ]
+}

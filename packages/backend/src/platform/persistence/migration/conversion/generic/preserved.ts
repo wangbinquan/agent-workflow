@@ -1,6 +1,6 @@
 import type { ConversionRule, RuleContext } from '../rule'
 import type { SourceRow, TargetRow } from '../types'
-import { requiredSeeds, checkSeedPresence, seedPresence } from './seedPresence'
+import { requiredSeedTables, checkSeedPresence, seedPresence } from './seedPresence'
 import { genericIdentities, identityMaxima, recordIdentityHighWater } from './identityHighWater'
 
 /** Source and target column order are independent; missing/extra columns still reach codec validation. */
@@ -20,7 +20,7 @@ export function preservedRule(table: string): ConversionRule {
     claims: [table],
     produces: [{ table }],
     lookups: [
-      ...(requiredSeeds.some((seed) => seed.table === table) ? [seedPresence.key] : []),
+      ...(requiredSeedTables.includes(table) ? [seedPresence.key] : []),
       ...(genericIdentities.some((identity) => identity.table === table)
         ? [identityMaxima.key]
         : []),

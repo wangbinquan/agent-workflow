@@ -1,5 +1,7 @@
 import type { ConversionRule } from '../conversion/rule'
-import { packageHistoryTable } from './package'
+import { canonicalSchemaJson } from '../../schema/canonical'
+import { BLOCK_CODES, rowBlock } from '../conversion/blockCodes'
+import { historyRecordReadable, packageHistoryTable } from './package'
 import {
   acknowledgeableWorkTables,
   unfinishedCodeWork,
@@ -32,6 +34,8 @@ const groupColumns: Readonly<Record<string, string>> = {
   code_produced_mrs: 'mr_key',
   code_publish_intents: 'batch_id',
 }
+/** RFC-626 §3.4 row 8: a packaged row the frozen codec could not decode. */
+export const HISTORY_KEPT_UNDECODED = 'v2-code-history-kept-undecoded'
 
 export function historyRule(table: string, absentTables: readonly string[] = []): ConversionRule {
   return {
@@ -61,8 +65,28 @@ export function historyRule(table: string, absentTables: readonly string[] = [])
       members: [],
       groupsPerUnit: Number.MAX_SAFE_INTEGER,
     },
+    // RFC-626 §3.4 row 8: the new version starts only when each history table has exactly one
+    // package and its index covers every packaged record (`queryIndexBuilder.ts`). A row the
+    // codec rejected used to take the whole one-unit table, and the package with it, out of
+    // the conversion; with automatic resolution the rule receives it instead. Operator
+    // resolution never hands such rows over, so the manual flow is unchanged.
+    takesUndecodedRows: true,
     convert(unit, ctx) {
-      const rows = unit.rows.get(table)!
+      const received = unit.rows.get(table)!
+      const contract = ctx.preflight.contract?.tables.find((entry) => entry.id === table)
+      // Only a record the new version can read back goes into the package; another undecodable
+      // row is set aside on its own (automatic resolution turns its row block into that).
+      const rows = received.filter((row) => historyRecordReadable(row, contract))
+      for (const row of received)
+        if (!rows.includes(row))
+          ctx.out.block(
+            rowBlock(
+              BLOCK_CODES.sourceCodec,
+              row,
+              { message: row.codecFailure!.message, raw: canonicalSchemaJson(row.raw) },
+              row.codecFailure!.columns,
+            ),
+          )
       for (const absent of absentTables) {
         const packaged = packageHistoryTable(absent, [], ctx)
         ctx.out.archive({
@@ -122,6 +146,23 @@ export function historyRule(table: string, absentTables: readonly string[] = [])
         const acknowledgement = unfinished.has(row.encodedKey)
           ? (ctx.operatorDecisions?.consume(row, 'v2-code-history-unfinished') ?? null)
           : null
+        // Recorded before the row's outputs, which classify the row as archived.
+        if (row.codecFailure)
+          ctx.out.record(
+            {
+              kind: 'decision',
+              code: HISTORY_KEPT_UNDECODED,
+              payload: {
+                automatic: 'kept',
+                sourceTable: table,
+                sourceKey: row.encodedKey,
+                columns: [...row.codecFailure.columns],
+                message: row.codecFailure.message,
+                recordOrdinal: values.record_ordinal,
+              },
+            },
+            row,
+          )
         ctx.out.row('code_history_id_index', values, row)
         ctx.out.exception({
           sourceTable: table,

@@ -20,6 +20,7 @@ import {
   createMigrationPlanDocument,
   type MigrationPlanDocument,
   type MigrationPlanDocumentPayload,
+  type PlanResolutions,
   type RestoreFileChange,
 } from './documents'
 import { EpochSwitchError, type EpochSwitchJournal } from './model'
@@ -40,6 +41,8 @@ export function buildEpochPlan(input: {
   restoreFiles: readonly RestoreFileChange[]
   blocks?: readonly ConversionBlock[]
   validation?: ValidationReport | null
+  /** RFC-626: the decisions of an automatic upgrade; only its actual-result plan has them. */
+  resolutions?: PlanResolutions
   now: number
 }): MigrationPlanDocument {
   const {
@@ -107,6 +110,7 @@ export function buildEpochPlan(input: {
         }),
       ).values(),
     ],
+    ...(input.resolutions ? { resolutions: input.resolutions } : {}),
     unfinishedTasks: input.unfinishedTasks,
     estimates: input.estimates,
     backup: {
@@ -345,6 +349,94 @@ function renderRestrictions(plan: MigrationPlanDocument): readonly string[] {
   ]
 }
 
+/** A key a person can read; a key that does not decode is written as it is. */
+function readableKey(table: string, key: string): string {
+  try {
+    return compactKey(table, key)
+  } catch {
+    return `${table} ${key}`
+  }
+}
+
+/**
+ * RFC-626 §3.7: the decisions of an automatic upgrade as lines for a person: the totals, every
+ * ended task (the plan lists up to its `listLimit`; `tasks: false` leaves them out), and of
+ * each other kind at most `listed` entries. The rows the conversion set aside and the
+ * references finalizing resolved are two kinds here, each listed up to `listed` on its own:
+ * a long list of the one does not push the other out of the report. When something is left
+ * out the last line says where all of it is.
+ */
+export function resolutionReportLines(
+  resolutions: PlanResolutions,
+  options: { readonly listed: number; readonly tasks?: boolean },
+): readonly string[] {
+  const r = resolutions
+  const listed = Math.max(0, options.listed)
+  const tasks = options.tasks === false ? [] : r.settledTasks
+  const byCode = (counts: Readonly<Record<string, number>>): [string, number][] =>
+    Object.entries(counts).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  const setAside = r.setAside.flatMap((item) => (item.stage === 'conversion' ? [item] : []))
+  const finalized = r.setAside.flatMap((item) => (item.stage === 'finalize' ? [item] : []))
+  const lines = [
+    `Decisions made by the upgrade: ${r.totals.settledTasks} unfinished task(s) ended; ` +
+      `${r.totals.missingContent} content reference(s) recorded as missing; ` +
+      `${r.totals.setAside} row(s) set aside by the conversion; ` +
+      `${r.totals.finalize} dangling reference(s) resolved while finalizing ` +
+      `(cleared, re-pointed, or with the referring row moved to the archive); ` +
+      `${r.totals.acknowledged} retired item(s) acknowledged; ` +
+      `${r.totals.kept} row(s) kept with a marker.`,
+  ]
+  for (const task of tasks)
+    lines.push(
+      `task ended by the upgrade: ${task.taskId} ${JSON.stringify(task.name ?? '')}, was ${task.originalStatus} (${
+        task.cause === 'parent-cascade'
+          ? `ended with its parent ${task.parentTaskId ?? 'task'}`
+          : task.blockCodes.join(', ') || task.cause
+      })`,
+    )
+  for (const item of r.missingContent.slice(0, listed))
+    lines.push(
+      `content recorded as missing: ${readableKey(item.table, item.key)} ${item.column} -> ${item.reference ?? 'no reference'} (${item.state})${
+        item.taskId === undefined ? '' : `, task ${item.taskId}`
+      }`,
+    )
+  for (const item of setAside.slice(0, listed))
+    lines.push(`row set aside: ${readableKey(item.sourceTable, item.sourceKey)}: ${item.code}`)
+  for (const item of finalized.slice(0, listed))
+    lines.push(
+      `reference ${item.action}: ${readableKey(item.targetTable, item.targetKey)} ${item.foreignKey} -> ${item.references}`,
+    )
+  for (const [code, total] of byCode(r.acknowledged))
+    lines.push(`acknowledged for the upgrade: ${code} x ${total}`)
+  for (const item of r.kept.slice(0, listed))
+    lines.push(`row kept with a marker: ${readableKey(item.table, item.key)}: ${item.code}`)
+  for (const [code, total] of byCode(r.keptByCode)) lines.push(`kept by code: ${code} x ${total}`)
+  if (
+    r.totals.settledTasks > tasks.length ||
+    r.totals.missingContent > Math.min(listed, r.missingContent.length) ||
+    r.totals.setAside > Math.min(listed, setAside.length) ||
+    r.totals.finalize > Math.min(listed, finalized.length) ||
+    r.totals.kept > Math.min(listed, r.kept.length)
+  )
+    lines.push(
+      `Not every decision is listed here; all of them are in ${r.recordsTable} of the new database.`,
+    )
+  return lines
+}
+
+function renderResolutions(plan: MigrationPlanDocument): readonly string[] {
+  const resolutions = plan.payload.resolutions
+  if (!resolutions) return []
+  return [
+    '## Decisions made by the automatic upgrade',
+    '',
+    ...resolutionReportLines(resolutions, { listed: resolutions.listLimit }).map(
+      (line) => `- ${line}`,
+    ),
+    '',
+  ]
+}
+
 export function renderEpochPlan(plan: MigrationPlanDocument): string {
   // A plan digest is canonical; its write-once Markdown must use the same key order.
   const stable = JSON.parse(canonicalSchemaJson(plan)) as MigrationPlanDocument
@@ -369,6 +461,7 @@ export function renderEpochPlan(plan: MigrationPlanDocument): string {
     '',
     ...renderBlocks(stable),
     ...renderRestrictions(stable),
+    ...renderResolutions(stable),
     '## Legacy boot conversions',
     '',
     `Boot environment: ${p.bootUpgradeEnvironmentDigest}`,

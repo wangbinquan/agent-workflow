@@ -21,11 +21,18 @@ import {
 } from '@/platform/persistence/migration/supportedSources'
 import { collectSourceFingerprint } from '@/platform/persistence/migration/sourceCatalog'
 import { tableCatalogDigest } from '@/platform/persistence/migration/sourceDispositions'
-import { runConversion } from '@/platform/persistence/migration/conversion/engine'
+import {
+  prepareConversion,
+  runConversion,
+} from '@/platform/persistence/migration/conversion/engine'
+import { readSourceTable } from '@/platform/persistence/migration/conversion/readSource'
 import {
   planConversion,
   resolveContributions,
 } from '@/platform/persistence/migration/conversion/plan'
+import { createBootUpgradeFacts } from '@/platform/persistence/migration/conversion/bootUpgradeFacts'
+import type { ConversionContribution } from '@/platform/persistence/migration/conversion/rule'
+import type { SourceWatch } from '@/platform/persistence/migration/freeze/sourceWatch'
 import { encodeMigrationKey } from '@/platform/persistence/migration/conversion/migrationKey'
 import { explainSourceRow } from '@/platform/persistence/migration/conversion/trace'
 import {
@@ -104,8 +111,17 @@ export interface LocalEpochSwitchOptions {
   candidateBuild?: string
   faults?: EpochSwitchFaults
   sourceBornOnPostgresql?: boolean
-  /** RFC-398 §3.7: automatic sessions infer native PG only when no retained archive is recorded. */
+  /**
+   * RFC-398 §3.7: automatic sessions infer native PG only when no retained archive is recorded.
+   * RFC-626 §4.2: and they alone run the switch in one pass (`EpochSwitchDependencies.direct`).
+   */
   autoUpgrade?: boolean
+  /**
+   * RFC-626 §4.1: what the automatic session remembers about the old database between the
+   * times it opens it. The session's assembly owns it and closes it when the session ends;
+   * every source handle only borrows it. The manual flow and the hosted deployment have none.
+   */
+  sourceWatch?: SourceWatch
   postgresqlArchive?: EpochSwitchDependencies['postgresqlArchive']
   nextTargetLocation?: EpochSwitchDependencies['nextTargetLocation']
   sessionLock?: EpochSwitchDependencies['sessionLock']
@@ -202,6 +218,8 @@ export function composeEpochTrace(
         emptyTables: run.emptyTables,
         operationRoot: join(root, `runs/${run.runId}/source`),
         artifacts: epochRunArtifacts(operation, deps.journal.artifacts?.(run.operationId)),
+        // RFC-626: read the source the way the run read it.
+        ...(run.conversionPlan.resolution ? { resolution: run.conversionPlan.resolution } : {}),
         expected: {
           watermark: run.binding.sourceWatermark,
           preUpgradeWatermark: run.binding.preUpgradeWatermark,
@@ -239,6 +257,27 @@ export function composeEpochTrace(
             const reader =
               query.sourcePhase === 'pre-upgrade' ? source.preUpgrade?.reader : source.reader
             if (!reader) return []
+            // RFC-626: an automatic run converts tables that hold rows the frozen codec
+            // rejects; the strict chunk reader throws on those. Such a table is read the way
+            // the conversion read it. A row that could not be decoded has its own disposition
+            // and needs no group.
+            if (query.run.conversionPlan.resolution === 'automatic') {
+              const preflight =
+                query.sourcePhase === 'pre-upgrade'
+                  ? source.preUpgrade!.preflight
+                  : source.preflight
+              const row = (
+                await readSourceTable({
+                  source: reader,
+                  preflight,
+                  table: query.sourceTable,
+                  phase: query.sourcePhase,
+                  limit: query.run.conversionPlan.chunkLimit,
+                })
+              ).find((entry) => entry.encodedKey === query.sourceKey)
+              const group = row && !row.codecFailure ? row.values[column] : undefined
+              return typeof group === 'string' ? [group] : []
+            }
             let afterKey: Parameters<typeof reader.readChunk>[1] = null
             for (;;) {
               const chunk = await reader.readChunk(
@@ -270,6 +309,9 @@ export function composeEpochTrace(
             const manifest = JSON.parse(
               Buffer.from(bytes).toString('utf8'),
             ) as FreezeContentManifest
+            // RFC-626: a replay converts exactly as the run did — same resolution, the tasks
+            // the run ended, and the refusals it recorded.
+            const resolution = query.run.conversionPlan.resolution
             const inventory = await deps.content.open({
               source,
               manifest: { ...manifest, roots: manifest.roots.map(localPath) },
@@ -284,6 +326,7 @@ export function composeEpochTrace(
                     }
                   : {}),
               },
+              ...(resolution ? { resolution } : {}),
             })
             const result = await explainSourceRow(
               epochConversionInput({
@@ -300,10 +343,14 @@ export function composeEpochTrace(
                 sourceBackupId: query.run.conversionPlan.sourceBackupId,
                 contentManifestDigest: query.run.conversionPlan.contentManifestDigest,
                 operatorDecisions: query.run.conversionPlan.operatorDecisions,
+                ...(resolution
+                  ? { resolution, settlements: query.run.conversionPlan.settlements ?? [] }
+                  : {}),
               }),
               query.table,
               query.key,
               query.phase,
+              resolution ? await meta.loadRejections?.(query.run.runId) : undefined,
             )
             return {
               runId: query.run.runId,
@@ -413,6 +460,29 @@ export function composeLocalEpochSwitchDependencies(
                 reopenScratchPostgresql: () => openScratch(false),
               }
             : {}),
+          // RFC-626 §4.1: borrowed by every handle of the session, closed by none of them.
+          ...(options.sourceWatch ? { watch: options.sourceWatch } : {}),
+        }
+      },
+      // RFC-626 §3.5: the check before an automatic session is recorded creates nothing. A
+      // PostgreSQL source has no scratch database yet and may not get one here — compiling
+      // the catalogs of the released versions fills the scratch and stores them under the
+      // operation directory — so its structure is left to the freeze (`manifest: null`) and
+      // the check reports whether the database can be read, its server version and its size.
+      async resolvePrecheck(request) {
+        const location = request.location
+        const sourceRuntime =
+          location.kind === 'postgresql-database' ? runtimeFor(location.profileRef) : null
+        if (sourceRuntime) runtimes.push(sourceRuntime)
+        const majors = options.catalogArtifacts.map((a) => a.postgresqlMajor)
+        return {
+          manifest: options.sourceManifest
+            ? await options.sourceManifest()
+            : sourceRuntime
+              ? null
+              : await loadSupportedSourceManifest(),
+          ...(sourceRuntime ? { postgresql: () => sourceRuntime } : {}),
+          ...(majors.length ? { supportedPostgresqlMajors: majors } : {}),
         }
       },
     })
@@ -433,10 +503,24 @@ export function composeLocalEpochSwitchDependencies(
         throw error
       }
     }
+    const precheck = adapter.precheck?.bind(adapter)
     return {
       discover: (input: Parameters<typeof adapter.discover>[0]) =>
         wrap(() => adapter.discover(input)),
       freeze: (input: Parameters<typeof adapter.freeze>[0]) => wrap(() => adapter.freeze(input)),
+      // RFC-626 §3.5: read-only. It returns no handle, so the runtimes it resolved are closed
+      // here instead of by a handle's close.
+      ...(precheck
+        ? {
+            async precheck(input: Parameters<NonNullable<typeof adapter.precheck>>[0]) {
+              try {
+                return await precheck(input)
+              } finally {
+                for (const runtime of runtimes.splice(0)) await runtime.close()
+              }
+            },
+          }
+        : {}),
     }
   }
   const pgPreflight = createExternalTargetPreflight({
@@ -529,8 +613,15 @@ export function composeLocalEpochSwitchDependencies(
       await runtime.close()
     }
   }
-  const content = createContentInventoryAdapter()
+  // RFC-626 §4.4: in one pass the execution step takes the listing of the plan step as it is.
+  const content = createContentInventoryAdapter(
+    options.autoUpgrade === true ? { handOver: true } : {},
+  )
   const deps: EpochSwitchDependencies = {
+    // RFC-626 §4.2: the automatic upgrade — and only it — runs the switch in one pass.
+    ...(options.autoUpgrade === true ? { direct: true } : {}),
+    // §4.7: between its steps it collects what the step before left behind.
+    ...(options.autoUpgrade === true ? { reclaim: () => Bun.gc(true) } : {}),
     sessionLock: options.sessionLock,
     autoUpgradeRecords: options.autoUpgradeRecords,
     retainedDatabases: options.retainedDatabases,
@@ -606,6 +697,15 @@ export function composeLocalEpochSwitchDependencies(
         return { ...sink.result, stagingPeakBytes }
       },
       run: (request, sink) => runConversion(epochConversionInput(request), sink),
+      // RFC-626 §3.1: staging and — with automatic resolution — the tasks the conversion
+      // ends, before a target run exists; the run is registered with the plan this returns.
+      prepare: (request) => prepareConversion(epochConversionInput(request)),
+      // RFC-626 §3.3: the references a row survives without, for the finalize step. They are
+      // declarations of the contributions and do not depend on the source, so they are taken
+      // the way `resolveContributions` takes them, without a source to resolve against.
+      references: (conversionContributions as readonly ConversionContribution[])
+        .map((entry) => entry.withBootUpgrade?.(createBootUpgradeFacts([])) ?? entry)
+        .flatMap((contribution) => contribution.references ?? []),
     },
     activation: createPointerEpochActivation({ pointerPath, journal, faults }),
     quiesce: createLocalEpochQuiesce({

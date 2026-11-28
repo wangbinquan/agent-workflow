@@ -97,6 +97,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'helpers/releaseUpgrade/build.ts: 5', // real-file-database
   // RFC-398 design §7.5: mutate the frozen SQLite journal alias; a current-schema eachProvider DB cannot represent this release artifact.
   'helpers/releaseUpgrade/negative.ts: 1', // real-file-database
+  // RFC-626 design §7: writes the overlay of a matrix seed into the released SQLite file it was built
+  // into (the PostgreSQL lane receives the same seed through the released bridge).
+  'helpers/releaseUpgrade/rfc626.ts: 1', // real-file-database
   'helpers/rfc349PostgresqlHostedEvidence.ts: 2', // real-file-database
   'helpers/rfc370SqliteAffectedRowsCases.ts: 1', // sqlite-only-primitive
   'helpers/rfc395FixtureGeneration.ts: 1', // real-file-database; moved from rfc395R2Harness.ts (CI round 1 fixture snapshots)
@@ -364,6 +367,14 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // RFC-615: inspect independent cached/cold SQLite files, WAL header bytes and frozen migration receipts.
   // These six native handles verify file-copy isolation, not provider-neutral application behavior.
   'rfc615-frozen-sqlite-fixture.test.ts: 6', // real-file-database
+  // RFC-626: what only a SQLite file can hold — the SQLite half of the unit-metadata batching
+  // oracle (its PostgreSQL half runs on scripted statements in the same file), the frozen epoch-1
+  // chain replayed from an empty journal, the WAL sidecar and live-page size the precheck reads,
+  // and data_version / file identity as another process changes or replaces the file.
+  'rfc626-meta-store-unit-batches.test.ts: 1', // real-file-database
+  'rfc626-source-catalog-prefixes.test.ts: 1', // real-file-database
+  'rfc626-source-precheck.test.ts: 2', // real-file-database
+  'rfc626-sqlite-source-identity.test.ts: 2', // real-file-database
   'runner-subagent-live-capture.test.ts: 6', // real-file-database
   'scheduler-audit-gap1-limits-resume-startedat.test.ts: 1', // sqlite-execution-engine
   'scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts: 1', // sqlite-execution-engine

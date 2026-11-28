@@ -5,14 +5,15 @@ import type {
 import type { TargetRow } from '@/platform/persistence/migration/conversion/types'
 import { rowBlock } from '@/platform/persistence/migration/conversion/blockCodes'
 import { CONTENT_CATALOG, contentCatalogLookup } from './catalog'
-import { contentBaseRow, contentSourceTables } from './specs'
-import { contentTaskLookups } from './receipts'
+import { contentBaseRow, contentSourceTables, registeredByteColumns } from './specs'
+import { contentSettlementTasks, contentTaskLookups } from './receipts'
 import { convertContentReference } from './convert'
 import { publicationRow } from './publications'
 import { contentResourceTasksLookup } from './resourceClosure'
 
 function contentRule(table: string): ConversionRule {
   const target = table === 'hosted_object_publications' ? 'content_publications' : table
+  const registered = registeredByteColumns[table]
   return {
     ref: {
       id: `content/${table}`,
@@ -29,6 +30,9 @@ function contentRule(table: string): ConversionRule {
         : []),
     ],
     lookups: [CONTENT_CATALOG, ...contentTaskLookups],
+    // RFC-626 §3.2.2: missing required content ends the unfinished tasks that need it. The
+    // declaration and the blocking (`contentUncertainty`) share one derivation of those tasks.
+    settles: { tasksOf: contentSettlementTasks },
     unit: { kind: 'source-chunk', table },
     async convert(unit, ctx) {
       for (const row of unit.rows.get(table)!) {
@@ -62,6 +66,11 @@ function contentRule(table: string): ConversionRule {
           else {
             values[slot.refColumn] = result.refJson
             values[slot.bytesColumn] = result.inline
+          }
+          // RFC-626 §3.4 row 2b①: bytes kept as found on disk are what the row registers now.
+          if (result.measured && registered && !slot.part) {
+            values[registered.sha256] = result.measured.sha256
+            values[registered.size] = result.measured.size
           }
         }
         if (blocked) continue

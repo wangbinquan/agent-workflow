@@ -100,7 +100,11 @@ export interface EpochHistoryRestrictionView {
   readonly decisionCode: string
   readonly history: z.infer<typeof HistoryRestrictionSchema>
 }
-import type { MigrationPlanBlock, MigrationPlanDocument } from '../domain/epochSwitch/documents'
+import type {
+  MigrationPlanBlock,
+  MigrationPlanDocument,
+  PlanResolutions,
+} from '../domain/epochSwitch/documents'
 import type {
   EpochProviderSchema,
   EpochSwitchFailure,
@@ -199,6 +203,24 @@ export interface EpochSwitchStatusView extends EpochSwitchSummaryView {
    * never dropped automatically; status names each with its size and purpose.
    */
   readonly retainedDatabases?: readonly EpochRetainedDatabaseView[]
+  /**
+   * RFC-626 §3.7: what an automatic upgrade decided in place of a person. Present when the
+   * operation's plan of the actual result carries decisions.
+   */
+  readonly resolutions?: EpochResolutionsView
+}
+/**
+ * RFC-626 §3.7: the totals of the decisions of an automatic upgrade, as `db migration status`
+ * shows them. The lists themselves are in the plan file named here.
+ */
+export interface EpochResolutionsView {
+  readonly planDigest: string
+  readonly planPath: string
+  readonly totals: PlanResolutions['totals']
+  readonly acknowledged: PlanResolutions['acknowledged']
+  readonly keptByCode: PlanResolutions['keptByCode']
+  readonly listLimit: number
+  readonly recordsTable: string
 }
 export interface EpochRetainedDatabaseView {
   readonly kind: 'target' | 'scratch'

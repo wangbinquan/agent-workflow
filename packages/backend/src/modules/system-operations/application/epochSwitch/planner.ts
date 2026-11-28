@@ -1,4 +1,8 @@
-import { estimateEpochCapacity } from '../../domain/epochSwitch/capacity'
+import {
+  directUpgradePlanEstimates,
+  estimateDirectUpgradeCapacity,
+  estimateEpochCapacity,
+} from '../../domain/epochSwitch/capacity'
 import { epochDeploymentCapabilities } from '@/modules/system-operations/domain/epochSwitch/deploymentCapabilities'
 import { persistenceDialect } from '@/platform/persistence/nativeDialect'
 import { epochArtifactPath } from '@/platform/persistence/migration/run/paths'
@@ -14,9 +18,11 @@ import {
   type BootUpgradeFacts,
 } from '@/platform/persistence/migration/conversion/bootUpgradeFacts'
 import { executionClass } from '@/platform/persistence/migration/conversion/lookups/keys'
+import { readSourceTable } from '@/platform/persistence/migration/conversion/readSource'
 import {
   OperatorDecisionSchema,
   type ConversionBlock,
+  type ConversionResolution,
   type OperatorDecision,
 } from '@/platform/persistence/migration/conversion/types'
 import type {
@@ -54,6 +60,7 @@ import {
 import {
   pointerEvidence,
   readEpochPlan,
+  readPlanPin,
   runArtifact,
   sourcePort,
   sourceRequest,
@@ -280,6 +287,8 @@ export function conversionRequest(
     contentManifestDigest: manifestDigest,
     bootUpgradeFacts,
     operatorDecisions: p.inputs.operatorDecisions,
+    // RFC-626: a direct run's conversion resolves what it cannot carry over instead of blocking.
+    ...(session.deps.direct ? { resolution: 'automatic' as const } : {}),
   }
 }
 
@@ -311,6 +320,9 @@ export async function captureBootUpgradeFacts(
     content,
     manifest,
     root: epochContentRoot(session),
+    // RFC-626: facts for the rows that decode; the conversion sets the others aside. The plan
+    // step and the execution step read the same way, so their environment digests compare.
+    ...(session.deps.direct ? { resolution: 'automatic' as const } : {}),
     readArtifact: (name) =>
       session.deps.journal.readArtifact(operationId, runArtifact(session.journal, name)),
     async writeArtifact(name, bytes) {
@@ -327,9 +339,55 @@ export async function captureBootUpgradeFacts(
   return normalized
 }
 
+/**
+ * RFC-626 §3.3: the tasks of the old database as the plan of an automatic upgrade's actual
+ * result reports them. The table is read the way the conversion reads it: a row the frozen
+ * codec rejects is skipped instead of failing the count, because the conversion sets that row
+ * aside. A task the upgrade ended is canceled in the new database, so it is not counted as
+ * unfinished; its name is returned for the report instead.
+ */
+export async function automaticTaskCensus(
+  source: FrozenSourceHandle,
+  settled: ReadonlySet<string>,
+): Promise<{
+  readonly unfinished: readonly { status: string; count: number }[]
+  readonly names: ReadonlyMap<string, string | null>
+}> {
+  const counts = new Map<string, number>()
+  const names = new Map<string, string | null>()
+  if (source.preflight.tables.some((t) => t.table === 'tasks'))
+    for (const row of await readSourceTable({
+      source: source.reader,
+      preflight: source.preflight,
+      table: 'tasks',
+    })) {
+      if (row.codecFailure) continue
+      const id = typeof row.values.id === 'string' ? row.values.id : null
+      if (id !== null && settled.has(id)) {
+        names.set(id, typeof row.values.name === 'string' ? row.values.name : null)
+        continue
+      }
+      const status = String(row.values.status)
+      if (executionClass(status) === 'executable') counts.set(status, (counts.get(status) ?? 0) + 1)
+    }
+  return {
+    unfinished: [...counts]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([status, count]) => ({ status, count })),
+    names,
+  }
+}
+
 export async function unfinishedTasks(
   source: FrozenSourceHandle,
+  options: {
+    /** RFC-626: `automatic` reads tolerantly and leaves out the tasks the upgrade ended. */
+    readonly resolution?: ConversionResolution
+    readonly settled?: ReadonlySet<string>
+  } = {},
 ): Promise<readonly { status: string; count: number }[]> {
+  if (options.resolution === 'automatic')
+    return (await automaticTaskCensus(source, options.settled ?? new Set())).unfinished
   if (!source.preflight.tables.some((t) => t.table === 'tasks')) return []
   const counts = new Map<string, number>()
   let after = null
@@ -446,6 +504,11 @@ export async function planEpochOperation(
   let p = session.journal.payload
   if (phaseIndex(p.phase) > phaseIndex('planned'))
     throw new EpochSwitchError('v3-replan-requires-new-run')
+  // RFC-626 §4.2: a direct run that pinned its plan has started to write artifacts that are
+  // written once (frozen preflight, frozen content manifest, backup). A new plan with a new
+  // inventory could not replace them, so from the pin on the plan changes only with the run.
+  if (session.deps.direct && (await readPlanPin(session.deps, session.journal)) !== null)
+    throw new EpochSwitchError('v3-replan-requires-new-run')
   if (input.target || scratchProfile !== undefined || input.emptyTables || input.chunkLimit) {
     const provider = input.target?.provider ?? p.target.provider
     if (!p.target.generationId) throw new EpochSwitchError('v3-target-generation-missing')
@@ -474,7 +537,14 @@ export async function planEpochOperation(
     p = session.journal.payload
   }
   const sourceInput = sourceRequest(session)
-  const source = await sourcePort(session).discover(sourceInput)
+  // RFC-626 §4.2: the automatic session holds the daemon lock, so nothing writes the old
+  // database while it plans. Its first access is therefore already the frozen one: the frozen
+  // copy and the working copy made here are the ones the execution step re-opens. No expected
+  // identity is passed — until a plan is pinned nothing depends on the identity of the copy,
+  // and an old database that changed since the last attempt is simply frozen again.
+  const source = session.deps.direct
+    ? await sourcePort(session).freeze(sourceInput)
+    : await sourcePort(session).discover(sourceInput)
   try {
     await session.deps.autoUpgradeCheckpoint?.('plan')
     const provider = source.preflight.fingerprint.provider
@@ -541,6 +611,7 @@ export async function planEpochOperation(
         source,
         root: epochContentRoot(session),
         manifest,
+        ...(session.deps.direct ? { resolution: 'automatic' as const } : {}),
       })
       bootUpgradeFacts = await captureBootUpgradeFacts(session, source, content, manifest, 'plan')
       const request = conversionRequest(
@@ -552,9 +623,12 @@ export async function planEpochOperation(
         null,
         bootUpgradeFacts,
       )
-      const rehearsal = await session.deps.conversion.dryRun(request)
-      summary = rehearsal.summary
-      stagingPeakBytes = rehearsal.stagingPeakBytes ?? null
+      // RFC-626 §4.2: a direct run does not rehearse. Its only conversion is the one that
+      // writes the new database, and what that conversion finds is reported by the plan
+      // written after it.
+      const rehearsal = session.deps.direct ? null : await session.deps.conversion.dryRun(request)
+      summary = rehearsal?.summary ?? staticConversionSummary(session.deps.conversionPlan(request))
+      stagingPeakBytes = rehearsal?.stagingPeakBytes ?? null
     }
     const measured = await session.deps.measureCapacity?.(
       sourceInput.location,
@@ -569,7 +643,12 @@ export async function planEpochOperation(
       // Hosted artifacts also maintain a local cache; budget ordinary copies in both entries.
       localArtifactMirrors: session.deps.journal.artifacts !== undefined,
     })
+    // RFC-626 §3.5: a direct run's space was judged by the environment check before the
+    // session was recorded, from the live data. Here the frozen copy and the working copy
+    // already exist, so comparing the whole requirement with what is free now would refuse an
+    // upgrade that fits; its pre-plan records the estimate and blocks on the target only.
     if (
+      !session.deps.direct &&
       capacity.requiredBytes !== null &&
       capacity.availableBytes !== null &&
       capacity.availableBytes < capacity.requiredBytes
@@ -581,6 +660,7 @@ export async function planEpochOperation(
         }),
       )
     const elapsed = Math.max(0, session.now() - started)
+    const liveBytes = measured?.sourceBytes ?? null
     const plan = buildEpochPlan({
       journal: session.journal,
       source,
@@ -594,12 +674,32 @@ export async function planEpochOperation(
         session.deps.journal.operationRoot(p.operationId),
         `backup/${p.run?.ordinal ?? 0}`,
       ),
-      estimates: {
-        ...capacity,
-        rehearsalMs: elapsed,
-        maintenanceMs: input.rehearse ? elapsed : null,
-      },
-      unfinishedTasks: source.preflight.requiresOfflineUpgrade ? [] : await unfinishedTasks(source),
+      estimates: session.deps.direct
+        ? directUpgradePlanEstimates({
+            capacity:
+              liveBytes === null
+                ? null
+                : estimateDirectUpgradeCapacity({
+                    liveBytes,
+                    contentFiles: manifest.files.length,
+                    targetOnOperationFilesystem: p.target.location.kind === 'sqlite-file',
+                    // The journal publishes its own write-once files by hard link.
+                    artifactHardLinks: true,
+                  }),
+            operationBytes: measured?.operationBytes ?? null,
+            availableBytes: measured?.availableBytes ?? target.availableBytes,
+          })
+        : {
+            ...capacity,
+            rehearsalMs: elapsed,
+            maintenanceMs: input.rehearse ? elapsed : null,
+          },
+      // RFC-626 §3.3: which tasks stay unfinished is known once the conversion has ended the
+      // ones it cannot carry over; the plan written after it counts them.
+      unfinishedTasks:
+        session.deps.direct || source.preflight.requiresOfflineUpgrade
+          ? []
+          : await unfinishedTasks(source),
       restoreFiles: await planFileChanges(session),
       blocks: extraBlocks,
       now: started,
@@ -607,6 +707,24 @@ export async function planEpochOperation(
     return await persistEpochPlan(session, plan, 'planned', preserveApproval)
   } finally {
     await source.close()
+  }
+}
+
+/**
+ * RFC-626 §4.2: what the pre-plan of a direct run knows about the conversion. Its conversion
+ * section is the static plan — which rule converts which table, in which order, and the digest
+ * of the rule set — for which no row was read. Receipts, restrictions and boot conversions
+ * exist only after the conversion, in the plan the execution step writes then.
+ */
+function staticConversionSummary(plan: ConversionPlanSection): ConversionSummary {
+  return {
+    status: plan.blocks.length ? 'blocked' : 'converted',
+    plan,
+    tableReceipts: [],
+    blocks: plan.blocks,
+    records: [],
+    historyOnly: [],
+    stagingDigest: valueDigest({ pending: 'direct-conversion' }),
   }
 }
 

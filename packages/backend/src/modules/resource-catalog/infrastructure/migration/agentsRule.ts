@@ -18,7 +18,29 @@ export const AGENT_REFERENCE_IDS = {
   plugin: idSetLookup('plugins', 'id').key,
 }
 
-export function explodeAgentReferences(row: SourceRow) {
+/** RFC-626 §3.4 row 9: one reference the automatic upgrade left out of a kept agent. */
+export interface SkippedAgentReference {
+  /** The block this entry raises with operator resolution. */
+  readonly code: string
+  readonly column: string
+  /** Position in the source list; null when the whole column is not a list. */
+  readonly ordinal: number | null
+  /** The source entry (or the column text) as JSON text; null when there is none. */
+  readonly entry: string | null
+}
+
+/**
+ * Explodes the four reference columns into reference rows. With `skipUnconfirmed` (RFC-626
+ * §3.4 row 9, automatic resolution) an entry that cannot be confirmed is left out instead of
+ * failing the agent, and the remaining entries of the column are numbered without gaps: the
+ * read-only probe requires `ordinal` to run from 0 and `occurrence` to count earlier entries
+ * with the same key. Without it the output is the operator flow's, unchanged.
+ */
+export function explodeAgentReferences(
+  row: SourceRow,
+  options: { readonly skipUnconfirmed?: boolean } = {},
+) {
+  const compact = options.skipUnconfirmed === true
   const agent = Object.fromEntries(
     Object.entries(row.values).filter(
       ([column]) => !['skills', 'depends_on', 'mcp', 'plugins'].includes(column),
@@ -26,10 +48,12 @@ export function explodeAgentReferences(row: SourceRow) {
   )
   const decisions: { code: string; detail: JsonValue }[] = []
   const blocks: ConversionBlock[] = []
+  const skipped: SkippedAgentReference[] = []
   const skillRefs: TargetRow[] = [],
     mcpRefs: TargetRow[] = [],
     pluginRefs: TargetRow[] = [],
     dependencies: TargetRow[] = []
+  const entryText = (value: unknown): string | null => JSON.stringify(value) ?? null
   function list(column: string): unknown[] {
     let value: unknown
     try {
@@ -39,6 +63,13 @@ export function explodeAgentReferences(row: SourceRow) {
     }
     if (!Array.isArray(value)) {
       blocks.push(rowBlock('v2-agent-reference-shape', row, { column }, [column]))
+      const raw = row.values[column]
+      skipped.push({
+        code: 'v2-agent-reference-shape',
+        column,
+        ordinal: null,
+        entry: typeof raw === 'string' ? raw : null,
+      })
       return []
     }
     return value
@@ -55,30 +86,45 @@ export function explodeAgentReferences(row: SourceRow) {
       })
     return value
   }
-  list('skills').forEach((value, ordinal) => {
+  const reject = (
+    block: ConversionBlock,
+    column: string,
+    ordinal: number,
+    value: unknown,
+  ): void => {
+    blocks.push(block)
+    skipped.push({ code: block.code, column, ordinal, entry: entryText(value) })
+  }
+  list('skills').forEach((value, index) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      blocks.push(
+      reject(
         rowBlock(
           typeof value === 'string'
             ? 'v2-agent-reference-name-unproven'
             : 'v2-agent-reference-shape',
           row,
-          { column: 'skills', ordinal },
+          { column: 'skills', ordinal: index },
           ['skills'],
         ),
+        'skills',
+        index,
+        value,
       )
       return
     }
     const ref = value as Record<string, unknown>
     const field = ref.kind === 'managed' ? 'skillId' : 'name'
     if (ref.kind === 'managed' && typeof ref.skillId !== 'string' && typeof ref.name === 'string') {
-      blocks.push(
+      reject(
         rowBlock(
           'v2-agent-reference-name-unproven',
           row,
-          { column: 'skills', ordinal, name: ref.name },
+          { column: 'skills', ordinal: index, name: ref.name },
           ['skills.skillId'],
         ),
+        'skills',
+        index,
+        value,
       )
       return
     }
@@ -87,18 +133,28 @@ export function explodeAgentReferences(row: SourceRow) {
       typeof ref[field] !== 'string' ||
       Object.keys(ref).some((key) => key !== 'kind' && key !== field)
     ) {
-      blocks.push(
+      reject(
         rowBlock(
           'v2-agent-reference-shape',
           row,
-          { column: 'skills', ordinal, reason: 'unrepresentable kind, selector or parameters' },
+          {
+            column: 'skills',
+            ordinal: index,
+            reason: 'unrepresentable kind, selector or parameters',
+          },
           ['skills'],
         ),
+        'skills',
+        index,
+        value,
       )
       return
     }
     const typed = ref as AgentSkillRef
     const key = encodeAgentSkillReferenceKey(typed)
+    // Every entry before this one was kept unless an entry was skipped, so the two agree
+    // whenever the operator flow converts the agent at all.
+    const ordinal = compact ? skillRefs.length : index
     skillRefs.push({
       agent_id: row.values.id!,
       reference_key: key,
@@ -114,11 +170,17 @@ export function explodeAgentReferences(row: SourceRow) {
     ['mcp', mcpRefs, 'mcp_id'],
     ['plugins', pluginRefs, 'plugin_id'],
   ] as const)
-    list(column).forEach((value, ordinal) => {
+    list(column).forEach((value, index) => {
       if (typeof value !== 'string') {
-        blocks.push(rowBlock('v2-agent-reference-shape', row, { column, ordinal }, [column]))
+        reject(
+          rowBlock('v2-agent-reference-shape', row, { column, ordinal: index }, [column]),
+          column,
+          index,
+          value,
+        )
         return
       }
+      const ordinal = compact ? target.length : index
       target.push({
         agent_id: row.values.id!,
         [field]: value,
@@ -126,7 +188,12 @@ export function explodeAgentReferences(row: SourceRow) {
         occurrence: occurrence(column, value, ordinal),
       })
     })
-  return { agent, skillRefs, mcpRefs, pluginRefs, dependencies, decisions, blocks }
+  return { agent, skillRefs, mcpRefs, pluginRefs, dependencies, decisions, blocks, skipped }
+}
+
+/** RFC-626 §3.4 row 9: the decision code of a reference the automatic upgrade left out. */
+export function skippedAgentReferenceCode(code: string): string {
+  return `${code}-kept`
 }
 
 export const agentsRule: ConversionRule = {
@@ -143,9 +210,24 @@ export const agentsRule: ConversionRule = {
   lookups: Object.values(AGENT_REFERENCE_IDS),
   unit: { kind: 'source-chunk', table: 'agents' },
   convert(unit, ctx) {
+    // RFC-626 §3.4 row 9: the automatic upgrade keeps the agent and leaves out only the
+    // references it cannot confirm; reference columns have no foreign key, so nothing else
+    // depends on the entries left out.
+    const automatic = ctx.resolution === 'automatic'
     for (const row of unit.rows.get('agents') ?? []) {
-      const result = explodeAgentReferences(row)
-      if (result.blocks.length) {
+      const result = explodeAgentReferences(row, { skipUnconfirmed: automatic })
+      if (automatic)
+        for (const skip of result.skipped)
+          result.decisions.push({
+            code: skip.code,
+            detail: {
+              column: skip.column,
+              ordinal: skip.ordinal,
+              entry: skip.entry,
+              skipped: true,
+            },
+          })
+      if (result.blocks.length && !automatic) {
         resourceDecision(
           row,
           ctx,
@@ -189,6 +271,25 @@ export const agentsRule: ConversionRule = {
             key: ctx.target.key(target.table, target.values),
           })),
         )
+      if (automatic)
+        for (const skip of result.skipped)
+          ctx.out.record(
+            {
+              kind: 'decision',
+              code: skippedAgentReferenceCode(skip.code),
+              payload: {
+                automatic: 'kept',
+                sourcePhase: row.phase,
+                sourceTable: row.table,
+                sourceKey: row.encodedKey,
+                agentId: String(row.values.id),
+                column: skip.column,
+                ordinal: skip.ordinal,
+                entry: skip.entry,
+              },
+            },
+            row,
+          )
     }
   },
 }

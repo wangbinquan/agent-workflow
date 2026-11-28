@@ -18,6 +18,25 @@ export interface RepositoryUrlFact {
   readonly reason: string | null
 }
 export const repositoryUrlFacts = lookupKey<RepositoryUrlFact>('boot/repository-urls', 2)
+/**
+ * RFC-626 §3.4 row 4: the reasons a cache repository's address cannot be restored while the
+ * cache is still known by the hash of that address. With automatic resolution the cache, and
+ * the tasks, mounts and schedules that name it by address, are kept and linked by that hash.
+ * One list for the three rules that decide this.
+ */
+export const LINKABLE_UNREADABLE_URL_REASONS: readonly string[] = [
+  'v2-boot-url-key-missing',
+  'v2-boot-url-key-unreadable',
+  'v2-boot-url-escrow-invalid',
+  'v2-boot-url-decode-invalid',
+  'v2-boot-url-decode-unproven',
+  'v2-boot-url-output-conflict',
+]
+/** RFC-626 §3.6: facts that contradict the frozen row; only a change during the upgrade does that. */
+export const CONTRADICTED_URL_FACT_REASONS: readonly string[] = [
+  'v2-boot-url-fact-missing',
+  'v2-boot-url-source-changed',
+]
 export interface SkillBootIdentityFact {
   readonly skillId: string
   readonly state: 'proven' | 'husk' | 'blocked'

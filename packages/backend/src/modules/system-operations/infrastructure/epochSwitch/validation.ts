@@ -15,6 +15,7 @@ import type {
   ValidationReport,
   VerifiableContentInventory,
 } from '@/platform/persistence/migration/run/types'
+import { targetTableName } from '@/platform/persistence/migration/target/loader'
 import { collectMigrationRows, type MigrationMetaStore } from './metaStore'
 import { historyRestrictionsDigest } from './historyRestrictions'
 
@@ -123,6 +124,32 @@ export async function validateConversionRun(input: {
       mismatches.push(`${table.phase}:${table.table}`)
   }
   if (receipts.length !== expected.length) mismatches.push('table-receipt-roster')
+  // RFC-626: finalize may have moved rows out of the target after their units committed, and
+  // the source-side counts above cannot see that. What a business table holds must equal what
+  // the committed units wrote to it minus what finalize moved to the archive. Only units write
+  // business rows; the migration metadata tables are not part of this.
+  if (finalized.dispositions) {
+    const written = new Map<string, number>()
+    for (const unit of units)
+      if (unit.outcome === 'committed')
+        for (const target of unit.receipt.targets)
+          written.set(target.table, (written.get(target.table) ?? 0) + target.rows)
+    const removed = new Map<string, Set<string>>()
+    for (const disposition of finalized.dispositions)
+      if (disposition.action === 'set-aside') {
+        const keys = removed.get(disposition.targetTable) ?? new Set<string>()
+        keys.add(disposition.targetKey)
+        removed.set(disposition.targetTable, keys)
+      }
+    for (const table of input.registry.tables) {
+      const counted = await input.target.execute(
+        `SELECT COUNT(*) AS count FROM ${targetTableName(input.target.provider, table.id)}`,
+      )
+      const actual = Number(counted[0]?.count)
+      const wanted = (written.get(table.id) ?? 0) - (removed.get(table.id)?.size ?? 0)
+      if (actual !== wanted) mismatches.push(`target:${table.id}:${actual}!=${wanted}`)
+    }
+  }
   add('receipt-conservation', mismatches.length === 0, { mismatches })
   add(
     'constraints',

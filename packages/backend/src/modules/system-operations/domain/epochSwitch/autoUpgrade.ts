@@ -118,6 +118,38 @@ export function autoUpgradeTrigger(input: {
   return { kind: 'noop', reason: input.installation.kind }
 }
 
+/** A run asks for approval again at most this many times with materially different plans. */
+export const AUTO_UPGRADE_REAPPROVAL_LIMIT = 3
+
+/**
+ * RFC-626 §4.2: what the session already recorded for one plan of one run.
+ *
+ * An evaluation and an approval are recorded once per approval digest and reused afterwards: a
+ * process killed between "evaluation recorded" and "approval in the journal" meets the same
+ * plan again when it resumes, and counting that as another re-approval refused upgrades whose
+ * plan had never changed. The limit therefore counts the distinct approval digests of the
+ * re-approvals, not the evaluations.
+ */
+export function autoUpgradePlanRecords(
+  session: Pick<AutoUpgradeSession, 'records'>,
+  runId: string,
+  approvalDigest: string,
+): { readonly evaluated: boolean; readonly approved: boolean; readonly reapprovals: number } {
+  const ofRun = session.records.filter((record) => record.data.runId === runId)
+  const evaluations = ofRun.filter((record) => record.kind === 'plan-evaluated')
+  return {
+    evaluated: evaluations.some((record) => record.data.approvalDigest === approvalDigest),
+    approved: ofRun.some(
+      (record) => record.kind === 'approved' && record.data.approvalDigest === approvalDigest,
+    ),
+    reapprovals: new Set(
+      evaluations
+        .filter((record) => record.data.reapproval === true)
+        .map((record) => String(record.data.approvalDigest)),
+    ).size,
+  }
+}
+
 export function evaluateAutoUpgradePlan(
   plan: Pick<MigrationPlanDocument, 'payload' | 'approvalDigest'>,
 ) {
@@ -207,4 +239,11 @@ export interface AutoUpgradeConclusion {
   readonly guidance: readonly string[]
   /** RFC-610: the receipt as published (the JSON `db migration auto --json` prints and recovery reads back). */
   readonly receipt?: JsonObject
+  /**
+   * RFC-626 §3.6: for `refused` the reason; for `error` the code the failure carries, when it
+   * has one. `guidance` says the same in words.
+   */
+  readonly code?: string
+  /** RFC-626 §3.6: the directory that holds the operation's artifacts, when an operation exists. */
+  readonly artifactRoot?: string
 }

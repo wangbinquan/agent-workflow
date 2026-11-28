@@ -7,6 +7,8 @@ import type {
   ConversionRule,
   RowValidator,
   ConversionSourceCatalog,
+  ReferenceKeepPolicy,
+  SettlementContribution,
 } from './rule'
 import type { ContentInventory } from './content'
 import { lookupIdentity, orderLookupBuilders, type LookupBuilder, type LookupKey } from './lookups'
@@ -21,9 +23,12 @@ import {
   type OperatorDecision,
   type ConversionBlock,
   type SourcePhase,
+  type ConversionResolution,
+  type TaskSettlement,
 } from './types'
 
-export const CONVERTER_VERSION = 'rfc395-v2@2'
+// RFC-626: automatic resolution changes what the conversion decides, so its outputs differ.
+export const CONVERTER_VERSION = 'rfc395-v2@3'
 export interface TargetRosterEntry {
   readonly table: string
   readonly sources: readonly string[]
@@ -31,6 +36,11 @@ export interface TargetRosterEntry {
 export interface ConversionInput {
   readonly progress?: MigrationProgressCallback
   readonly onStagingPeak?: (bytes: number) => void
+  /**
+   * RFC-626 §4.7: called at table and unit boundaries, where nothing of the work just done is
+   * needed any more. Default: a full collection at most every few seconds (`createReclaimer`).
+   */
+  readonly reclaim?: () => void
   readonly source: VersionedSourceReader
   readonly preflight: SourcePreflight
   readonly preUpgradeSource?: VersionedSourceReader
@@ -50,6 +60,13 @@ export interface ConversionInput {
   readonly operatorDecisions?: readonly OperatorDecision[]
   /** Explicit partial conversion for domain fixtures. Such a plan is never whole-database acceptance. */
   readonly sourceScope?: readonly string[]
+  /** RFC-626: `automatic` is the automatic upgrade; default `operator`, unchanged behaviour. */
+  readonly resolution?: ConversionResolution
+  /**
+   * RFC-626: the settlements an earlier preparation of this run registered (replay and resume).
+   * The engine applies them first and then asserts that discovery adds none.
+   */
+  readonly settlements?: readonly TaskSettlement[]
 }
 export type ConversionPlanInput = Omit<ConversionInput, 'content' | 'scratchRoot'>
 export interface ConversionPlanSection {
@@ -82,11 +99,18 @@ export interface ConversionPlanSection {
   readonly topology: TargetTopology
   readonly deferredChecks: readonly { readonly table: string; readonly name: string }[]
   readonly blocks: readonly ConversionBlock[]
+  /** RFC-626: written only with automatic resolution; both are part of the plan digest. */
+  readonly resolution?: 'automatic'
+  /** RFC-626: the tasks this conversion ends, sorted by task id. */
+  readonly settlements?: readonly TaskSettlement[]
 }
 export interface ResolvedConversion {
   readonly rules: readonly ConversionRule[]
   readonly lookups: readonly LookupBuilder<unknown>[]
   readonly validators: readonly RowValidator[]
+  /** RFC-626: in contribution order; the engine only calls them. */
+  readonly settlements: readonly SettlementContribution[]
+  readonly references: readonly ReferenceKeepPolicy[]
 }
 export function resolveContributions(
   input: ConversionSourceCatalog & { readonly contributions: readonly ConversionContribution[] },
@@ -104,6 +128,10 @@ export function resolveContributions(
     validators: contributions
       .flatMap((contribution) => contribution.validators)
       .sort((a, b) => a.ref.id.localeCompare(b.ref.id)),
+    settlements: contributions.flatMap((contribution) =>
+      contribution.settlement ? [contribution.settlement] : [],
+    ),
+    references: contributions.flatMap((contribution) => contribution.references ?? []),
   }
 }
 export function sourceIdentity(table: string, phase: SourcePhase = 'current'): string {
@@ -299,10 +327,17 @@ export function buildConversionPlan(
       missingFields: [],
       detail: { reason: table.reason, rows: table.rows },
     }))
+  // `settles` carries a function; the digest records only that the declaration exists.
   const ruleSetDigest = valueDigest({
-    rules: rules.map(({ convert: _convert, ...rule }) => rule),
+    rules: rules.map(({ convert: _convert, settles, ...rule }) => ({
+      ...rule,
+      ...(settles ? { settles: true } : {}),
+    })),
     lookups: lookups.map(({ build: _build, ...lookup }) => lookup),
-    validators: validators.map(({ validate: _validate, ...validator }) => validator),
+    validators: validators.map(({ validate: _validate, settles, ...validator }) => ({
+      ...validator,
+      ...(settles ? { settles: true } : {}),
+    })),
   })
   const payload = {
     version: 1 as const,
@@ -336,6 +371,15 @@ export function buildConversionPlan(
           .sort() ?? [],
     })),
     topology: targetTopology(input.target),
+    // RFC-626: absent with operator resolution, so a manual plan keeps its shape.
+    ...(input.resolution === 'automatic'
+      ? {
+          resolution: 'automatic' as const,
+          settlements: [...(input.settlements ?? [])].sort((a, b) =>
+            a.taskId < b.taskId ? -1 : a.taskId > b.taskId ? 1 : 0,
+          ),
+        }
+      : {}),
     deferredChecks: input.target.tables.flatMap((table) => [
       ...table.checks
         .filter((check) => !isTypedExpression(check.expression))

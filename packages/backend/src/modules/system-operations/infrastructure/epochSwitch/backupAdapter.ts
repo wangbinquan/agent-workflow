@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import {
   createSwitchBackup,
   immutableSourceBackup,
@@ -8,6 +9,7 @@ import {
   materializeSwitchBackup,
 } from '@/platform/persistence/migration/freeze/backup'
 import { frozenSourceDetails } from '@/platform/persistence/migration/freeze/sourceAccess'
+import { errorText } from '@/platform/persistence/migration/errorText'
 import type {
   EpochBackupPort,
   FrozenSourceHandle,
@@ -31,12 +33,22 @@ export function createEpochBackupAdapter(
   } = {},
 ): EpochBackupPort {
   const stores = new Map<string, EpochSwitchArtifactPort>()
+  /**
+   * RFC-626 §4.5: backups this adapter wrote for an automatic upgrade, by receipt id. Their
+   * directory digest was computed when they were written and travels with the receipt; within
+   * the same process nothing else writes into the operation's backup directory, so checking
+   * such a receipt does not read the whole backup again. A receipt from an earlier process is
+   * not in here and is verified against the disk as before.
+   */
+  const written = new Map<string, SwitchBackupReceipt>()
   return {
     async create(input) {
       try {
         const persist = async (receipt: SwitchBackupReceipt) => {
           if (input.artifacts) stores.set(receipt.id, input.artifacts)
-          return persistSwitchBackup(receipt, input.artifacts)
+          const persisted = await persistSwitchBackup(receipt, input.artifacts)
+          if (input.resolution === 'automatic') written.set(persisted.id, persisted)
+          return persisted
         }
         const details = frozenSourceDetails(input.source)
         if (details.location.kind === 'backup')
@@ -51,6 +63,7 @@ export function createEpochBackupAdapter(
               destination: input.destination,
               frozen: input.source,
               contentManifest: input.contentManifest ?? null,
+              resolution: input.resolution,
             }),
           )
         return await persist(
@@ -65,7 +78,7 @@ export function createEpochBackupAdapter(
       } catch (error) {
         throw new EpochSwitchError('backup-failed', {
           category: 'backup-failed',
-          message: error instanceof Error ? error.message : String(error),
+          message: errorText(error),
         })
       }
     },
@@ -74,15 +87,25 @@ export function createEpochBackupAdapter(
         return dependencies.retainedMatches
           ? dependencies.retainedMatches(receipt, watermark)
           : false
+      const own = written.get(receipt.id)
+      if (
+        own &&
+        own.digest === receipt.digest &&
+        own.path === receipt.path &&
+        receipt.path !== null &&
+        existsSync(receipt.path)
+      )
+        return receipt.version === 1 && receipt.sourceWatermark === watermark
       const artifacts = stores.get(receipt.id) ?? (await dependencies.artifacts?.(receipt))
-      if (artifacts && (!receipt.path || !(await switchBackupMatches(receipt, watermark)))) {
-        try {
-          return switchBackupMatches(await materializeSwitchBackup(receipt, artifacts), watermark)
-        } catch {
-          return false
-        }
+      // The local directory is read once: it either is the backup, or the backup has to be
+      // materialised from the artifact store and that copy is what gets read.
+      const local = receipt.path ? await switchBackupMatches(receipt, watermark) : false
+      if (local || !artifacts) return local
+      try {
+        return switchBackupMatches(await materializeSwitchBackup(receipt, artifacts), watermark)
+      } catch {
+        return false
       }
-      return switchBackupMatches(receipt, watermark)
     },
   }
 }

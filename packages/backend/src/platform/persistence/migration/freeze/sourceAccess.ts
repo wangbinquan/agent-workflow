@@ -5,9 +5,11 @@ import type { PostgresqlDatabaseRuntime } from '../../postgresqlRuntime'
 import { canonicalSchemaJson, digestSchemaContract } from '../../schema/canonical'
 import { readMigrationSourcePointer } from '../generationPointerSource'
 import {
+  FrozenCopyStaleError,
   openEpoch1SqliteSource,
   openEpoch1SqliteBackupSource,
   type Epoch1SqliteSource,
+  type SqliteCopyRecord,
 } from '../sqliteSourceReader'
 import { openEpoch1PostgresqlSource } from '../postgresqlSourceReader'
 import {
@@ -37,13 +39,18 @@ import { rawSourceChunk } from '../rawSourceReader'
 import type { SupportedSourceManifest } from '../supportedSources'
 import { unhandledDatabaseProvider, type DatabaseProvider } from '../../databaseProviders'
 import type { EmptyTableDecision } from '../sourceDispositions'
-import type { SourcePreflight, VersionedSourceReader } from '../sourceTypes'
+import type {
+  SourceMeasurementObserver,
+  SourcePreflight,
+  VersionedSourceReader,
+} from '../sourceTypes'
 import type {
   EpochSourceLocation,
   FrozenSourceHandle,
   EpochSwitchArtifactPort,
   SourceArchiveInput,
 } from '../run/types'
+import type { ConversionResolution } from '../conversion/types'
 import { captureLiveSqliteSnapshot, pinnedSnapshotReader } from './liveSnapshot'
 import { migrationPostgresqlRuntime, preparePostgresqlScratch } from './postgresqlDatabases'
 import {
@@ -53,6 +60,15 @@ import {
   sourceArtifactRoot,
   syncSourceDirectory,
 } from './artifacts'
+import {
+  FROZEN_COPY_FILE,
+  describesFreeze,
+  discardFreezeRecord,
+  freezeIdentity,
+  publishFreezeRecord,
+  readFreezeRecord,
+} from './freezeRecord'
+import type { SourceWatch } from './sourceWatch'
 
 export interface SourceAccessInput {
   readonly progress?: MigrationProgressCallback
@@ -69,6 +85,23 @@ export interface SourceAccessInput {
   readonly postgresql?: () => PostgresqlDatabaseRuntime
   readonly createScratchPostgresql?: () => Promise<OfflinePostgresqlDatabase>
   readonly reopenScratchPostgresql?: () => Promise<OfflinePostgresqlDatabase>
+  /**
+   * RFC-626 §4.1: what the process remembers about the old database from one handle to the
+   * next. Borrowed: the assembly of the automatic upgrade owns it for the whole session and a
+   * handle never closes it. Without one each handle confirms the identity for itself.
+   */
+  readonly watch?: SourceWatch
+  /**
+   * RFC-626: `automatic` for the automatic upgrade. A frozen handle then keeps its freeze in
+   * the run directory and later handles of the run take it over (§4.2), and what the old
+   * database could hold is left to the conversion instead of failing the freeze (§3.3).
+   */
+  readonly resolution?: ConversionResolution
+  /**
+   * RFC-626 §7: told each time one of the handle's readers reads all of the data of a source or
+   * of an artifact directory. Tests count with it; the assembly passes none.
+   */
+  readonly onMeasure?: SourceMeasurementObserver
 }
 export interface SourceExpected {
   readonly watermark: string
@@ -98,17 +131,23 @@ export function openBackupSource(input: {
   readonly manifest: SupportedSourceManifest
   readonly operationRoot: string
   readonly emptyTables: readonly EmptyTableDecision[]
+  readonly onMeasure?: SourceMeasurementObserver
 }): VersionedSourceReader {
-  const { location, manifest } = input
+  const { location, manifest, onMeasure } = input
   if (location.sourceKind === 'sqlite-backup')
     return openEpoch1SqliteBackupSource({
       backupRoot: location.root,
       manifest,
       operationRoot: input.operationRoot,
       emptyTables: input.emptyTables,
+      onMeasure,
     })
   if (location.sourceKind === 'hosted-backup')
-    return openEpoch1HostedBackupSource({ backupRoot: location.root, supportedSources: manifest })
+    return openEpoch1HostedBackupSource({
+      backupRoot: location.root,
+      supportedSources: manifest,
+      onMeasure,
+    })
   if (location.sourceKind === 'logical-backup') {
     const backup = readManifest(location.root)
     if (backup?.manifestVersion !== 2) throw new Error('old-epoch-logical-manifest-required')
@@ -117,6 +156,7 @@ export function openBackupSource(input: {
       backupRoot: location.root,
       envelopeFileDigest: backup.database.envelopeFileDigest,
       supportedSources: manifest,
+      onMeasure,
     })
   }
   if (existsSync(join(location.root, 'logical-backup.json')))
@@ -124,6 +164,7 @@ export function openBackupSource(input: {
       artifactRoot: location.root,
       envelopeFileDigest: logicalArtifactFileDigest(join(location.root, 'logical-backup.json')),
       supportedSources: manifest,
+      onMeasure,
     })
   const artifact = verifyLogicalArtifactManifest(
     JSON.parse(readFileSync(join(location.root, 'logical-manifest.json'), 'utf8')),
@@ -135,6 +176,7 @@ export function openBackupSource(input: {
       join(location.root, 'legacy-archive/manifest.json'),
     ),
     supportedSources: manifest,
+    onMeasure,
   })
 }
 
@@ -147,6 +189,65 @@ interface UpgradeBinding {
   readonly bindingDigest: string
   readonly scratchFingerprint: string | null
   readonly frozen: boolean
+  /**
+   * RFC-626 §4.2, automatic upgrade only: the content identity of the SQLite work copy and the
+   * size it was recorded at. The copy is this operation's own, so a later handle recognises it
+   * by its size and takes the identity over instead of reading the whole copy again.
+   */
+  readonly copy?: SqliteCopyRecord
+}
+/** The work copy depends on the source it was made from, the decisions, and the head it reaches. */
+function upgradeBindingDigest(original: SourcePreflight, input: SourceAccessInput): string {
+  return digestSchemaContract({
+    watermark: original.watermark,
+    decisions: input.emptyTables,
+    head: input.manifest.headDigest,
+  })
+}
+/** `runs/<runId>/source-access/frozen` in an operation with an artifact store. */
+async function freezeRecordRoot(input: SourceAccessInput, workRoot: string): Promise<string> {
+  return input.artifacts
+    ? sourceArtifactRoot(input.artifacts, 'source-access/frozen')
+    : join(workRoot, 'frozen')
+}
+/**
+ * A borrowed watch seen under a prefix. A reader keys its baseline by the database it reads,
+ * and a scratch database that is reset and filled again is still that database: it can hold
+ * as many rows and the same sequence values as before with other content, which cheap
+ * evidence cannot tell apart. The prefix names the copy, so each copy starts without a baseline.
+ */
+function scopedWatch(watch: SourceWatch, scope: string): SourceWatch {
+  return {
+    sqliteDataVersion: (path) => watch.sqliteDataVersion(path),
+    baseline: (key) => watch.baseline(`${scope}:${key}`),
+    remember: (key, baseline) => watch.remember(`${scope}:${key}`, baseline),
+    forget: (key) => watch.forget(`${scope}:${key}`),
+    close() {},
+  }
+}
+/** A borrowed watch that also reports the cheap evidence the reader last settled on. */
+function observedWatch(watch: SourceWatch): {
+  readonly watch: SourceWatch
+  evidence(): string | null
+} {
+  let evidence: string | null = null
+  return {
+    watch: {
+      sqliteDataVersion: (path) => watch.sqliteDataVersion(path),
+      baseline(key) {
+        const remembered = watch.baseline(key)
+        if (remembered) evidence = remembered.evidence
+        return remembered
+      },
+      remember(key, baseline) {
+        evidence = baseline.evidence
+        watch.remember(key, baseline)
+      },
+      forget: (key) => watch.forget(key),
+      close() {},
+    },
+    evidence: () => evidence,
+  }
 }
 
 async function access(
@@ -200,42 +301,118 @@ async function access(
         )
           rmSync(join(directory, entry.name), { recursive: true, force: true })
     }
+    // RFC-626 §4.2: only the automatic upgrade keeps its freeze. It runs with the daemon stopped
+    // for the whole session, so the copy frozen for the plan is still the old database when
+    // the run step opens it. An operator's plan reads a snapshot of a database that is still
+    // being written, and every handle of theirs freezes for itself as before.
+    const durable = input.resolution === 'automatic' && mode === 'frozen'
     let original: VersionedSourceReader
     let pointerBytes: string | null = null
     let databaseFingerprint: string | null = null
     let sqlite: Epoch1SqliteSource | null = null
+    let databaseEvidence: (() => string | null) | null = null
     if (input.location.kind === 'sqlite-file') {
-      const pointer = readMigrationSourcePointer(input.location.pointerPath)
+      const location = input.location
+      const pointer = readMigrationSourcePointer(location.pointerPath)
       pointerBytes = pointer.bytes ? Buffer.from(pointer.bytes).toString('base64') : null
       if (pointer.pointer && pointer.pointer.payload.version !== 1)
         throw new Error('source-epoch-not-one')
       const snapshot =
-        mode === 'live'
-          ? captureLiveSqliteSnapshot({ ...input.location, operationRoot: workRoot })
-          : null
+        mode === 'live' ? captureLiveSqliteSnapshot({ ...location, operationRoot: workRoot }) : null
       if (snapshot) releases.push(snapshot.close)
-      sqlite = openEpoch1SqliteSource({
-        path: snapshot?.path ?? input.location.path,
-        manifest: input.manifest,
-        operationRoot: workRoot,
-        emptyTables: input.emptyTables,
-        ...(!pointer.bytes ? { sourceGenerationId: 'dbg_legacy_sqlite' } : {}),
-        ...(snapshot?.pointerPath
-          ? { generationPointerPath: snapshot.pointerPath }
-          : mode === 'frozen' && pointer.bytes
-            ? { generationPointerPath: input.location.pointerPath }
-            : {}),
-      })
+      const openOriginal = (
+        copy: Pick<Parameters<typeof openEpoch1SqliteSource>[0], 'frozenCopy' | 'recorded'> = {},
+      ) => {
+        const opened = openEpoch1SqliteSource({
+          path: snapshot?.path ?? location.path,
+          manifest: input.manifest,
+          operationRoot: workRoot,
+          emptyTables: input.emptyTables,
+          resolution: input.resolution,
+          ...(!pointer.bytes ? { sourceGenerationId: 'dbg_legacy_sqlite' } : {}),
+          ...(snapshot?.pointerPath
+            ? { generationPointerPath: snapshot.pointerPath }
+            : mode === 'frozen' && pointer.bytes
+              ? { generationPointerPath: location.pointerPath }
+              : {}),
+          // The plan snapshot is this handle's own copy and is read in place; the old database
+          // itself is what the watch is for.
+          ...(snapshot ? { privateCopy: true } : { watch: input.watch }),
+          onMeasure: input.onMeasure,
+          ...copy,
+        })
+        // Registered at once: a reader that fails below still gives up its connections.
+        releases.push(() => opened.close())
+        return opened
+      }
+      if (!durable) sqlite = openOriginal()
+      else {
+        const root = await freezeRecordRoot(input, workRoot)
+        const frozenCopy = join(root, FROZEN_COPY_FILE)
+        const record = readFreezeRecord(root)
+        if (record?.provider === 'sqlite') {
+          const reopened = openOriginal({
+            frozenCopy,
+            recorded: { content: record.content, bytes: record.copy.bytes },
+          })
+          let stale: FrozenCopyStaleError['reason'] | null = null
+          try {
+            if (describesFreeze(record, await reopened.preflight())) sqlite = reopened
+            else stale = 'source'
+          } catch (error) {
+            if (!(error instanceof FrozenCopyStaleError)) throw error
+            stale = error.reason
+          }
+          if (stale) {
+            await reopened.close()
+            // The old database is no longer what was frozen. A run whose plan is pinned ends
+            // here and the caller starts a new run; before that nothing depends on the earlier
+            // identity yet and the freeze is taken again in this run's directory. A copy that
+            // merely is not the recorded file any more is made again from the source either way.
+            if (stale === 'source' && expected)
+              throw new Error('source-changed: source differs from its frozen copy')
+          }
+        }
+        if (!sqlite) {
+          // No record, or one that cannot be taken over: what lies there is an unfinished or
+          // outdated freeze.
+          discardFreezeRecord(root)
+          const frozen = openOriginal({ frozenCopy })
+          const preflight = await frozen.preflight()
+          const state = frozen.copyState()
+          await publishFreezeRecord(root, {
+            ...freezeIdentity(
+              preflight,
+              preflight.requiresOfflineUpgrade ? upgradeBindingDigest(preflight, input) : null,
+            ),
+            provider: 'sqlite',
+            content: state.content,
+            copy: { file: FROZEN_COPY_FILE, bytes: state.bytes },
+            foreignKeyViolations: state.foreignKeyViolations ?? 0,
+          })
+          if (state.foreignKeyViolations)
+            input.progress?.({
+              phase: 'freeze',
+              detail: `${state.foreignKeyViolations} row(s) with a dangling foreign key are left to the conversion`,
+            })
+          sqlite = frozen
+        }
+      }
       original = sqlite
     } else if (input.location.kind === 'postgresql-database') {
       if (!input.postgresql) throw new Error('postgresql-source-runtime-required')
       const runtime = migrationPostgresqlRuntime(input.postgresql())
       databaseFingerprint = (await runtime.readiness()).databaseFingerprint
+      const observed = durable && input.watch ? observedWatch(input.watch) : null
+      databaseEvidence = observed?.evidence ?? null
       original = openEpoch1PostgresqlSource({
         runtime,
         manifest: input.manifest,
         contentRoot: input.operationRoot,
         emptyTables: input.emptyTables,
+        watch: observed?.watch ?? input.watch,
+        resolution: input.resolution,
+        onMeasure: input.onMeasure,
       })
     } else {
       original = openBackupSource({ ...input, location: input.location, operationRoot: workRoot })
@@ -300,7 +477,7 @@ async function access(
       if (input.location.kind === 'postgresql-database' && !archiveInput)
         throw new Error('postgresql-archive-required')
       const archive = archiveInput
-        ? await resolvePostgresqlSourceArchive(sourceDetails, archiveInput)
+        ? await resolvePostgresqlSourceArchive(sourceDetails, archiveInput, input.onMeasure)
         : undefined
       await archive?.emptyArchive?.assertProvenance()
       const binding = digestSchemaContract({
@@ -342,6 +519,7 @@ async function access(
         operationRoot: workRoot,
         emptyTables: input.emptyTables,
         progress: input.progress,
+        onMeasure: input.onMeasure,
       })
       releases.push(() => upgraded.close())
       const physical = await upgraded.reader.preflight()
@@ -360,7 +538,8 @@ async function access(
           throw new Error('source-changed: PostgreSQL bridge binding differs')
         await bridge.reader.assertUnchanged(bridge.preflight)
         await upgraded.reader.assertUnchanged(physical)
-        if (archiveInput) await resolvePostgresqlSourceArchive(sourceDetails, archiveInput)
+        if (archiveInput)
+          await resolvePostgresqlSourceArchive(sourceDetails, archiveInput, input.onMeasure)
       }
       const handle: FrozenSourceHandle = {
         reader: {
@@ -406,6 +585,34 @@ async function access(
       await assertUnchanged(current)
       return handle
     }
+    if (durable && input.location.kind === 'postgresql-database') {
+      // A database source has no frozen file: its freeze is the reader's snapshot transaction,
+      // which ended with the earlier handle. The reader has just taken a new snapshot and
+      // decided for itself whether its identity still holds; here the result is only compared
+      // with what the run recorded. A bridged baseline (returned above) is rebuilt on every
+      // access and keeps no record.
+      const root = await freezeRecordRoot(input, workRoot)
+      const found = readFreezeRecord(root)
+      const record = found?.provider === 'postgresql' ? found : null
+      if (!record || !describesFreeze(record, originalPreflight)) {
+        if (record && expected)
+          throw new Error('source-changed: source differs from its freeze record')
+        discardFreezeRecord(root)
+        mkdirSync(root, { recursive: true })
+        await publishFreezeRecord(root, {
+          ...freezeIdentity(
+            originalPreflight,
+            originalPreflight.requiresOfflineUpgrade
+              ? upgradeBindingDigest(originalPreflight, input)
+              : null,
+          ),
+          provider: 'postgresql',
+          tableRows: originalPreflight.fingerprint.tableRows,
+          identityHighWater: originalPreflight.identityHighWater,
+          evidence: databaseEvidence?.() ?? null,
+        })
+      }
+    }
     let reader = original
     let evidenceRoot: string | null = null
     let preUpgrade: FrozenSourceHandle['preUpgrade'] = null
@@ -445,11 +652,7 @@ async function access(
       const { owner } = JSON.parse(readFileSync(ownerPath, 'utf8')) as { owner: string }
       if (input.scratchOwner && owner !== input.scratchOwner)
         throw new Error('postgresql-scratch-owned-by-another-operation')
-      const bindingDigest = digestSchemaContract({
-        watermark: originalPreflight.watermark,
-        decisions: input.emptyTables,
-        head: input.manifest.headDigest,
-      })
+      const bindingDigest = upgradeBindingDigest(originalPreflight, input)
       const bindingPath = join(cacheRoot, 'binding.json')
       let prior: UpgradeBinding | null = null
       if (existsSync(bindingPath)) {
@@ -483,6 +686,11 @@ async function access(
             operationRoot: workRoot,
             emptyTables: input.emptyTables,
             sourceGenerationId: binding.generationId,
+            // The work copy is this operation's own file: read in place, never copied again.
+            privateCopy: true,
+            resolution: input.resolution,
+            onMeasure: input.onMeasure,
+            ...(durable && binding.copy ? { recorded: binding.copy } : {}),
           })
           const reopened = reader
           releases.push(() => reopened.close())
@@ -505,6 +713,13 @@ async function access(
             manifest: input.manifest,
             sourceGenerationId: binding.generationId,
             contentRoot: join(cacheRoot, binding.directory),
+            // Scoped to this very copy: a scratch that is reset and filled again gets a new
+            // directory name, so it can never take over what was remembered for its predecessor.
+            ...(input.watch
+              ? { watch: scopedWatch(input.watch, `work-copy:${binding.directory}`) }
+              : {}),
+            resolution: input.resolution,
+            onMeasure: input.onMeasure,
           })
           const reopened = reader
           releases.push(() => reopened.close())
@@ -518,7 +733,10 @@ async function access(
         }
       } else {
         if (prior) {
-          if (prior.frozen)
+          // RFC-626 §4.2: a freeze the automatic upgrade takes again before its plan is pinned
+          // replaces the earlier one — nothing depends on that identity yet, so its work copy
+          // goes too. Otherwise a frozen work copy is evidence of a run and is retained.
+          if (prior.frozen && !(durable && !expected))
             await atomicSourceFile(join(cacheRoot, prior.directory, '.retained'), '')
           else rmSync(join(cacheRoot, prior.directory), { recursive: true, force: true })
           rmSync(bindingPath, { force: true })
@@ -533,6 +751,7 @@ async function access(
         )
         let sqlitePath: string | null = null
         let scratchFingerprint: string | null = null
+        let workCopy: Epoch1SqliteSource | null = null
         if (sqlite) {
           const upgraded = await upgradeEpoch1Copy({
             progress: input.progress,
@@ -541,6 +760,8 @@ async function access(
             manifest: input.manifest,
             operationRoot: workRoot,
             emptyTables: input.emptyTables,
+            resolution: input.resolution,
+            onMeasure: input.onMeasure,
           })
           try {
             sqlitePath = join(directoryName, 'current.sqlite')
@@ -548,15 +769,19 @@ async function access(
           } finally {
             await upgraded.close()
           }
-          reader = openEpoch1SqliteSource({
+          workCopy = openEpoch1SqliteSource({
             path: join(cacheRoot, sqlitePath),
             manifest: input.manifest,
             operationRoot: workRoot,
             emptyTables: input.emptyTables,
             sourceGenerationId: originalPreflight.sourceGenerationId,
+            privateCopy: true,
+            resolution: input.resolution,
+            onMeasure: input.onMeasure,
           })
-          const upgradedReader = reader
+          const upgradedReader = workCopy
           releases.push(() => upgradedReader.close())
+          reader = workCopy
         } else {
           const openScratch = input.reopenScratchPostgresql ?? input.createScratchPostgresql!
           const upgraded = await upgradeEpoch1Copy({
@@ -564,6 +789,13 @@ async function access(
             source: original,
             manifest: input.manifest,
             operationRoot: workRoot,
+            resolution: input.resolution,
+            onMeasure: input.onMeasure,
+            // The scope the reopening handle above uses for this copy: its identity, measured
+            // once here, is adopted by a later handle of this process instead of read again.
+            ...(input.watch
+              ? { watch: scopedWatch(input.watch, `work-copy:${directoryName}`) }
+              : {}),
             async createEmptyDatabase() {
               const scratch = await openScratch()
               const runtime = migrationPostgresqlRuntime(scratch.runtime)
@@ -586,15 +818,18 @@ async function access(
           reader = upgraded.reader
         }
         await syncSourceDirectory(directory)
+        const currentWatermark = (await reader.preflight()).watermark
+        const copied = durable ? workCopy?.copyState() : undefined
         binding = {
           originalWatermark: originalPreflight.watermark,
           generationId: originalPreflight.sourceGenerationId,
           directory: directoryName,
           sqlitePath,
-          currentWatermark: (await reader.preflight()).watermark,
+          currentWatermark,
           bindingDigest,
           scratchFingerprint,
           frozen: mode === 'frozen',
+          ...(copied ? { copy: { content: copied.content, bytes: copied.bytes } } : {}),
         }
         await atomicSourceFile(bindingPath, canonicalSchemaJson(binding))
         await persist()
@@ -642,8 +877,12 @@ async function access(
         if ((bytes ? Buffer.from(bytes).toString('base64') : null) !== pointerBytes)
           throw new Error('source-changed: source pointer differs')
       }
-      if (canonicalSchemaJson(value) !== canonicalSchemaJson(current))
+      // The handle hands out `current` itself; only a foreign value has to be encoded to compare.
+      if (value !== current && canonicalSchemaJson(value) !== canonicalSchemaJson(current))
         throw new Error('source-changed: source binding differs')
+      // RFC-626 §4.1: neither reader measures its database here. The old database answers with
+      // its cheap evidence and the work copy, being this operation's own, with its size; the
+      // content identity is recomputed only when that evidence has moved.
       await originalReader.assertUnchanged(originalPreflight)
       if (reader !== originalReader) await reader.assertUnchanged(physicalCurrent)
       if (preUpgrade) await preUpgrade.reader.assertUnchanged(preUpgrade.preflight)
@@ -679,7 +918,7 @@ async function access(
       const physicalHandle = handle
       const physicalDetails = frozenSourceDetails(physicalHandle)
       const archiveInput = await input.postgresqlArchive(physicalHandle)
-      await resolvePostgresqlSourceArchive(physicalDetails, archiveInput)
+      await resolvePostgresqlSourceArchive(physicalDetails, archiveInput, input.onMeasure)
       if (archiveInput.kind === 'retained-epoch1-archive') {
         const manifest = verifyLogicalArtifactManifest(
           JSON.parse(readFileSync(join(archiveInput.path, 'logical-manifest.json'), 'utf8')),
@@ -689,6 +928,7 @@ async function access(
           manifestDigest: manifest.digest,
           legacyArchiveFileDigest: archiveInput.digest,
           supportedSources: input.manifest,
+          onMeasure: input.onMeasure,
         })
         releases.push(() => archive.close())
         // Compose after the physical offline upgrade. Backup/export and scratch
@@ -706,18 +946,6 @@ async function access(
         handle.preflight.sourceGenerationId !== expected.sourceGenerationId)
     )
       throw new Error('source-changed: frozen source differs from the previous run')
-    const preflightPath = join(
-      workRoot,
-      `preflight-${digestSchemaContract({ current: handle.preflight, preUpgrade: preUpgrade?.preflight ?? null }).slice(7)}.json`,
-    )
-    if (!existsSync(preflightPath))
-      await atomicSourceFile(
-        preflightPath,
-        canonicalSchemaJson({
-          current: handle.preflight,
-          preUpgrade: preUpgrade?.preflight ?? null,
-        }),
-      )
     input.progress?.({ phase: 'freeze', detail: 'source ready', boundary: true })
     return handle
   } catch (error) {

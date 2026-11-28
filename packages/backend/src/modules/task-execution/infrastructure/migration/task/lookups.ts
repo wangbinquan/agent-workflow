@@ -12,12 +12,22 @@ import {
   type TaskMountFacts,
 } from '@/platform/persistence/migration/conversion/lookups/keys'
 import { deterministicChildId } from '@/platform/persistence/migration/conversion/ids'
+import type { SourceRow } from '@/platform/persistence/migration/conversion/types'
 import { deriveTaskSubjectFacts } from './subject'
+import { taskRowUsable, unusableTaskSourceValue } from './usability'
 import { assignTaskRepositoryMounts } from './workspace'
 import { text, nullableText, number } from './values'
 
 export const USER_IDS = idSetLookup('users', 'id').key
 export const WORKFLOW_BUILTIN = columnLookup('workflows', ['id'], ['builtin']).key
+
+/**
+ * RFC-626: a state row whose `dw_state_json` the frozen codec rejected says nothing about the
+ * phase. Invalid JSON text already read as no state; a value that is not text used to throw here.
+ */
+function readableState(state: SourceRow | undefined): SourceRow | undefined {
+  return state?.codecFailure?.columns.includes('dw_state_json') ? undefined : state
+}
 
 export const taskFactsLookup: LookupBuilder<TaskFacts> = {
   key: TASK_FACTS,
@@ -26,10 +36,13 @@ export const taskFactsLookup: LookupBuilder<TaskFacts> = {
   build(staged, put, lookups) {
     for (const task of staged.rows('tasks')) {
       const taskId = text(task, 'id')
+      // RFC-626: a task row that cannot be decoded or used has no facts. Its unit is blocked
+      // before the rule runs (source codec or `v2-task-row-unusable`), so nothing requires them.
+      if (!taskRowUsable(task)) continue
       const subject = deriveTaskSubjectFacts(
         task,
         lookups(WORKFLOW_BUILTIN).get(text(task, 'workflow_id'))?.builtin === true,
-        staged.group('workgroup_task_state', 'task_id', taskId)[0],
+        readableState(staged.group('workgroup_task_state', 'task_id', taskId)[0]),
       )
       put(taskId, {
         taskId,
@@ -61,14 +74,20 @@ export const taskMountsLookup: LookupBuilder<TaskMountFacts> = {
     for (const task of staged.rows('tasks')) {
       const taskId = text(task, 'id')
       const repos = staged.group('task_repos', 'task_id', taskId)
-      if (task.codecFailure || repos.some((repo) => repo.codecFailure)) {
+      const facts = lookups(TASK_FACTS).get(taskId)
+      // A task without facts (RFC-626) or with a member row nobody can read is blocked whole.
+      if (
+        !facts ||
+        task.codecFailure ||
+        repos.some((repo) => repo.codecFailure || unusableTaskSourceValue(repo))
+      ) {
         put(taskId, { taskId, layout: 'none', mounts: [] })
         continue
       }
       const assigned = assignTaskRepositoryMounts(
         task,
         repos,
-        lookups(TASK_FACTS).require(taskId),
+        facts,
         { child: deterministicChildId },
         lookups(TASK_ISOLATION).get(taskId),
       )

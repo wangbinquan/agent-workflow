@@ -108,6 +108,11 @@ export const rfc398Main = resolve(import.meta.dir, '../../src/main.ts')
 export async function autoUpgradeFixture(
   options: {
     blocked?: boolean
+    /**
+     * RFC-626 §3.5: a table no released version creates, holding a row. The automatic upgrade's
+     * environment check refuses such a database before it records anything.
+     */
+    unreleasedTable?: boolean
     manual?: boolean
     home?: string
     env?: Record<string, string>
@@ -120,6 +125,10 @@ export async function autoUpgradeFixture(
     await materializeFrozenEpoch1Sqlite(join(home, 'db.sqlite'))
     const db = new Database(join(home, 'db.sqlite'))
     try {
+      if (options.unreleasedTable)
+        db.exec(
+          "CREATE TABLE rfc626_unreleased (id TEXT PRIMARY KEY); INSERT INTO rfc626_unreleased (id) VALUES ('added by hand')",
+        )
       if (options.blocked) {
         const row = frozenValues('code_work_items', {
           id: 'rfc398-stranded-work',
@@ -278,35 +287,6 @@ export async function autoUpgradeFixture(
   }
 }
 export type AutoUpgradeFixture = Awaited<ReturnType<typeof autoUpgradeFixture>>
-
-export async function acknowledgeFixture(f: AutoUpgradeFixture) {
-  const journal = f.journals()[0]!
-  const bytes = readFileSync(
-    join(
-      f.home,
-      'database-migrations',
-      journal.payload.operationId,
-      `plans/${journal.payload.plan!.digest}.json`,
-    ),
-    'utf8',
-  )
-  const plan = JSON.parse(bytes) as {
-    payload: { blocks: { id: string; block: { acknowledgeable?: boolean } }[] }
-  }
-  const items = plan.payload.blocks.filter((b) => b.block.acknowledgeable).map((b) => b.id)
-  if (!items.length) throw new Error('expected real acknowledgeable legacy work')
-  const child = f.spawn([
-    'db',
-    'migration',
-    'acknowledge',
-    journal.payload.operationId,
-    ...items.flatMap((id) => ['--item', id]),
-    '--reason',
-    'archive stranded fixture work',
-    '--json',
-  ])
-  if ((await child.exited) !== 0) throw new Error(child.output + child.error)
-}
 
 export async function businessRoundTrip(f: AutoUpgradeFixture) {
   const info = await f.ready()

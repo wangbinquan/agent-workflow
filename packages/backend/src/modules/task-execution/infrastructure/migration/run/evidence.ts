@@ -116,8 +116,12 @@ export function emitRunEvidence(
   const unusedNonce =
     unusedByExecution && unknown.every((decision) => decision.code === 'v2-run-null-nonce')
   if (task.execution === 'executable' && !unusedNonce) {
+    // RFC-626 §3.2.1: the run blocks only because its task could continue. The operator gets the
+    // same block as before; the automatic upgrade ends the task instead, and this row then takes
+    // the history-only branch below.
     for (const decision of unknown)
-      ctx.out.block(
+      ctx.out.blockExecutable(
+        { taskId: task.taskId, status: task.status },
         rowBlock(
           decision.code,
           row,

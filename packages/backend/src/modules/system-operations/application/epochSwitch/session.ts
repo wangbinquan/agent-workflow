@@ -8,7 +8,10 @@ import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { bytesDigest } from '@/platform/persistence/migration/conversion/digest'
 import { valueDigest } from '@/platform/persistence/migration/conversion/digest'
 import type { EmptyTableDecision } from '@/platform/persistence/migration/sourceDispositions'
-import type { ConversionPlanSection } from '@/platform/persistence/migration/conversion/plan'
+import {
+  CONVERTER_VERSION,
+  type ConversionPlanSection,
+} from '@/platform/persistence/migration/conversion/plan'
 import type { ConversionRunRequest } from '@/platform/persistence/migration/run/types'
 import type {
   EpochSourceLocation,
@@ -53,8 +56,16 @@ import {
 import type { InstallationFacts } from '../../domain/epochSwitch/classification'
 import {
   parseMigrationPlanDocument,
+  type MigrationPlanDocument,
   type RestoreFileChange,
 } from '../../domain/epochSwitch/documents'
+import {
+  PLAN_PIN_ARTIFACT,
+  parsePlanPin,
+  pinnedMaterialDifferences,
+  type PinnedMaterial,
+  type PlanPin,
+} from '../../domain/epochSwitch/planPin'
 
 export interface EpochSwitchWithdrawalInput {
   readonly operationId: string
@@ -81,6 +92,36 @@ export interface EpochRestoreFiles {
   rollback(changes: readonly RestoreFileChange[]): Promise<void>
 }
 export interface EpochSwitchDependencies {
+  /**
+   * RFC-626 §4.2: single-pass orchestration. Only the assembly of the automatic upgrade sets
+   * it; the manual flow and the hosted deployment never do, and without it every step is what
+   * it was. The automatic session holds the daemon lock from its first step to its last, so
+   * the old database cannot change in between: one freeze, one inventory, one backup, one
+   * conversion written straight into the new database, one finalize and one validation
+   * replace the manual flow's "plan on the live database, then do it again once writers have
+   * stopped". The conversion resolves what it cannot carry over instead of blocking.
+   */
+  readonly direct?: boolean
+  /**
+   * RFC-626 §4.7: called by a direct run where one step has ended and the next has not begun —
+   * the plan step's objects are dead, the backup is written, the conversion is over. The
+   * assembly of the automatic upgrade collects there, so that what the next step allocates
+   * fits into memory the process already holds instead of adding to it.
+   */
+  readonly reclaim?: () => void
+  /**
+   * RFC-626 §4.2: the automatic session's answer to the plan a direct run wrote after its
+   * conversion. That plan nearly always differs materially from the plan approved before the
+   * run, so the run would otherwise return, be approved by the session and be entered again —
+   * re-opening the source, capturing the boot facts and verifying every content reference a
+   * second time. The session installs this for the duration of its loop; it evaluates the
+   * plan under its usual rules and returns the approval digest, or null when it does not
+   * approve (the run then stops awaiting approval, as it does without the callback).
+   */
+  approveActualPlan?(request: {
+    readonly runId: string
+    readonly plan: MigrationPlanDocument
+  }): Promise<string | null>
   readonly sessionLock?: SessionLockPort
   readonly autoUpgradeRecords?: AutoUpgradeRecordPort
   /** RFC-398 §3.5: databases allocated by automatic PostgreSQL sessions (status lists them). */
@@ -182,6 +223,87 @@ export async function readEpochPlan(session: EpochSwitchSession) {
   if (document.digest !== plan.digest) throw new EpochSwitchError('v3-plan-digest-mismatch')
   return document
 }
+/** RFC-626 §4.2: the write-once artifact that pins the plan a direct run executes. */
+export function planPinName(journal: EpochSwitchJournal): string {
+  return runArtifact(journal, PLAN_PIN_ARTIFACT)
+}
+/**
+ * `null`: this run has not pinned a plan. `'unreadable'`: it has, and this binary cannot read
+ * the pin — which the comparison with the running binary counts as "written by another one".
+ */
+export async function readPlanPin(
+  deps: Pick<EpochSwitchDependencies, 'journal'>,
+  journal: EpochSwitchJournal,
+): Promise<PlanPin | 'unreadable' | null> {
+  if (!journal.payload.run) return null
+  const bytes = await deps.journal.readArtifact(journal.payload.operationId, planPinName(journal))
+  if (bytes === null) return null
+  const pin = parsePlanPin(bytes)
+  return pin !== null && pin.runId === journal.payload.run.runId ? pin : 'unreadable'
+}
+/** What the running binary pins, and what a pinned run is compared with when it is resumed. */
+export function currentPinnedMaterial(
+  deps: Pick<
+    EpochSwitchDependencies,
+    'candidateBuild' | 'targetContractDigest' | 'targetPlanDigest'
+  >,
+  journal: EpochSwitchJournal,
+): PinnedMaterial {
+  return {
+    candidateBuild: deps.candidateBuild,
+    converterVersion: CONVERTER_VERSION,
+    targetContractDigest: deps.targetContractDigest,
+    targetPlanDigest: deps.targetPlanDigest(journal.payload.target.provider),
+  }
+}
+/**
+ * RFC-626 §4.2: why the running binary cannot continue the journal's run directly; empty when
+ * it can. Compared before anything opens the new database or parses the plan document, and
+ * from the pin alone: a changed target contract makes the new database unopenable, and a
+ * changed plan structure makes the plan unreadable, so neither can be the place that notices.
+ *
+ * Only a run that has started to execute is bound to its binary. Before the pin the plan is
+ * simply made again by whichever binary runs. Once the activation receipt is published the
+ * remaining steps read that receipt back and are not compared here. A run past `planned`
+ * without a pin was not begun by a direct run at all and is given up the same way.
+ */
+export async function directRunMismatch(
+  deps: Pick<
+    EpochSwitchDependencies,
+    'journal' | 'candidateBuild' | 'targetContractDigest' | 'targetPlanDigest'
+  >,
+  journal: EpochSwitchJournal,
+): Promise<readonly string[]> {
+  const p = journal.payload
+  if (!p.run || phaseIndex(p.phase) >= phaseIndex('activated')) return []
+  if (await deps.journal.readArtifact(p.operationId, 'activation-receipt.json')) return []
+  const pin = await readPlanPin(deps, journal)
+  if (pin === null) return phaseIndex(p.phase) > phaseIndex('planned') ? ['plan-not-pinned'] : []
+  return pinnedMaterialDifferences(
+    pin === 'unreadable' ? null : pin,
+    currentPinnedMaterial(deps, journal),
+  )
+}
+/** The plan document a pin names: the plan the run that pinned it had approved. */
+export async function readPinnedPlan(
+  deps: Pick<EpochSwitchDependencies, 'journal'>,
+  journal: EpochSwitchJournal,
+  pin: PlanPin,
+): Promise<MigrationPlanDocument> {
+  const bytes = await deps.journal.readArtifact(
+    journal.payload.operationId,
+    `plans/${pin.planDigest}.json`,
+  )
+  if (!bytes) throw new EpochSwitchError('v3-plan-file-missing', { category: 'receipt-conflict' })
+  const document = parseMigrationPlanDocument(Buffer.from(bytes).toString('utf8'))
+  if (
+    document.digest !== pin.planDigest ||
+    document.approvalDigest !== pin.approvalDigest ||
+    document.payload.target.generationId !== journal.payload.target.generationId
+  )
+    throw new EpochSwitchError('v3-pinned-plan-mismatch', { category: 'receipt-conflict' })
+  return document
+}
 export function sourcePort(session: EpochSwitchSession): EpochSourcePort {
   return session.deps.sourceFor?.(session.journal) ?? session.deps.source
 }
@@ -211,6 +333,9 @@ export function sourceRequest(session: EpochSwitchSession) {
       session.deps.journal.operationRoot(p.operationId),
       runArtifact(session.journal, 'source'),
     ),
+    // RFC-626: a direct run lets the conversion decide about data the source can hold but the
+    // strict access would refuse; the source access also keeps and re-opens its frozen copy.
+    ...(session.deps.direct ? { resolution: 'automatic' as const } : {}),
   }
 }
 

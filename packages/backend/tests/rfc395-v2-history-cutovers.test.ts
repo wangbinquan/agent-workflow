@@ -9,6 +9,8 @@ import {
   writerDrainRule,
 } from '@/platform/persistence/migration/archives/writerDrain'
 import { runConversion } from '@/platform/persistence/migration/conversion/engine'
+// RFC-626 §3.3: the cutover rule checks the target's seed rows through the generic lookup.
+import { seedPresence } from '@/platform/persistence/migration/conversion/generic/seedPresence'
 
 // Slowest case took 3.04 s on CI run 40433510287 including hooks; allow 20 s.
 setDefaultTimeout(20_000)
@@ -26,7 +28,9 @@ describeV2Providers('RFC-395 V2-X family routing and writer receipts', (h) => {
         change_ref: 'original-change',
       }),
     ])
-    const input = await h.input([{ rules: [familyCutoversRule], lookups: [], validators: [] }])
+    const input = await h.input([
+      { rules: [familyCutoversRule], lookups: [seedPresence], validators: [] },
+    ])
     try {
       const sink = new V2MemorySink()
       expect((await runConversion(input, sink)).blocks).toEqual([])
@@ -63,7 +67,9 @@ describeV2Providers('RFC-395 V2-X family routing and writer receipts', (h) => {
         }),
       ),
     )
-    const input = await h.input([{ rules: [familyCutoversRule], lookups: [], validators: [] }])
+    const input = await h.input([
+      { rules: [familyCutoversRule], lookups: [seedPresence], validators: [] },
+    ])
     try {
       const sink = new V2MemorySink()
       expect((await runConversion(input, sink)).blocks).toContainEqual(

@@ -89,7 +89,18 @@ function countClass(entry: OracleEntry): string {
     ? 'converted'
     : entry.disposition
 }
+/**
+ * RFC-626 §3.4 row 3c: the automatic upgrade ends a skill operation the old daemon was killed in
+ * (and an operation without its skill): the operation is converted with `active=0` and its lock
+ * is set aside, so the new version's boot recovery never judges it. A finished operation
+ * (`active=0`) is copied as before. Every lock belongs to an operation that has not finished.
+ */
+function settledSkillOperation(entry: OracleEntry, row: Row): boolean {
+  return entry.table === 'skill_operations' && Number(row.active) === 1
+}
 function expectedRowClass(entry: OracleEntry, row: Row): string {
+  if (settledSkillOperation(entry, row)) return 'converted'
+  if (entry.table === 'skill_operation_locks') return 'archived'
   if (
     entry.table === 'cached_repos' &&
     typeof row.url_enc === 'string' &&
@@ -186,6 +197,10 @@ export async function checkEpoch1(
                 task_space_nodes: 'task_id',
                 workgroup_task_state: 'task_id',
                 skill_versions: 'skill_id',
+                // RFC-626 §3.4 row 3c: the skill rule's group members since they left the
+                // generic copy (skillBootRules.ts).
+                skill_operations: 'skill_id',
+                skill_operation_locks: 'locked_skill_id',
                 code_mr_leases: 'lease_key',
                 code_produced_mrs: 'mr_key',
                 code_publish_intents: 'batch_id',
@@ -267,7 +282,17 @@ export async function checkEpoch1(
               `S2 ${label} archive digest`,
             )
             equal(bytes.byteLength, Number(archives[0]!.byte_size), `S2 ${label} archive byte size`)
-            const payload: unknown = JSON.parse(Buffer.from(bytes).toString('utf8'))
+            const parsed: unknown = JSON.parse(Buffer.from(bytes).toString('utf8'))
+            // RFC-626 §3.3: a row the automatic upgrade set aside is archived as it was read —
+            // its canonical row (key and logical values) beside the raw cells.
+            const payload: unknown =
+              parsed &&
+              typeof parsed === 'object' &&
+              !Array.isArray(parsed) &&
+              'canonical' in parsed &&
+              'raw' in parsed
+                ? parsed.canonical
+                : parsed
             if (historyPackage) {
               equal(
                 bytes,
@@ -393,7 +418,11 @@ export async function checkEpoch1(
                   entry.table,
                   row,
                   column,
-                  codecValue(destination.table, column, row[column]),
+                  codecValue(
+                    destination.table,
+                    column,
+                    column === 'active' && settledSkillOperation(entry, row) ? 0 : row[column],
+                  ),
                 ),
                 `S3 ${entry.table}->${destination.table}.${column}`,
               )

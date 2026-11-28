@@ -8,6 +8,17 @@ import { loadConfig } from '@/config'
 import { Paths } from '@/platform/configuration/installationPaths'
 import { appVersion } from '@/platform/execution/version'
 import { createMigrationProgressReporter } from '@/platform/persistence/migration/run/progress'
+import { errorText } from '@/platform/persistence/migration/errorText'
+import { createSourceWatch } from '@/platform/persistence/migration/freeze/sourceWatch'
+import {
+  checkHomeConfig,
+  createAutoUpgradeEnvironment,
+  environmentRefusalConclusion,
+  homeConfigRefusal,
+  lockOutOfSpaceRefusal,
+  readHomeConfigFile,
+  unloadableConfigRefusal,
+} from '@/modules/system-operations/composition/epochAutoUpgrade'
 import {
   autoUpgrade,
   createAutoUpgradeRecords,
@@ -69,11 +80,13 @@ export async function runAutomaticEpochUpgrade(
     retry?: boolean
     appHome?: string
     env?: Readonly<Record<string, string | undefined>>
+    /** Replaceable so tests can stand in for a disk on which the lock file cannot be written. */
+    createSessionLock?: typeof createAutoUpgradeSessionLock
   } = {},
 ): Promise<AutoUpgradeConclusion> {
   const appHome = input.appHome ?? Paths.root
   const env = input.env ?? process.env
-  const lock = createAutoUpgradeSessionLock({
+  const lock = (input.createSessionLock ?? createAutoUpgradeSessionLock)({
     appHome,
     startMonitor: (onTick) =>
       startMaintenanceTicker({
@@ -86,9 +99,43 @@ export async function runAutomaticEpochUpgrade(
     delegation: env.AGENT_WORKFLOW_EPOCH_LOCK_DELEGATION,
   })
   // Publish active.json / validate delegation before configuration, classification or DB work.
-  await lock.acquire()
   try {
-    const config = loadConfig(join(appHome, 'config.json'))
+    await lock.acquire()
+  } catch (error) {
+    // RFC-626 §3.5: the lock file is the first thing an upgrade writes, so on a disk without
+    // any free space this is where it fails. That is reported as the lack of space it is,
+    // like the other refusals of the environment; nothing has been recorded.
+    const refusal = lockOutOfSpaceRefusal({
+      code: (error as NodeJS.ErrnoException | null)?.code ?? null,
+      error: errorText(error),
+      availableBytes: await createAutoUpgradeEnvironment().availableBytes(appHome),
+      directory: appHome,
+    })
+    if (!refusal) throw error
+    return environmentRefusalConclusion(refusal)
+  }
+  // RFC-626 §4.1: one watch for the whole session. Planning closes its source handle and the
+  // execution step opens another; a connection that is closed and opened again reports a
+  // data version that cannot be compared with the earlier one, so the session keeps it.
+  const sourceWatch = createSourceWatch()
+  try {
+    // RFC-626 §3.5: the configuration as the conversion would judge it. A file the conversion
+    // would reject is reported in seconds and before anything is recorded, instead of in the
+    // middle of the conversion — for a new session only, as every check before one: the
+    // session judges it first (`homeConfigRefusal`). An installation that is already upgraded
+    // and a session that resumes go on as long as the configuration loads (gate G4-5).
+    const configPath = join(appHome, 'config.json')
+    const invalid = homeConfigRefusal(configPath, checkHomeConfig(readHomeConfigFile(configPath)))
+    let config: ReturnType<typeof loadConfig>
+    try {
+      config = loadConfig(configPath)
+    } catch (error) {
+      // Nothing below can be assembled without the configuration, whatever the session.
+      await autoUpgradeTestCheckpoint('environment-refused')
+      return environmentRefusalConclusion(
+        invalid ?? unloadableConfigRefusal(configPath, errorText(error)),
+      )
+    }
     const records = createAutoUpgradeRecords(appHome)
     const provisioning = automaticUpgradeProvisioning({
       appHome,
@@ -112,6 +159,7 @@ export async function runAutomaticEpochUpgrade(
       catalogArtifacts: persistencePostgresqlCatalogs(),
       candidateBuild: env.AGENT_WORKFLOW_BUILD ?? env.AGENT_WORKFLOW_VERSION ?? appVersion(),
       autoUpgrade: true,
+      sourceWatch,
       sessionLock: lock,
       autoUpgradeRecords: records,
       retainedDatabases: provisioning?.retained,
@@ -156,6 +204,8 @@ export async function runAutomaticEpochUpgrade(
         lock,
         legacy: createLegacyMigrationFinalize({ appHome, env }),
         provisioning,
+        environment: createAutoUpgradeEnvironment(),
+        homeConfigRefusal: invalid,
         enabled: config.autoEpochMigration !== false,
         standalone: !env.AW_DEPLOYMENT_MODE || env.AW_DEPLOYMENT_MODE === 'standalone',
         log: (line, warning) => progressLine(`${warning ? 'WARN ' : ''}${line}\n`),
@@ -163,6 +213,11 @@ export async function runAutomaticEpochUpgrade(
       input,
     )
   } finally {
-    await lock.release()
+    // The session is over however it ended: completed, refused or failed.
+    try {
+      sourceWatch.close()
+    } finally {
+      await lock.release()
+    }
   }
 }

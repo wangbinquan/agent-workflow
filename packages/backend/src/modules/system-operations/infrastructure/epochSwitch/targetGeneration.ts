@@ -9,9 +9,18 @@ import { firstLiveWriteAt } from '@/platform/persistence/schema/history/markers'
 import { metaTableName } from '@/platform/persistence/schema/history/meta'
 import { parameters } from '@/platform/persistence/schema/history/connection'
 import { valueDigest, bytesDigest } from '@/platform/persistence/migration/conversion/digest'
+import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
+import { requiredSeedKeys } from '@/platform/persistence/migration/conversion/requiredSeeds'
+import { errorCode, errorText } from '@/platform/persistence/migration/errorText'
+import {
+  FINALIZE_REFERENCE_CODE,
+  FINALIZE_REFERENCE_UNIT,
+  resolveDanglingReferences,
+} from '@/platform/persistence/migration/target/dangling'
 import type {
   ConversionTargetConnection,
   EpochTargetLocation,
+  FinalizeDisposition,
   HealthReport,
   TargetFinalizeReport,
 } from '@/platform/persistence/migration/run/types'
@@ -62,6 +71,61 @@ export interface TargetGenerationOptions {
   }
   readonly receiptStorage?: 'files-and-meta' | 'meta-only'
 }
+/** Shared by the opened handle and by the retirement that does not open one (RFC-626). */
+async function retireUnwrittenGeneration(
+  target: ConversionTargetConnection,
+  meta: ReturnType<typeof createMigrationMetaStore>,
+  generationId: string,
+  now: () => number,
+): Promise<'retired' | 'already-retired' | 'written'> {
+  return target.transaction(async (tx) => {
+    const store = meta.withConnection(tx)
+    // A's first-write fence locks this generation row in the business transaction.
+    const lock = persistenceDialect(tx.provider).rowLock
+    const rows = await tx.execute(
+      `SELECT state FROM ${metaTableName(tx.provider, 'generations')} WHERE generation_id = ${parameters(tx, 1)}${lock}`,
+      [generationId],
+    )
+    if (!rows.length) throw new Error('v3-target-generation-missing')
+    const markerLock = persistenceDialect(tx.provider).rowLock
+    await tx.execute(
+      `SELECT first_live_write_at FROM ${metaTableName(tx.provider, 'first_write')} WHERE generation_id = ${parameters(tx, 1)}${markerLock}`,
+      [generationId],
+    )
+    if ((await firstLiveWriteAt(tx, generationId)) !== null) return 'written'
+    if (rows[0]!.state === 'retired') return 'already-retired'
+    if ((await store.select('switch_receipts', { generationId, kind: 'completed' })).length)
+      throw new Error('v3-rollback-completed')
+    await store.update('generations', { generationId }, { state: 'retired', retiredAt: now() })
+    const gen = (await store.select('generations', { generationId }))[0]!
+    if (gen.runId) await store.update('migration_runs', { runId: gen.runId }, { state: 'retired' })
+    return 'retired'
+  })
+}
+/** RFC-626: the finalize dispositions of a run, as persisted, in table / key / foreign key order. */
+async function finalizeDispositions(
+  meta: ReturnType<typeof createMigrationMetaStore>,
+  runId: string,
+): Promise<readonly FinalizeDisposition[]> {
+  const found: FinalizeDisposition[] = []
+  for (const row of await meta.select('migration_records', { runId, kind: 'decision' })) {
+    if (!String(row.unitId).startsWith(FINALIZE_REFERENCE_UNIT)) continue
+    const payload = (row.recordJson as { payload: FinalizeDisposition }).payload
+    found.push({
+      targetTable: payload.targetTable,
+      targetKey: payload.targetKey,
+      foreignKey: payload.foreignKey,
+      references: payload.references,
+      action: payload.action,
+      archive: payload.archive,
+    })
+  }
+  return found.sort((a, b) => {
+    const left = canonicalSchemaJson([a.targetTable, a.targetKey, a.foreignKey])
+    const right = canonicalSchemaJson([b.targetTable, b.targetKey, b.foreignKey])
+    return left < right ? -1 : left > right ? 1 : 0
+  })
+}
 export function createTargetGenerationHandle(input: {
   target: ConversionTargetConnection
   generationId: string
@@ -80,7 +144,7 @@ export function createTargetGenerationHandle(input: {
   const handle: TargetGenerationHandle = {
     generationId,
     provider: target.provider,
-    openRun(row) {
+    openRun(row, options) {
       if (
         row.conversionPlan.targetGeneration !== generationId ||
         row.conversionPlan.targetContractDigest !== head.contract.contract.digest
@@ -93,11 +157,12 @@ export function createTargetGenerationHandle(input: {
         run: row,
         now,
         fault: input.faults,
+        ...(options?.resolution ? { resolution: options.resolution } : {}),
       })
     },
     recordApproval: (approval) =>
       target.transaction((tx) => meta.withConnection(tx).recordApproval(approval)),
-    async finalize({ runId }) {
+    async finalize({ runId, dangling }) {
       const run = await meta.migrationRun(runId)
       if (
         !run?.summaryDigest ||
@@ -113,6 +178,48 @@ export function createTargetGenerationHandle(input: {
       let violations: TargetFinalizeReport['violations'] = []
       let deferredConstraintsApplied = false
       try {
+        // RFC-626: clear or move away references to rows that are not here before the
+        // constraints go on; every change is recorded in the transaction that makes it.
+        if (dangling)
+          await resolveDanglingReferences(target, {
+            registry,
+            policies: dangling.policies,
+            requiredSeedKeys: requiredSeedKeys(registry),
+            journal: {
+              recorded: async (tx, unitId) =>
+                (await meta.withConnection(tx).select('migration_records', { runId, unitId }))
+                  .length > 0,
+              async record(tx, unitId, disposition, detail, archive) {
+                const store = meta.withConnection(tx)
+                const record = {
+                  kind: 'decision',
+                  code: FINALIZE_REFERENCE_CODE,
+                  payload: { ...disposition, ...(detail as object) },
+                } as const
+                if (archive && !(await store.archive({ runId, ref: archive.ref })))
+                  await store.insert('migration_archives', {
+                    runId,
+                    archiveRef: archive.ref,
+                    unitId,
+                    kind: 'deleted-row',
+                    sourceTable: disposition.targetTable,
+                    format: 'logical-row@1',
+                    rows: 1,
+                    byteSize: archive.bytes.byteLength,
+                    bytes: archive.bytes,
+                  })
+                await store.insert('migration_records', {
+                  runId,
+                  unitId,
+                  ordinal: 0,
+                  kind: record.kind,
+                  tableName: disposition.targetTable,
+                  recordJson: record,
+                  recordDigest: valueDigest(record),
+                })
+              },
+            },
+          })
         violations = await enforceDeferredConstraints(target, { registry, deferred })
         deferredConstraintsApplied = violations.length === 0
         if (deferredConstraintsApplied)
@@ -182,6 +289,9 @@ export function createTargetGenerationHandle(input: {
         catalogAdmitted = false
       }
       if (catalogAdmitted) input.faults?.('after-catalog-admission')
+      // Derived from the persisted records, so a finalize that is repeated or resumed half
+      // way reports the same list.
+      const dispositions = dangling ? await finalizeDispositions(meta, runId) : undefined
       const report = {
         version: 1 as const,
         runId,
@@ -191,13 +301,16 @@ export function createTargetGenerationHandle(input: {
         catalogAdmitted,
         identityHighWater,
         identityVerified,
+        ...(dispositions ? { dispositions } : {}),
       }
       return { ...report, digest: valueDigest(report) }
     },
-    async validate(request) {
+    async validate({ finalized: supplied, ...request }) {
       const existing = await meta.migrationRun(request.runId)
       if (existing?.receiptExportDigest && existing.validation) return existing.validation
-      const finalized = await handle.finalize({ runId: request.runId })
+      // RFC-626: the caller that has just finalized passes its report; finalizing twice
+      // repeated the foreign-key and integrity scans of the whole target.
+      const finalized = supplied ?? (await handle.finalize({ runId: request.runId }))
       return validateConversionRun({ ...request, target, meta, registry, finalized, now })
     },
     exportReceipts: ({ runId, operationRoot }) =>
@@ -328,32 +441,7 @@ export function createTargetGenerationHandle(input: {
       return { ...payload, digest: valueDigest(payload) } satisfies HealthReport
     },
     firstLiveWriteAt: () => firstLiveWriteAt(target, generationId),
-    async retireIfUnwritten() {
-      return target.transaction(async (tx) => {
-        const store = meta.withConnection(tx)
-        // A's first-write fence locks this generation row in the business transaction.
-        const lock = persistenceDialect(tx.provider).rowLock
-        const rows = await tx.execute(
-          `SELECT state FROM ${metaTableName(tx.provider, 'generations')} WHERE generation_id = ${parameters(tx, 1)}${lock}`,
-          [generationId],
-        )
-        if (!rows.length) throw new Error('v3-target-generation-missing')
-        const markerLock = persistenceDialect(tx.provider).rowLock
-        await tx.execute(
-          `SELECT first_live_write_at FROM ${metaTableName(tx.provider, 'first_write')} WHERE generation_id = ${parameters(tx, 1)}${markerLock}`,
-          [generationId],
-        )
-        if ((await firstLiveWriteAt(tx, generationId)) !== null) return 'written'
-        if (rows[0]!.state === 'retired') return 'already-retired'
-        if ((await store.select('switch_receipts', { generationId, kind: 'completed' })).length)
-          throw new Error('v3-rollback-completed')
-        await store.update('generations', { generationId }, { state: 'retired', retiredAt: now() })
-        const gen = (await store.select('generations', { generationId }))[0]!
-        if (gen.runId)
-          await store.update('migration_runs', { runId: gen.runId }, { state: 'retired' })
-        return 'retired'
-      })
-    },
+    retireIfUnwritten: () => retireUnwrittenGeneration(target, meta, generationId, now),
     async writeSwitchReceipt(receipt) {
       const checked =
         receipt.payload.kind === 'rolled-back'
@@ -515,6 +603,40 @@ export function createTargetGenerationPort(options: TargetGenerationOptions): Ta
       } catch (error) {
         await target.close()
         throw error
+      }
+    },
+    async retire(input) {
+      if (persistenceDialect(input.provider).targetLocationKind !== input.location.kind)
+        throw new Error('v3-target-provider-mismatch')
+      if (
+        input.location.kind === 'sqlite-file' &&
+        !existsSync(resolve(options.appHome, input.location.relativePath))
+      )
+        return 'absent'
+      const target = await connect(input.location, false)
+      try {
+        // RFC-626: identity only. The contract and plan digests of this generation belong to
+        // the binary that built it and are deliberately not compared with this one's.
+        const meta = createMigrationMetaStore({ target, registry: options.registry })
+        let rows: Awaited<ReturnType<typeof meta.select>>
+        try {
+          rows = await meta.select('generations', { generationId: input.generationId })
+        } catch (error) {
+          // A database that was created and never installed (the process died between the
+          // two) has no migration metadata at all: there is nothing to retire in it.
+          if (
+            errorCode(error) === '42P01' ||
+            /no such table|does not exist/i.test(errorText(error))
+          )
+            return 'absent'
+          throw error
+        }
+        const row = rows[0]
+        if (!row) return 'absent'
+        if (row.provider !== input.provider) throw new Error('v3-target-generation-mismatch')
+        return await retireUnwrittenGeneration(target, meta, input.generationId, now)
+      } finally {
+        await target.close()
       }
     },
     async open(input) {

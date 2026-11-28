@@ -5459,6 +5459,8 @@ export const enUS: Resources = {
         daemonRestart__hint: 'Use Resume to continue (auto-resume handles this when enabled).',
         orphanReconcile: 'The task lost contact during operation and was marked interrupted.',
         canceledByUser: 'The task was canceled manually.',
+        endedByUpgrade:
+          'Ended during the upgrade: its records from the previous version cannot be continued.',
         schedulerError: 'An internal scheduler error failed the task.',
         schedulerStalled: 'Scheduling stalled: a node could not make progress.',
         schedulerStalled__hint:

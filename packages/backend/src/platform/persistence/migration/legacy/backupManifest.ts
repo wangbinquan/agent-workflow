@@ -53,6 +53,12 @@ export interface LogicalBackupDatabaseManifest {
   readonly logicalPath: 'database/logical'
   readonly envelopeFileDigest: string
   readonly rawSqlitePath: 'db.sqlite' | null
+  /**
+   * RFC-626 §3.3: present only on a backup an automatic upgrade exported under the transport
+   * value rule. Everything that reads the backup reads it under the rule recorded here; a
+   * manifest without the field is read under the strict rule.
+   */
+  readonly valueRule?: 'transport'
 }
 
 export interface BackupManifestV2 extends BackupManifestBase {
@@ -107,6 +113,13 @@ export function readMigrationAxisFromJournal(migrationsFolder: string): Migratio
   return { maxWhen: whens.length > 0 ? Math.max(...whens) : 0, count: whens.length }
 }
 
+/** RFC-626 §3.3: the value rule a backup's logical database is read under. */
+export function backupValueRule(manifest: BackupManifest | null): 'strict' | 'transport' {
+  return manifest?.manifestVersion === 2 && manifest.database.valueRule === 'transport'
+    ? 'transport'
+    : 'strict'
+}
+
 export function writeManifest(dir: string, manifest: BackupManifest): void {
   writeFileSync(join(dir, MANIFEST_FILENAME), JSON.stringify(manifest, null, 2), 'utf-8')
 }
@@ -135,7 +148,8 @@ export function readManifest(dir: string): BackupManifest | null {
         !/^sha256:[a-f0-9]{64}$/.test(database.schemaDigest) ||
         database.logicalPath !== 'database/logical' ||
         !/^sha256:[a-f0-9]{64}$/.test(database.envelopeFileDigest) ||
-        (database.rawSqlitePath !== 'db.sqlite' && database.rawSqlitePath !== null)
+        (database.rawSqlitePath !== 'db.sqlite' && database.rawSqlitePath !== null) ||
+        (database.valueRule !== undefined && database.valueRule !== 'transport')
       ) {
         return null
       }

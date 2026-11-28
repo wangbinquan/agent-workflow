@@ -23,24 +23,33 @@ import {
 import { taskLaunchContext, taskLifecycle } from './alignment'
 import { taskDefinition } from './definition'
 import { recordTaskIssues, type TaskIssue } from './evidence'
+import { legacyGenerationZero } from './generation'
 import { TASK_LINEAGE } from './lineage'
 import { TASK_ISOLATION, USER_IDS, WORKFLOW_BUILTIN } from './lookups'
+import { keepUnreadableRepositoryUrl, REPOSITORY_URL_KEPT } from './repositoryUrls'
+import { taskRuleTasksOf, taskRuleTasksOfGroup } from './settles'
 import { taskSpaceNodes } from './spaceNodes'
 import { deriveTaskSubjectFacts } from './subject'
 import { nullableText, number, text } from './values'
 import { workgroupState } from './workgroupState'
 import { assignTaskRepositoryMounts } from './workspace'
 
+/** RFC-626 §3.4 row 12: a task kept with its missing owner cleared. */
+export const TASK_OWNER_KEPT = 'v2-task-owner-dangling-kept'
+
 export const taskConversionRule: ConversionRule = {
   ref: { id: 'task-execution/task', version: 4 },
   owner: 'task-execution',
   codecTakeovers: [{ table: 'tasks', columns: ['workgroup_config_json', 'name'] }],
   claims: ['tasks', 'task_repos', 'task_space_nodes', 'workgroup_task_state'],
+  // RFC-626 §3.2.2: the task body is part of its execution chain (`taskRuleTasksOf`).
+  settles: { tasksOf: taskRuleTasksOf, tasksOfGroup: taskRuleTasksOfGroup },
   produces: [
     { table: 'tasks' },
     { table: 'task_definitions' },
     { table: 'task_launch_contexts' },
     { table: 'task_workspaces' },
+    { table: 'task_execution_generations' },
     { table: 'task_repository_mounts' },
     { table: 'task_space_nodes' },
     { table: 'workgroup_task_state' },
@@ -90,28 +99,57 @@ export const taskConversionRule: ConversionRule = {
         ctx.lookup(TASK_ISOLATION).get(taskId),
       )
       const urls = ctx.lookup(repositoryUrlFacts)
-      const taskUrl = resolveRepositoryUrlFact(
-        urls,
+      const automatic = ctx.resolution === 'automatic'
+      // RFC-626 §3.4 row 4: with automatic resolution an unreadable cache URL no longer stops
+      // the task; it is linked by URL hash as the previous release did at boot.
+      const resolveUrl = (rawUrl: string | null, cachedRepoId: string | null) => {
+        const fact = resolveRepositoryUrlFact(urls, rawUrl, cachedRepoId)
+        return automatic
+          ? keepUnreadableRepositoryUrl(urls, fact, rawUrl)
+          : { fact, unreadable: null }
+      }
+      const taskUrlResolution = resolveUrl(
         nullableText(task, 'repo_url'),
         nullableText(task, 'cached_repo_id'),
       )
-      const mountUrls = workspace.mounts.map((mount) => ({
-        mount,
-        fact: resolveRepositoryUrlFact(
-          urls,
-          typeof mount.repo_url === 'string' ? mount.repo_url : null,
+      const taskUrl = taskUrlResolution.fact
+      const mountUrls = workspace.mounts.map((mount) => {
+        const rawUrl = typeof mount.repo_url === 'string' ? mount.repo_url : null
+        const resolution = resolveUrl(
+          rawUrl,
           typeof mount.cached_repo_id === 'string' ? mount.cached_repo_id : null,
-        ),
-      }))
+        )
+        return { mount, fact: resolution.fact, unreadable: resolution.unreadable }
+      })
       let urlBlocked = false
-      for (const { origin, fact } of [
-        { origin: task, fact: taskUrl },
-        ...mountUrls.map(({ mount, fact }) => ({
+      for (const { origin, fact, unreadable } of [
+        { origin: task, fact: taskUrl, unreadable: taskUrlResolution.unreadable },
+        ...mountUrls.map(({ mount, fact, unreadable }) => ({
           origin: repos.find((repo) => repo.values.repo_index === mount.ordinal) ?? task,
           fact,
+          unreadable,
         })),
       ])
-        if (fact.state === 'blocked') {
+        if (unreadable !== null)
+          ctx.out.record(
+            {
+              kind: 'decision',
+              code: REPOSITORY_URL_KEPT,
+              payload: {
+                automatic: 'kept',
+                sourceTable: origin.table,
+                sourceKey: origin.encodedKey,
+                taskId,
+                reason: unreadable,
+                linkedBy: 'url-hash',
+                cachedRepoId: fact.cachedRepoId,
+                rawUrlDigest: fact.rawUrlDigest,
+                factIds: [...fact.factIds],
+              },
+            },
+            origin,
+          )
+        else if (fact.state === 'blocked') {
           blockBootRow(
             ctx,
             taskConversionRule.ref,
@@ -189,7 +227,10 @@ export const taskConversionRule: ConversionRule = {
           detail: { parent: lineage.parentLaunchOrigin, child: lineage.launchOrigin },
         })
       const owner = nullableText(task, 'owner_user_id')
-      if (owner !== null && !ctx.lookup(USER_IDS).get(owner))
+      const ownerMissing = owner !== null && !ctx.lookup(USER_IDS).get(owner)
+      // RFC-626 §3.4 row 12: with automatic resolution the task is kept and its owner cleared
+      // (the target column is nullable and its foreign key is `set null`); see below.
+      if (ownerMissing && !automatic)
         issues.push({
           code: 'v2-task-owner-dangling',
           missingFields: ['owner_user_id'],
@@ -212,12 +253,30 @@ export const taskConversionRule: ConversionRule = {
             },
           })
 
-      const lifecycle = taskLifecycle(task, ctx.target, workspace.rootRef)
+      const stored = taskLifecycle(task, ctx.target, workspace.rootRef)
+      const lifecycle = ownerMissing && automatic ? { ...stored, owner_user_id: null } : stored
       ctx.out.row('tasks', lifecycle, task)
+      if (ownerMissing && automatic)
+        ctx.out.record(
+          {
+            kind: 'decision',
+            code: TASK_OWNER_KEPT,
+            payload: {
+              automatic: 'kept',
+              sourceTable: task.table,
+              sourceKey: task.encodedKey,
+              taskId,
+              ownerUserId: owner,
+            },
+          },
+          task,
+        )
       const taskTargets: TargetRef[] = [{ table: 'tasks', key: ctx.target.key('tasks', lifecycle) }]
       ctx.out.row('task_definitions', definition.row, task)
       ctx.out.row('task_launch_contexts', taskLaunchContext(task, lineage), task)
       ctx.out.row('task_workspaces', convertedWorkspace, task)
+      // RFC-626 §3.3: generation 0 belongs with the task body, from the task row.
+      ctx.out.row('task_execution_generations', legacyGenerationZero(facts), task)
       const sourceChanged =
         taskUrl.repoUrl !== nullableText(task, 'repo_url') ||
         taskUrl.cachedRepoId !== nullableText(task, 'cached_repo_id')

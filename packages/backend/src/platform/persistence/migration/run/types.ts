@@ -14,6 +14,8 @@ import type {
   ArtifactReceipt,
   ChunkReceipt,
   ConversionBlock,
+  ConversionResolution,
+  TaskSettlement,
   DispositionClass,
   EncodedKey,
   HistoryRestriction,
@@ -205,6 +207,19 @@ export interface HealthReport {
   readonly passed: boolean
   readonly digest: string
 }
+/**
+ * RFC-626: what finalizing the target did to one reference that pointed at a row which is not
+ * in the target. One record per target row and foreign key; a row can have several.
+ */
+export interface FinalizeDisposition {
+  readonly targetTable: string
+  readonly targetKey: EncodedKey
+  readonly foreignKey: string
+  readonly references: string
+  /** `detached` and `substituted` keep the row; `set-aside` moves it to the archive. */
+  readonly action: 'detached' | 'substituted' | 'set-aside'
+  readonly archive: ArchiveRef | null
+}
 export interface TargetFinalizeReport {
   readonly version: 1
   readonly runId: string
@@ -214,6 +229,12 @@ export interface TargetFinalizeReport {
   readonly catalogAdmitted: boolean
   readonly identityHighWater: readonly FoldedIdentityHighWater[]
   readonly identityVerified: boolean
+  /**
+   * RFC-626: present when dangling references were resolved instead of reported. Read from
+   * the persisted records, sorted by table, key and foreign key, so a repeated finalize
+   * returns the same list.
+   */
+  readonly dispositions?: readonly FinalizeDisposition[]
   readonly digest: string
 }
 export const VALIDATION_CHECKS = [
@@ -269,6 +290,10 @@ export interface ConversionRunRequest {
   readonly contentManifestDigest: string
   readonly bootUpgradeFacts?: BootUpgradeFacts
   readonly operatorDecisions: readonly OperatorDecision[]
+  /** RFC-626: `automatic` for the automatic upgrade; absent means `operator`. */
+  readonly resolution?: ConversionResolution
+  /** RFC-626: the settlements the run registered, for replay; the engine then adds none. */
+  readonly settlements?: readonly TaskSettlement[]
 }
 export interface DryRunResult {
   readonly stagingPeakBytes?: number
@@ -411,11 +436,29 @@ export interface MigrationTraceResult {
     readonly range: { readonly firstKey: EncodedKey; readonly lastKey: EncodedKey } | null
     readonly groups: { readonly first: string | null; readonly last: string | null } | null
   } | null
-  readonly targets: readonly (TargetRef & { readonly probed: boolean; readonly present: boolean })[]
+  readonly targets: readonly (TargetRef & {
+    readonly probed: boolean
+    readonly present: boolean
+    /**
+     * RFC-626: what finalizing the target did to this row after its unit committed. A row
+     * with a `set-aside` entry was converted and then moved to the archive because a row it
+     * refers to is not in the target; the entry names the archive.
+     */
+    readonly finalized?: readonly FinalizeDisposition[]
+  })[]
   readonly artifacts: readonly ArtifactReceipt[]
   readonly restrictions: readonly HistoryRestriction[]
   readonly blocks: readonly ConversionBlock[]
   readonly archive: ArchiveRef | null
+  /**
+   * RFC-626: what ending the row's task at the upgrade rewrote on this source row — the reason
+   * the source shows one state and the target another. Absent when nothing was rewritten.
+   */
+  readonly settlement?: {
+    readonly taskId: string
+    readonly cause: string
+    readonly columns: JsonValue
+  }
 }
 export interface UnitProgress {
   readonly runId: string

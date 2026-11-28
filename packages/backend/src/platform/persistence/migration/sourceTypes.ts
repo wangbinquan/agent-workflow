@@ -1,5 +1,6 @@
 // RFC-395 II-b V1: source-side contracts; run/receipt persistence belongs to V3.
 import type { DatabaseProvider } from '../databaseProviders'
+import { errorText } from './errorText'
 import type { CanonicalLogicalRow, CanonicalLogicalValue } from './legacy/logicalDatabaseArtifact'
 import type { LogicalSchemaContract } from '../schema/contractTypes'
 import type { HistoryCatalog } from '../schema/history/catalog'
@@ -12,6 +13,17 @@ export type SourceKind =
   | 'hosted-backup'
   | 'postgresql-database'
 export type TableDisposition = 'converted' | 'preserved' | 'archived' | 'metadata' | 'blocked'
+/** RFC-626 §7: a measurement that reads all of the data of a source or of an artifact directory. */
+export type SourceMeasurement =
+  | 'sqlite-content'
+  | 'postgresql-content'
+  | 'directory-digest'
+  | 'tree-verification'
+/**
+ * Told once each time such a measurement starts. How many of them an upgrade takes is what its
+ * duration hangs on, so tests pass one in to hold that number down; production passes none.
+ */
+export type SourceMeasurementObserver = (kind: SourceMeasurement) => void
 export interface SourceJournalEntry {
   readonly identity: string
   readonly digest: string
@@ -143,7 +155,6 @@ export interface RawSourceChunk {
   readonly sourceDigest: string
 }
 export function sourceFailure(error: unknown): SourceBlockedError {
-  return error instanceof SourceBlockedError
-    ? error
-    : new SourceBlockedError(error instanceof Error ? error.message : String(error))
+  // Database clients throw values that are not `Error` instances; `errorText` reads their message.
+  return error instanceof SourceBlockedError ? error : new SourceBlockedError(errorText(error))
 }

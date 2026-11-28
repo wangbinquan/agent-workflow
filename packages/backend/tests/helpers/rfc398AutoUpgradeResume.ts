@@ -7,14 +7,10 @@
 // the cases. `rfc398-split-test-coverage.test.ts` requires every point exactly once.
 import { expect, test } from 'bun:test'
 import { Database, type SQLQueryBindings } from 'bun:sqlite'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { isProcessAlive } from '@/platform/execution/local/process'
-import {
-  autoUpgradeFixture,
-  acknowledgeFixture,
-  type AutoUpgradeFixture,
-} from './rfc398AutoUpgrade'
+import { autoUpgradeFixture, type AutoUpgradeFixture } from './rfc398AutoUpgrade'
 import { postgresqlAutoUpgradeFixture } from './rfc398AutoUpgradePostgresql'
 import { describeRfc398Postgresql } from './rfc398Postgresql'
 import { frozenValues } from './rfc395V2/contentFixtures'
@@ -52,7 +48,38 @@ export const POSTGRESQL_RESUME_POINTS: readonly string[] = [
 ]
 const victims = ['child', 'parent', 'both'] as const
 
+/**
+ * RFC-626 §4.2 / §7「先因目标库非空被拒绝，清空后再启动能继续」: since the automatic upgrade decides
+ * about data instead of refusing (§3.1), the condition a session still refuses on and that the
+ * operator then corrects is the target's. Stopped after planning froze the source and before it
+ * checks the target, the run finds a database already at its target path.
+ */
+function occupiedTarget(f: AutoUpgradeFixture): string {
+  const location = f.journals()[0]!.payload.target.location
+  if (location?.kind !== 'sqlite-file') throw new Error('expected a SQLite target location')
+  return join(f.home, location.relativePath)
+}
+function occupyTarget(f: AutoUpgradeFixture) {
+  const path = occupiedTarget(f)
+  mkdirSync(dirname(path), { recursive: true })
+  copyFileSync(join(f.home, 'db.sqlite'), path)
+}
+/** The correction: whatever occupied the target path is moved out of the way. */
+function clearTarget(f: AutoUpgradeFixture) {
+  const path = occupiedTarget(f)
+  for (const suffix of ['', '-wal', '-shm', '-journal']) rmSync(`${path}${suffix}`, { force: true })
+}
+
 async function atPoint(f: AutoUpgradeFixture, point: string) {
+  if (point === 'refused') {
+    f.barriers(['plan', point])
+    const parent = f.start()
+    await f.reached('plan')
+    occupyTarget(f)
+    f.release('plan')
+    const reached = await f.reached(point)
+    return { parent, child: reached.pid }
+  }
   if (point === 'failure-source-changed') {
     f.barriers(['phase-frozen'])
     const first = f.start()
@@ -118,7 +145,7 @@ export function registerResumePoint(point: string): void {
   if (!RESUME_POINTS.includes(point)) throw new Error(`unknown RFC-398 resume point ${point}`)
   for (const victim of victims) {
     test(`${point}: SIGKILL ${victim} preserves one operation and the durable acceptance decision`, async () => {
-      const f = await autoUpgradeFixture({ blocked: point === 'refused' })
+      const f = await autoUpgradeFixture()
       try {
         const negative = point === 'acceptance-unpublished' || committed.includes(point)
         if (negative) f.flag('negative-health')
@@ -140,7 +167,11 @@ export function registerResumePoint(point: string): void {
               ? true
               : null,
           )
-          await acknowledgeFixture(f)
+          expect(f.sessions()[0]!.records.at(-1)).toMatchObject({
+            kind: 'refused',
+            data: { reason: 'plan-blocked' },
+          })
+          clearTarget(f)
         }
         const next = f.start()
         // Killing P alone does not interrupt C's already computed negative result. C must

@@ -224,7 +224,9 @@ describeV2Providers('RFC-395 V2-N O2 frame handoff', (h) => {
     try {
       const sink = new V2MemorySink()
       expect((await runConversion(input, sink)).blocks).toEqual([])
-      expect(sink.rows('task_execution_generations')).toHaveLength(2)
+      // RFC-626 §3.3: generation 0 of every task (the empty one too) is emitted by the task
+      // rule now (task/generation.ts); the run rule converted here emits none.
+      expect(sink.rows('task_execution_generations')).toHaveLength(0)
       expect(
         [...sink.units.values()]
           .flatMap((unit) => unit.records)

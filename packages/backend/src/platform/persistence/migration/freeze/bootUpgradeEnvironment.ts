@@ -7,6 +7,8 @@ import {
   type BootUpgradeFacts,
 } from '../conversion/bootUpgradeFacts'
 import type { ContentInventory } from '../conversion/content'
+import { readSourceTable } from '../conversion/readSource'
+import type { ConversionResolution } from '../conversion/types'
 import type { ContentRootSpec, FreezeContentManifest, FrozenSourceHandle } from '../run/types'
 import type { DecodedSourceRow } from '../sourceTypes'
 
@@ -16,6 +18,11 @@ export interface BootUpgradeCaptureInput {
   readonly root: ContentRootSpec
   readonly content: ContentInventory
   readonly manifest: FreezeContentManifest
+  /**
+   * RFC-626: `automatic` for the automatic upgrade. Facts are then captured for the rows that
+   * decode; a row that does not is set aside by the conversion and needs no fact.
+   */
+  readonly resolution?: ConversionResolution
   readArtifact(name: string): Promise<Uint8Array | null>
   writeArtifact(name: string, bytes: Uint8Array): Promise<void>
 }
@@ -42,14 +49,25 @@ export function createBootUpgradeEnvironment(
     },
   }
 }
-/** An absent source table must be an admitted absence, never an unknown-table fallback. */
+/**
+ * An absent source table must be an admitted absence, never an unknown-table fallback.
+ * RFC-626: pass the capture input (or its `resolution`). With `automatic` a row the frozen
+ * codec rejects is left out instead of failing the capture: the conversion reads the table the
+ * same way and sets that row aside, so the facts describe exactly the rows that are converted.
+ * Without it the read stays strict, as it always was.
+ */
 export async function bootSourceRows(
   source: FrozenSourceHandle,
   table: string,
+  options: { readonly resolution?: ConversionResolution } = {},
 ): Promise<readonly DecodedSourceRow[]> {
   if (!source.preflight.tables.some((entry) => entry.table === table))
     if (source.preflight.expectedAbsent.includes(table)) return []
     else throw new Error(`v2-boot-source-table-unavailable:${table}`)
+  if (options.resolution === 'automatic')
+    return (await readSourceTable({ source: source.reader, preflight: source.preflight, table }))
+      .filter((row) => !row.codecFailure)
+      .map((row) => row.values)
   const rows: DecodedSourceRow[] = []
   let after = null
   for (;;) {

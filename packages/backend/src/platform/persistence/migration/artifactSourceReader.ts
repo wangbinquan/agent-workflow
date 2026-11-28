@@ -6,13 +6,14 @@ import {
   logicalArtifactFileDigest,
   verifyLogicalArtifactManifest,
   type CanonicalLogicalRow,
+  type CanonicalLogicalValue,
+  type LogicalValueRule,
 } from './legacy/logicalDatabaseArtifact'
 import { readLogicalDatabaseBackupEnvelope } from './legacy/logicalDatabaseExport'
-import {
-  openVerifiedLogicalDatabaseArtifactSource,
-  type VerifiedLogicalDatabaseArtifactSource,
-} from './legacy/logicalDatabaseRestore'
-import { readManifest } from './legacy/backupManifest'
+import type { VerifiedLogicalDatabaseArtifactSource } from './legacy/logicalDatabaseRestore'
+import { backupValueRule, readManifest } from './legacy/backupManifest'
+import type { LogicalTableContract } from '../schema/contractTypes'
+import { cachedSourceFilesDigest, cachedVerifiedArtifactSource } from './artifactDirectoryCache'
 import { canonicalSchemaJson } from '../schema/canonical'
 import { loadFrozenEpoch1History } from './epoch1/bundle'
 import { resolveEpoch1PostgresqlVersion } from './epoch1/releasedPostgresql'
@@ -25,17 +26,13 @@ import { rawSourceChunk } from './rawSourceReader'
 import { identifySource, type SupportedSourceManifest } from './supportedSources'
 import { makeSourceFingerprint } from './sourceCatalog'
 import { sourceTableDispositions, tableCatalogDigest } from './sourceDispositions'
-import {
-  assertSourceChunkRequest,
-  sourceChunk,
-  sourceContentPresence,
-  sourceFilesDigest,
-} from './sourceReader'
+import { assertSourceChunkRequest, sourceChunk, sourceContentPresence } from './sourceReader'
 import {
   SourceBlockedError,
   sourceFailure,
   type SourcePreflight,
   type RawSourceRow,
+  type SourceMeasurementObserver,
   type VersionedSourceReader,
 } from './sourceTypes'
 
@@ -43,6 +40,8 @@ export type Epoch1LogicalArtifactInput = {
   readonly artifactRoot: string
   readonly supportedSources?: SupportedSourceManifest
   readonly hosted?: boolean
+  /** RFC-626 §7: told each time the reader hashes the directory or verifies the whole tree. */
+  readonly onMeasure?: SourceMeasurementObserver
 } & (
   | {
       readonly envelopeFileDigest: string
@@ -70,9 +69,40 @@ export function openEpoch1LogicalArtifactSource(
   let evidence: Epoch1ExportEvidence | null = null
   let pending: Promise<SourcePreflight> | undefined
   let closed = false
+  /** RFC-626 §3.3: the rule the backup manifest records; strict for everything else. */
+  let valueRule: LogicalValueRule = 'strict'
   const root = input.backupRoot ?? input.artifactRoot
   const assertOpen = () => {
     if (closed) throw new SourceBlockedError('Source reader is closed')
+  }
+  /** Up to `limit` verified rows after `afterKey`, in the artifact's stable key order. */
+  const verifiedRows = (
+    table: LogicalTableContract,
+    afterKey: readonly CanonicalLogicalValue[] | null,
+    limit: number,
+  ): CanonicalLogicalRow[] => {
+    const entry = verified!.verification.manifest.payload.tables.find(
+      (item) => item.table === table.id,
+    )!
+    const rows: CanonicalLogicalRow[] = []
+    let start = 0
+    let end = entry.chunkCount
+    if (afterKey !== null) {
+      while (start < end) {
+        const middle = Math.floor((start + end) / 2)
+        const last = verified!.readChunk(table, middle).payload.rows.at(-1)
+        if (last && compareCanonicalLogicalKeys(last.key, afterKey) <= 0) start = middle + 1
+        else end = middle
+      }
+    }
+    for (let index = start; index < entry.chunkCount && rows.length < limit; index += 1) {
+      for (const row of verified!.readChunk(table, index).payload.rows) {
+        if (afterKey !== null && compareCanonicalLogicalKeys(row.key, afterKey) <= 0) continue
+        rows.push(row)
+        if (rows.length === limit) break
+      }
+    }
+    return rows
   }
   const reader: VersionedSourceReader = {
     kind,
@@ -84,7 +114,7 @@ export function openEpoch1LogicalArtifactSource(
       }
       if (pending) return pending
       pending = (async () => {
-        const watermark = await sourceFilesDigest(root)
+        const watermark = await cachedSourceFilesDigest(root, input.onMeasure)
         const envelope =
           input.envelopeFileDigest !== undefined
             ? readLogicalDatabaseBackupEnvelope({
@@ -115,6 +145,8 @@ export function openEpoch1LogicalArtifactSource(
           )
         if (input.backupRoot) {
           const backup = readManifest(input.backupRoot)
+          // RFC-626 §3.3: a backup is read under the rule it was written under.
+          valueRule = backupValueRule(backup)
           if (
             backup?.manifestVersion !== 2 ||
             backup.database.envelopeFileDigest !== input.envelopeFileDigest ||
@@ -136,12 +168,16 @@ export function openEpoch1LogicalArtifactSource(
               throw new SourceBlockedError('Hosted backup sidecar and logical envelope differ')
           }
         }
-        verified = openVerifiedLogicalDatabaseArtifactSource({
-          artifactRoot: input.artifactRoot,
-          contract: version.contract,
-          expectedManifestDigest: envelope.payload.logicalManifestDigest,
-          expectedLegacyArchiveFileDigest: envelope.payload.legacyArchiveFileDigest,
-        })
+        verified = cachedVerifiedArtifactSource(
+          {
+            artifactRoot: input.artifactRoot,
+            contract: version.contract,
+            expectedManifestDigest: envelope.payload.logicalManifestDigest,
+            expectedLegacyArchiveFileDigest: envelope.payload.legacyArchiveFileDigest,
+            ...(valueRule === 'transport' ? { valueRule } : {}),
+          },
+          input.onMeasure,
+        )
         const tableRows = Object.fromEntries(
           verified.verification.manifest.payload.tables.map((table) => [
             table.table,
@@ -192,7 +228,7 @@ export function openEpoch1LogicalArtifactSource(
           )
             throw new SourceBlockedError('Export binding and logical envelope differ')
         }
-        if ((await sourceFilesDigest(root)) !== watermark)
+        if ((await cachedSourceFilesDigest(root, input.onMeasure)) !== watermark)
           throw new SourceBlockedError('Logical source changed during preflight')
         const logicalTables = sourceTableDispositions({
           source: fingerprint,
@@ -250,7 +286,7 @@ export function openEpoch1LogicalArtifactSource(
         snapshot.watermark !== expected.watermark ||
         snapshot.sourceGenerationId !== expected.sourceGenerationId ||
         snapshot.fingerprint.digest !== expected.fingerprint.digest ||
-        (await sourceFilesDigest(root)) !== snapshot.watermark
+        (await cachedSourceFilesDigest(root, input.onMeasure)) !== snapshot.watermark
       )
         throw new SourceBlockedError(
           'Logical source changed after preflight; a new freeze/plan is required',
@@ -263,27 +299,7 @@ export function openEpoch1LogicalArtifactSource(
       const table = snapshot.contract!.tables.find((entry) => entry.id === tableId)
       if (!table) throw new SourceBlockedError(`Unknown logical source table ${tableId}`)
       assertSourceChunkRequest(table, afterKey, limit)
-      const entry = verified.verification.manifest.payload.tables.find(
-        (item) => item.table === tableId,
-      )!
-      const rows: CanonicalLogicalRow[] = []
-      let start = 0
-      let end = entry.chunkCount
-      if (afterKey !== null) {
-        while (start < end) {
-          const middle = Math.floor((start + end) / 2)
-          const last = verified.readChunk(table, middle).payload.rows.at(-1)
-          if (last && compareCanonicalLogicalKeys(last.key, afterKey) <= 0) start = middle + 1
-          else end = middle
-        }
-      }
-      for (let index = start; index < entry.chunkCount && rows.length < limit; index += 1) {
-        for (const row of verified.readChunk(table, index).payload.rows) {
-          if (afterKey !== null && compareCanonicalLogicalKeys(row.key, afterKey) <= 0) continue
-          rows.push(row)
-          if (rows.length === limit) break
-        }
-      }
+      const rows = verifiedRows(table, afterKey, limit)
       return sourceChunk({ sourceVersion: snapshot.sourceVersion, table, afterKey, rows })
     },
     async readRawChunk(tableId, afterKey, limit) {
@@ -314,7 +330,21 @@ export function openEpoch1LogicalArtifactSource(
           rows,
         })
       }
-      const chunk = await reader.readChunk(tableId, afterKey, limit)
+      // RFC-626 §3.3: a backup written under the transport rule may hold rows the strict
+      // `readChunk` refuses — exactly the rows the conversion reads raw to set them aside — so
+      // its raw channel takes the verified rows as they are.
+      const transport = valueRule === 'transport'
+      const contractTable = snapshot.contract!.tables.find((table) => table.id === tableId)
+      if (transport && !contractTable)
+        throw new SourceBlockedError(`Unknown logical source table ${tableId}`)
+      if (transport) assertSourceChunkRequest(contractTable!, afterKey, limit)
+      const chunk = transport
+        ? {
+            sourceVersion: snapshot.sourceVersion,
+            migrationKey: contractTable!.migrationKey,
+            rows: verifiedRows(contractTable!, afterKey, limit),
+          }
+        : await reader.readChunk(tableId, afterKey, limit)
       return rawSourceChunk({
         sourceVersion: chunk.sourceVersion,
         table: tableId,
@@ -341,6 +371,7 @@ export function openEpoch1LogicalArtifactSource(
 export function openEpoch1HostedBackupSource(input: {
   readonly backupRoot: string
   readonly supportedSources?: SupportedSourceManifest
+  readonly onMeasure?: SourceMeasurementObserver
 }): VersionedSourceReader {
   const artifactRoot = join(input.backupRoot, 'database/logical')
   return openEpoch1LogicalArtifactSource({

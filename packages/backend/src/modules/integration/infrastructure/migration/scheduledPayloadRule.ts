@@ -2,18 +2,23 @@ import { z } from 'zod'
 import { valueDigest } from '@/platform/persistence/migration/conversion/digest'
 import {
   repositoryUrlFacts,
+  repositoryUrlFactKey,
   resolveRepositoryUrlFact,
   emitBootRow,
   blockBootRow,
   createBootUpgradeFacts,
+  LINKABLE_UNREADABLE_URL_REASONS,
   type BootUpgradeFacts,
 } from '@/platform/persistence/migration/conversion/bootUpgradeFacts'
+import { ConversionContractError } from '@/platform/persistence/migration/conversion/blockCodes'
 import type { LookupReader } from '@/platform/persistence/migration/conversion/lookups'
 import type { RepositoryUrlFact } from '@/platform/persistence/migration/conversion/bootUpgradeFacts'
 import type {
   ConversionContribution,
   ConversionRule,
+  RuleContext,
 } from '@/platform/persistence/migration/conversion/rule'
+import type { SourceRow } from '@/platform/persistence/migration/conversion/types'
 import {
   bootSourceRows,
   probeLocalGit,
@@ -105,7 +110,7 @@ export function scheduledPayloadEnvironment(
     id: ref.id,
     async capture(input) {
       const captured = new Map<string, LocalGitFact>()
-      for (const row of await bootSourceRows(input.source, 'scheduled_tasks')) {
+      for (const row of await bootSourceRows(input.source, 'scheduled_tasks', input)) {
         if (
           staysDisabled(
             row.enabled === true || row.enabled === 1,
@@ -155,12 +160,36 @@ export interface ScheduledPayloadDecision {
   readonly factIds: readonly string[]
   readonly changes: readonly string[]
 }
+/**
+ * RFC-626 §3.4 rows 4–5: reasons for which the cached repository is converted although its
+ * address could not be read back (key missing or another one, damaged legacy escrow). A
+ * schedule naming such a repository by URL still links to it by URL hash, as v0.19.2 did at
+ * boot. Equal to the source-control rule's list; a guard test compares the two, because a
+ * module does not import another module's migration code.
+ */
+export { LINKABLE_UNREADABLE_URL_REASONS }
+export const SCHEDULE_KEPT_DISABLED_INVALID = 'v2-boot-schedule-kept-disabled-invalid'
+/** The cached repository a blocked URL fact still names by hash, when its address only is unreadable. */
+function unreadableRepositoryOf(
+  urls: LookupReader<RepositoryUrlFact>,
+  rawUrl: string | null,
+  reason: string | null,
+): string | null {
+  if (rawUrl === null || reason === null || !LINKABLE_UNREADABLE_URL_REASONS.includes(reason))
+    return null
+  return urls.get(repositoryUrlFactKey(rawUrl))?.cachedRepoId ?? null
+}
 export function healFrozenScheduledPayload(input: {
   payload: string
   enabled: boolean
   lastError: string | null
   urls: LookupReader<RepositoryUrlFact>
   git: ReadonlyMap<string, LocalGitFact>
+  /**
+   * RFC-626, automatic resolution: link a repository whose address is unreadable by its URL
+   * hash instead of failing (see `LINKABLE_UNREADABLE_URL_REASONS`).
+   */
+  linkUnreadable?: boolean
 }): ScheduledPayloadDecision {
   const parsed: unknown = JSON.parse(input.payload)
   if (!object(parsed)) throw new Error('v2-boot-schedule-payload-invalid')
@@ -183,11 +212,17 @@ export function healFrozenScheduledPayload(input: {
         typeof entry.cachedRepoId === 'string' ? entry.cachedRepoId : null,
       )
       for (const id of result.factIds) factIds.add(id)
-      if (result.state === 'blocked')
+      const linked =
+        result.state === 'blocked'
+          ? input.linkUnreadable
+            ? unreadableRepositoryOf(input.urls, rawUrl, result.reason)
+            : null
+          : result.cachedRepoId
+      if (result.state === 'blocked' && linked === null)
         throw new Error(result.reason ?? 'v2-boot-schedule-url-unproven')
-      if (rawUrl && result.cachedRepoId) {
+      if (rawUrl && linked) {
         delete entry.repoUrl
-        entry.cachedRepoId = result.cachedRepoId
+        entry.cachedRepoId = linked
         changes.push('repoUrl -> cachedRepoId')
       }
     }
@@ -289,6 +324,85 @@ export function healFrozenScheduledPayload(input: {
     changes.length ? 'v2-boot-schedule-healed' : 'v2-boot-schedule-unchanged',
   )
 }
+/**
+ * RFC-626 §3.4 row 5, automatic resolution: a schedule whose payload cannot be healed is kept
+ * and disabled instead of blocking. The payload stays byte for byte; the reason goes where the
+ * product shows it (`last_error`), in the wording v0.19.2 used when a local path could not be
+ * resolved to a Git root. The detail page reports the payload error and a manual run fails
+ * clearly, so nothing launches from an unreadable payload.
+ */
+function keepScheduleDisabled(
+  ctx: RuleContext,
+  row: SourceRow,
+  before: {
+    readonly id: string
+    readonly enabled: boolean
+    readonly payloadDigest: string
+    readonly lastError: string | null
+  },
+  error: unknown,
+): void {
+  // An engine contract error is never a property of the row.
+  if (error instanceof ConversionContractError) throw error
+  const message = error instanceof Error ? error.message : String(error)
+  const code = message.startsWith('v2-')
+    ? message.split(':')[0]!
+    : 'v2-boot-schedule-payload-invalid'
+  // §3.6: facts captured for this upgrade contradict the frozen rows; only a change made while
+  // the upgrade ran does that, and retrying is the remedy.
+  if (code.endsWith('-fact-missing') || code.endsWith('-source-changed'))
+    throw new ConversionContractError(code, `scheduled_tasks/${before.id}: ${message}`)
+  const path = error instanceof ScheduledPayloadFactError ? error.path : null
+  const factIds = error instanceof ScheduledPayloadFactError ? error.factIds : []
+  const lastError =
+    path !== null
+      ? `rfc165-local-path-retired: ${path}`
+      : `${code}: the launch payload could not be interpreted during the upgrade${message === code ? '' : ` (${message})`}; edit and re-save the schedule to enable it`
+  const values = {
+    ...row.values,
+    enabled: false,
+    next_run_at: null,
+    last_error: lastError,
+    updated_at: ctx.planTime,
+  }
+  const changed = Object.keys(values).some(
+    (column) => values[column as keyof typeof values] !== row.values[column],
+  )
+  // Recorded first: the decision names the row before the row's own outputs classify it.
+  ctx.out.record(
+    {
+      kind: 'decision',
+      code: SCHEDULE_KEPT_DISABLED_INVALID,
+      payload: {
+        automatic: 'kept',
+        sourceTable: row.table,
+        sourceKey: row.encodedKey,
+        cause: code,
+        message,
+        ...(path !== null ? { path } : {}),
+        original: {
+          enabled: before.enabled,
+          nextRunAt: typeof row.values.next_run_at === 'number' ? row.values.next_run_at : null,
+          lastError: before.lastError,
+        },
+      },
+    },
+    row,
+  )
+  emitBootRow(ctx, ref, row, values, {
+    changed,
+    before,
+    after: {
+      ...before,
+      enabled: false,
+      lastError,
+      nextRunCleared: true,
+      cause: code,
+    },
+    reason: SCHEDULE_KEPT_DISABLED_INVALID,
+    factIds,
+  })
+}
 export function scheduledPayloadConversion(facts: BootUpgradeFacts): ConversionContribution {
   const git = new Map(
     facts.facts
@@ -317,6 +431,7 @@ export function scheduledPayloadConversion(facts: BootUpgradeFacts): ConversionC
             lastError: before.lastError,
             urls: ctx.lookup(repositoryUrlFacts),
             git,
+            ...(ctx.resolution === 'automatic' ? { linkUnreadable: true } : {}),
           })
           const changed =
             result.payload !== row.values.launch_payload || result.disableError !== null
@@ -346,6 +461,10 @@ export function scheduledPayloadConversion(facts: BootUpgradeFacts): ConversionC
             factIds: result.factIds,
           })
         } catch (error) {
+          if (ctx.resolution === 'automatic') {
+            keepScheduleDisabled(ctx, row, before, error)
+            continue
+          }
           blockBootRow(
             ctx,
             ref,

@@ -96,6 +96,12 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // RFC-625: GetProcessTimes/WaitForSingleObject need a real Windows kernel; windows-platform.yml
   // explicitly runs all four native cases in this suite. Its platform-neutral cases run everywhere.
   'packages/backend/tests/rfc625-daemon-process-identity.test.ts#skipIf': 1,
+  // RFC-626: symbolic links and permission bits need a POSIX filesystem, and an entry cannot be
+  // made unreadable for a privileged user; every other case of the suite runs everywhere.
+  'packages/backend/tests/rfc626-content-inventory-walk.test.ts#skipIf': 3,
+  // RFC-626: "no database file at the stored location" is a state of a file location only;
+  // the PostgreSQL leg of the same suite has nothing of the kind to construct.
+  'packages/backend/tests/rfc626-target-retire.test.ts#skipIf': 1,
   'packages/backend/tests/rfc135-runtimes-status.test.ts#skipIf': 2,
   // The live icacls/whoami round-trip requires a Windows kernel.
   'packages/backend/tests/rfc254-win32-acl-integration.test.ts#skipIf': 1,

@@ -10,6 +10,7 @@ import {
 } from './intentTurnEvents'
 import { runtimeSessionLeasesRule } from './runtimeSessionLeases'
 import { userAccessAuditRule } from './userAccessAudit'
+import { alignmentReferencePolicies } from './referencePolicies'
 
 export const conversion: ConversionContribution = {
   rules: [
@@ -23,4 +24,6 @@ export const conversion: ConversionContribution = {
   ],
   lookups: [intentEventConflicts],
   validators: [intentEventUniqueValidator],
+  // RFC-626 §3.3: the same constant the rules apply when the referenced row is absent.
+  references: alignmentReferencePolicies,
 }

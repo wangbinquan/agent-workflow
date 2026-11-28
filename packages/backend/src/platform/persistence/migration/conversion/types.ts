@@ -81,7 +81,72 @@ export interface SourceRow {
   /** Only failures not taken over by the claiming rule remain blocking here. */
   readonly codecFailure?: { readonly message: string; readonly columns: readonly string[] }
   readonly codecTakeovers?: readonly SourceCodecTakeover[]
+  /**
+   * RFC-626: this row belongs to a task the upgrade ended. `values` already carry the rewrite;
+   * `canonical` / `raw` stay as the source wrote them. The note says what was rewritten.
+   */
+  readonly settlement?: SettlementRewrite
 }
+/** RFC-626: who decides what happens to data the converter cannot carry over as it is. */
+export type ConversionResolution = 'operator' | 'automatic'
+/** RFC-626: one unfinished task that the automatic upgrade ends as canceled. */
+export interface TaskSettlement {
+  readonly taskId: string
+  readonly cause: 'unprovable-records' | 'parent-cascade'
+  readonly originalStatus: string
+  /** Codes of the blocks that caused it, distinct and sorted. Empty for a cascade. */
+  readonly blockCodes: readonly string[]
+  /** The settled parent whose cascade reached this task; null otherwise. */
+  readonly parentTaskId: string | null
+}
+/** RFC-626: what a settlement changed on one staged row. */
+export interface SettlementRewrite {
+  readonly taskId: string
+  readonly cause: TaskSettlement['cause']
+  /** Rewritten columns with the canonical form of the value before and after. */
+  readonly columns: Readonly<
+    Record<
+      string,
+      { readonly before: CanonicalLogicalValue; readonly after: CanonicalLogicalValue }
+    >
+  >
+}
+/** A target row the target database refused, as the loader located it. */
+export interface TargetLoadRejection {
+  readonly table: string
+  readonly targetKey: EncodedKey
+  readonly constraint: string | null
+  readonly message: string
+}
+/**
+ * RFC-626: one source row set aside because the target database refused rows produced from it.
+ * Persisted with its unit and handed back verbatim on resume, so the unit converts to the same bytes.
+ */
+export interface LoadRejectionDecision {
+  readonly sourcePhase: SourcePhase
+  readonly sourceTable: string
+  readonly sourceKey: EncodedKey
+  /** Sorted by table, key, constraint. */
+  readonly targets: readonly {
+    readonly table: string
+    readonly key: EncodedKey
+    readonly constraint: string | null
+    readonly message: string
+  }[]
+}
+/** RFC-626: codes the engine itself writes; rules add their own codes for rows they keep. */
+export const RESOLUTION_CODES = {
+  taskSettled: 'v2-task-settled-at-upgrade',
+  rowSetAside: 'v2-row-set-aside',
+  loadRejected: 'v3-target-load-rejected',
+  settlementMissed: 'v2-settlement-missed',
+  requiredSeedSetAside: 'v2-required-seed-set-aside',
+} as const
+/**
+ * RFC-626: a rule marks the `decision` record of an automatic disposition that keeps the row
+ * with `{ automatic: 'kept', ... }` in its payload, so the report counts it without knowing the rule.
+ */
+export type AutomaticDecisionKind = 'kept' | 'set-aside' | 'settled' | 'acknowledged'
 export type DispositionClass = 'converted' | 'preserved' | 'archived' | 'blocked'
 export type ExceptionKind =
   | 'derived-id'

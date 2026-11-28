@@ -29,19 +29,13 @@ export function makeSourceFingerprint(
   }
 }
 
-function collectFileFingerprint(db: Database): SourceFingerprint {
-  const catalog = collectSqliteHistoryCatalog(db)
-  const tables = db
+const fileTables = (db: Database): string[] =>
+  db
     .query<{ name: string }, []>("SELECT name FROM sqlite_schema WHERE type='table' ORDER BY name")
     .all()
-  const tableRows: Record<string, number> = {}
-  for (const { name } of tables) {
-    const count = db.query(`SELECT count(*) AS n FROM ${quoteSourceIdentifier(name)}`).get() as {
-      n: number
-    }
-    tableRows[name] = count.n
-  }
-  const journal = tables.some((table) => table.name === '__drizzle_migrations')
+    .map((table) => table.name)
+function fileJournal(db: Database, tables: readonly string[]): SourceJournalEntry[] {
+  return tables.includes('__drizzle_migrations')
     ? (
         db
           .query('SELECT hash, created_at FROM __drizzle_migrations ORDER BY created_at, hash')
@@ -51,40 +45,41 @@ function collectFileFingerprint(db: Database): SourceFingerprint {
         }[]
       ).map((row) => ({ identity: String(row.created_at), digest: row.hash }))
     : []
-  return makeSourceFingerprint('sqlite', catalog, journal, tableRows)
+}
+function collectFileFingerprint(db: Database): SourceFingerprint {
+  const catalog = collectSqliteHistoryCatalog(db)
+  const tables = fileTables(db)
+  const tableRows: Record<string, number> = {}
+  for (const name of tables) {
+    const count = db.query(`SELECT count(*) AS n FROM ${quoteSourceIdentifier(name)}`).get() as {
+      n: number
+    }
+    tableRows[name] = count.n
+  }
+  return makeSourceFingerprint('sqlite', catalog, fileJournal(db, tables), tableRows)
+}
+function collectFileStructure(db: Database): SourceFingerprint {
+  const catalog = collectSqliteHistoryCatalog(db)
+  const tables = fileTables(db)
+  const tableRows: Record<string, number> = {}
+  for (const name of tables)
+    tableRows[name] = db
+      .query(`SELECT 1 AS present FROM ${quoteSourceIdentifier(name)} LIMIT 1`)
+      .get()
+      ? 1
+      : 0
+  return makeSourceFingerprint('sqlite', catalog, fileJournal(db, tables), tableRows)
 }
 
-async function collectDatabaseFingerprint(
+const qualifiedRelation = (relation: string): string =>
+  relation.split('.').map(quoteSourceIdentifier).join('.')
+const databaseTables = (catalog: HistoryCatalog) =>
+  catalog.filter((row) => row.kind === 'relation' && ['r', 'p'].includes(row.definition))
+async function databaseJournal(
   connection: HistoryConnection,
-): Promise<SourceFingerprint> {
-  const catalog = await collectEpoch1PostgresqlCatalog(connection)
-  const tableRows: Record<string, number> = {}
-  const tables = catalog.filter(
-    (row) => row.kind === 'relation' && ['r', 'p'].includes(row.definition),
-  )
-  // Counts share the caller's snapshot. Bound SQL size while avoiding one network trip per table.
-  for (let offset = 0; offset < tables.length; offset += 64) {
-    const batch = tables.slice(offset, offset + 64)
-    const rows = await connection.execute(
-      batch
-        .map((table, index) => {
-          const name = table.relation.split('.').map(quoteSourceIdentifier).join('.')
-          return `SELECT $${index + 1}::text AS relation, count(*) AS n FROM ${name}`
-        })
-        .join(' UNION ALL '),
-      batch.map((table) => table.relation),
-    )
-    const counts = new Map(rows.map((row) => [String(row.relation), row.n]))
-    for (const table of batch) {
-      const count = Number(counts.get(table.relation))
-      if (!Number.isSafeInteger(count))
-        throw new Error(
-          `source row count exceeds safe integer: ${table.relation.split('.').map(quoteSourceIdentifier).join('.')}`,
-        )
-      tableRows[table.relation] = count
-    }
-  }
-  const journal = Object.hasOwn(tableRows, 'agent_workflow_meta.schema_migrations')
+  tableRows: Readonly<Record<string, number>>,
+): Promise<SourceJournalEntry[]> {
+  return Object.hasOwn(tableRows, 'agent_workflow_meta.schema_migrations')
     ? (
         await connection.execute(
           'SELECT baseline_id, contract_digest, plan_digest FROM agent_workflow_meta.schema_migrations ORDER BY baseline_id',
@@ -95,8 +90,75 @@ async function collectDatabaseFingerprint(
         planDigest: String(row.plan_digest),
       }))
     : []
+}
+async function collectDatabaseFingerprint(
+  connection: HistoryConnection,
+): Promise<SourceFingerprint> {
+  const catalog = await collectEpoch1PostgresqlCatalog(connection)
+  const tableRows: Record<string, number> = {}
+  const tables = databaseTables(catalog)
+  // Counts share the caller's snapshot. Bound SQL size while avoiding one network trip per table.
+  for (let offset = 0; offset < tables.length; offset += 64) {
+    const batch = tables.slice(offset, offset + 64)
+    const rows = await connection.execute(
+      batch
+        .map(
+          (table, index) =>
+            `SELECT $${index + 1}::text AS relation, count(*) AS n FROM ${qualifiedRelation(table.relation)}`,
+        )
+        .join(' UNION ALL '),
+      batch.map((table) => table.relation),
+    )
+    const counts = new Map(rows.map((row) => [String(row.relation), row.n]))
+    for (const table of batch) {
+      const count = Number(counts.get(table.relation))
+      if (!Number.isSafeInteger(count))
+        throw new Error(
+          `source row count exceeds safe integer: ${qualifiedRelation(table.relation)}`,
+        )
+      tableRows[table.relation] = count
+    }
+  }
   return {
-    ...makeSourceFingerprint('postgresql', catalog, journal, tableRows),
+    ...makeSourceFingerprint(
+      'postgresql',
+      catalog,
+      await databaseJournal(connection, tableRows),
+      tableRows,
+    ),
+    postgresqlMajor: await readPostgresqlMajor(connection),
+  }
+}
+async function collectDatabaseStructure(connection: HistoryConnection): Promise<SourceFingerprint> {
+  const catalog = await collectEpoch1PostgresqlCatalog(connection)
+  const tableRows: Record<string, number> = {}
+  const tables = databaseTables(catalog)
+  for (let offset = 0; offset < tables.length; offset += 64) {
+    const batch = tables.slice(offset, offset + 64)
+    const rows = await connection.execute(
+      batch
+        .map(
+          (table, index) =>
+            `SELECT $${index + 1}::text AS relation, EXISTS (SELECT 1 FROM ${qualifiedRelation(table.relation)}) AS present`,
+        )
+        .join(' UNION ALL '),
+      batch.map((table) => table.relation),
+    )
+    const present = new Map(rows.map((row) => [String(row.relation), row.present]))
+    for (const table of batch) {
+      const value = present.get(table.relation)
+      if (typeof value !== 'boolean')
+        throw new Error(`source table could not be probed: ${qualifiedRelation(table.relation)}`)
+      tableRows[table.relation] = Number(value)
+    }
+  }
+  return {
+    ...makeSourceFingerprint(
+      'postgresql',
+      catalog,
+      await databaseJournal(connection, tableRows),
+      tableRows,
+    ),
     postgresqlMajor: await readPostgresqlMajor(connection),
   }
 }
@@ -109,6 +171,28 @@ export function collectSourceFingerprint(
   return 'query' in connection
     ? collectFileFingerprint(connection)
     : collectDatabaseFingerprint(connection)
+}
+
+/**
+ * RFC-626 §3.5: the structure of a source without its row counts. Only the catalog and the
+ * migration journal are read, so the cost does not grow with the data: this is what the
+ * read-only check before an automatic upgrade can afford. `tableRows` does not hold counts
+ * here: it is 1 for a table with at least one row and 0 for an empty one, asked with a
+ * single-row probe. That is all identification needs — it only has to tell an unknown empty
+ * table from an unknown table with data.
+ *
+ * The result has the shape of a fingerprint so that `identifySource` can read it, but its
+ * digest is not the digest of the source: never persist it or compare it with the counted
+ * fingerprint a freeze takes.
+ */
+export function collectSourceStructure(connection: Database): SourceFingerprint
+export function collectSourceStructure(connection: HistoryConnection): Promise<SourceFingerprint>
+export function collectSourceStructure(
+  connection: Database | HistoryConnection,
+): SourceFingerprint | Promise<SourceFingerprint> {
+  return 'query' in connection
+    ? collectFileStructure(connection)
+    : collectDatabaseStructure(connection)
 }
 
 export function diffSourceCatalog(

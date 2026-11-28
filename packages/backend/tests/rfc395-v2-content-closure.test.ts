@@ -13,7 +13,7 @@ import {
 } from './helpers/rfc395V2/contentFixtures'
 import { conversion as contentConversion } from '@/platform/content/migration'
 import { CONTENT_CATALOG } from '@/platform/content/migration/catalog'
-import { contentTaskLookups } from '@/platform/content/migration/receipts'
+import { contentSettlementTasks, contentTaskLookups } from '@/platform/content/migration/receipts'
 import { convertContentReference } from '@/platform/content/migration/convert'
 import type {
   ConversionContribution,
@@ -30,6 +30,9 @@ const skillClosureProbes: ConversionRule[] = ['skills', 'skill_versions'].map((t
   produces: [{ table }],
   lookups: [CONTENT_CATALOG, ...contentTaskLookups],
   unit: { kind: 'source-chunk', table },
+  // RFC-626: a rule that converts content references can end a task, so it declares that,
+  // with the same derivation the content rules use.
+  settles: { tasksOf: contentSettlementTasks },
   async convert(unit, ctx) {
     for (const row of unit.rows.get(table)!) {
       const decoded = ctx.lookup(CONTENT_CATALOG).require(row.encodedKey)

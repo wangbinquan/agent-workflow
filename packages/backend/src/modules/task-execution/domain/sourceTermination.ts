@@ -34,6 +34,13 @@ export type TaskStopCause =
   | Readonly<{ kind: 'user' }>
   | ResourceReapStopCause
   | Readonly<{ kind: 'daemon-shutdown' }>
+  /**
+   * RFC-626: the task was ended while its database was upgraded to a new major structure,
+   * because its records from the previous version cannot be continued. No running process
+   * is involved: the upgrade writes the canceled state itself, so this cause is never passed
+   * to a runtime stop request.
+   */
+  | Readonly<{ kind: 'upgrade' }>
   | Readonly<{
       kind: 'parent-cascade'
       parentTaskId: string
@@ -54,6 +61,7 @@ export type TaskStopProjection = Readonly<{
     | 'webhook-mr-closed'
     | 'webhook-mr-merged'
     | 'resource-reaped'
+    | 'ended-by-upgrade'
   summary: string
 }>
 
@@ -67,6 +75,8 @@ export function taskStopProjection(cause: TaskStopCause): TaskStopProjection {
       return { code: 'resource-reaped', summary: cause.summary }
     case 'parent-cascade':
       return { code: 'canceled-by-parent-cascade', summary: 'canceled by parent task' }
+    case 'upgrade':
+      return { code: 'ended-by-upgrade', summary: 'ended by upgrade' }
     case 'webhook-terminal':
       return cause.terminal === 'closed'
         ? { code: 'webhook-mr-closed', summary: 'MR/PR 已关闭，任务已停止' }

@@ -61,13 +61,18 @@ const base: InstallationFacts = {
   rollbackIncomplete: false,
 }
 
+// RFC-626 §3.5 moved the "old provider move not finished" judgement into the read-only
+// environment check, which runs before the intent is recorded: the T4 status is read with no
+// session record yet, and an unfinished move is refused leaving no session record at all. The
+// write — finalize — still follows the intent, and a new session asks for the status once.
 for (const phase of ['accepting-writes', 'copying'] as const)
-  test(`legacy ${phase}: intent precedes the T4 port; only a finalizable operation reaches discovery`, async () => {
+  test(`legacy ${phase}: the T4 status is read before the intent and finalize after it; only a finalizable operation reaches discovery`, async () => {
     const f = makeSwitchFixture()
     try {
       const port = createAutoUpgradeRecords(f.root)
       const probe = f.deps.installation
       let finalized = false
+      let statusReads = 0
       f.deps.installation = async () => {
         const installation = await probe()
         return {
@@ -97,23 +102,33 @@ for (const phase of ['accepting-writes', 'copying'] as const)
         },
         legacy: {
           async status() {
-            expect((await port.list())[0]!.records[0]!.kind).toBe('intent')
+            statusReads++
+            expect(await port.list()).toEqual([])
             expect(await f.deps.journal.list()).toEqual([])
             return status
           },
           async finalize() {
             expect(phase).toBe('accepting-writes')
+            expect((await port.list())[0]!.records[0]!.kind).toBe('intent')
+            expect(await f.deps.journal.list()).toEqual([])
             finalized = true
             return { ...status, phase: 'finalized' }
           },
         },
       })
+      expect(statusReads).toBe(1)
       expect(result.exitCode).toBe(phase === 'accepting-writes' ? 0 : 3)
-      const session = (await port.list())[0]!
-      expect(session.records.some((r) => r.kind === 'rfc349-finalized')).toBe(finalized)
-      expect(session.outcome).toBe(finalized ? 'completed' : null)
-      if (!finalized) {
-        expect(session.records.at(-1)!.data.reason).toBe('rfc349-operation-unfinished')
+      if (finalized) {
+        const session = (await port.list())[0]!
+        expect(session.records.some((r) => r.kind === 'rfc349-finalized')).toBe(true)
+        expect(session.outcome).toBe('completed')
+      } else {
+        expect(result).toMatchObject({
+          outcome: 'refused',
+          operationId: null,
+          code: 'rfc349-operation-unfinished',
+        })
+        expect(await port.list()).toEqual([])
         expect(await f.deps.journal.list()).toEqual([])
       }
     } finally {
@@ -451,7 +466,7 @@ test('discovery honors the intent identity only when creating an operation', asy
   }
 })
 
-test('a frozen run reuses the persisted plan, approves at most three times, and handles both returned and thrown approval requests', async () => {
+test('a frozen run reuses the persisted plan, approves its digest once, refuses a run that keeps asking for it, and handles both returned and thrown approval requests', async () => {
   const f = await plannedFixture()
   try {
     const port = createAutoUpgradeRecords(f.root)
@@ -513,12 +528,17 @@ test('a frozen run reuses the persisted plan, approves at most three times, and 
     })
     expect(result).toMatchObject({ outcome: 'refused', exitCode: 3 })
     expect(plans).toBe(1)
-    expect(runs).toBe(4) // initial approved run, then three permitted re-approvals
+    // RFC-626 §4.2 / §9.9: the plan never changes here, so its approval digest is evaluated
+    // and approved once and reused; the re-approval limit counts distinct digests only. A run
+    // that keeps asking for the approval it was just given is refused after the initial run
+    // and three more requests for that same approval within the process.
+    expect(runs).toBe(4)
     const session = (await port.list())[0]!
     expect(session.unfinished).toBe(true)
-    expect(
-      session.records.filter((r) => r.kind === 'plan-evaluated' && r.data.reapproval),
-    ).toHaveLength(3)
+    const evaluated = session.records.filter((r) => r.kind === 'plan-evaluated')
+    expect(evaluated).toHaveLength(1)
+    expect(evaluated[0]!.data.reapproval).toBe(false)
+    expect(session.records.filter((r) => r.kind === 'approved')).toHaveLength(1)
     expect(session.records.at(-1)!.data.reason).toBe('approval-retry-limit')
   } finally {
     f.close()

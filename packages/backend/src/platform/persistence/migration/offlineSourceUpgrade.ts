@@ -6,20 +6,23 @@ import { join } from 'node:path'
 import { vacuumSqliteInto } from './legacy/sqliteSnapshot'
 import { applyFrozenSqliteMigrations } from './epoch1/sqliteChain'
 import { assertSqliteIntegrity } from './rawSourceReader'
-import {
-  captureSourceDispositionRows,
-  type SourceDispositionEvidence,
-} from './sourceDispositionEvidence'
 import { openEpoch1SqliteSource, type Epoch1SqliteSource } from './sqliteSourceReader'
 import { openEpoch1PostgresqlSource } from './postgresqlSourceReader'
+import type { SourceWatch } from './freeze/sourceWatch'
 import {
   createLogicalTableChunk,
   type CanonicalLogicalValue,
+  type LogicalValueRule,
 } from './legacy/logicalDatabaseArtifact'
-import { openPostgresqlLogicalTarget } from './legacy/postgresqlLogicalTarget'
+import {
+  openPostgresqlLogicalTarget,
+  postgresqlCopyBatchRows,
+  type PostgresqlLogicalTarget,
+} from './legacy/postgresqlLogicalTarget'
 import { migratePostgresqlSchema } from './legacy/postgresqlMigrator'
 import type { PostgresqlDatabaseRuntime } from '../postgresqlRuntime'
 import { canonicalSchemaJson } from '../schema/canonical'
+import type { LogicalSchemaContract, LogicalTableContract } from '../schema/contractTypes'
 import type { LogicalTargetTableVerification } from './legacy/logicalDatabaseRestore'
 import { loadFrozenEpoch1History } from './epoch1/bundle'
 import { collectSourceFingerprint } from './sourceCatalog'
@@ -29,13 +32,21 @@ import {
   type SupportedSourceManifest,
 } from './supportedSources'
 import type { EmptyTableDecision } from './sourceDispositions'
+import type { ConversionResolution } from './conversion/types'
+import { readChunkForTransport } from './sourceTransport'
 import {
   SourceBlockedError,
   sourceFailure,
   type SourcePreflight,
   type SourceFingerprint,
+  type SourceMeasurementObserver,
   type VersionedSourceReader,
 } from './sourceTypes'
+
+// RFC-626 §4.1: the rows a retired or metadata table holds are captured by the caller (the
+// source access) before it upgrades a copy; the capture this module used to make as well went
+// unread. The SQLite copy's reader is preflighted by whoever reads it — the preflight this
+// module ran on it was discarded, and its main caller only takes the file.
 
 // SQLite requires VACUUM/files/PRAGMAs; PostgreSQL requires a provisioned server
 // and a logical load. The two upgrade mechanisms are intentionally dialect-specific.
@@ -46,6 +57,14 @@ async function upgradeFileCopy(input: {
   readonly operationRoot: string
   readonly progress?: MigrationProgressCallback
   readonly emptyTables?: readonly EmptyTableDecision[]
+  /**
+   * RFC-626 §3.3: `automatic` counts rows whose foreign key dangles after the remaining
+   * migrations instead of refusing them; the conversion and the target's finalization deal with
+   * such rows. A damaged file (`quick_check`) is refused either way.
+   */
+  readonly resolution?: ConversionResolution
+  /** RFC-626 §7: handed to the reader of the upgraded copy. */
+  readonly onMeasure?: SourceMeasurementObserver
 }): Promise<{
   readonly path: string
   readonly before: SourceFingerprint
@@ -53,7 +72,6 @@ async function upgradeFileCopy(input: {
   readonly sourceWatermark: string
   readonly sourcePreflight: SourcePreflight
   readonly reader: Epoch1SqliteSource
-  readonly sourceEvidence: readonly SourceDispositionEvidence[]
   close(): Promise<void>
 }> {
   await input.source.assertUnchanged(input.expected)
@@ -63,12 +81,6 @@ async function upgradeFileCopy(input: {
   let copy: Database | undefined
   let reader: Epoch1SqliteSource | undefined
   try {
-    const sourceEvidence = await captureSourceDispositionRows(
-      input.source,
-      input.expected,
-      join(directory, 'pre-upgrade'),
-    )
-    await input.source.assertUnchanged(input.expected)
     vacuumSqliteInto({ dbPath: input.source.offlinePath(), dest: path })
     copy = new Database(path)
     const before = collectSourceFingerprint(copy)
@@ -81,7 +93,7 @@ async function upgradeFileCopy(input: {
     })
     const history = await loadFrozenEpoch1History()
     applyFrozenSqliteMigrations(copy, history.sqlite.slice(identified.source.sqliteThrough))
-    assertSqliteIntegrity(copy)
+    assertSqliteIntegrity(copy, { tolerateForeignKeys: input.resolution === 'automatic' })
     const after = collectSourceFingerprint(copy)
     const result = identifySource({
       fingerprint: after,
@@ -93,14 +105,18 @@ async function upgradeFileCopy(input: {
     copy.close()
     copy = undefined
     await input.source.assertUnchanged(input.expected)
+    // The upgraded file is this operation's own: read in place, not copied once more, and
+    // preflighted by whoever reads it.
     reader = openEpoch1SqliteSource({
       path,
       manifest: input.manifest,
       operationRoot: directory,
       emptyTables: input.emptyTables,
       sourceGenerationId: input.expected.sourceGenerationId,
+      privateCopy: true,
+      resolution: input.resolution,
+      onMeasure: input.onMeasure,
     })
-    await reader.preflight()
     const resultReader = reader
     return {
       path,
@@ -109,7 +125,6 @@ async function upgradeFileCopy(input: {
       sourceWatermark: input.expected.watermark,
       sourcePreflight: input.expected,
       reader,
-      sourceEvidence,
       async close() {
         await resultReader.close()
         rmSync(directory, { recursive: true, force: true })
@@ -129,21 +144,96 @@ export interface OfflinePostgresqlDatabase {
   readonly runtime: PostgresqlDatabaseRuntime
   close(): Promise<void>
 }
+
+/**
+ * Copies one table of the source into the scratch target, chunk by chunk. RFC-626 §4.6: a
+ * chunk holds `postgresqlCopyBatchRows(columns)` rows — at most 1000, fewer for a table so wide
+ * that 1000 rows would exceed the protocol's parameter ceiling in one INSERT (`tasks`, 70
+ * columns: 857). Every chunk is still written, read back row by row and receipted as one unit.
+ */
+export async function copyTableToScratch(input: {
+  readonly source: VersionedSourceReader
+  readonly target: Pick<PostgresqlLogicalTarget, 'copyChunk'>
+  readonly operationId: string
+  readonly contract: LogicalSchemaContract
+  readonly table: LogicalTableContract
+  readonly valueRule: LogicalValueRule
+  readonly progress?: MigrationProgressCallback
+}): Promise<LogicalTargetTableVerification> {
+  const { table } = input
+  let afterKey: readonly CanonicalLogicalValue[] | null = null
+  let rowCount = 0
+  let chunkCount = 0
+  // Archive-only data remains on the immutable source, never silently discarded.
+  if (table.disposition !== 'ARCHIVE_THEN_OMIT') {
+    const limit = postgresqlCopyBatchRows(table.columns.length)
+    for (;;) {
+      const chunk = await readChunkForTransport(
+        input.source,
+        input.valueRule,
+        table.id,
+        afterKey,
+        limit,
+      )
+      if (!chunk.rows.length) break
+      await input.target.copyChunk(
+        table,
+        createLogicalTableChunk({
+          operationId: input.operationId,
+          contract: input.contract,
+          table,
+          chunkIndex: chunkCount,
+          rows: [...chunk.rows],
+          ...(input.valueRule === 'transport' ? { valueRule: input.valueRule } : {}),
+        }),
+        Date.now(),
+      )
+      rowCount += chunk.rows.length
+      input.progress?.({
+        phase: 'offline-upgrade',
+        detail: table.id,
+        completed: rowCount,
+        unit: 'rows',
+      })
+      chunkCount += 1
+      afterKey = chunk.lastKey
+    }
+  }
+  return { table: table.id, disposition: table.disposition, rowCount, chunkCount }
+}
+
 async function upgradeDatabaseCopy(input: {
   readonly source: VersionedSourceReader
   readonly manifest: SupportedSourceManifest
   readonly operationRoot: string
   readonly progress?: MigrationProgressCallback
   readonly createEmptyDatabase: () => Promise<OfflinePostgresqlDatabase>
+  /**
+   * RFC-626 §3.3: `automatic` moves the rows into the scratch database under the transport
+   * value rule (the source must be read through a reader opened for the automatic upgrade) and
+   * does not hold the copy to the cross-table business oracle; indexes and constraints are
+   * installed as always. A manual upgrade copies as before.
+   */
+  readonly resolution?: ConversionResolution
+  /** RFC-626 §7: handed to the reader of the scratch copy. */
+  readonly onMeasure?: SourceMeasurementObserver
+  /**
+   * RFC-626 §4.1: borrowed by the reader of the scratch copy, which remembers there the identity
+   * it measures. A later reader of the same copy in this process borrowing the same watch (the
+   * execution step of the automatic upgrade) adopts it instead of reading the copy again. The
+   * caller scopes it to this very copy; without one the identity lives as long as the reader.
+   */
+  readonly watch?: SourceWatch
 }): Promise<
   OfflinePostgresqlDatabase & {
     readonly sourceWatermark: string
     readonly sourcePreflight: SourcePreflight
     readonly contractDigest: string
     readonly reader: VersionedSourceReader
-    readonly sourceEvidence: readonly SourceDispositionEvidence[]
   }
 > {
+  const automatic = input.resolution === 'automatic'
+  const valueRule: LogicalValueRule = automatic ? 'transport' : 'strict'
   const source = await input.source.preflight()
   const history = await loadFrozenEpoch1History()
   const version = history.postgresql.versions.find(
@@ -156,11 +246,6 @@ async function upgradeDatabaseCopy(input: {
   await input.source.assertUnchanged(source)
   mkdirSync(input.operationRoot, { recursive: true })
   const directory = mkdtempSync(join(input.operationRoot, 'epoch1-pg-upgrade-'))
-  const sourceEvidence = await captureSourceDispositionRows(
-    input.source,
-    source,
-    join(directory, 'pre-upgrade'),
-  )
   const copy = await input.createEmptyDatabase()
   const operationId = `dbm_epoch1_offline_${crypto.randomUUID().replaceAll('-', '')}`
   let reader: VersionedSourceReader | undefined
@@ -183,44 +268,23 @@ async function upgradeDatabaseCopy(input: {
         if (canonicalSchemaJson(plan) !== canonicalSchemaJson(version.plan))
           throw new SourceBlockedError('Offline PostgreSQL plan differs from frozen history')
       },
+      ...(automatic ? { valueRule, businessInvariants: false } : {}),
     })
     await target.prepare(Date.now())
     const tables: LogicalTargetTableVerification[] = []
-    for (const frozen of version.contract.tables) {
-      // The copy decodes and re-verifies rows with the same corrected codecs as the reader.
-      const table = withLogicalCodecCorrections(frozen, input.manifest.codecCorrections)
-      let afterKey: readonly CanonicalLogicalValue[] | null = null
-      let rowCount = 0
-      let chunkCount = 0
-      // Archive-only data remains on the immutable source, never silently discarded.
-      if (table.disposition !== 'ARCHIVE_THEN_OMIT') {
-        for (;;) {
-          const chunk = await input.source.readChunk(table.id, afterKey, 1000)
-          if (!chunk.rows.length) break
-          await target.copyChunk(
-            table,
-            createLogicalTableChunk({
-              operationId,
-              contract: version.contract,
-              table,
-              chunkIndex: chunkCount,
-              rows: [...chunk.rows],
-            }),
-            Date.now(),
-          )
-          rowCount += chunk.rows.length
-          input.progress?.({
-            phase: 'offline-upgrade',
-            detail: table.id,
-            completed: rowCount,
-            unit: 'rows',
-          })
-          chunkCount += 1
-          afterKey = chunk.lastKey
-        }
-      }
-      tables.push({ table: table.id, disposition: table.disposition, rowCount, chunkCount })
-    }
+    for (const frozen of version.contract.tables)
+      tables.push(
+        await copyTableToScratch({
+          source: input.source,
+          target,
+          operationId,
+          contract: version.contract,
+          // The copy decodes and re-verifies rows with the same corrected codecs as the reader.
+          table: withLogicalCodecCorrections(frozen, input.manifest.codecCorrections),
+          valueRule,
+          progress: input.progress,
+        }),
+      )
     await input.source.assertUnchanged(source)
     await target.finalizeSchema(Date.now(), tables)
     await target.close()
@@ -231,18 +295,22 @@ async function upgradeDatabaseCopy(input: {
       history: history.postgresql,
     })
     await input.source.assertUnchanged(source)
+    // The conversion reads the copy under the strict rule. The reader is handed out
+    // preflighted; a later preflight of the same reader only compares the cheap evidence.
     reader = openEpoch1PostgresqlSource({
       runtime: copy.runtime,
       manifest: input.manifest,
       sourceGenerationId: source.sourceGenerationId,
       contentRoot: directory,
+      ...(input.watch ? { watch: input.watch } : {}),
+      resolution: input.resolution,
+      onMeasure: input.onMeasure,
     })
     await reader.preflight()
     const resultReader = reader
     return {
       runtime: copy.runtime,
       reader,
-      sourceEvidence,
       async close() {
         await resultReader.close()
         await copy.close()

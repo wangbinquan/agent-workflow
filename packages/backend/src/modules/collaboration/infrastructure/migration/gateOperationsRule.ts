@@ -17,22 +17,28 @@ export const gateOperationsValidator: RowValidator = {
   ref: { id: 'collaboration/gate-open-drain', version: 1 },
   table: 'collaboration_gate_operations',
   lookups: [TASK_FACTS],
+  // RFC-626 §3.2.1: an open left half-way by a killed old service blocks only while its task
+  // can continue; the automatic upgrade ends that task instead (`task_id` names it).
+  settles: {},
   validate(row, ctx) {
     if (!pendingOpen(row)) return []
     const task = ctx.lookup(TASK_FACTS).get(String(row.values.task_id))
     if (!task) return [rowBlock('v2-gate-task-facts-missing', row, null, ['TASK_FACTS'])]
     return task.execution === 'executable'
       ? [
-          rowBlock(
-            'v2-gate-open-in-flight',
-            row,
-            {
-              gateKind: String(row.values.gate_kind),
-              state: String(row.values.state),
-              execution: task.execution,
-            },
-            ['legacy-open-replay'],
-          ),
+          {
+            executable: { taskId: task.taskId, status: task.status },
+            block: rowBlock(
+              'v2-gate-open-in-flight',
+              row,
+              {
+                gateKind: String(row.values.gate_kind),
+                state: String(row.values.state),
+                execution: task.execution,
+              },
+              ['legacy-open-replay'],
+            ),
+          },
         ]
       : []
   },
@@ -44,6 +50,9 @@ export const gateOperationsRule: ConversionRule = {
   claims: ['collaboration_gate_operations'],
   produces: [{ table: 'collaboration_gate_operations' }],
   lookups: [TASK_FACTS],
+  // RFC-626 §3.2.2: gate operations are part of a task's execution chain; one that is set
+  // aside ends the unfinished task it belongs to.
+  settles: {},
   unit: { kind: 'source-chunk', table: 'collaboration_gate_operations' },
   convert(unit, ctx) {
     for (const row of unit.rows.get('collaboration_gate_operations') ?? []) {

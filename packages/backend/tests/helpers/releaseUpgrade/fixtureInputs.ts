@@ -21,6 +21,15 @@ export function supplyMatrixInputs(
       captured(await captureSource(request.source, built, expected))
     return dryRun(request)
   }
+  // RFC-626: the automatic upgrade converts in one pass and never rehearses, so the source
+  // it converts is observed where that pass starts.
+  const prepare = epoch.conversion.prepare?.bind(epoch.conversion)
+  if (prepare)
+    epoch.conversion.prepare = async (request) => {
+      if (!request.source.preflight.requiresOfflineUpgrade)
+        captured(await captureSource(request.source, built, expected))
+      return prepare(request)
+    }
   const objects = new Map(
     built.seeds.flatMap((seed) =>
       (seed.content ?? [])

@@ -13,6 +13,7 @@ import {
   decodeLogicalRow,
   encodeLogicalRow,
   type LogicalTableChunk,
+  type LogicalValueRule,
 } from './logicalDatabaseArtifact'
 import type {
   PostgresqlDatabaseRuntime,
@@ -119,6 +120,30 @@ async function analyzeApplicationTables(
   }
 }
 
+/**
+ * RFC-626 §4.6: the PostgreSQL protocol carries at most 65535 bind parameters in one statement.
+ * One chunk used to be one INSERT of every row and every column, so a 1000-row chunk of the
+ * 70-column `tasks` table (70 000 parameters) failed from its 937th row on — `query has too many
+ * parameters` — and an installation with that many tasks could not upgrade. Statements stay a
+ * margin below the ceiling.
+ */
+export const POSTGRESQL_STATEMENT_PARAMETERS = 60_000
+
+/** Rows per statement (and per copied batch) for a row of `parameters` bind parameters. */
+export function postgresqlCopyBatchRows(parameters: number): number {
+  return Math.max(
+    1,
+    Math.min(1000, Math.floor(POSTGRESQL_STATEMENT_PARAMETERS / Math.max(1, parameters))),
+  )
+}
+
+function batches<T>(items: readonly T[], size: number): T[][] {
+  const result: T[][] = []
+  for (let offset = 0; offset < items.length; offset += size)
+    result.push(items.slice(offset, offset + size))
+  return result
+}
+
 function keyJson(row: LogicalTableChunk['payload']['rows'][number] | undefined): string | null {
   return row === undefined ? null : canonicalSchemaJson(row.key).trimEnd()
 }
@@ -141,32 +166,43 @@ async function rowsForChunk(
   chunk: LogicalTableChunk,
 ): Promise<readonly Record<string, unknown>[]> {
   if (chunk.payload.rows.length === 0) return []
-  const parameters: unknown[] = []
-  const predicates = chunk.payload.rows.map((row) => {
-    const pieces = table.migrationKey.map((column, keyIndex) => {
-      const logicalValue = row.key[keyIndex]!
-      parameters.push(
-        logicalValue.type === 'boolean'
-          ? logicalValue.value
-          : logicalValue.type === 'integer'
-            ? BigInt(logicalValue.value)
-            : logicalValue.type === 'real'
-              ? Number(logicalValue.value)
-              : logicalValue.type === 'text'
-                ? logicalValue.value
-                : logicalValue.type === 'bytes'
-                  ? Buffer.from(logicalValue.value, 'base64')
-                  : null,
-      )
-      return `${quote(column)} = $${parameters.length}`
-    })
-    return `(${pieces.join(' AND ')})`
-  })
   const columns = table.columns.map((column) => quote(column.name)).join(', ')
-  return await connection.unsafe(
-    `SELECT ${columns} FROM ${applicationTable(physicalTable(table))} WHERE ${predicates.join(' OR ')}`,
-    parameters,
-  )
+  const result: Record<string, unknown>[] = []
+  // One statement per parameter-bounded batch; a chunk of up to 1000 rows keyed by fewer than
+  // 60 columns is still the single statement it always was.
+  for (const rows of batches(
+    chunk.payload.rows,
+    postgresqlCopyBatchRows(table.migrationKey.length),
+  )) {
+    const parameters: unknown[] = []
+    const predicates = rows.map((row) => {
+      const pieces = table.migrationKey.map((column, keyIndex) => {
+        const logicalValue = row.key[keyIndex]!
+        parameters.push(
+          logicalValue.type === 'boolean'
+            ? logicalValue.value
+            : logicalValue.type === 'integer'
+              ? BigInt(logicalValue.value)
+              : logicalValue.type === 'real'
+                ? Number(logicalValue.value)
+                : logicalValue.type === 'text'
+                  ? logicalValue.value
+                  : logicalValue.type === 'bytes'
+                    ? Buffer.from(logicalValue.value, 'base64')
+                    : null,
+        )
+        return `${quote(column)} = $${parameters.length}`
+      })
+      return `(${pieces.join(' AND ')})`
+    })
+    result.push(
+      ...(await connection.unsafe(
+        `SELECT ${columns} FROM ${applicationTable(physicalTable(table))} WHERE ${predicates.join(' OR ')}`,
+        parameters,
+      )),
+    )
+  }
+  return result
 }
 
 function safeDatabaseCount(value: unknown, detail: string): number {
@@ -359,10 +395,11 @@ function assertTargetChunk(
   table: LogicalTableContract,
   source: LogicalTableChunk,
   targetRows: readonly Record<string, unknown>[],
+  valueRule: LogicalValueRule,
 ): void {
   const byKey = new Map(
     targetRows.map((row) => {
-      const encoded = encodeLogicalRow(table, row)
+      const encoded = encodeLogicalRow(table, row, valueRule)
       return [keyIdentity(encoded), encoded] as const
     }),
   )
@@ -379,6 +416,7 @@ function assertTargetChunk(
     table,
     chunkIndex: source.payload.chunkIndex,
     rows: ordered as LogicalTableChunk['payload']['rows'],
+    valueRule,
   })
   if (projected.digest !== source.digest) {
     throw new PostgresqlLogicalTargetError(
@@ -398,7 +436,23 @@ export async function openPostgresqlLogicalTarget(input: {
   readonly plan: PostgresqlSchemaPlan
   /** Infrastructure test seam; production verifies the embedded history. */
   readonly verifyMigrationHistory?: (plan: PostgresqlSchemaPlan) => Promise<void>
+  /**
+   * RFC-626 §3.3: the value rule copied chunks are read back under. The scratch copy of an
+   * automatic upgrade moves values only the strict rule refuses; the conversion decides
+   * about them later.
+   */
+  readonly valueRule?: LogicalValueRule
+  /**
+   * RFC-626 §3.3: false skips the closed cross-table business oracle when the schema is
+   * finalized. The oracle is the acceptance of an old release's "move to PostgreSQL"; the
+   * scratch copy of an automatic upgrade is only a private copy of the old database, which must
+   * hold whatever that database holds. Indexes, constraints and identities are installed and
+   * verified either way.
+   */
+  readonly businessInvariants?: boolean
 }): Promise<PostgresqlLogicalTarget> {
+  const valueRule: LogicalValueRule = input.valueRule ?? 'strict'
+  const businessInvariants = input.businessInvariants !== false
   if (input.plan.contractDigest !== input.contract.digest) {
     throw new PostgresqlLogicalTargetError(
       'postgresql-target-operation-mismatch',
@@ -577,14 +631,20 @@ export async function openPostgresqlLogicalTarget(input: {
             table,
             chunk,
             await rowsForChunk(connection, table, chunk),
+            valueRule,
           )
           await connection.unsafe('COMMIT')
           return
         }
 
-        if (chunk.payload.rows.length > 0) {
+        // RFC-626 §4.6: one INSERT per parameter-bounded batch, all inside this chunk's
+        // transaction, so the chunk is still written, verified and receipted as one unit.
+        for (const rows of batches(
+          chunk.payload.rows,
+          postgresqlCopyBatchRows(table.columns.length),
+        )) {
           const parameters: unknown[] = []
-          const valueGroups = chunk.payload.rows.map((row) => {
+          const valueGroups = rows.map((row) => {
             const decoded = decodeLogicalRow(table, row)
             return `(${table.columns
               .map((column) => {
@@ -603,6 +663,7 @@ export async function openPostgresqlLogicalTarget(input: {
           table,
           chunk,
           await rowsForChunk(connection, table, chunk),
+          valueRule,
         )
         await connection.unsafe(
           `INSERT INTO ${metadataTable('logical_copy_chunks')} (operation_id, table_id, chunk_index, chunk_digest, row_count, first_key_json, last_key_json, committed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -656,7 +717,8 @@ export async function openPostgresqlLogicalTarget(input: {
           operationId: input.operationId,
           expectedTables,
         })
-        await assertTargetBusinessInvariants({ connection, contract: input.contract })
+        if (businessInvariants)
+          await assertTargetBusinessInvariants({ connection, contract: input.contract })
         await assertTargetIdentitySequences({ connection, contract: input.contract })
         const operations = await connection.unsafe(
           `SELECT stage FROM ${metadataTable('logical_copy_operations')} WHERE operation_id = $1`,
@@ -697,7 +759,8 @@ export async function openPostgresqlLogicalTarget(input: {
         // Run the closed cross-table oracle before unique/FK DDL so a copied
         // business-key mismatch reports its exact invariant/table/key instead
         // of being flattened into a provider constraint error.
-        await assertTargetBusinessInvariants({ connection, contract: input.contract })
+        if (businessInvariants)
+          await assertTargetBusinessInvariants({ connection, contract: input.contract })
         for (const statement of input.plan.statements.filter(
           (statement) =>
             statement.kind === 'index' ||

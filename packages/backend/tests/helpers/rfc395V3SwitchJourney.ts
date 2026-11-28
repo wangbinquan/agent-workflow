@@ -241,6 +241,9 @@ function providerJourney(h: V3Harness, selected: string) {
           async discard() {
             throw new Error('not used')
           },
+          async retire() {
+            throw new Error('not used')
+          },
         }
         const app = createEpochSwitchApplication(f.deps)
         const planInput = {

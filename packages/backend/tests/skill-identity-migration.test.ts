@@ -394,9 +394,13 @@ test('B owns skills/versions exclusively; X retains the entry conversion claim',
   expect(claims).not.toContain('skills')
   expect(claims).not.toContain('skill_versions')
   expect(claims).toContain('skill_content_entries')
+  // RFC-626: the skill rule also claims the two operation tables (moved out of the generic
+  // copy into the skill groups, kept in the "preserved" class through `preservedClaims`).
   expect(createSkillBootConversion(convert).rules.flatMap((rule) => rule.claims)).toEqual([
     'skills',
     'skill_versions',
+    'skill_operations',
+    'skill_operation_locks',
   ])
 })
 

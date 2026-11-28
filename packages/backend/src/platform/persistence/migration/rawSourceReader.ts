@@ -11,6 +11,7 @@ import {
   type RawSourceChunk,
   type RawSourceRow,
   type SourceIdentityHighWater,
+  type SourceMeasurementObserver,
 } from './sourceTypes'
 
 export function rawSourceCell(storageClass: string, value: unknown): RawSourceCell {
@@ -123,8 +124,15 @@ export function sqliteIdentityHighWater(database: Database): readonly SourceIden
 }
 /** Stable across reopen, relocation, VACUUM and WAL checkpoints. Includes schema,
  * journal, identity high-water and every storage value; excludes inode, clocks,
- * connection data_version and synthetic rowids. Any included fact invalidates it. */
-export function sqliteContentDigest(database: Database): string {
+ * connection data_version and synthetic rowids. Any included fact invalidates it.
+ *
+ * RFC-626 §7: the digest reads every value of every table, so the number of times it runs is
+ * what an upgrade's duration hangs on; `onMeasure` is told each time it does. */
+export function sqliteContentDigest(
+  database: Database,
+  onMeasure?: SourceMeasurementObserver,
+): string {
+  onMeasure?.('sqlite-content')
   const hash = createSha256DigestBuilder()
   const frame = (value: unknown) => {
     const text = canonicalSchemaJson(value)
@@ -158,11 +166,26 @@ export function sqliteContentDigest(database: Database): string {
     database.exec('ROLLBACK')
   }
 }
-export function assertSqliteIntegrity(database: Database): void {
+/**
+ * A database that fails `quick_check` is damaged and is always refused. Rows whose foreign key
+ * dangles are a different matter: the file is sound and the old release wrote them. RFC-626 §3.3:
+ * with `tolerateForeignKeys` they are counted instead of refused, because the automatic upgrade
+ * converts such rows and then clears the reference or sets the row aside when it finalizes the
+ * target.
+ */
+export function assertSqliteIntegrity(
+  database: Database,
+  options: { readonly tolerateForeignKeys?: boolean } = {},
+): { readonly foreignKeyViolations: number } {
   const checks = database.query('PRAGMA quick_check').all() as { quick_check: string }[]
   if (checks.length !== 1 || checks[0]?.quick_check !== 'ok')
     throw new SourceBlockedError('SQLite source failed quick_check')
-  const foreignKeys = database.query('PRAGMA foreign_key_check').all()
-  if (foreignKeys.length)
-    throw new SourceBlockedError(`SQLite source has ${foreignKeys.length} foreign-key violation(s)`)
+  // One row per violating row: count them without holding all of them in memory.
+  let foreignKeyViolations = 0
+  for (const _row of database.query('PRAGMA foreign_key_check').iterate()) foreignKeyViolations += 1
+  if (foreignKeyViolations && !options.tolerateForeignKeys)
+    throw new SourceBlockedError(
+      `SQLite source has ${foreignKeyViolations} foreign-key violation(s)`,
+    )
+  return { foreignKeyViolations }
 }

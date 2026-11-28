@@ -1,0 +1,595 @@
+{
+  "formatVersion": 1,
+  "scenario": "settled-tasks",
+  "base": "v0.19.2",
+  "providers": [
+    "sqlite",
+    "postgresql"
+  ],
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-626-upgrade-no-refusal-minimal-time/design.md §3.2.1, §3.2.3, §3.2.4, §7",
+      "design/RFC-626-upgrade-no-refusal-minimal-time/proposal.md §1.1 M1, §5 A1, §6 item 1",
+      "packages/backend/db/migrations/0210_rfc328_task_execution_ownership.sql",
+      "packages/backend/db/migrations/0212_rfc333_human_gate_operations.sql"
+    ],
+    "note": "Unfinished tasks a v0.19.2 installation keeps after its daemon stopped: runs dispatched before envelope nonces existed (pending, running, interrupted, awaiting review, awaiting a human answer), a run whose recorded upstream run is gone, a parent with a pending and an interrupted child, plus one complete task waiting for review and one complete task interrupted by a daemon restart. Every row copies a released-ledger row so the columns later migrations added keep the values those migrations gave them; only the state of the old database is described here."
+  },
+  "rows": [
+    {
+      "op": "clone",
+      "table": "tasks",
+      "from": {
+        "id": "01K3980000085154084C742759"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000001",
+        "name": "rfc626 interrupted with a run from before envelope nonces",
+        "status": "interrupted",
+        "finished_at": null,
+        "error_summary": "daemon-restart",
+        "error_message": null,
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260ST00000000000001",
+        "execution_lineage_id": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "M1: an interrupted task whose only run has no envelope nonce and is the slot's selected run"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K3980000D3D6DE02630EDFDE"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000101",
+        "task_id": "01K3986260ST00000000000001",
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "done worker run, envelope_nonce NULL (as the released ledger's own era-0000 runs)"
+    },
+    {
+      "op": "clone",
+      "table": "lifecycle_alerts",
+      "from": {
+        "id": "01K39800008D7ED84D75C867F0"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000201",
+        "task_id": "01K3986260ST00000000000001",
+        "detail": "{\"nodeRunId\":\"01K3986260ST00000000000101\"}",
+        "resolved_at": null
+      },
+      "why": "an unresolved stuck alert; ending the task resolves it (design §3.2.3 row 7)"
+    },
+    {
+      "op": "clone",
+      "table": "task_execution_intents",
+      "from": {
+        "id": "01K3980000452A62D5F0CB0D1E"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000301",
+        "task_id": "01K3986260ST00000000000001",
+        "state": "pending",
+        "request_hash": "6260000000000000000000000000000000000000000000000000000000000301",
+        "payload_json": "{\"version\":1,\"taskId\":\"01K3986260ST00000000000001\"}",
+        "execution_lineage_id": "01K3986260ST00000000000001",
+        "claimed_epoch": null,
+        "claimed_at": null,
+        "completed_at": null
+      },
+      "why": "a pending execution intent left by the stopped daemon (design §3.2.3 row 3)"
+    },
+    {
+      "op": "clone",
+      "table": "task_execution_owners",
+      "from": {
+        "task_id": "01K3980000085154084C742759"
+      },
+      "values": {
+        "task_id": "01K3986260ST00000000000001",
+        "state": "claimed",
+        "revision": 1
+      },
+      "why": "a claimed durable owner left by the stopped daemon (design §3.2.3 row 4)"
+    },
+    {
+      "op": "clone",
+      "table": "tasks",
+      "from": {
+        "id": "01K3980000085154084C742759"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000002",
+        "name": "rfc626 pending with an undispatched run",
+        "status": "pending",
+        "finished_at": null,
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260ST00000000000002",
+        "execution_lineage_id": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "pending task whose pending run would be adopted by the scheduler"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K3980000D3D6DE02630EDFDE"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000102",
+        "task_id": "01K3986260ST00000000000002",
+        "status": "pending",
+        "started_at": null,
+        "finished_at": null,
+        "exit_code": null,
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "pending run without an envelope nonce, used by the execution chain"
+    },
+    {
+      "op": "clone",
+      "table": "tasks",
+      "from": {
+        "id": "01K3980000085154084C742759"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000003",
+        "name": "rfc626 running with a missing upstream run",
+        "status": "running",
+        "finished_at": null,
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260ST00000000000003",
+        "execution_lineage_id": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "running task whose review run consumed an upstream run that is not in the database"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K3980000D3D6DE02630EDFDE"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000103",
+        "task_id": "01K3986260ST00000000000003",
+        "envelope_nonce": "6260000000000000000000000000000000000000000000000000000000000103",
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "provable done worker run"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K3980000289A7465F249D86E"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000113",
+        "task_id": "01K3986260ST00000000000003",
+        "status": "running",
+        "finished_at": null,
+        "exit_code": null,
+        "envelope_nonce": "6260000000000000000000000000000000000000000000000000000000000113",
+        "consumed_upstream_runs_json": "{\"worker\":\"01K3986260ST00000000000999\"}",
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "v2-run-input-producer-missing: the recorded upstream run 01K3986260ST00000000000999 does not exist"
+    },
+    {
+      "op": "clone",
+      "table": "tasks",
+      "from": {
+        "id": "01K3980000085154084C742759"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000004",
+        "name": "rfc626 awaiting review since before envelope nonces",
+        "status": "awaiting_review",
+        "finished_at": null,
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260ST00000000000004",
+        "execution_lineage_id": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "M1: a review that waited for months; its runs have no envelope nonce"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K3980000D3D6DE02630EDFDE"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000104",
+        "task_id": "01K3986260ST00000000000004",
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "done worker run without an envelope nonce"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K3980000289A7465F249D86E"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000114",
+        "task_id": "01K3986260ST00000000000004",
+        "status": "awaiting_review",
+        "finished_at": null,
+        "exit_code": null,
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "the review run waiting for a decision"
+    },
+    {
+      "op": "clone",
+      "table": "doc_versions",
+      "from": {
+        "id": "01K39800003EF6C465BA1EE405"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000404",
+        "task_id": "01K3986260ST00000000000004",
+        "review_node_run_id": "01K3986260ST00000000000114",
+        "body_path": "runs/01K3986260ST00000000000004/review/review/document/v1.md",
+        "decision": "pending",
+        "decision_reason": null,
+        "decided_at": null,
+        "decided_by": null,
+        "decided_by_role": null
+      },
+      "why": "the pending document; ending the task does not touch it (design §3.2.3「不处理的行」)"
+    },
+    {
+      "op": "clone",
+      "table": "tasks",
+      "from": {
+        "id": "01K398000037CCE521AC9029CB"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000005",
+        "name": "rfc626 awaiting a human answer since before envelope nonces",
+        "status": "awaiting_human",
+        "finished_at": null,
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260ST00000000000005",
+        "execution_lineage_id": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "M1: a clarification left unanswered; the released clarify workflow snapshot"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K3980000B80ECC821B9D0545"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000105",
+        "task_id": "01K3986260ST00000000000005",
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "done asking run without an envelope nonce"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K39800002F406CF9552EED51"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000115",
+        "task_id": "01K3986260ST00000000000005",
+        "status": "awaiting_human",
+        "finished_at": null,
+        "exit_code": null,
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "the clarify intermediary run waiting for the answer"
+    },
+    {
+      "op": "clone",
+      "table": "clarify_rounds",
+      "from": {
+        "id": "01K398000058E2DC4E90A80B69"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000505",
+        "task_id": "01K3986260ST00000000000005",
+        "kind": "self",
+        "asking_node_id": "worker",
+        "asking_node_run_id": "01K3986260ST00000000000105",
+        "intermediary_node_id": "clarify",
+        "intermediary_node_run_id": "01K3986260ST00000000000115",
+        "container_run_id": null,
+        "status": "awaiting_human",
+        "answers_json": null,
+        "answered_at": null,
+        "answered_by": null,
+        "submitted_by_role": null,
+        "answer_attributions_json": null,
+        "draft_answers_json": null
+      },
+      "why": "the open self clarification round (design §3.2.3 rows 2b and 6)"
+    },
+    {
+      "op": "clone",
+      "table": "tasks",
+      "from": {
+        "id": "01K3980000085154084C742759"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000006",
+        "name": "rfc626 running parent with children",
+        "status": "running",
+        "finished_at": null,
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260ST00000000000006",
+        "execution_lineage_id": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "a parent ended for its own records; its cancelable child follows it"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K3980000D3D6DE02630EDFDE"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000106",
+        "task_id": "01K3986260ST00000000000006",
+        "status": "running",
+        "finished_at": null,
+        "exit_code": null,
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "running run without an envelope nonce"
+    },
+    {
+      "op": "clone",
+      "table": "tasks",
+      "from": {
+        "id": "01K3980000085154084C742759"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000007",
+        "name": "rfc626 pending child of the running parent",
+        "status": "pending",
+        "finished_at": null,
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260ST00000000000007",
+        "parent_task_id": "01K3986260ST00000000000006",
+        "root_task_id": "01K3986260ST00000000000006",
+        "invocation_depth": 1,
+        "execution_lineage_id": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "complete pending child: ended only because its parent is (cascade, design §3.2.3 expand)"
+    },
+    {
+      "op": "clone",
+      "table": "tasks",
+      "from": {
+        "id": "01K3980000085154084C742759"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000008",
+        "name": "rfc626 interrupted child of the running parent",
+        "status": "interrupted",
+        "finished_at": null,
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260ST00000000000008",
+        "parent_task_id": "01K3986260ST00000000000006",
+        "root_task_id": "01K3986260ST00000000000006",
+        "invocation_depth": 1,
+        "execution_lineage_id": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "an interrupted child is not among the cascade's four cancelable states and stays as it was"
+    },
+    {
+      "op": "clone",
+      "table": "tasks",
+      "from": {
+        "id": "01K3980000085154084C742759"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000011",
+        "name": "rfc626 complete task waiting for review",
+        "status": "awaiting_review",
+        "finished_at": null,
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260ST00000000000011",
+        "execution_lineage_id": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "proposal §6 item 1: a normal waiting review must survive the upgrade and be approvable"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K3980000D3D6DE02630EDFDE"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000111",
+        "task_id": "01K3986260ST00000000000011",
+        "envelope_nonce": "6260000000000000000000000000000000000000000000000000000000000111",
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "provable done worker run"
+    },
+    {
+      "op": "clone",
+      "table": "node_run_outputs",
+      "from": {
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "port_name": "document"
+      },
+      "values": {
+        "node_run_id": "01K3986260ST00000000000111"
+      },
+      "why": "the worker's document output reviewed by the gate"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K3980000289A7465F249D86E"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000121",
+        "task_id": "01K3986260ST00000000000011",
+        "status": "awaiting_review",
+        "finished_at": null,
+        "exit_code": null,
+        "envelope_nonce": "6260000000000000000000000000000000000000000000000000000000000121",
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "the provable review run waiting for a decision"
+    },
+    {
+      "op": "clone",
+      "table": "doc_versions",
+      "from": {
+        "id": "01K39800003EF6C465BA1EE405"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000411",
+        "task_id": "01K3986260ST00000000000011",
+        "review_node_run_id": "01K3986260ST00000000000121",
+        "body_path": "runs/01K3986260ST00000000000011/review/review/document/v1.md",
+        "decision": "pending",
+        "decision_reason": null,
+        "decided_at": null,
+        "decided_by": null,
+        "decided_by_role": null
+      },
+      "why": "the pending document of the normal review"
+    },
+    {
+      "op": "clone",
+      "table": "collaboration_gate_operations",
+      "from": {
+        "id": "01K398000002C3B88F137D374F"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000611",
+        "task_id": "01K3986260ST00000000000011",
+        "gate_ref": "01K3986260ST00000000000411",
+        "idempotency_key": "rfc626-review-open-01K3986260ST00000000000011",
+        "request_hash": "6260000000000000000000000000000000000000000000000000000000000611",
+        "manifest_json": "{\"version\":1,\"kind\":\"review-open\",\"docVersionId\":\"01K3986260ST00000000000411\"}",
+        "receipt_json": "{\"version\":1,\"docVersionId\":\"01K3986260ST00000000000411\"}"
+      },
+      "why": "the review gate's completed open operation (RFC-333)"
+    },
+    {
+      "op": "clone",
+      "table": "collaboration_gate_artifacts",
+      "from": {
+        "operation_id": "01K398000002C3B88F137D374F",
+        "artifact_key": "review-document"
+      },
+      "values": {
+        "operation_id": "01K3986260ST00000000000611",
+        "staged_path": "<AW_HOME>/runs/01K3986260ST00000000000011/review/review/document/v1.md",
+        "final_path": "<AW_HOME>/runs/01K3986260ST00000000000011/review/review/document/v1.md"
+      },
+      "why": "the finalized review document of the open gate, registered with its real digest and size"
+    },
+    {
+      "op": "clone",
+      "table": "task_collaborators",
+      "from": {
+        "task_id": "01K3980000085154084C742759",
+        "user_id": "01K39800007DFB4CF67742CB06",
+        "role": "owner"
+      },
+      "values": {
+        "task_id": "01K3986260ST00000000000011"
+      },
+      "why": "the fixture administrator owns the normal review task"
+    },
+    {
+      "op": "clone",
+      "table": "review_node_reviewers",
+      "from": {
+        "task_id": "01K3980000085154084C742759",
+        "review_node_id": "review",
+        "reviewer_user_id": "01K39800007DFB4CF67742CB06"
+      },
+      "values": {
+        "task_id": "01K3986260ST00000000000011"
+      },
+      "why": "the fixture administrator is the review node's reviewer"
+    },
+    {
+      "op": "clone",
+      "table": "tasks",
+      "from": {
+        "id": "01K3980000085154084C742759"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000012",
+        "name": "rfc626 complete task interrupted by a daemon restart",
+        "status": "interrupted",
+        "finished_at": null,
+        "error_summary": "daemon-restart",
+        "error_message": null,
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260ST00000000000012",
+        "execution_lineage_id": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "design §3.2.4: a complete interrupted task stays a boot auto-resume candidate"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K3980000D3D6DE02630EDFDE"
+      },
+      "values": {
+        "id": "01K3986260ST00000000000112",
+        "task_id": "01K3986260ST00000000000012",
+        "status": "interrupted",
+        "finished_at": null,
+        "exit_code": null,
+        "envelope_nonce": "6260000000000000000000000000000000000000000000000000000000000112",
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "provable interrupted run"
+    }
+  ],
+  "content": [
+    {
+      "path": "runs/01K3986260ST00000000000004/review/review/document/v1.md",
+      "utf8": "# Upgrade report\n\nThe release ledger keeps this review document.\n",
+      "sha256": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff"
+    },
+    {
+      "path": "runs/01K3986260ST00000000000011/review/review/document/v1.md",
+      "utf8": "# Upgrade report\n\nThe release ledger keeps this review document.\n",
+      "sha256": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff"
+    }
+  ],
+  "worktrees": [
+    {
+      "path": "worktrees/upgrade-example/01K3986260ST00000000000011",
+      "repository": "repositories/upgrade-example",
+      "branch": "task/upgrade-history",
+      "baseBranch": "main"
+    }
+  ]
+}

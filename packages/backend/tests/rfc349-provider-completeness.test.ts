@@ -143,6 +143,19 @@ const PROVIDER_FORK_LEDGER = {
   'platform/persistence/databaseProviderRuntime.ts': { forks: 3, fence: 'fenced-dispatch' },
   // RFC-359：统一事务原语按客户端品牌挑会话实现（$provider 缺失 = bun:sqlite），残余分支沉入 never 汇。
   'platform/persistence/databaseTransaction.ts': { forks: 2, fence: 'fenced-dispatch' },
+  // RFC-626 §4.3: the freeze record is a union keyed by the provider of the old database
+  // (`FileFreeze | DatabaseFreeze`). A file source keeps its frozen copy next to the record; a
+  // database source keeps only the identity it was confirmed at. Every literal below narrows
+  // that union: a third provider has no variant to write, and a record whose provider the
+  // reader does not know reads as absent, so the freeze is simply taken again.
+  'platform/persistence/migration/freeze/freezeRecord.ts': {
+    forks: 3,
+    fence: 'discriminated-union',
+  },
+  'platform/persistence/migration/freeze/sourceAccess.ts': {
+    forks: 2,
+    fence: 'discriminated-union',
+  },
   // RFC-371 v2 retired the report snapshot, report build, native history and baseline
   // readers. The three frozen generators below only replay the published PostgreSQL
   // history: both nested JSON adapters ask the exact capability matrix; their two

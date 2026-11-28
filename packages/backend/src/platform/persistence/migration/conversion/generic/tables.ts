@@ -127,8 +127,8 @@ export const genericCopyTables = [
   'mcps',
   'plugin_artifact_generations',
   'plugins',
-  'skill_operation_locks',
-  'skill_operations',
+  // skill_operations and skill_operation_locks are members of the skill rule's groups and are
+  // disposed of with their skill (RFC-626 §3.4 row 3c).
   'workgroup_members',
   'workgroups',
   'observation_call_models',

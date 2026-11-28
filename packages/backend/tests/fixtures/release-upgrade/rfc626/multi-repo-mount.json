@@ -1,0 +1,68 @@
+{
+  "formatVersion": 1,
+  "scenario": "multi-repo-mount",
+  "base": "v0.19.2",
+  "providers": [
+    "sqlite",
+    "postgresql"
+  ],
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-626-upgrade-no-refusal-minimal-time/design.md §3.3「自动处置之后校验必须通过」(任务聚合完整), §9.8 T0-4",
+      "packages/backend/db/migrations/0083_rfc164_workgroup_engine.sql (task_repos)"
+    ],
+    "note": "A finished two-repository task whose first mount (repo_index 0) disagrees with the repository fields the task row mirrors, while the second mount is consistent. Before RFC-626 the first mount was skipped and the second emitted, so the task-aggregate probe (minimum ordinal 0) failed in both modes."
+  },
+  "rows": [
+    {
+      "op": "clone",
+      "table": "tasks",
+      "from": {
+        "id": "01K3980000085154084C742759"
+      },
+      "values": {
+        "id": "01K3986260MM00000000000001",
+        "name": "rfc626 finished task with a contradicting first mount",
+        "repo_count": 2,
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260MM00000000000001",
+        "execution_lineage_id": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "terminal task: no settlement, only the mount rule is exercised"
+    },
+    {
+      "op": "clone",
+      "table": "task_repos",
+      "from": {
+        "task_id": "01K398000056156B246ACF9C23",
+        "repo_index": 0
+      },
+      "values": {
+        "task_id": "01K3986260MM00000000000001",
+        "repo_index": 0,
+        "repo_path": "<AW_HOME>/repositories/rfc626-not-the-task-repository",
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260MM00000000000001/first",
+        "worktree_dir_name": "first",
+        "mount_path": "first"
+      },
+      "why": "v2-task-mount-conflict: its repo_path differs from tasks.repo_path"
+    },
+    {
+      "op": "clone",
+      "table": "task_repos",
+      "from": {
+        "task_id": "01K398000056156B246ACF9C23",
+        "repo_index": 0
+      },
+      "values": {
+        "task_id": "01K3986260MM00000000000001",
+        "repo_index": 1,
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260MM00000000000001/second",
+        "worktree_dir_name": "second",
+        "mount_path": "second"
+      },
+      "why": "a consistent second mount"
+    }
+  ]
+}

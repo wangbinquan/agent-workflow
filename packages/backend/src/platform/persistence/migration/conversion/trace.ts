@@ -5,8 +5,10 @@ import type {
   ConversionBlock,
   DispositionClass,
   EncodedKey,
+  LoadRejectionDecision,
   MigrationKey,
   RowDisposition,
+  SettlementRewrite,
   SourcePhase,
   TargetRef,
   ChunkReceipt,
@@ -22,12 +24,16 @@ export interface RowExplanation {
   readonly dispositions: readonly RowDisposition[]
   readonly receipts: readonly ChunkReceipt[]
   readonly blocks: readonly ConversionBlock[]
+  /** RFC-626: what ending its task rewrote on this row; null when nothing was rewritten. */
+  readonly settlement: SettlementRewrite | null
 }
 export async function explainSourceRow(
   input: ConversionInput,
   table: string,
   key: MigrationKey,
   phase: SourcePhase = 'current',
+  /** RFC-626: the load rejections the run persisted, so a replay sets the same rows aside. */
+  loadRejections?: ReadonlyMap<string, readonly LoadRejectionDecision[]>,
 ): Promise<RowExplanation> {
   const encoded = encodeMigrationKey(table, key)
   const targets: TargetRef[] = []
@@ -36,11 +42,12 @@ export async function explainSourceRow(
   const blocks: ConversionBlock[] = []
   let disposition: DispositionClass | null = null
   let found = false
+  let settlement: SettlementRewrite | null = null
   await executeConversion(
     input,
     {
       async open() {
-        return { committedUnitIds: new Set() }
+        return { committedUnitIds: new Set(), ...(loadRejections ? { loadRejections } : {}) }
       },
       async commitUnit() {},
       async finish(summary) {
@@ -59,6 +66,7 @@ export async function explainSourceRow(
         )
         if (!row) return
         found = true
+        settlement = row.settlement ?? null
         targets.push(...links(row))
         receipts.push(output.receipt)
         const exceptions = output.dispositions.filter((item) => item.sourceKey === encoded)
@@ -70,10 +78,12 @@ export async function explainSourceRow(
         blocks.push(...output.blocks.filter((block) => block.sourceKey === encoded))
         disposition = exceptions.some((item) => item.class === 'blocked')
           ? 'blocked'
-          : (exceptions.at(-1)?.class ??
-            (output.receipt.sources.find((source) => source.table === table)?.counts.preserved
-              ? 'preserved'
-              : 'converted'))
+          : exceptions.some((item) => item.class === 'archived')
+            ? 'archived'
+            : (exceptions.at(-1)?.class ??
+              (output.receipt.sources.find((source) => source.table === table)?.counts.preserved
+                ? 'preserved'
+                : 'converted'))
       },
     },
   )
@@ -87,5 +97,6 @@ export async function explainSourceRow(
     dispositions,
     receipts,
     blocks,
+    settlement,
   }
 }

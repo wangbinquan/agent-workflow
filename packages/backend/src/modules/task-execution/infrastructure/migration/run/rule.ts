@@ -6,7 +6,7 @@ import {
 } from '@/platform/persistence/migration/conversion/lookups/keys'
 import { rowBlock } from '@/platform/persistence/migration/conversion/blockCodes'
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
-import type { JsonValue } from '@/platform/persistence/migration/conversion/types'
+import type { JsonValue, SourceRow } from '@/platform/persistence/migration/conversion/types'
 import { RUN_DEFINITIONS, RUN_SEQUENCES, WRITER_EVIDENCE } from './lookups'
 import { extractWriterFacts } from './writers'
 import { deriveRunIdentities } from './identity'
@@ -15,10 +15,14 @@ import { convertConsumedInputs } from './inputs'
 import { convertCheckpoints, type RunDecision } from './checkpoints'
 import { convertPrompt } from './prompts'
 import { splitNodeRun } from './split'
-import { legacyGeneration } from './generations'
-import { allocationBase, emitRunAllocation } from './allocations'
+import {
+  blockSequenceWithoutRow,
+  emitRunAllocation,
+  recordSequenceKept,
+  resolveAllocationBase,
+} from './allocations'
 import { emitRunEvidence } from './evidence'
-import { nullableText, oracleRow, text } from './source'
+import { nullableText, oracleRow, text, unusableNumberColumns, unusableRowBlock } from './source'
 import { LEGACY_EFFECT_SLOT_PATHS, legacyRunLineageSlotPath } from './legacyLineage'
 
 export const runRule: ConversionRule = {
@@ -38,10 +42,11 @@ export const runRule: ConversionRule = {
       ],
     },
   ],
+  // RFC-626 §3.3: generation 0 is emitted by the task rule with the task row as its origin, so a
+  // run group set aside as a whole no longer takes its task's generation row along.
   produces: [
     ...[
       'node_runs',
-      'task_execution_generations',
       'node_run_selections',
       'node_run_inputs',
       'node_run_configs',
@@ -67,32 +72,38 @@ export const runRule: ConversionRule = {
     groupColumn: 'task_id',
     members: [{ table: 'node_runs', column: 'task_id' }],
   },
+  // RFC-626 §3.2.1: a run that cannot be proved blocks only while its task could continue
+  // (`emitRunEvidence`). The default `tasksOf` is the row's `task_id`, which is the group key:
+  // a group covers its own task and nothing else.
+  settles: { tasksOfGroup: (taskId) => [taskId] },
   async convert(unit, ctx) {
     for (const taskId of unit.groupKeys ?? []) {
       const task = ctx.lookup(TASK_FACTS).require(taskId)
-      ctx.out.row('task_execution_generations', legacyGeneration(task), null)
-      const rows = (unit.rows.get('node_runs') ?? []).filter((row) => row.values.task_id === taskId)
+      const all = (unit.rows.get('node_runs') ?? []).filter((row) => row.values.task_id === taskId)
+      // RFC-626: a number past 2^53 cannot be carried; the run lookups skip the same rows.
+      const rows: SourceRow[] = []
+      for (const row of all) {
+        const unusable = unusableNumberColumns(row)
+        if (unusable.length) ctx.out.block(unusableRowBlock(row, unusable))
+        else rows.push(row)
+      }
       const sequence = ctx.lookup(RUN_SEQUENCES).require(taskId)
       let base: number
+      let baseKept: string | null
       try {
         if (sequence.error) throw new Error(sequence.error)
-        base = allocationBase(sequence, ctx)
+        ;({ base, kept: baseKept } = resolveAllocationBase(sequence, ctx))
       } catch (error) {
         for (const row of rows)
           ctx.out.block(rowBlock('v2-run-sequence', row, { error: String(error) }, ['seq']))
-        if (!rows.length)
-          ctx.out.block({
-            code: 'v2-run-sequence',
-            scope: 'global',
-            sourceTable: null,
-            sourceKey: null,
-            taskId,
-            runId: null,
-            missingFields: ['seq'],
-            detail: { error: String(error) },
-          })
+        if (!all.length)
+          blockSequenceWithoutRow(ctx, { sourceTable: null, taskId, error: String(error) })
         continue
       }
+      // RFC-626 §3.4 row 16: runs of this task that are given a sequence get it from the
+      // largest sequence of the rows; the task says so once.
+      if (baseKept !== null && sequence.runs.some((run) => run.allocationOrdinal !== null))
+        recordSequenceKept(ctx, { sourceTable: 'node_runs', taskId, error: baseKept })
       const byId = new Map(rows.map((row) => [text(row, 'id'), row]))
       const sequenced = new Map(
         sequence.runs.map((run) => [

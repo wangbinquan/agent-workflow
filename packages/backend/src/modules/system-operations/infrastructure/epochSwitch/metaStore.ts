@@ -38,7 +38,7 @@ import type {
   ValidationReport,
 } from '@/platform/persistence/migration/run/types'
 import { VALIDATION_CHECKS } from '@/platform/persistence/migration/run/types'
-import { probeTargetRow } from '@/platform/persistence/migration/target/loader'
+import { probeTargetRow, targetStatementRows } from '@/platform/persistence/migration/target/loader'
 import { foldIdentityHighWater } from '@/platform/persistence/migration/target/identity'
 import type { MigrationMetaReadPort } from '../../application/ports/epochSwitch'
 import {
@@ -165,6 +165,40 @@ export function createMigrationMetaStore(input: {
       `INSERT INTO ${metaTableName(tx.provider, table)} (${entries.map((entry) => quote(entry.name)).join(', ')}) VALUES (${parameters(tx, entries.length)})`,
       entries.map((entry) => entry.value),
     )
+  }
+  /**
+   * The rows `insert` would write one by one, as multi-row statements within the parameter limit
+   * of the target (RFC-626 §4.6): a unit's dispositions and receipts are a statement per few
+   * hundred rows instead of one each. Every row is checked and encoded before the first statement.
+   */
+  const insertRows = async (table: string, rows: readonly MetaRow[]): Promise<void> => {
+    const width = Object.keys(declaration(table).columns).length
+    const encoded = rows.map((row) => {
+      if (Object.keys(row).length !== width) throw new Error(`v3-meta-incomplete-row: ${table}`)
+      return encode(table, row)
+    })
+    if (!encoded.length) return
+    // Complete rows hold every declared column once; bind them in the first row's order.
+    const names = encoded[0]!.map((entry) => entry.name)
+    const position = new Map(names.map((name, index) => [name, index]))
+    const dialect = persistenceDialect(tx.provider)
+    const limit = targetStatementRows(tx.provider, names.length)
+    for (let start = 0; start < encoded.length; start += limit) {
+      const values: unknown[] = []
+      const groups = encoded.slice(start, start + limit).map((entries) => {
+        const ordered = new Array<unknown>(names.length)
+        for (const entry of entries) ordered[position.get(entry.name)!] = entry.value
+        const slots = ordered.map((value) => {
+          values.push(value)
+          return dialect.parameter(values.length)
+        })
+        return `(${slots.join(', ')})`
+      })
+      await tx.execute(
+        `INSERT INTO ${metaTableName(tx.provider, table)} (${names.map((name) => quote(name)).join(', ')}) VALUES ${groups.join(', ')}`,
+        values,
+      )
+    }
   }
   const update = async (table: string, where: MetaRow, row: MetaRow): Promise<void> => {
     const entries = encode(table, row)
@@ -547,8 +581,9 @@ export function createMigrationMetaStore(input: {
         : null
     },
     async writeBlocks(runId, origin, unitId, blocks) {
-      for (const [ordinal, block] of blocks.entries())
-        await insert('migration_blocks', {
+      await insertRows(
+        'migration_blocks',
+        blocks.map((block, ordinal) => ({
           runId,
           origin,
           unitId: unitId ?? '',
@@ -563,8 +598,10 @@ export function createMigrationMetaStore(input: {
           missingFieldsJson: block.missingFields,
           detailJson: block.detail,
           acknowledgeable: block.acknowledgeable ?? false,
-        })
+        })),
+      )
     },
+    // RFC-626 §4.6: the same rows as one insert each, written per table as multi-row statements.
     async writeUnit(runId, output, outcome, now, loadBlocks = []) {
       const receipt = output.receipt
       const unitId = receipt.unitId
@@ -583,8 +620,9 @@ export function createMigrationMetaStore(input: {
             : 0,
         committedAt: now,
       })
-      for (const source of receipt.sources)
-        await insert('migration_unit_sources', {
+      await insertRows(
+        'migration_unit_sources',
+        receipt.sources.map((source) => ({
           runId,
           sourceTable: source.table,
           sourcePhase: source.phase,
@@ -600,17 +638,18 @@ export function createMigrationMetaStore(input: {
           unitKind: receipt.unit.kind,
           firstGroup: receipt.unit.kind === 'group' ? receipt.unit.firstGroup : null,
           lastGroup: receipt.unit.kind === 'group' ? receipt.unit.lastGroup : null,
-        })
+        })),
+      )
       if (outcome === 'load-blocked') {
         await store.writeBlocks(runId, 'load', unitId, loadBlocks)
         return
       }
-      for (const [ordinal, disposition] of output.dispositions.entries()) {
-        const sourcePhase = disposition.sourcePhase ?? 'current'
-        await insert('migration_row_dispositions', {
+      await insertRows(
+        'migration_row_dispositions',
+        output.dispositions.map((disposition, ordinal) => ({
           runId,
           sourceTable: disposition.sourceTable,
-          sourcePhase,
+          sourcePhase: disposition.sourcePhase ?? 'current',
           sourceKey: disposition.sourceKey,
           ordinal,
           unitId,
@@ -624,28 +663,35 @@ export function createMigrationMetaStore(input: {
           historyJson: disposition.history ?? null,
           codecColumnsJson: disposition.codecColumns ?? null,
           allocationJson: disposition.allocation ?? null,
-        })
-        if (disposition.history) {
+        })),
+      )
+      await insertRows(
+        'migration_history_restrictions',
+        output.dispositions.flatMap((disposition, ordinal) => {
           const history = disposition.history
-          await insert('migration_history_restrictions', {
-            taskId: history.taskId,
-            sourceTable: disposition.sourceTable,
-            sourcePhase,
-            sourceKey: disposition.sourceKey,
-            runId,
-            ordinal,
-            nodeRunId: history.runId,
-            execution: history.execution,
-            executionUse: history.executionUse ?? null,
-            reason: history.reason ?? null,
-            missingFieldsJson: history.missingFields,
-            decisionCode: disposition.decision?.code ?? disposition.kind,
-            unitId,
-          })
-        }
-      }
-      for (const [ordinal, artifact] of output.artifacts.entries())
-        await insert('migration_artifact_receipts', {
+          if (!history) return []
+          return [
+            {
+              taskId: history.taskId,
+              sourceTable: disposition.sourceTable,
+              sourcePhase: disposition.sourcePhase ?? 'current',
+              sourceKey: disposition.sourceKey,
+              runId,
+              ordinal,
+              nodeRunId: history.runId,
+              execution: history.execution,
+              executionUse: history.executionUse ?? null,
+              reason: history.reason ?? null,
+              missingFieldsJson: history.missingFields,
+              decisionCode: disposition.decision?.code ?? disposition.kind,
+              unitId,
+            },
+          ]
+        }),
+      )
+      await insertRows(
+        'migration_artifact_receipts',
+        output.artifacts.map((artifact, ordinal) => ({
           runId,
           sourceTable: artifact.sourceTable,
           sourceKey: artifact.sourceKey,
@@ -662,9 +708,13 @@ export function createMigrationMetaStore(input: {
           publication: artifact.publication,
           missingState: artifact.missing?.state ?? null,
           missingEvidence: artifact.missing?.evidence ?? null,
-        })
+        })),
+      )
+      // An archive already stored, by an earlier unit or earlier in this one, must be identical.
+      const archives = new Map<string, UnitOutput['archives'][number]>()
       for (const archive of output.archives) {
-        const previous = await store.archive({ runId, ref: archive.ref })
+        const previous =
+          archives.get(archive.ref) ?? (await store.archive({ runId, ref: archive.ref }))
         if (previous) {
           if (
             !Buffer.from(previous.bytes).equals(Buffer.from(archive.bytes)) ||
@@ -674,21 +724,25 @@ export function createMigrationMetaStore(input: {
             previous.format !== archive.format
           )
             throw new Error('v3-archive-conflict')
-        } else
-          await insert('migration_archives', {
-            runId,
-            archiveRef: archive.ref,
-            unitId,
-            kind: archive.kind,
-            sourceTable: archive.sourceTable,
-            format: archive.format,
-            rows: archive.rows,
-            byteSize: archive.bytes.byteLength,
-            bytes: archive.bytes,
-          })
+        } else archives.set(archive.ref, archive)
       }
-      for (const [ordinal, record] of output.records.entries())
-        await insert('migration_records', {
+      await insertRows(
+        'migration_archives',
+        [...archives.values()].map((archive) => ({
+          runId,
+          archiveRef: archive.ref,
+          unitId,
+          kind: archive.kind,
+          sourceTable: archive.sourceTable,
+          format: archive.format,
+          rows: archive.rows,
+          byteSize: archive.bytes.byteLength,
+          bytes: archive.bytes,
+        })),
+      )
+      await insertRows(
+        'migration_records',
+        output.records.map((record, ordinal) => ({
           runId,
           unitId,
           ordinal,
@@ -696,7 +750,8 @@ export function createMigrationMetaStore(input: {
           tableName: 'table' in record ? record.table : null,
           recordJson: record,
           recordDigest: valueDigest(record),
-        })
+        })),
+      )
       await store.writeBlocks(runId, 'unit', unitId, output.blocks)
     },
     async finishRun(runId, summary, now) {

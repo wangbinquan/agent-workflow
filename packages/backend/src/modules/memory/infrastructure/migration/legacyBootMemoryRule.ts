@@ -12,6 +12,8 @@ import type {
 } from '@/platform/persistence/migration/conversion/rule'
 
 const ref = { id: 'memory/boot-fused-provenance', version: 2 } as const
+/** RFC-626 §3.4 row 7: a fused memory kept against the quarantine marker by the automatic upgrade. */
+export const FUSED_MEMORY_KEPT_QUARANTINED = 'v2-boot-fused-memory-unproven-kept'
 export const legacyBootMemoryRule: ConversionRule = {
   ...memoriesRule,
   ref,
@@ -45,7 +47,12 @@ export const legacyBootMemoryRule: ConversionRule = {
         supersededById:
           typeof row.values.superseded_by_id === 'string' ? row.values.superseded_by_id : null,
       }
-      if (fused && row.values.fused_into_skill_id !== quarantinedSkillId && fact?.reason) {
+      // RFC-626 §3.4 row 7, together with the fusion rule: with automatic resolution the fusion is
+      // kept against the quarantine marker, and so is the memory fused into it. The fact proves
+      // no skill, so the resolution below falls back to the marker.
+      const unproven =
+        fused && row.values.fused_into_skill_id !== quarantinedSkillId && !!fact?.reason
+      if (unproven && ctx.resolution !== 'automatic') {
         blockBootRow(ctx, ref, row, 'v2-boot-fused-memory-unproven', before, fact?.factIds)
         continue
       }
@@ -111,6 +118,26 @@ export const legacyBootMemoryRule: ConversionRule = {
           },
         },
       )
+      if (unproven)
+        ctx.out.record(
+          {
+            kind: 'decision',
+            code: FUSED_MEMORY_KEPT_QUARANTINED,
+            payload: {
+              automatic: 'kept',
+              sourcePhase: row.phase,
+              sourceTable: row.table,
+              sourceKey: row.encodedKey,
+              cause: fact?.reason ?? 'v2-boot-fused-memory-unproven',
+              memoryId: before.id,
+              fusionId:
+                typeof row.values.fused_fusion_id === 'string' ? row.values.fused_fusion_id : null,
+              skillId: before.skillId,
+              version: before.version,
+            },
+          },
+          row,
+        )
     }
   },
 }

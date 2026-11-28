@@ -299,6 +299,9 @@ export const clarifyRule: ConversionRule = {
     table,
   })),
   lookups: [TASK_FACTS, RUN_FRAMES],
+  // RFC-626 §3.2.1: a round that cannot be proven blocks only while its task can continue;
+  // the automatic upgrade ends that task instead. `clarify_rounds.task_id` names it.
+  settles: {},
   unit: { kind: 'source-chunk', table: 'clarify_rounds' },
   convert(unit, ctx) {
     for (const row of unit.rows.get('clarify_rounds') ?? []) {
@@ -322,7 +325,8 @@ export const clarifyRule: ConversionRule = {
           },
           [],
         )
-        for (const block of result.blocks) ctx.out.block(block)
+        for (const block of result.blocks)
+          ctx.out.blockExecutable({ taskId: fact.taskId, status: fact.status }, block)
         continue
       }
       const targets = result.representable

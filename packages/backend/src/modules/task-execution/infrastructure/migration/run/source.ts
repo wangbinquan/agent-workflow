@@ -1,7 +1,64 @@
 import type { NodeRunStatus } from '@agent-workflow/shared'
-import type { SourceRow, TargetValue } from '@/platform/persistence/migration/conversion/types'
+import type {
+  ConversionBlock,
+  SourceRow,
+  TargetValue,
+} from '@/platform/persistence/migration/conversion/types'
+import { rowBlock } from '@/platform/persistence/migration/conversion/blockCodes'
 import type { SequencedOracleRunRow } from '../../migration/oracle/rows'
 import type { RunFrame } from '@/platform/persistence/migration/conversion/lookups/keys'
+
+/**
+ * RFC-626: the columns of a run row the converter reads as numbers. An integer past 2^53
+ * decodes to a bigint, which no number column can carry; such a row used to throw while the
+ * lookups were built and abort the whole conversion. The lookups now skip it and the rules set
+ * it aside with `v2-run-row-unusable`. Both use `unusableNumberColumns`, so they always agree.
+ */
+export interface RunNumberColumn {
+  readonly name: string
+  readonly nullable: boolean
+}
+export const RUN_NUMBER_COLUMNS: readonly RunNumberColumn[] = [
+  { name: 'seq', nullable: true },
+  { name: 'iteration', nullable: false },
+  { name: 'retry_index', nullable: false },
+  { name: 'review_iteration', nullable: false },
+  { name: 'wg_round', nullable: true },
+  { name: 'started_at', nullable: true },
+]
+export const ALLOCATION_NUMBER_COLUMNS: readonly RunNumberColumn[] = [
+  { name: 'seq', nullable: false },
+]
+export const RUN_ROW_UNUSABLE = 'v2-run-row-unusable'
+/** The listed columns whose value is not a safe integer (or NULL where NULL is allowed). */
+export function unusableNumberColumns(
+  row: SourceRow,
+  columns: readonly RunNumberColumn[] = RUN_NUMBER_COLUMNS,
+): readonly string[] {
+  return columns
+    .filter(({ name, nullable }) => {
+      const value = row.values[name]
+      return value === null ? !nullable : typeof value !== 'number' || !Number.isSafeInteger(value)
+    })
+    .map(({ name }) => name)
+}
+/** A run row the run lookups read: decoded, with every number column usable. */
+export function readableRun(row: SourceRow): boolean {
+  return !row.codecFailure && unusableNumberColumns(row).length === 0
+}
+export function unusableRowBlock(row: SourceRow, columns: readonly string[]): ConversionBlock {
+  return rowBlock(
+    RUN_ROW_UNUSABLE,
+    row,
+    {
+      unusable: columns.map((column) => {
+        const value = row.values[column]
+        return { column, value: value === null || value === undefined ? null : String(value) }
+      }),
+    },
+    columns,
+  )
+}
 
 export function text(row: SourceRow, column: string): string {
   const value = row.values[column]

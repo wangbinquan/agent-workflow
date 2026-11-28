@@ -277,12 +277,19 @@ async function evidenceContext(row: SourceRow) {
     sourceContract: fixtureDigest,
     target,
     topology: target.tables.map((table) => table.id),
+    // RFC-626 §3.2.1: the evidence helpers call `blockExecutable`, which needs the unit's
+    // `settles` view (the run rule declares one); with operator resolution it is a plain block.
+    settles: {
+      tasksOf: (source) => [String(source.values.task_id ?? source.values.id)],
+      isExecutable: () => true,
+    },
   })
   const blocks: ConversionBlock[] = []
   const dispositions: Omit<RowDisposition, 'rule'>[] = []
   const ctx: RuleContext = {
     sourceVersion: source.preflight.sourceVersion,
     sourceProvider: 'sqlite',
+    resolution: 'operator',
     sourceGenerationId: 'dbg_source_fixture',
     preflight: { ...source.preflight, contract: frozenEpoch1Contract },
     planTime: 123,
@@ -301,6 +308,10 @@ async function evidenceContext(row: SourceRow) {
       block(block) {
         blocks.push(block)
         collector.out.block(block)
+      },
+      blockExecutable(task, block) {
+        blocks.push(block)
+        collector.out.blockExecutable(task, block)
       },
       exception(disposition) {
         dispositions.push(disposition)

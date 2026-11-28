@@ -118,8 +118,14 @@ export async function stageSourceTable(input: {
   readonly phase: SourcePhase
   readonly raw: boolean
   readonly limit: number
-  readonly staged: StagingStore
+  /** Only these two are used: a caller that just wants the rows passes its own collector. */
+  readonly staged: Pick<StagingStore, 'putMany' | 'clear'>
   readonly codecTakeovers?: readonly string[]
+  /**
+   * RFC-626 §4.7: called after every chunk is staged, when nothing of it is needed any more.
+   * Rows with large payloads leave dead values behind far faster than a table ends.
+   */
+  readonly reclaim?: () => void
 }): Promise<void> {
   const { source, preflight, table, phase, limit, staged } = input
   let completed = 0
@@ -148,6 +154,7 @@ export async function stageSourceTable(input: {
       )
       report(chunk.rows.length)
       after = chunk.lastKey
+      input.reclaim?.()
     }
   }
   if (input.raw || !contract) {
@@ -185,6 +192,7 @@ export async function stageSourceTable(input: {
       )
       report(chunk.rows.length)
       after = chunk.lastKey
+      input.reclaim?.()
     }
   } catch (error) {
     if (!isSourceCodecFailure(error)) throw error
@@ -194,4 +202,39 @@ export async function stageSourceTable(input: {
     staged.clear(table, phase)
     await raw()
   }
+}
+/**
+ * RFC-626: every row of one source table, read the way the conversion reads it — strictly, and
+ * when the frozen codec rejects a row, the whole table again through the raw channel with the
+ * rows it cannot decode marked (`codecFailure`). For the readers that run before the
+ * conversion (boot-upgrade facts, the unfinished-task count, the trace's group lookup): they
+ * read strictly and had no such way out, so one undecodable row ended the upgrade before the
+ * conversion could set that row aside.
+ */
+export async function readSourceTable(input: {
+  readonly source: VersionedSourceReader
+  readonly preflight: SourcePreflight
+  readonly table: string
+  readonly phase?: SourcePhase
+  readonly limit?: number
+}): Promise<readonly SourceRow[]> {
+  let rows: SourceRow[] = []
+  const phase = input.phase ?? 'current'
+  await stageSourceTable({
+    source: input.source,
+    preflight: input.preflight,
+    table: input.table,
+    phase,
+    raw: false,
+    limit: input.limit ?? 1000,
+    staged: {
+      putMany(batch) {
+        rows.push(...batch)
+      },
+      clear() {
+        rows = []
+      },
+    },
+  })
+  return rows
 }

@@ -8,6 +8,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { resolvePostgresqlMigrationsFolder } from '@/platform/persistence/migration/migrationsFolder'
+import { errorText } from '../errorText'
 import { OBSERVATION_SOURCE_REVISION } from './observationSourceRevisionSchema'
 import {
   buildPostgresqlSchemaPlan,
@@ -573,7 +574,8 @@ function decodeArtifact<T>(raw: string, schema: z.ZodType<T>, name: string): T {
 }
 
 function historyDrift(error: unknown): never {
-  const reason = error instanceof Error ? error.message : String(error)
+  // RFC-626 §3.6: a database client's failure is not an `Error`; read its message as text.
+  const reason = errorText(error)
   throw new PostgresqlMigrationHistoryError(
     'postgresql-migration-history-drift',
     `PostgreSQL migration history does not match this binary schema plan (${reason}). ` +

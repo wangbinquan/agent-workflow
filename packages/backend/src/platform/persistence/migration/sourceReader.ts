@@ -1,6 +1,6 @@
 // RFC-395 II-b V1: common frozen-codec chunks and artifact presence evidence.
 import { createSha256DigestBuilder } from '@/platform/contracts/hash'
-import { createReadStream, existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   compareCanonicalLogicalKeys,
@@ -11,6 +11,7 @@ import {
 } from './legacy/logicalDatabaseArtifact'
 import { digestSchemaContract } from '../schema/canonical'
 import type { LogicalTableContract } from '../schema/contractTypes'
+import { createFileDigestInput } from './fileDigestInput'
 import {
   SourceBlockedError,
   sourceFailure,
@@ -89,6 +90,8 @@ export function sourceContentPresence(input: {
 /** File content watermarks also detect same-size chunk/manifest edits. */
 export async function sourceFilesDigest(root: string): Promise<string> {
   const hash = createSha256DigestBuilder()
+  // One buffer for the whole directory (RFC-626 §4.7, see `createFileDigestInput`).
+  const input = createFileDigestInput()
   const visit = async (path: string, relative: string): Promise<void> => {
     const info = statSync(path)
     if (info.isDirectory()) {
@@ -96,7 +99,7 @@ export async function sourceFilesDigest(root: string): Promise<string> {
         await visit(join(path, name), `${relative}/${name}`)
     } else {
       hash.update(JSON.stringify([relative, info.size]))
-      for await (const bytes of createReadStream(path)) hash.update(bytes as Buffer)
+      await input.update(hash, path)
     }
   }
   await visit(root, '')

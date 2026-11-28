@@ -603,6 +603,9 @@ export function createDigitalEmployeeExecutionCore(
   // 注意资源上限超时与空闲收割也会把任务置成 `canceled`，只是改写了 errorSummary——
   // 它们仍按失败走重试（改成 stopped 会让超时不再重试，那是 AC-12 禁止放宽的重试预算）。
   const userCancelSummary = taskStopProjection({ kind: 'user' }).summary
+  // RFC-626：升级时被结束的任务多是旧版本留下的遗留，升级后不应自己重新跑起来，
+  // 与用户取消同等对待（视为停止、不重试）。
+  const upgradeEndSummary = taskStopProjection({ kind: 'upgrade' }).summary
 
   const core: DigitalEmployeeExecutionCore = {
     async launch(input) {
@@ -615,7 +618,11 @@ export function createDigitalEmployeeExecutionCore(
 
     async inspect(executionRef: string): Promise<DigitalEmployeeExecutionCoreSnapshot> {
       const task = await ports.tasks.get(executionRef)
-      if (task !== null && task.status === 'canceled' && task.errorSummary === userCancelSummary) {
+      if (
+        task !== null &&
+        task.status === 'canceled' &&
+        (task.errorSummary === userCancelSummary || task.errorSummary === upgradeEndSummary)
+      ) {
         const usage = (await ports.resourceUsage.read(executionRef)) ?? {
           effectiveRunningMs: 0,
           totalTokens: 0,

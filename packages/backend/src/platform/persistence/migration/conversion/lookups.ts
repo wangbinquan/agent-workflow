@@ -91,18 +91,37 @@ export function restrictLookups(
     return resolve(key)
   }
 }
+/** RFC-626: the built lookups plus a way to rebuild the ones a rewrite of staged rows touched. */
+export interface LookupSet {
+  readonly resolve: LookupResolver
+  /**
+   * Rebuild every lookup that reads one of these source tables, and every lookup that depends
+   * on a rebuilt one. `tables` holds `sourceIdentity`-style `[phase, table]` pairs.
+   */
+  rebuild(tables: readonly (readonly [SourcePhase, string])[]): Promise<void>
+}
 export async function buildLookups(
   builders: readonly LookupBuilder<unknown>[],
   staged: StagingStore,
   progress?: MigrationProgressCallback,
 ): Promise<LookupResolver> {
+  return (await createLookupSet(builders, staged, progress)).resolve
+}
+export async function createLookupSet(
+  builders: readonly LookupBuilder<unknown>[],
+  staged: StagingStore,
+  progress?: MigrationProgressCallback,
+): Promise<LookupSet> {
   const versions = new Map<string, LookupVersion>()
   const resolve: LookupResolver = <V>(key: LookupKey<V>): LookupReader<V> => {
     const id = lookupIdentity(key)
     const version = versions.get(id)
     if (!version) throw new ConversionContractError(BLOCK_CODES.missingLookup, id)
     return {
-      version,
+      // Read the version when asked: a rebuild replaces it.
+      get version() {
+        return versions.get(id) ?? version
+      },
       get: (key) => staged.lookup<StoredLookupEntry<V>>(id, key)?.value,
       sourceStatus: (key) => staged.lookup<StoredLookupEntry<V>>(id, key)?.sourceStatus,
       require(key) {
@@ -117,7 +136,8 @@ export async function buildLookups(
       },
     }
   }
-  for (const builder of orderLookupBuilders(builders)) {
+  const ordered = orderLookupBuilders(builders)
+  const build = async (builder: LookupBuilder<unknown>): Promise<void> => {
     let completed = 0
     const id = lookupIdentity(builder.key)
     const allowed = new Set(builder.sources)
@@ -176,7 +196,27 @@ export async function buildLookups(
       digest: unorderedDigest(fragments()),
     })
   }
-  return resolve
+  for (const builder of ordered) await build(builder)
+  return {
+    resolve,
+    async rebuild(tables) {
+      const touched = new Set(tables.map(([phase, table]) => JSON.stringify([phase, table])))
+      const rebuilt = new Set<string>()
+      // Dependency order: a lookup that reads a rebuilt one is rebuilt after it.
+      for (const builder of ordered) {
+        const id = lookupIdentity(builder.key)
+        const phase = builder.sourcePhase ?? 'current'
+        if (
+          builder.sources.some((table) => touched.has(JSON.stringify([phase, table]))) ||
+          (builder.dependsOn ?? []).some((key) => rebuilt.has(lookupIdentity(key)))
+        ) {
+          staged.clearLookup(id)
+          await build(builder)
+          rebuilt.add(id)
+        }
+      }
+    },
+  }
 }
 function sourceStatus(row: SourceRow): LookupSourceStatus | undefined {
   const takenOverColumns = (row.codecTakeovers ?? []).map((failure) => failure.column)

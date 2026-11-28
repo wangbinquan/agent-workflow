@@ -14,6 +14,22 @@ import { valueDigest } from '@/platform/persistence/migration/conversion/digest'
 import type { DecodedSourceRow } from '@/platform/persistence/migration/sourceTypes'
 
 const ref = { id: 'knowledge-evolution/boot-fusion-provenance', version: 2 } as const
+/** RFC-626 §3.4 row 7: a fusion kept against the quarantine marker by the automatic upgrade. */
+export const FUSION_SOURCE_KEPT_QUARANTINED = 'v2-boot-fusion-source-unproven-kept'
+const UNFINISHED_FUSION_STATUSES: readonly string[] = ['running', 'awaiting_approval', 'applying']
+/**
+ * Whether the old boot ended this fusion as failed: an unfinished fusion whose skill resolves to
+ * the quarantine marker while the row does not already point there. Shared by the proven
+ * decision and by the automatic upgrade's quarantine of an unprovable fusion, whose fact carries
+ * no verdict of its own.
+ */
+export function fusionWouldTerminalize(row: DecodedSourceRow, resolvedSkillId: string): boolean {
+  return (
+    row.skill_id !== QUARANTINED_FUSION_SKILL_ID &&
+    resolvedSkillId === QUARANTINED_FUSION_SKILL_ID &&
+    UNFINISHED_FUSION_STATUSES.includes(String(row.status))
+  )
+}
 export function decideFusionProvenance(
   row: DecodedSourceRow,
   versions: readonly { readonly skillId: string; readonly version: number }[],
@@ -63,10 +79,7 @@ export function decideFusionProvenance(
     }),
     wouldPreviouslyQuarantine:
       resolved === QUARANTINED_FUSION_SKILL_ID && row.skill_id !== resolved,
-    wouldPreviouslyTerminalize:
-      !quarantined &&
-      resolved === QUARANTINED_FUSION_SKILL_ID &&
-      ['running', 'awaiting_approval', 'applying'].includes(String(row.status)),
+    wouldPreviouslyTerminalize: fusionWouldTerminalize(row, resolved),
   }
 }
 export const fusionProvenanceLookup: LookupBuilder<FusionProvenanceFact> = {
@@ -118,6 +131,61 @@ export const fusionProvenanceRule: ConversionRule = {
         skillId: String(row.values.skill_id),
         status: String(row.values.status),
         error: typeof row.values.error === 'string' ? row.values.error : null,
+      }
+      if (!fact.skillId && ctx.resolution === 'automatic') {
+        // RFC-626 §3.4 row 7: the ledger versions the fusion rests on cannot be read, so its
+        // skill cannot be proven. Keep it the way the old boot kept a fusion it could not prove:
+        // pointing at the quarantine marker, and failed when still unfinished. The fact's own
+        // verdicts are null here, so the decision is taken again from the row.
+        const terminalize = fusionWouldTerminalize(row.values, QUARANTINED_FUSION_SKILL_ID)
+        const values = {
+          ...row.values,
+          skill_id: QUARANTINED_FUSION_SKILL_ID,
+          ...(terminalize
+            ? {
+                status: 'failed',
+                error:
+                  'fusion provenance could not be proven during upgrade; re-initiate the fusion',
+                decided_at: ctx.planTime,
+              }
+            : {}),
+        }
+        const after = {
+          ...before,
+          skillId: QUARANTINED_FUSION_SKILL_ID,
+          status: String(values.status),
+          error: typeof values.error === 'string' ? values.error : null,
+          proof: null,
+          versions: fact.versions,
+          wouldPreviouslyQuarantine: row.values.skill_id !== QUARANTINED_FUSION_SKILL_ID,
+          wouldPreviouslyTerminalize: terminalize,
+        }
+        emitBootRow(ctx, ref, row, values, {
+          changed: row.values.skill_id !== QUARANTINED_FUSION_SKILL_ID || terminalize,
+          before,
+          after,
+          reason: 'v2-boot-fusion-quarantined',
+          factIds: fact.factIds,
+        })
+        ctx.out.record(
+          {
+            kind: 'decision',
+            code: FUSION_SOURCE_KEPT_QUARANTINED,
+            payload: {
+              automatic: 'kept',
+              sourcePhase: row.phase,
+              sourceTable: row.table,
+              sourceKey: row.encodedKey,
+              cause: fact.reason ?? 'v2-boot-fusion-source-unproven',
+              fusionId: before.id,
+              skillId: before.skillId,
+              status: before.status,
+              terminalized: terminalize,
+            },
+          },
+          row,
+        )
+        continue
       }
       if (!fact.skillId) {
         blockBootRow(

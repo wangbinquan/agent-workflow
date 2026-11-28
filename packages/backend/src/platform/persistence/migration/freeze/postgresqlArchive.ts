@@ -2,12 +2,13 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { exportEpoch1PostgresqlSource } from '../postgresqlSourceExport'
 import type { SourceArchiveInput } from '../run/types'
-import { openVerifiedLogicalDatabaseArtifactSource } from '../legacy/logicalDatabaseRestore'
+import { cachedVerifiedArtifactSource } from '../artifactDirectoryCache'
 import {
   logicalArtifactFileDigest,
   verifyLogicalArtifactManifest,
 } from '../legacy/logicalDatabaseArtifact'
 import { resolveEpoch1PostgresqlVersion } from '../epoch1/releasedPostgresql'
+import type { SourceMeasurementObserver } from '../sourceTypes'
 import type { FrozenSourceDetails } from './sourceAccess'
 
 export type PostgresqlBackupArchive = Pick<
@@ -18,6 +19,8 @@ export type PostgresqlBackupArchive = Pick<
 export async function resolvePostgresqlSourceArchive(
   details: Pick<FrozenSourceDetails, 'originalPreflight' | 'originalReader'>,
   archive: SourceArchiveInput,
+  /** RFC-626 §7: told each time the retained archive's whole tree is verified. */
+  onMeasure?: SourceMeasurementObserver,
 ): Promise<PostgresqlBackupArchive> {
   const preflight = details.originalPreflight
   if (archive.kind === 'retained-epoch1-archive') {
@@ -30,12 +33,17 @@ export async function resolvePostgresqlSourceArchive(
     const contract = (await resolveEpoch1PostgresqlVersion(manifest.payload.schemaDigest))?.contract
     if (!contract) throw new Error('postgresql-archive-contract-unsupported')
     return {
-      preservedArchive: openVerifiedLogicalDatabaseArtifactSource({
-        artifactRoot: archive.path,
-        expectedManifestDigest: manifest.digest,
-        expectedLegacyArchiveFileDigest: archive.digest,
-        contract,
-      }),
+      // RFC-626 §4.6: the retained archive is resolved again at every check of the source; its
+      // chunks are verified once per process for as long as the directory stays the same.
+      preservedArchive: cachedVerifiedArtifactSource(
+        {
+          artifactRoot: archive.path,
+          expectedManifestDigest: manifest.digest,
+          expectedLegacyArchiveFileDigest: archive.digest,
+          contract,
+        },
+        onMeasure,
+      ),
     }
   }
   const assertProvenance = async () => {

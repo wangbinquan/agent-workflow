@@ -3,6 +3,7 @@ import { join, posix } from 'node:path'
 import type { ContentLocation } from '../contentRef'
 import { skillTreeKey } from '../migration/specs'
 import type { ContentStat } from '@/platform/persistence/migration/conversion/content'
+import type { ConversionResolution } from '@/platform/persistence/migration/conversion/types'
 import type {
   ContentDrift,
   ContentRootSpec,
@@ -20,7 +21,6 @@ import {
 } from './databaseTrees'
 import {
   resolveContentLocation,
-  inventoryRelativePath,
   inventoryManifestPath,
   inventoryHomePath,
   type InventoryResolution,
@@ -28,6 +28,7 @@ import {
 import { readInventoryObject, statInventoryObject, type InventoryObjectReader } from './objects'
 import { contentByteFacts, skillTreeManifestBytes } from './treeDigest'
 import { verifyContentManifest } from './manifest'
+import { createContentManifestIndex } from './manifestIndex'
 
 interface Observation {
   readonly stat: ContentStat
@@ -39,9 +40,15 @@ export function createFreezeContentInventory(input: {
   readonly source?: FrozenSourceHandle
   readonly objects?: InventoryObjectReader
   readonly operationRoot?: string
+  /**
+   * RFC-626 §3.4 row 2b: with `automatic`, verification leaves receipts that register content as
+   * missing alone; omitted or `operator` keeps the strict comparison.
+   */
+  readonly resolution?: ConversionResolution
 }): VerifiableContentInventory {
   verifyContentManifest(input.manifest)
-  const files = new Map(input.manifest.files.map((entry) => [entry.path, entry]))
+  const listing = createContentManifestIndex(input.manifest)
+  const automatic = input.resolution === 'automatic'
   let index: Promise<InventorySourceIndex> | undefined
   const sourceIndex = () =>
     (index ??= input.source
@@ -68,7 +75,7 @@ export function createFreezeContentInventory(input: {
   })
   const file = (path: string): Observation => {
     const relative = inventoryManifestPath(input.root, path)
-    const entry = files.get(relative)
+    const entry = listing.file(relative)
     if (!existsSync(path))
       return absent(
         !!entry && !live,
@@ -96,10 +103,7 @@ export function createFreezeContentInventory(input: {
   const tree = (path: string): Observation => {
     const relative = inventoryManifestPath(input.root, path)
     const prefix = posix.join(relative, '/')
-    const listed =
-      input.manifest.roots.some(
-        (directory) => inventoryRelativePath(input.manifest.roots[0]!, directory) === relative,
-      ) || input.manifest.files.some((entry) => entry.path.startsWith(prefix))
+    const listed = listing.hasDirectory(relative) || listing.hasFilesUnder(prefix)
     if (!existsSync(path))
       return absent(
         listed && !live,
@@ -117,12 +121,12 @@ export function createFreezeContentInventory(input: {
       }
     }
     walk(path)
-    if (!live && paths.some((item) => !files.has(inventoryManifestPath(input.root, item))))
+    if (!live && paths.some((item) => !listing.file(inventoryManifestPath(input.root, item))))
       throw new Error('content-unlisted-present')
     const entries = []
     const entriesToRead = live
       ? paths.map((path) => ({ path: inventoryManifestPath(input.root, path) }))
-      : input.manifest.files.filter((entry) => entry.path.startsWith(prefix))
+      : listing.filesUnder(prefix)
     for (const entry of entriesToRead) {
       const read = file(inventoryHomePath(input.root, entry.path))
       if (read.stat.state !== 'present') return read
@@ -155,9 +159,7 @@ export function createFreezeContentInventory(input: {
       return resolution.kind === 'file' ? file(resolution.path) : tree(resolution.path)
     }
     if (resolution.kind === 'database-tree') {
-      const listed = input.manifest.databaseTrees.find(
-        (entry) => entry.skillId === resolution.skillId && entry.tree === resolution.tree,
-      )
+      const listed = listing.databaseTree(resolution.skillId, resolution.tree)
       const actual = source.trees.get(skillTreeKey(resolution.skillId, resolution.tree))
       if (!actual)
         return absent(!!listed && !live, 'database skill tree absent from the frozen source')
@@ -174,7 +176,7 @@ export function createFreezeContentInventory(input: {
       return present(actual.bytes)
     }
     if (!input.objects || input.root.objects === 'none') throw new Error('object-store-unavailable')
-    const listed = input.manifest.objects.find((entry) => entry.id === resolution.objectId)
+    const listed = listing.object(resolution.objectId)
     const actual = await statInventoryObject(input.objects, resolution.objectId)
     if (!actual)
       return absent(
@@ -244,6 +246,10 @@ export function createFreezeContentInventory(input: {
       for await (const receipt of receipts) {
         if (receipt.target.backend === 'inline' || receipt.target.backend === 'database-bytes')
           continue
+        // RFC-626 §3.4 row 2b: the new database asserts nothing about the bytes of content it
+        // registered as missing, so a file appearing there later does not bear on it. Receipts
+        // that register bytes are compared in both modes.
+        if (automatic && receipt.missing) continue
         const key = inventoryReceiptKey(receipt)
         if (source.receipts.has(key) && source.receipts.get(key) === null) continue
         let location =

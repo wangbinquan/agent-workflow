@@ -23,6 +23,7 @@ import {
   type LogicalDatabaseArtifactManifest,
   type LogicalTableArtifactEntry,
   type LogicalTableChunk,
+  type LogicalValueRule,
 } from './logicalDatabaseArtifact'
 import {
   readLogicalDatabaseBackupEnvelope,
@@ -226,9 +227,13 @@ function readLegacyArchive(input: {
   return manifest
 }
 
-function normalizedRow(table: LogicalTableContract, row: CanonicalLogicalRow): CanonicalLogicalRow {
+function normalizedRow(
+  table: LogicalTableContract,
+  row: CanonicalLogicalRow,
+  rule: LogicalValueRule,
+): CanonicalLogicalRow {
   try {
-    return encodeLogicalRow(table, decodeLogicalRow(table, row))
+    return encodeLogicalRow(table, decodeLogicalRow(table, row), rule)
   } catch {
     return corrupt(`row shape/value does not match ${table.id}`)
   }
@@ -241,13 +246,16 @@ function readVerifiedChunk(input: {
   readonly table: LogicalTableContract
   readonly entry: LogicalTableArtifactEntry
   readonly chunkIndex: number
+  /** RFC-626 §3.3: the rule the artifact was written under (its manifest says which). */
+  readonly valueRule?: LogicalValueRule
 }): LogicalTableChunk {
+  const rule = input.valueRule ?? 'strict'
   const path = logicalChunkPath(input.artifactRoot, input.table, input.chunkIndex)
   let raw: string
   let chunk: LogicalTableChunk
   try {
     raw = readFileSync(path, 'utf8')
-    chunk = verifyLogicalTableChunk(JSON.parse(raw))
+    chunk = verifyLogicalTableChunk(JSON.parse(raw), rule)
   } catch {
     return corrupt(`${input.table.id} chunk ${input.chunkIndex} is missing or unreadable`)
   }
@@ -281,7 +289,11 @@ function readVerifiedChunk(input: {
     corrupt(`${input.table.id} chunk ${input.chunkIndex} is empty instead of being omitted`)
   }
   for (const row of payload.rows) {
-    assertExact(normalizedRow(input.table, row), row, `${input.table.id} row key/value mismatch`)
+    assertExact(
+      normalizedRow(input.table, row, rule),
+      row,
+      `${input.table.id} row key/value mismatch`,
+    )
   }
   return chunk
 }
@@ -292,6 +304,7 @@ function verifyEntry(input: {
   readonly contract: LogicalSchemaContract
   readonly table: LogicalTableContract
   readonly entry: LogicalTableArtifactEntry
+  readonly valueRule?: LogicalValueRule
 }): Readonly<{ rows: number; chunks: number }> {
   if (
     input.entry.table !== input.table.id ||
@@ -347,6 +360,8 @@ export function verifyLogicalDatabaseArtifactTree(input: {
   readonly expectedManifestDigest: string
   readonly expectedLegacyArchiveFileDigest: string
   readonly contract: LogicalSchemaContract
+  /** RFC-626 §3.3: absent for every artifact whose manifest records no rule. */
+  readonly valueRule?: LogicalValueRule
 }): LogicalDatabaseArtifactVerification {
   const manifest = readManifest(input)
   const legacyArchive = readLegacyArchive({ ...input, manifest })
@@ -365,6 +380,7 @@ export function verifyLogicalDatabaseArtifactTree(input: {
       contract: input.contract,
       table,
       entry,
+      valueRule: input.valueRule,
     })
     if (table.disposition === 'ARCHIVE_THEN_OMIT') {
       archiveRows += verified.rows
@@ -389,6 +405,7 @@ export function openVerifiedLogicalDatabaseArtifactSource(input: {
   readonly expectedManifestDigest: string
   readonly expectedLegacyArchiveFileDigest: string
   readonly contract: LogicalSchemaContract
+  readonly valueRule?: LogicalValueRule
 }): VerifiedLogicalDatabaseArtifactSource {
   const verification = verifyLogicalDatabaseArtifactTree(input)
   const entries = new Map(
@@ -416,6 +433,7 @@ export function openVerifiedLogicalDatabaseArtifactSource(input: {
         table: contractTable,
         entry,
         chunkIndex,
+        valueRule: input.valueRule,
       })
     },
   })

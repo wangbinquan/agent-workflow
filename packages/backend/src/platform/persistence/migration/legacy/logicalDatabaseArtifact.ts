@@ -32,56 +32,95 @@ const DigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/)
 const OperationIdSchema = z.string().regex(/^dbm_[A-Za-z0-9_-]{8,128}$/)
 const TableIdSchema = z.string().regex(/^[a-z][a-z0-9_]{0,127}$/)
 
-export const CanonicalLogicalValueSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('null') }).strict(),
-  z.object({ type: z.literal('boolean'), value: z.boolean() }).strict(),
-  z
-    .object({ type: z.literal('integer'), value: z.string().regex(/^-?(?:0|[1-9][0-9]*)$/) })
-    .strict(),
-  z
-    .object({
-      type: z.literal('real'),
-      value: z.string().refine((value) => Number.isFinite(Number(value))),
-    })
-    .strict(),
-  z.object({ type: z.literal('text'), value: z.string() }).strict(),
-  z
-    .object({
-      type: z.literal('bytes'),
-      value: z.string().regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
-    })
-    .strict(),
-])
+/**
+ * RFC-626 §3.3: which value rules the codec enforces on top of how it represents a value.
+ *
+ * `strict` (every reader, and every manual upgrade) refuses JSON-text cells that are not JSON
+ * and reals that are not finite. `transport` is for the three places an automatic upgrade only
+ * moves rows without using them — the copy into the scratch database with its read-back, the
+ * backup export, and reading that backup back: the physical columns hold such values (plain
+ * text, `double precision`), and refusing them there ended the upgrade before the conversion,
+ * which sets such a row aside, ever saw it. The representation is the same under both rules —
+ * JSON text is `text` either way and a non-finite real is the text `String()` gives it — so a
+ * row both rules accept encodes to the same bytes, and so does every chunk, cursor and digest
+ * built from it.
+ */
+export type LogicalValueRule = 'strict' | 'transport'
+const NON_FINITE_REALS: ReadonlySet<string> = new Set(['NaN', 'Infinity', '-Infinity'])
+
+function logicalValueSchema(realValue: (value: string) => boolean) {
+  return z.discriminatedUnion('type', [
+    z.object({ type: z.literal('null') }).strict(),
+    z.object({ type: z.literal('boolean'), value: z.boolean() }).strict(),
+    z
+      .object({ type: z.literal('integer'), value: z.string().regex(/^-?(?:0|[1-9][0-9]*)$/) })
+      .strict(),
+    z
+      .object({
+        type: z.literal('real'),
+        value: z.string().refine(realValue),
+      })
+      .strict(),
+    z.object({ type: z.literal('text'), value: z.string() }).strict(),
+    z
+      .object({
+        type: z.literal('bytes'),
+        value: z.string().regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
+      })
+      .strict(),
+  ])
+}
+
+export const CanonicalLogicalValueSchema = logicalValueSchema((value) =>
+  Number.isFinite(Number(value)),
+)
+const TransportLogicalValueSchema = logicalValueSchema(
+  (value) => Number.isFinite(Number(value)) || NON_FINITE_REALS.has(value),
+)
 
 export type CanonicalLogicalValue = z.infer<typeof CanonicalLogicalValueSchema>
 
-export const CanonicalLogicalRowSchema = z
-  .object({
-    key: z.array(CanonicalLogicalValueSchema).min(1),
-    values: z.array(CanonicalLogicalValueSchema),
-  })
-  .strict()
+function logicalRowSchema(value: ReturnType<typeof logicalValueSchema>) {
+  return z
+    .object({
+      key: z.array(value).min(1),
+      values: z.array(value),
+    })
+    .strict()
+}
+
+export const CanonicalLogicalRowSchema = logicalRowSchema(CanonicalLogicalValueSchema)
+const TransportLogicalRowSchema = logicalRowSchema(TransportLogicalValueSchema)
 
 export type CanonicalLogicalRow = z.infer<typeof CanonicalLogicalRowSchema>
 
-const LogicalTableChunkPayloadSchema = z
-  .object({
-    version: z.literal(1),
-    operationId: OperationIdSchema,
-    schemaDigest: DigestSchema,
-    table: TableIdSchema,
-    disposition: z.enum(['KEEP', 'ARCHIVE_THEN_OMIT', 'DEFER']),
-    chunkIndex: z.number().int().nonnegative(),
-    columns: z.array(z.string()).min(1),
-    migrationKey: z.array(z.string()).min(1),
-    rows: z.array(CanonicalLogicalRowSchema),
-  })
-  .strict()
+function logicalTableChunkPayloadSchema(row: ReturnType<typeof logicalRowSchema>) {
+  return z
+    .object({
+      version: z.literal(1),
+      operationId: OperationIdSchema,
+      schemaDigest: DigestSchema,
+      table: TableIdSchema,
+      disposition: z.enum(['KEEP', 'ARCHIVE_THEN_OMIT', 'DEFER']),
+      chunkIndex: z.number().int().nonnegative(),
+      columns: z.array(z.string()).min(1),
+      migrationKey: z.array(z.string()).min(1),
+      rows: z.array(row),
+    })
+    .strict()
+}
+
+const LogicalTableChunkPayloadSchema = logicalTableChunkPayloadSchema(CanonicalLogicalRowSchema)
+const TransportLogicalTableChunkPayloadSchema =
+  logicalTableChunkPayloadSchema(TransportLogicalRowSchema)
 
 export type LogicalTableChunkPayload = z.infer<typeof LogicalTableChunkPayloadSchema>
 
 const LogicalTableChunkSchema = z
   .object({ payload: LogicalTableChunkPayloadSchema, digest: DigestSchema })
+  .strict()
+const TransportLogicalTableChunkSchema = z
+  .object({ payload: TransportLogicalTableChunkPayloadSchema, digest: DigestSchema })
   .strict()
 
 export type LogicalTableChunk = z.infer<typeof LogicalTableChunkSchema>
@@ -171,6 +210,7 @@ export function encodeLogicalValue(
   table: string,
   column: LogicalColumnContract,
   value: unknown,
+  rule: LogicalValueRule = 'strict',
 ): CanonicalLogicalValue {
   if (value === null) {
     if (!column.nullable) codecFailure(table, column.name, 'unexpected NULL')
@@ -195,13 +235,15 @@ export function encodeLogicalValue(
       return { type: 'integer', value: encoded }
     }
     case 'real': {
-      if (typeof value !== 'number' || !Number.isFinite(value)) {
+      if (typeof value !== 'number' || (rule === 'strict' && !Number.isFinite(value))) {
         return codecFailure(table, column.name, 'expected a finite real')
       }
+      // `String` gives NaN / Infinity / -Infinity their text form under the transport rule.
       return { type: 'real', value: Object.is(value, -0) ? '0' : String(value) }
     }
     case 'json-text':
       if (typeof value !== 'string') return codecFailure(table, column.name, 'expected JSON text')
+      if (rule === 'transport') return { type: 'text', value }
       try {
         JSON.parse(value)
       } catch {
@@ -305,6 +347,7 @@ export function compareCanonicalLogicalKeys(
 export function encodeLogicalRow(
   table: LogicalTableContract,
   row: Readonly<Record<string, unknown>>,
+  rule: LogicalValueRule = 'strict',
 ): CanonicalLogicalRow {
   const values = table.columns.map((column) => {
     if (!(column.name in row)) {
@@ -313,7 +356,7 @@ export function encodeLogicalRow(
         `logical database row is missing ${table.id}.${column.name}`,
       )
     }
-    return encodeLogicalValue(table.id, column, row[column.name])
+    return encodeLogicalValue(table.id, column, row[column.name], rule)
   })
   const byColumn = new Map(table.columns.map((column, index) => [column.name, values[index]!]))
   return {
@@ -356,8 +399,14 @@ export function createLogicalTableChunk(input: {
   readonly table: LogicalTableContract
   readonly chunkIndex: number
   readonly rows: readonly CanonicalLogicalRow[]
+  /** RFC-626 §3.3: `transport` admits the values only the strict rule refuses. */
+  readonly valueRule?: LogicalValueRule
 }): LogicalTableChunk {
-  const payload = LogicalTableChunkPayloadSchema.parse({
+  const schema =
+    input.valueRule === 'transport'
+      ? TransportLogicalTableChunkPayloadSchema
+      : LogicalTableChunkPayloadSchema
+  const payload = schema.parse({
     version: 1,
     operationId: input.operationId,
     schemaDigest: input.contract.digest,
@@ -393,8 +442,13 @@ export function createLogicalTableChunk(input: {
  */
 const chunksVerifiedByConstruction = new WeakSet<LogicalTableChunk>()
 
-export function verifyLogicalTableChunk(value: unknown): LogicalTableChunk {
-  const parsed = LogicalTableChunkSchema.safeParse(value)
+export function verifyLogicalTableChunk(
+  value: unknown,
+  rule: LogicalValueRule = 'strict',
+): LogicalTableChunk {
+  const parsed = (
+    rule === 'transport' ? TransportLogicalTableChunkSchema : LogicalTableChunkSchema
+  ).safeParse(value)
   if (!parsed.success || logicalChunkDigest(parsed.data.payload) !== parsed.data.digest) {
     throw new LogicalDatabaseCodecError(
       'logical-artifact-corrupt',
@@ -503,8 +557,11 @@ export interface PersistedLogicalTableChunk {
 export function persistLogicalTableChunk(
   operationRoot: string,
   chunk: LogicalTableChunk,
+  rule: LogicalValueRule = 'strict',
 ): PersistedLogicalTableChunk {
-  const verified = chunksVerifiedByConstruction.has(chunk) ? chunk : verifyLogicalTableChunk(chunk)
+  const verified = chunksVerifiedByConstruction.has(chunk)
+    ? chunk
+    : verifyLogicalTableChunk(chunk, rule)
   const table = TableIdSchema.parse(verified.payload.table)
   const area = verified.payload.disposition === 'ARCHIVE_THEN_OMIT' ? 'legacy-archive' : 'chunks'
   const path = join(
@@ -518,13 +575,20 @@ export function persistLogicalTableChunk(
   return { path, chunk: verified, bytes: Buffer.byteLength(body, 'utf8') }
 }
 
-export function writeLogicalTableChunk(operationRoot: string, chunk: LogicalTableChunk): string {
-  return persistLogicalTableChunk(operationRoot, chunk).path
+export function writeLogicalTableChunk(
+  operationRoot: string,
+  chunk: LogicalTableChunk,
+  rule: LogicalValueRule = 'strict',
+): string {
+  return persistLogicalTableChunk(operationRoot, chunk, rule).path
 }
 
-export function readLogicalTableChunk(path: string): LogicalTableChunk {
+export function readLogicalTableChunk(
+  path: string,
+  rule: LogicalValueRule = 'strict',
+): LogicalTableChunk {
   try {
-    return verifyLogicalTableChunk(JSON.parse(readFileSync(path, 'utf8')))
+    return verifyLogicalTableChunk(JSON.parse(readFileSync(path, 'utf8')), rule)
   } catch (error) {
     if (error instanceof LogicalDatabaseCodecError) throw error
     throw new LogicalDatabaseCodecError(

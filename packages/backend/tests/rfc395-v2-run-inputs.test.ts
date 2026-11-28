@@ -23,13 +23,16 @@ test('D16 NULL is unrecorded, {} is recorded without edges, malformed JSON is an
   }
 })
 test('D16 raw text ordering survives integer-like keys, escaped keys, and nested invalid values', () => {
+  // RFC-626 (run/inputs.ts): a producer counts only when it ran the node the input names, so
+  // each key gets a producer of its own node; a producer of another node is a missing one.
   const producers = new Map([
-    ['p', runSource('p', { shard_key: '' })],
-    ['q', runSource('q', { shard_key: null })],
+    ['p', runSource('p', { node_id: '10', shard_key: '' })],
+    ['q', runSource('q', { node_id: '2', shard_key: null })],
+    ['r', runSource('r', { node_id: 'a:b', shard_key: '' })],
   ])
   const converted = convertConsumedInputs(
     runSource('c', {
-      consumed_upstream_runs_json: '{"10":"p","2":"q","a\\u003ab":"p","invalid":{"x":[1,2]}}',
+      consumed_upstream_runs_json: '{"10":"p","2":"q","a\\u003ab":"r","invalid":{"x":[1,2]}}',
     }),
     producers,
   )

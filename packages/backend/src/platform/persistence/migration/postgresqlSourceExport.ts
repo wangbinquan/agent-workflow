@@ -7,7 +7,9 @@ import {
   type LogicalDatabaseExportReceipt,
 } from './legacy/logicalDatabaseExport'
 import { pinnedSnapshotReader } from './freeze/liveSnapshot'
-import type { CanonicalLogicalValue } from './legacy/logicalDatabaseArtifact'
+import type { CanonicalLogicalValue, LogicalValueRule } from './legacy/logicalDatabaseArtifact'
+import type { ConversionResolution } from './conversion/types'
+import { readChunkForTransport } from './sourceTransport'
 import {
   SourceBlockedError,
   type RawSourceChunk,
@@ -31,7 +33,20 @@ export async function exportEpoch1PostgresqlSource(input: {
     typeof exportLogicalDatabaseArtifact
   >[0]['preservedArchive']
   readonly emptyArchive?: Parameters<typeof exportLogicalDatabaseArtifact>[0]['emptyArchive']
-}): Promise<LogicalDatabaseExportReceipt & { readonly evidence: Epoch1ExportEvidence }> {
+  /**
+   * RFC-626 §3.3: `automatic` exports under the transport value rule — JSON text that is not
+   * JSON and reals that are not finite are carried as they are, for the conversion to set
+   * aside. The receipt says which rule was used; the backup manifest records it for every
+   * later reader. A manual upgrade exports under the strict rule, as before.
+   */
+  readonly resolution?: ConversionResolution
+}): Promise<
+  LogicalDatabaseExportReceipt & {
+    readonly evidence: Epoch1ExportEvidence
+    readonly valueRule: LogicalValueRule
+  }
+> {
+  const valueRule: LogicalValueRule = input.resolution === 'automatic' ? 'transport' : 'strict'
   const preflight = await input.source.preflight()
   if (
     preflight.kind !== 'postgresql-database' ||
@@ -42,12 +57,13 @@ export async function exportEpoch1PostgresqlSource(input: {
     throw new SourceBlockedError('PostgreSQL export requires an identified physical source')
   await input.source.assertUnchanged(preflight)
   // The physical reader holds one repeatable-read transaction. Rechecking it
-  // per chunk restarts that transaction and rescans the whole database (including
-  // for empty tables). Keep this snapshot through logical and raw export, then
-  // perform the full physical watermark check before publishing its binding.
+  // per chunk restarts that transaction and counts every table again. Keep this
+  // snapshot through logical and raw export, then perform the physical
+  // watermark check before publishing its binding.
   const snapshot = pinnedSnapshotReader(input.source, preflight)
   const receipt = await exportLogicalDatabaseArtifact({
     ...input,
+    ...(valueRule === 'transport' ? { valueRule } : {}),
     sourceProvider: preflight.fingerprint.provider,
     sourceGenerationId: preflight.sourceGenerationId,
     contract: preflight.contract,
@@ -60,7 +76,8 @@ export async function exportEpoch1PostgresqlSource(input: {
       provider: preflight.fingerprint.provider,
       assertUnchanged: () => snapshot.assertUnchanged(preflight),
       async readChunk(table, afterKey, limit) {
-        return (await input.source.readChunk(table.id, afterKey, limit)).rows
+        return (await readChunkForTransport(input.source, valueRule, table.id, afterKey, limit))
+          .rows
       },
     },
   })
@@ -93,7 +110,7 @@ export async function exportEpoch1PostgresqlSource(input: {
   }
   const evidence = { ...payload, digest: digestSchemaContract(payload) }
   writeFileSync(join(directory, 'binding.json'), canonicalSchemaJson(evidence))
-  return { ...receipt, evidence }
+  return { ...receipt, evidence, valueRule }
 }
 export function readEpoch1ExportEvidence(
   artifactRoot: string,

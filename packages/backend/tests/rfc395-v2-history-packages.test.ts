@@ -13,6 +13,7 @@ import {
 import { conversion } from '@/platform/persistence/migration/archives'
 import { encodeHistoryPackage } from '@/platform/persistence/migration/archives/package'
 import { runConversion } from '@/platform/persistence/migration/conversion/engine'
+import { seedPresence } from '@/platform/persistence/migration/conversion/generic/seedPresence'
 import { bytesDigest } from '@/platform/persistence/migration/conversion/digest'
 import { decodeContentRefColumns } from '@/platform/content/contentRefCodec'
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
@@ -21,9 +22,18 @@ import {
   canonicalValue,
 } from '@/platform/persistence/migration/conversion/migrationKey'
 import type { SourceRow } from '@/platform/persistence/migration/conversion/types'
+import type { ConversionContribution } from '@/platform/persistence/migration/conversion/rule'
 
 // Slowest case took 4.25 s on CI run 40433510287 including hooks; allow 20 s.
 setDefaultTimeout(20_000)
+
+// RFC-626 §3.3: the archive contribution's cutover rule checks the target's seed rows through
+// the generic seed-presence lookup, which production registers with the generic contribution.
+const seedPresenceLookup: ConversionContribution = {
+  rules: [],
+  lookups: [seedPresence],
+  validators: [],
+}
 
 test('history package codec retains typed integer, NULL, bytes and exact JSON text', () => {
   const key = [canonicalValue('id')]
@@ -136,13 +146,16 @@ describeV2Providers('RFC-395 V2-X history packages', (h) => {
     await h.install()
     // PostgreSQL DDL alone omits the rows copied by the epoch-1 install seed.
     await seedRequiredRows(h)
-    const input = await h.input([conversion, historyLookups({ adoptions: false })], {
-      sourceScope: [
-        ...historySourceTables,
-        'committed_event_family_cutovers',
-        'employee_os_writer_state',
-      ],
-    })
+    const input = await h.input(
+      [conversion, historyLookups({ adoptions: false }), seedPresenceLookup],
+      {
+        sourceScope: [
+          ...historySourceTables,
+          'committed_event_family_cutovers',
+          'employee_os_writer_state',
+        ],
+      },
+    )
     try {
       const sink = new V2MemorySink()
       expect((await runConversion(input, sink)).blocks).toEqual([])
@@ -245,13 +258,16 @@ describeV2Providers('RFC-395 V2-X history packages', (h) => {
     await source.close()
     const present = names.filter((table) => preflight.tables.some((entry) => entry.table === table))
     for (const table of present) await h.write(table, [frozenValues(table)])
-    const input = await h.input([conversion, historyLookups({ adoptions: false })], {
-      sourceScope: [
-        ...historySourceTables,
-        'committed_event_family_cutovers',
-        'employee_os_writer_state',
-      ],
-    })
+    const input = await h.input(
+      [conversion, historyLookups({ adoptions: false }), seedPresenceLookup],
+      {
+        sourceScope: [
+          ...historySourceTables,
+          'committed_event_family_cutovers',
+          'employee_os_writer_state',
+        ],
+      },
+    )
     try {
       const sink = new V2MemorySink()
       const result = await runConversion(input, sink)

@@ -438,6 +438,14 @@ export function makeSwitchFixture(existingRoot?: string) {
       async discard() {
         control.state = 'discarded'
       },
+      // RFC-626: retirement by stored identity; the fixture target is one in-memory generation.
+      async retire() {
+        if (!control.installed) return 'absent'
+        if (control.firstWrite !== null) return 'written'
+        if (control.state === 'retired') return 'already-retired'
+        control.state = 'retired'
+        return 'retired'
+      },
     },
     conversionPlan: fixturePlan,
     conversion: {

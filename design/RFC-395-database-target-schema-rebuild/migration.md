@@ -61,6 +61,11 @@ generation pointer 升至 v2（显式 epoch、角色、数据库位置、合同�
 
 **2026-10-24 补充（可执行与历史的口径，用户 2026-10-24 决定）**：本节的「可执行任务」「在途」指状态为 `pending`、`running`、`awaiting_review`、`awaiting_human`、`interrupted` 的任务，任何无法证明的事实都阻塞迁移。`failed`、`canceled` 为「可重试历史」：无法证明的行记为 `history-only` / `unknown` 并附证据，逐个列入迁移计划；切换后，依赖这些行的恢复或重试被明确拒绝，查看历史不受影响。`done` 为终态历史。
 
+**2026-11-27 修订指针（RFC-626）**：上一段「任何无法证明的事实都阻塞迁移」只适用于**人工流程**（`db migration plan / run`）。
+自动升级（`start` / `migrate`）不再因数据而停：无法证明的事实落在未结束的任务上时，由升级结束该任务（标为已取消并写明原因）；
+个别行不合法时封存；内容文件不在时登记为缺失；每一条处置都进入报告。规则、取值与归档格式见
+`design/RFC-626-upgrade-no-refusal-minimal-time/design.md` §3（处置模型与逐类处置表）；本节其余转换规则不变。
+
 ### 4.1 Task 主体与来源
 
 1. 根据已持久化的判别字段（第 5 条的固定顺序）与冻结 snapshot 识别真实主体；host workflow ID 只是来源线索，不再作为新 catalog 引用。

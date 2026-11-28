@@ -1,0 +1,1457 @@
+{
+  "formatVersion": 1,
+  "authority": "independent-rfc626-specification",
+  "authoring": {
+    "sources": [
+      "design/RFC-626-upgrade-no-refusal-minimal-time/design.md §3.1-§3.4, §7",
+      "design/RFC-626-upgrade-no-refusal-minimal-time/proposal.md §5 A1-A10, §6",
+      "packages/backend/tests/fixtures/release-upgrade/seeds/README.md (oracle independence)"
+    ],
+    "converterExecuted": false,
+    "conversionOutputUsed": false,
+    "meaning": "What the target generation must hold after the automatic upgrade of the released v0.19.2 build plus one overlay seed. Written from the design's disposition tables and v0.19.2's cancel/gate-sweep semantics, never from a conversion run.",
+    "tokens": {
+      "$upgradeTime": "the matrix's fixed plan time (data.ts UPGRADE_TIME); design §3.2.3 「升级时刻」",
+      "$key": "[table, [cells]]: the mk1 key of the listed cells, in the table's key order, encoded by data.ts encodedKey/keyCell",
+      "$source": "the same column of the same row in the old database",
+      "$sha256Of / $sizeOf": "digest / byte length of the overlay content written at that path",
+      "$notNull, $startsWith, $includes, $oneOf, $json, $includesAll": "matchers; objects match as subsets, arrays exactly"
+    }
+  },
+  "validation": {
+    "checks": [
+      "coverage",
+      "engine-blocks",
+      "load-blocks",
+      "receipt-conservation",
+      "constraints",
+      "integrity",
+      "catalog",
+      "identity",
+      "required-seeds",
+      "content",
+      "history-restrictions",
+      "probes"
+    ],
+    "probes": [
+      "platform/content:catalog-bytes-and-publications",
+      "platform/content:skill-reference-columns",
+      "collaboration:target-clarify-and-gate-content",
+      "code-capability:history-index",
+      "intent:apply-artifact-envelopes",
+      "resource-catalog:apply-artifact-envelopes",
+      "resource-catalog:agent-reference-order",
+      "resource-catalog:workflow-index-parity",
+      "task-execution:run-selection-integrity",
+      "task-execution:run-input-integrity",
+      "task-execution:task-aggregate"
+    ]
+  },
+  "constants": {
+    "endedByUpgrade": {
+      "summary": "ended by upgrade",
+      "code": "ended-by-upgrade"
+    },
+    "canceledByParent": {
+      "summary": "canceled by parent task",
+      "code": "canceled-by-parent-cascade"
+    },
+    "gateSweepCode": "task-canceled",
+    "ownerRevokedCode": "terminal-control-cancel",
+    "systemUser": "__system__"
+  },
+  "scenarios": {
+    "settled-tasks": {
+      "seed": "settled-tasks.json",
+      "design": [
+        "§3.2.1",
+        "§3.2.2",
+        "§3.2.3",
+        "§3.2.4",
+        "§3.2.5",
+        "§7 结束任务 / 端到端"
+      ],
+      "settlements": [
+        {
+          "taskId": "01K3986260ST00000000000001",
+          "cause": "unprovable-records",
+          "originalStatus": "interrupted",
+          "parentTaskId": null,
+          "blockCodesInclude": [
+            "v2-run-null-nonce"
+          ]
+        },
+        {
+          "taskId": "01K3986260ST00000000000002",
+          "cause": "unprovable-records",
+          "originalStatus": "pending",
+          "parentTaskId": null,
+          "blockCodesInclude": [
+            "v2-run-null-nonce"
+          ]
+        },
+        {
+          "taskId": "01K3986260ST00000000000003",
+          "cause": "unprovable-records",
+          "originalStatus": "running",
+          "parentTaskId": null,
+          "blockCodesInclude": [
+            "v2-run-input-producer-missing"
+          ]
+        },
+        {
+          "taskId": "01K3986260ST00000000000004",
+          "cause": "unprovable-records",
+          "originalStatus": "awaiting_review",
+          "parentTaskId": null,
+          "blockCodesInclude": [
+            "v2-run-null-nonce"
+          ]
+        },
+        {
+          "taskId": "01K3986260ST00000000000005",
+          "cause": "unprovable-records",
+          "originalStatus": "awaiting_human",
+          "parentTaskId": null,
+          "blockCodesInclude": [
+            "v2-run-null-nonce"
+          ]
+        },
+        {
+          "taskId": "01K3986260ST00000000000006",
+          "cause": "unprovable-records",
+          "originalStatus": "running",
+          "parentTaskId": null,
+          "blockCodesInclude": [
+            "v2-run-null-nonce"
+          ]
+        },
+        {
+          "taskId": "01K3986260ST00000000000007",
+          "cause": "parent-cascade",
+          "originalStatus": "pending",
+          "parentTaskId": "01K3986260ST00000000000006",
+          "blockCodesInclude": []
+        }
+      ],
+      "rows": [
+        {
+          "table": "tasks",
+          "key": {
+            "id": "01K3986260ST00000000000001"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled",
+            "finished_at": {
+              "$upgradeTime": true
+            },
+            "error_summary": "ended by upgrade",
+            "error_message": "ended-by-upgrade",
+            "lifecycle_event_revision": 1
+          },
+          "why": "§3.2.3 row 1, §3.2.4; the lifecycle revision is not advanced"
+        },
+        {
+          "table": "tasks",
+          "key": {
+            "id": "01K3986260ST00000000000002"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled",
+            "finished_at": {
+              "$upgradeTime": true
+            },
+            "error_summary": "ended by upgrade",
+            "error_message": "ended-by-upgrade"
+          },
+          "why": "§3.2.3 row 1 from pending"
+        },
+        {
+          "table": "tasks",
+          "key": {
+            "id": "01K3986260ST00000000000003"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled",
+            "finished_at": {
+              "$upgradeTime": true
+            },
+            "error_summary": "ended by upgrade",
+            "error_message": "ended-by-upgrade"
+          },
+          "why": "§3.2.3 row 1 from running"
+        },
+        {
+          "table": "tasks",
+          "key": {
+            "id": "01K3986260ST00000000000004"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled",
+            "finished_at": {
+              "$upgradeTime": true
+            },
+            "error_summary": "ended by upgrade",
+            "error_message": "ended-by-upgrade"
+          },
+          "why": "§3.2.3 row 1 from awaiting_review"
+        },
+        {
+          "table": "tasks",
+          "key": {
+            "id": "01K3986260ST00000000000005"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled",
+            "finished_at": {
+              "$upgradeTime": true
+            },
+            "error_summary": "ended by upgrade",
+            "error_message": "ended-by-upgrade"
+          },
+          "why": "§3.2.3 row 1 from awaiting_human"
+        },
+        {
+          "table": "tasks",
+          "key": {
+            "id": "01K3986260ST00000000000006"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled",
+            "finished_at": {
+              "$upgradeTime": true
+            },
+            "error_summary": "ended by upgrade",
+            "error_message": "ended-by-upgrade"
+          },
+          "why": "the parent, ended for its own run"
+        },
+        {
+          "table": "tasks",
+          "key": {
+            "id": "01K3986260ST00000000000007"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled",
+            "finished_at": {
+              "$upgradeTime": true
+            },
+            "error_summary": "canceled by parent task",
+            "error_message": "canceled-by-parent-cascade"
+          },
+          "why": "§3.2.4: a cascaded child keeps the existing parent-cascade reason"
+        },
+        {
+          "table": "tasks",
+          "key": {
+            "id": "01K3986260ST00000000000008"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "interrupted",
+            "error_summary": null
+          },
+          "why": "§3.2.3: an interrupted child is not cascaded"
+        },
+        {
+          "table": "tasks",
+          "key": {
+            "id": "01K3986260ST00000000000011"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "awaiting_review",
+            "finished_at": null,
+            "error_summary": null
+          },
+          "why": "a complete waiting review is not ended"
+        },
+        {
+          "table": "tasks",
+          "key": {
+            "id": "01K3986260ST00000000000012"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "interrupted",
+            "error_summary": "daemon-restart"
+          },
+          "why": "§3.2.4: still a boot auto-resume candidate"
+        },
+        {
+          "table": "node_runs",
+          "key": {
+            "id": "01K3986260ST00000000000101"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "done",
+            "record_mode": "history-only"
+          },
+          "why": "§3.2.3 row 2a touches only the four cancelable states; the run stays read-only history"
+        },
+        {
+          "table": "node_runs",
+          "key": {
+            "id": "01K3986260ST00000000000102"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled",
+            "finished_at": {
+              "$upgradeTime": true
+            },
+            "error_message": "ended-by-upgrade"
+          },
+          "why": "§3.2.3 row 2a"
+        },
+        {
+          "table": "node_runs",
+          "key": {
+            "id": "01K3986260ST00000000000103"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "done"
+          },
+          "why": "a terminal run of an ended task is unchanged"
+        },
+        {
+          "table": "node_runs",
+          "key": {
+            "id": "01K3986260ST00000000000113"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled",
+            "finished_at": {
+              "$upgradeTime": true
+            },
+            "error_message": "ended-by-upgrade"
+          },
+          "why": "§3.2.3 row 2a"
+        },
+        {
+          "table": "node_runs",
+          "key": {
+            "id": "01K3986260ST00000000000114"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled",
+            "finished_at": {
+              "$upgradeTime": true
+            },
+            "error_message": "ended-by-upgrade"
+          },
+          "why": "§3.2.3 row 2a: the waiting review run is closed"
+        },
+        {
+          "table": "node_runs",
+          "key": {
+            "id": "01K3986260ST00000000000115"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled",
+            "finished_at": {
+              "$upgradeTime": true
+            },
+            "error_message": "task-canceled"
+          },
+          "why": "§3.2.3 rows 2a and 2b: the gate sweep's reason overrides the cancel reason on the open round's intermediary run"
+        },
+        {
+          "table": "node_runs",
+          "key": {
+            "id": "01K3986260ST00000000000106"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled",
+            "finished_at": {
+              "$upgradeTime": true
+            },
+            "error_message": "ended-by-upgrade"
+          },
+          "why": "§3.2.3 row 2a"
+        },
+        {
+          "table": "node_runs",
+          "key": {
+            "id": "01K3986260ST00000000000121"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "awaiting_review",
+            "record_mode": "executable"
+          },
+          "why": "the complete waiting review keeps an executable run"
+        },
+        {
+          "table": "node_runs",
+          "key": {
+            "id": "01K3986260ST00000000000112"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "interrupted",
+            "record_mode": "executable"
+          },
+          "why": "the complete interrupted task keeps an executable run"
+        },
+        {
+          "table": "clarify_rounds",
+          "key": {
+            "id": "01K3986260ST00000000000505"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled"
+          },
+          "why": "§3.2.3 row 6: a self round waiting for a human is canceled"
+        },
+        {
+          "table": "doc_versions",
+          "key": {
+            "id": "01K3986260ST00000000000404"
+          },
+          "expect": "present",
+          "columns": {
+            "decision": "pending"
+          },
+          "why": "§3.2.3「不处理的行」: the real cancel leaves the pending document as it is"
+        },
+        {
+          "table": "lifecycle_alerts",
+          "key": {
+            "id": "01K3986260ST00000000000201"
+          },
+          "expect": "present",
+          "columns": {
+            "resolved_at": {
+              "$upgradeTime": true
+            }
+          },
+          "why": "§3.2.3 row 7"
+        },
+        {
+          "table": "task_execution_intents",
+          "key": {
+            "id": "01K3986260ST00000000000301"
+          },
+          "expect": "present",
+          "columns": {
+            "state": "canceled",
+            "failure_code": "ended-by-upgrade",
+            "completed_at": {
+              "$upgradeTime": true
+            },
+            "updated_at": {
+              "$upgradeTime": true
+            }
+          },
+          "why": "§3.2.3 row 3"
+        },
+        {
+          "table": "task_execution_owners",
+          "key": {
+            "task_id": "01K3986260ST00000000000001"
+          },
+          "expect": "present",
+          "columns": {
+            "state": "revoked",
+            "revision": 2,
+            "recovery_code": "terminal-control-cancel",
+            "updated_at": {
+              "$upgradeTime": true
+            }
+          },
+          "why": "§3.2.3 row 4"
+        },
+        {
+          "table": "committed_events",
+          "key": {
+            "aggregate_id": "01K3986260ST00000000000001"
+          },
+          "expect": "absent",
+          "why": "§3.2.3: ending a task appends no lifecycle event"
+        },
+        {
+          "table": "committed_events",
+          "key": {
+            "aggregate_id": "01K3986260ST00000000000007"
+          },
+          "expect": "absent",
+          "why": "§3.2.3: the cascade appends no lifecycle event either"
+        }
+      ],
+      "dispositions": [
+        {
+          "sourceTable": "node_runs",
+          "sourceKey": {
+            "$key": [
+              "node_runs",
+              [
+                "01K3986260ST00000000000101"
+              ]
+            ]
+          },
+          "class": "converted",
+          "kind": "history-only",
+          "decisionCode": "v2-run-history-only",
+          "why": "§3.2.5: after the task is ended its unprovable run is read-only history by the existing path"
+        }
+      ],
+      "records": [
+        {
+          "code": "v2-task-settled-at-upgrade",
+          "payload": {
+            "automatic": "settled",
+            "sourceTable": "tasks",
+            "sourceKey": {
+              "$key": [
+                "tasks",
+                [
+                  "01K3986260ST00000000000001"
+                ]
+              ]
+            },
+            "taskId": "01K3986260ST00000000000001",
+            "cause": "unprovable-records"
+          },
+          "why": "§3.2.3 改写的留痕: the rewritten task row"
+        },
+        {
+          "code": "v2-task-settled-at-upgrade",
+          "payload": {
+            "automatic": "settled",
+            "sourceTable": "tasks",
+            "sourceKey": {
+              "$key": [
+                "tasks",
+                [
+                  "01K3986260ST00000000000007"
+                ]
+              ]
+            },
+            "taskId": "01K3986260ST00000000000007",
+            "cause": "parent-cascade"
+          },
+          "why": "the cascaded child's rewrite"
+        },
+        {
+          "code": "v2-task-settled-at-upgrade",
+          "payload": {
+            "automatic": "settled",
+            "sourceTable": "node_runs",
+            "sourceKey": {
+              "$key": [
+                "node_runs",
+                [
+                  "01K3986260ST00000000000102"
+                ]
+              ]
+            },
+            "taskId": "01K3986260ST00000000000002"
+          },
+          "why": "a rewritten run"
+        },
+        {
+          "code": "v2-task-settled-at-upgrade",
+          "payload": {
+            "automatic": "settled",
+            "sourceTable": "lifecycle_alerts",
+            "sourceKey": {
+              "$key": [
+                "lifecycle_alerts",
+                [
+                  "01K3986260ST00000000000201"
+                ]
+              ]
+            },
+            "taskId": "01K3986260ST00000000000001"
+          },
+          "why": "the resolved alert"
+        },
+        {
+          "code": "v2-task-settled-at-upgrade",
+          "payload": {
+            "automatic": "settled",
+            "sourceTable": "task_execution_intents",
+            "sourceKey": {
+              "$key": [
+                "task_execution_intents",
+                [
+                  "01K3986260ST00000000000301"
+                ]
+              ]
+            },
+            "taskId": "01K3986260ST00000000000001"
+          },
+          "why": "the canceled intent"
+        },
+        {
+          "code": "v2-task-settled-at-upgrade",
+          "payload": {
+            "automatic": "settled",
+            "sourceTable": "task_execution_owners",
+            "sourceKey": {
+              "$key": [
+                "task_execution_owners",
+                [
+                  "01K3986260ST00000000000001"
+                ]
+              ]
+            },
+            "taskId": "01K3986260ST00000000000001"
+          },
+          "why": "the revoked owner"
+        },
+        {
+          "code": "v2-task-settled-at-upgrade",
+          "payload": {
+            "automatic": "settled",
+            "sourceTable": "clarify_rounds",
+            "sourceKey": {
+              "$key": [
+                "clarify_rounds",
+                [
+                  "01K3986260ST00000000000505"
+                ]
+              ]
+            },
+            "taskId": "01K3986260ST00000000000005"
+          },
+          "why": "the canceled clarification round"
+        }
+      ]
+    },
+    "content": {
+      "seed": "content.json",
+      "design": [
+        "§3.2.1 必需内容",
+        "§3.4 rows 1, 2b",
+        "§7 内容"
+      ],
+      "settlements": [
+        {
+          "taskId": "01K3986260CN00000000000001",
+          "cause": "unprovable-records",
+          "originalStatus": "awaiting_review",
+          "parentTaskId": null,
+          "blockCodesInclude": [
+            "v2-content-required-missing"
+          ]
+        }
+      ],
+      "rows": [
+        {
+          "table": "tasks",
+          "key": {
+            "id": "01K3986260CN00000000000001"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled",
+            "finished_at": {
+              "$upgradeTime": true
+            },
+            "error_summary": "ended by upgrade",
+            "error_message": "ended-by-upgrade"
+          },
+          "why": "§3.4 row 1: missing required content of a task that could continue ends it"
+        },
+        {
+          "table": "node_runs",
+          "key": {
+            "id": "01K3986260CN00000000000111"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "canceled",
+            "error_message": "ended-by-upgrade"
+          },
+          "why": "its waiting review run is closed"
+        },
+        {
+          "table": "doc_versions",
+          "key": {
+            "id": "01K3986260CN00000000000401"
+          },
+          "expect": "present",
+          "columns": {
+            "decision": "pending"
+          },
+          "why": "the record stays; its content is registered as missing"
+        },
+        {
+          "table": "tasks",
+          "key": {
+            "id": "01K3986260CN00000000000002"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "done"
+          },
+          "why": "a finished task with missing content keeps its status"
+        },
+        {
+          "table": "doc_versions",
+          "key": {
+            "id": "01K3986260CN00000000000402"
+          },
+          "expect": "present",
+          "columns": {
+            "decision": "approved"
+          },
+          "why": "proposal §5 A2: the record stays"
+        },
+        {
+          "table": "collaboration_gate_artifacts",
+          "key": {
+            "operation_id": "01K3986260CN00000000000603",
+            "artifact_key": "review-document"
+          },
+          "expect": "present",
+          "columns": {
+            "state": "finalized"
+          },
+          "why": "§3.4 row 2b ①: kept as found on disk"
+        }
+      ],
+      "artifacts": [
+        {
+          "sourceTable": "doc_versions",
+          "sourceKey": {
+            "$key": [
+              "doc_versions",
+              [
+                "01K3986260CN00000000000401"
+              ]
+            ]
+          },
+          "sourceColumn": "body_path",
+          "columns": {
+            "missing_state": "originally-absent",
+            "original_reference": "runs/01K3986260CN00000000000001/review/review/document/v1.md"
+          },
+          "why": "the reference is kept and the receipt says the file is not there"
+        },
+        {
+          "sourceTable": "doc_versions",
+          "sourceKey": {
+            "$key": [
+              "doc_versions",
+              [
+                "01K3986260CN00000000000402"
+              ]
+            ]
+          },
+          "sourceColumn": "body_path",
+          "columns": {
+            "missing_state": "originally-absent",
+            "original_reference": "runs/01K3986260CN00000000000002/review/review/document/v1.md"
+          },
+          "why": "the same for a task that cannot continue"
+        },
+        {
+          "sourceTable": "collaboration_gate_artifacts",
+          "sourceKey": {
+            "$key": [
+              "collaboration_gate_artifacts",
+              [
+                "01K3986260CN00000000000603",
+                "review-document"
+              ]
+            ]
+          },
+          "sourceColumn": "final_path",
+          "columns": {
+            "missing_state": null,
+            "sha256": {
+              "$sha256Of": "runs/01K3986260CN00000000000003/review/review/document/v1.md"
+            },
+            "size": {
+              "$sizeOf": "runs/01K3986260CN00000000000003/review/review/document/v1.md"
+            }
+          },
+          "why": "§3.4 row 2b ①: the receipt carries the measured digest and size, not the registered 65 bytes"
+        }
+      ],
+      "dispositions": [
+        {
+          "sourceTable": "doc_versions",
+          "sourceKey": {
+            "$key": [
+              "doc_versions",
+              [
+                "01K3986260CN00000000000402"
+              ]
+            ]
+          },
+          "class": "converted",
+          "kind": "history-only",
+          "decisionCode": "v2-content-required-missing",
+          "why": "§3.4 row 1, the existing path for a task that cannot continue"
+        },
+        {
+          "sourceTable": "doc_versions",
+          "sourceKey": {
+            "$key": [
+              "doc_versions",
+              [
+                "01K3986260CN00000000000401"
+              ]
+            ]
+          },
+          "class": "converted",
+          "kind": "history-only",
+          "decisionCode": "v2-content-required-missing",
+          "why": "after it is ended, the task that could continue takes the same path"
+        }
+      ],
+      "records": [
+        {
+          "code": "v2-content-kept-differs-from-registered",
+          "payload": {
+            "automatic": "kept",
+            "sourceTable": "collaboration_gate_artifacts",
+            "sourceKey": {
+              "$key": [
+                "collaboration_gate_artifacts",
+                [
+                  "01K3986260CN00000000000603",
+                  "review-document"
+                ]
+              ]
+            }
+          },
+          "why": "§3.4 row 2b ①: registered and measured values are reported"
+        },
+        {
+          "code": "v2-task-settled-at-upgrade",
+          "payload": {
+            "automatic": "settled",
+            "sourceTable": "tasks",
+            "sourceKey": {
+              "$key": [
+                "tasks",
+                [
+                  "01K3986260CN00000000000001"
+                ]
+              ]
+            },
+            "taskId": "01K3986260CN00000000000001",
+            "cause": "unprovable-records"
+          },
+          "why": "the rewrite of the ended task"
+        }
+      ]
+    },
+    "skills": {
+      "seed": "skills.json",
+      "design": [
+        "§3.4 rows 3a, 3b, 3c",
+        "§3.3 升级后的服务必须能启动",
+        "§7 §3.4 每一行一例 / 技能"
+      ],
+      "settlements": [],
+      "rows": [
+        {
+          "table": "skills",
+          "key": {
+            "id": "01K3986260SK00000000000001"
+          },
+          "expect": "present",
+          "columns": {
+            "version_state": "quarantined"
+          },
+          "why": "§3.4 row 3a: kept and quarantined"
+        },
+        {
+          "table": "skill_versions",
+          "key": {
+            "id": "01K3986260SK00000000000101"
+          },
+          "expect": "present",
+          "why": "§3.4 row 3a: its version row is converted"
+        },
+        {
+          "table": "skills",
+          "key": {
+            "id": "01K3986260SK00000000000002"
+          },
+          "expect": "present",
+          "columns": {
+            "version_state": "quarantined"
+          },
+          "why": "§3.4 row 3a: kept and quarantined"
+        },
+        {
+          "table": "skill_versions",
+          "key": {
+            "id": "01K3986260SK00000000000102"
+          },
+          "expect": "present",
+          "why": "§3.4 row 3a: its version row is converted"
+        },
+        {
+          "table": "skills",
+          "key": {
+            "id": "01K3986260SK00000000000003"
+          },
+          "expect": "absent",
+          "why": "§3.4 row 3c: a creation that never committed is set aside as row 3b"
+        },
+        {
+          "table": "skill_operations",
+          "key": {
+            "op_id": "01K3986260SK00000000000203"
+          },
+          "expect": "present",
+          "columns": {
+            "active": 0
+          },
+          "why": "§3.4 row 3c: the operation record is settled so the boot recovery step admits it"
+        },
+        {
+          "table": "skill_operation_locks",
+          "key": {
+            "locked_skill_id": "01K3986260SK00000000000003"
+          },
+          "expect": "absent",
+          "why": "§3.4 row 3c: the lock is set aside"
+        },
+        {
+          "table": "skills",
+          "key": {
+            "id": "01K3986260SK00000000000004"
+          },
+          "expect": "absent",
+          "why": "§3.4 row 3b: the referenced empty skill is set aside"
+        },
+        {
+          "table": "agents",
+          "key": {
+            "id": "01K3986260SK00000000000011"
+          },
+          "expect": "present",
+          "why": "proposal §5 A3: the agent referring to a quarantined skill stays"
+        },
+        {
+          "table": "agents",
+          "key": {
+            "id": "01K3986260SK00000000000012"
+          },
+          "expect": "present",
+          "why": "a reference without a foreign key does not take the agent along (§3.3 末段)"
+        },
+        {
+          "table": "workflows",
+          "key": {
+            "id": "01K3986260SK00000000000021"
+          },
+          "expect": "present",
+          "why": "the workflow used to launch the agent"
+        }
+      ],
+      "dispositions": [
+        {
+          "sourceTable": "skills",
+          "sourceKey": {
+            "$key": [
+              "skills",
+              [
+                "01K3986260SK00000000000003"
+              ]
+            ]
+          },
+          "class": "archived",
+          "kind": "archived",
+          "why": "§3.3: set aside with its original row archived"
+        },
+        {
+          "sourceTable": "skills",
+          "sourceKey": {
+            "$key": [
+              "skills",
+              [
+                "01K3986260SK00000000000004"
+              ]
+            ]
+          },
+          "class": "archived",
+          "kind": "archived",
+          "decisionCode": "v2-boot-skill-husk-references",
+          "why": "§3.4 row 3b"
+        },
+        {
+          "sourceTable": "skill_operation_locks",
+          "sourceKey": {
+            "$key": [
+              "skill_operation_locks",
+              [
+                "01K3986260SK00000000000003"
+              ]
+            ]
+          },
+          "class": "archived",
+          "kind": "archived",
+          "why": "§3.4 row 3c"
+        }
+      ],
+      "records": [
+        {
+          "code": "v2-boot-skill-kept-unavailable",
+          "payload": {
+            "automatic": "kept",
+            "sourceTable": "skills",
+            "sourceKey": {
+              "$key": [
+                "skills",
+                [
+                  "01K3986260SK00000000000001"
+                ]
+              ]
+            }
+          },
+          "why": "§3.4 row 3a"
+        },
+        {
+          "code": "v2-boot-skill-kept-unavailable",
+          "payload": {
+            "automatic": "kept",
+            "sourceTable": "skills",
+            "sourceKey": {
+              "$key": [
+                "skills",
+                [
+                  "01K3986260SK00000000000002"
+                ]
+              ]
+            }
+          },
+          "why": "§3.4 row 3a"
+        }
+      ]
+    },
+    "set-aside": {
+      "seed": "set-aside.json",
+      "design": [
+        "§3.3 封存 / 悬空行 / 旧库里本来就悬空的行",
+        "§3.4 rows 11, 11b, 17",
+        "§7 封存与保留"
+      ],
+      "settlements": [],
+      "rows": [
+        {
+          "table": "maintenance_state",
+          "key": {
+            "key": "rfc626:undecodable-row"
+          },
+          "expect": "absent",
+          "providers": [
+            "sqlite"
+          ],
+          "why": "§3.4 row 17: the undecodable row is not in a business table"
+        },
+        {
+          "table": "users",
+          "key": {
+            "id": "01K3986260SA00000000000002"
+          },
+          "expect": "present",
+          "columns": {
+            "created_by": null,
+            "username": "rfc626_dangling_creator"
+          },
+          "why": "§3.4 row 11: the user stays and the dangling creator is cleared"
+        },
+        {
+          "table": "task_collaborators",
+          "key": {
+            "task_id": "01K3980000085154084C742759",
+            "user_id": "01K3986260SA00000000000002",
+            "role": "collaborator"
+          },
+          "expect": "present",
+          "columns": {
+            "added_by": "__system__"
+          },
+          "why": "§3.4 row 11b: membership stays, the adder becomes the system user"
+        },
+        {
+          "table": "lifecycle_alerts",
+          "key": {
+            "id": "01K3986260SA00000000000004"
+          },
+          "expect": "absent",
+          "providers": [
+            "sqlite"
+          ],
+          "why": "§3.3: an alert whose task is gone has no keep policy and is moved to the archive at finalize"
+        }
+      ],
+      "dispositions": [
+        {
+          "sourceTable": "maintenance_state",
+          "sourceKey": {
+            "$key": [
+              "maintenance_state",
+              [
+                "rfc626:undecodable-row"
+              ]
+            ]
+          },
+          "class": "archived",
+          "kind": "archived",
+          "decisionCode": "v2-source-codec",
+          "raw": "present",
+          "providers": [
+            "sqlite"
+          ],
+          "why": "§3.3: archived with the raw evidence of what the old database stored"
+        }
+      ],
+      "records": [
+        {
+          "code": "v2-row-set-aside",
+          "payload": {
+            "automatic": "set-aside",
+            "sourceTable": "maintenance_state",
+            "sourceKey": {
+              "$key": [
+                "maintenance_state",
+                [
+                  "rfc626:undecodable-row"
+                ]
+              ]
+            },
+            "code": "v2-source-codec"
+          },
+          "providers": [
+            "sqlite"
+          ],
+          "why": "§3.3: the report entry"
+        },
+        {
+          "codePrefix": "v2-dangling-reference",
+          "payload": {
+            "automatic": "kept",
+            "sourceTable": "users",
+            "sourceKey": {
+              "$key": [
+                "users",
+                [
+                  "01K3986260SA00000000000002"
+                ]
+              ]
+            }
+          },
+          "why": "§3.4 row 11 登记"
+        },
+        {
+          "codePrefix": "v2-dangling-reference",
+          "payload": {
+            "automatic": "kept",
+            "sourceTable": "task_collaborators",
+            "sourceKey": {
+              "$key": [
+                "task_collaborators",
+                [
+                  "01K3980000085154084C742759",
+                  "01K3986260SA00000000000002",
+                  "collaborator"
+                ]
+              ]
+            }
+          },
+          "why": "§3.4 row 11b 登记原值"
+        }
+      ],
+      "finalize": [
+        {
+          "targetTable": "lifecycle_alerts",
+          "targetKey": {
+            "$key": [
+              "lifecycle_alerts",
+              [
+                "01K3986260SA00000000000004"
+              ]
+            ]
+          },
+          "foreignKey": "lifecycle_alerts_task_id_tasks_id_fk",
+          "references": "tasks",
+          "action": "set-aside",
+          "providers": [
+            "sqlite"
+          ],
+          "why": "§3.3 收尾处置: cascade foreign key, no keep policy"
+        }
+      ]
+    },
+    "schedule": {
+      "seed": "schedule.json",
+      "design": [
+        "§3.4 row 5"
+      ],
+      "settlements": [],
+      "rows": [
+        {
+          "table": "scheduled_tasks",
+          "key": {
+            "id": "01K3986260SC00000000000001"
+          },
+          "expect": "present",
+          "columns": {
+            "enabled": 0,
+            "next_run_at": null,
+            "last_error": {
+              "$notNull": true
+            },
+            "launch_payload": {
+              "$source": "launch_payload"
+            }
+          },
+          "why": "§3.4 row 5: kept and disabled; the payload is byte-exact"
+        }
+      ],
+      "records": [
+        {
+          "code": "v2-boot-schedule-kept-disabled-invalid",
+          "payload": {
+            "automatic": "kept",
+            "sourceTable": "scheduled_tasks",
+            "sourceKey": {
+              "$key": [
+                "scheduled_tasks",
+                [
+                  "01K3986260SC00000000000001"
+                ]
+              ]
+            }
+          },
+          "why": "§3.4 row 5 登记"
+        }
+      ]
+    },
+    "cached-repos": {
+      "seed": "cached-repos.json",
+      "design": [
+        "§3.4 row 4",
+        "§3.3 升级后的服务必须能启动 (备份准备)"
+      ],
+      "settlements": [],
+      "rows": [
+        {
+          "table": "cached_repos",
+          "key": {
+            "id": "01K3986260CR00000000000001"
+          },
+          "expect": "present",
+          "columns": {
+            "url_enc": {
+              "$source": "url_enc"
+            }
+          },
+          "why": "§3.4 row 4: sealed under the current scheme, kept as the old database holds it"
+        },
+        {
+          "table": "cached_repos",
+          "key": {
+            "id": "01K3986260CR00000000000002"
+          },
+          "expect": "present",
+          "columns": {
+            "url_enc": null
+          },
+          "why": "§3.4 row 4: a damaged escrow is cleared so later backups do not fail"
+        }
+      ],
+      "records": [
+        {
+          "code": "v2-boot-url-kept-unreadable",
+          "payload": {
+            "automatic": "kept",
+            "sourceTable": "cached_repos",
+            "sourceKey": {
+              "$key": [
+                "cached_repos",
+                [
+                  "01K3986260CR00000000000001"
+                ]
+              ]
+            }
+          },
+          "why": "§3.4 row 4 登记"
+        },
+        {
+          "code": "v2-boot-url-kept-unreadable",
+          "payload": {
+            "automatic": "kept",
+            "sourceTable": "cached_repos",
+            "sourceKey": {
+              "$key": [
+                "cached_repos",
+                [
+                  "01K3986260CR00000000000002"
+                ]
+              ]
+            }
+          },
+          "why": "§3.4 row 4 登记"
+        }
+      ]
+    },
+    "code-history": {
+      "seed": "code-history.json",
+      "design": [
+        "§3.3 升级后的服务必须能启动 (代码历史的查询索引)",
+        "§3.4 row 8",
+        "§9.8 T0-7",
+        "§9.9 旧代码历史第 8 行"
+      ],
+      "settlements": [],
+      "rows": [],
+      "records": [
+        {
+          "code": "v2-row-set-aside",
+          "payload": {
+            "automatic": "set-aside",
+            "sourceTable": "code_findings",
+            "sourceKey": {
+              "$key": [
+                "code_findings",
+                [
+                  "01K3986260CH00000000000001"
+                ]
+              ]
+            },
+            "code": "v2-source-codec"
+          },
+          "why": "§3.3: the report entry of the row set aside"
+        },
+        {
+          "code": "v2-code-history-kept-undecoded",
+          "payload": {
+            "automatic": "kept",
+            "sourceTable": "code_round_stages",
+            "sourceKey": {
+              "$key": [
+                "code_round_stages",
+                [
+                  "01K3986260CH00000000000002"
+                ]
+              ]
+            },
+            "columns": [
+              "counts_json"
+            ]
+          },
+          "why": "§3.4 row 8: the undecodable row went into the package as read"
+        }
+      ],
+      "historyPackages": {
+        "tables": [
+          "code_ai_attempts",
+          "code_artifacts",
+          "code_findings",
+          "code_fix_attempts",
+          "code_mr_leases",
+          "code_produced_mrs",
+          "code_publish_intents",
+          "code_round_stages",
+          "code_trigger_deliveries",
+          "code_work_items",
+          "code_work_observations",
+          "code_work_rounds",
+          "legacy_code_work_item_links"
+        ],
+        "indexed": [
+          {
+            "table": "code_round_stages",
+            "originalId": "01K3986260CH00000000000002"
+          }
+        ],
+        "setAside": [
+          {
+            "table": "code_findings",
+            "originalId": "01K3986260CH00000000000001"
+          }
+        ]
+      },
+      "dispositions": [
+        {
+          "sourceTable": "code_findings",
+          "sourceKey": {
+            "$key": [
+              "code_findings",
+              [
+                "01K3986260CH00000000000001"
+              ]
+            ]
+          },
+          "class": "archived",
+          "kind": "archived",
+          "decisionCode": "v2-source-codec",
+          "raw": "present",
+          "why": "§9.9 row 8: set aside on its own with the raw evidence of what the old database stored"
+        }
+      ]
+    },
+    "multi-repo-mount": {
+      "seed": "multi-repo-mount.json",
+      "design": [
+        "§3.3 自动处置之后校验必须通过 (任务聚合完整)",
+        "§9.8 T0-4"
+      ],
+      "settlements": [],
+      "rows": [
+        {
+          "table": "tasks",
+          "key": {
+            "id": "01K3986260MM00000000000001"
+          },
+          "expect": "present",
+          "columns": {
+            "status": "done"
+          },
+          "why": "the finished task is converted"
+        },
+        {
+          "table": "task_repository_mounts",
+          "key": {
+            "task_id": "01K3986260MM00000000000001"
+          },
+          "expect": "absent",
+          "why": "T0-4: when the ordinal-0 mount cannot be emitted the task has no mounts at all"
+        }
+      ],
+      "dispositions": [
+        {
+          "sourceTable": "tasks",
+          "sourceKey": {
+            "$key": [
+              "tasks",
+              [
+                "01K3986260MM00000000000001"
+              ]
+            ]
+          },
+          "class": "converted",
+          "kind": "history-only",
+          "decisionCode": "v2-task-history-only",
+          "why": "the existing path for a contradicting mount of a task that cannot continue"
+        }
+      ]
+    }
+  }
+}

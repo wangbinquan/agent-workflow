@@ -1,6 +1,13 @@
 import { planNodeRunSeqBackfill } from './legacySequencePlan'
 import type { SourceRow } from '@/platform/persistence/migration/conversion/types'
-import { integer, nullableInteger, text } from './source'
+import {
+  ALLOCATION_NUMBER_COLUMNS,
+  integer,
+  nullableInteger,
+  readableRun,
+  text,
+  unusableNumberColumns,
+} from './source'
 
 export function assignLegacySequences(
   rows: readonly { readonly id: string; readonly seq: number | null }[],
@@ -66,7 +73,8 @@ export function planRunSequences(
   let observedHighWater = 0
   const groups = new Map<string, { id: string; seq: number | null }[]>()
   for (const row of rows) {
-    if (row.codecFailure) continue
+    // RFC-626: a run the rule sets aside (undecodable, or a number past 2^53) gets no sequence.
+    if (!readableRun(row)) continue
     const taskId = text(row, 'task_id')
     const group = groups.get(taskId) ?? []
     group.push({ id: text(row, 'id'), seq: nullableInteger(row, 'seq') })
@@ -74,7 +82,8 @@ export function planRunSequences(
     observedHighWater = Math.max(observedHighWater, nullableInteger(row, 'seq') ?? 0)
   }
   for (const row of allocations)
-    if (!row.codecFailure) observedHighWater = Math.max(observedHighWater, integer(row, 'seq'))
+    if (!row.codecFailure && !unusableNumberColumns(row, ALLOCATION_NUMBER_COLUMNS).length)
+      observedHighWater = Math.max(observedHighWater, integer(row, 'seq'))
   let ordinal = 0
   const plans = new Map<string, RunSequencePlan>()
   for (const taskId of [...groups.keys()].sort()) {

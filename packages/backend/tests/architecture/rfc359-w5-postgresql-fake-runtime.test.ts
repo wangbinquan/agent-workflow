@@ -138,6 +138,15 @@ export const FAKE_POSTGRESQL_RUNTIME_LITERALS: readonly string[] = [
   // fails BEGIN / COMMIT / SAVEPOINT / RELEASE SAVEPOINT / values() on demand, which a real pool cannot
   // do; every other RFC-397 case in that file runs on the real harness database.
   'rfc397-owner-fenced-writes-read-committed.test.ts: 1',
+  // RFC-626 — the legitimate kind: the observation is the bind parameters of every statement of
+  // the copy into the scratch database (65 535 is the protocol's limit; 937 tasks of 70 columns
+  // broke it), which a real pool does not report. The copy itself runs on real PostgreSQL in
+  // rfc626-source-readers-upgrade and in the release matrix.
+  'rfc626-postgresql-scratch-copy.test.ts: 2',
+  // RFC-626 — the legitimate kind: the subject is the exact statements the source precheck sends
+  // (no count(*), nothing written) and its refusal of a server major without a catalog; the same
+  // precheck runs on the real harness database in the same file (describeV1Providers).
+  'rfc626-source-precheck.test.ts: 1',
 ]
 
 function walk(root: string, dir: string, out: string[]): string[] {

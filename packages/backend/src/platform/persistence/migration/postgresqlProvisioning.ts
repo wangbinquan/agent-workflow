@@ -73,6 +73,10 @@ export async function readPostgresqlDatabaseProperties(
 const occupiedSql =
   "SELECT 1 FROM pg_namespace WHERE nspname IN ('agent_workflow','agent_workflow_meta') UNION ALL SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg_toast%' AND c.relkind IN ('r','p','v','m','S','f')"
 
+/** §3.1: the variable with which an operator names the database of one kind explicitly. */
+const explicitUrlVariable = (kind: DatabaseAllocation['kind']): string =>
+  kind === 'target' ? 'AGENT_WORKFLOW_EPOCH_TARGET_URL' : 'AGENT_WORKFLOW_EPOCH_SCRATCH_URL'
+
 /** The auto session holds the daemon lock across allocation, provision and journal replacement. */
 export function createPostgresqlProvisioning(input: {
   readonly appHome: string
@@ -135,8 +139,7 @@ export function createPostgresqlProvisioning(input: {
           (kind === 'scratch' || row.runId === request.runId),
       )
       .at(-1)
-    const variable =
-      kind === 'target' ? 'AGENT_WORKFLOW_EPOCH_TARGET_URL' : 'AGENT_WORKFLOW_EPOCH_SCRATCH_URL'
+    const variable = explicitUrlVariable(kind)
     // §3.1 / §8: a derived database refused before any provisioning receipt bound it may be
     // replaced by the operator's explicit variable. The refused name stays in the ledger (never
     // reused) and a newer row takes over; a provisioned location never moves.
@@ -340,6 +343,64 @@ export function createPostgresqlProvisioning(input: {
         writeDurableLogicalArtifact(receiptPath, receipt)
         await input.recordProvisioned?.(receipt)
         return receipt
+      } finally {
+        await source.close()
+      }
+    },
+    /**
+     * RFC-626 §3.5: what `prepare` would refuse for a session that has no allocation yet,
+     * found out by reading only. A database has to exist or be creatable for each kind: the
+     * operator named it with its variable, the role may create databases, or the database
+     * `prepare` would derive is already there (created by hand after an earlier refusal).
+     * The names are the ones `allocate` would give, read from the same ledger without
+     * writing to it, so the statements reported here are the ones `prepare` would run.
+     */
+    async precheck() {
+      const source = runtime(input.sourceProfileRef)
+      try {
+        const pool = source.providerPool()
+        const role = (
+          await pool.unsafe(
+            'SELECT (rolcreatedb OR rolsuper) AS allowed FROM pg_roles WHERE rolname = current_user',
+          )
+        )[0]
+        if (role?.allowed === true) return { ok: true as const }
+        const identity = (
+          await pool.unsafe('SELECT current_database() AS database, current_user AS owner')
+        )[0]!
+        const properties = (await readPostgresqlDatabaseProperties(pool))!
+        const all = list()
+        let n = all.at(-1)?.n ?? 0
+        const statements: string[] = []
+        for (const kind of ['target', 'scratch'] as const) {
+          // `allocate` numbers an explicit database as well.
+          n += 1
+          if (input.env[explicitUrlVariable(kind)]) continue
+          const database = autoUpgradeDatabaseName(
+            String(identity.database),
+            kind,
+            n,
+            !all.some((row) => row.kind === kind),
+          )
+          if (await readPostgresqlDatabaseProperties(pool, database)) continue
+          statements.push(
+            createPostgresqlDatabaseStatement({
+              database,
+              source: properties,
+              owner: String(identity.owner),
+            }),
+          )
+        }
+        if (!statements.length) return { ok: true as const }
+        const refusal = new PostgresqlProvisioningError('postgresql-create-database-denied', {
+          statements,
+        })
+        return {
+          ok: false as const,
+          code: refusal.code,
+          message: refusal.message,
+          detail: refusal.detail,
+        }
       } finally {
         await source.close()
       }

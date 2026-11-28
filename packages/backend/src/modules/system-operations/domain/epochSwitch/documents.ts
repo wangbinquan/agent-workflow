@@ -115,6 +115,14 @@ export const MigrationRowDispositionSchema = z.strictObject({
   allocation: z.strictObject({ column: text, value: text, sourceHighWater: text }).optional(),
   decision: z.strictObject({ code: text, detail: json }).nullable(),
 })
+/** RFC-626: one unfinished task the automatic upgrade ends as canceled (`TaskSettlement`). */
+export const TaskSettlementSchema = z.strictObject({
+  taskId: text,
+  cause: z.enum(['unprovable-records', 'parent-cascade']),
+  originalStatus: text,
+  blockCodes: z.array(text).readonly(),
+  parentTaskId: text.nullable(),
+})
 export const ConversionPlanSectionSchema = z
   .strictObject({
     version: z.literal(1),
@@ -156,6 +164,11 @@ export const ConversionPlanSectionSchema = z
     }),
     deferredChecks: z.array(z.strictObject({ table: text, name: text })).readonly(),
     blocks: z.array(ConversionBlockSchema).readonly(),
+    // RFC-626: written only by the automatic upgrade, and then part of the plan digest. A run
+    // is registered with the plan that names the tasks it ends, so the strict form has to
+    // accept them; a manual plan carries neither key and keeps its bytes.
+    resolution: z.literal('automatic').optional(),
+    settlements: z.array(TaskSettlementSchema).readonly().optional(),
   })
   .transform((input) => {
     const operatorDecisions = canonicalOperatorDecisions(input.operatorDecisions)
@@ -267,6 +280,89 @@ export const RestoreFileChangeSchema = z.strictObject({
   replacedPath: text.nullable(),
 })
 export type RestoreFileChange = z.infer<typeof RestoreFileChangeSchema>
+const archiveReference = z
+  .string()
+  .regex(/^archive:sha256:[a-f0-9]{64}$/)
+  .transform((value): ArchiveRef => value as ArchiveRef)
+/**
+ * RFC-626 §3.7: what the automatic upgrade decided, as the plan of the actual result records
+ * it. The conversion's own decisions (`ConversionSummary.resolutions`) and what finalizing the
+ * target did to references that dangled meet here, because the conversion summary is final
+ * before the target is finalized. The receipt, the completion log and `db migration status`
+ * all read this section.
+ *
+ * Every list holds at most `listLimit` entries (`setAside`: per stage); `totals` are exact and
+ * `recordsTable` names the table of the new database that holds every decision.
+ */
+export const PlanResolutionsSchema = z.strictObject({
+  settledTasks: z
+    .array(
+      z.strictObject({
+        taskId: text,
+        /** The task's name in the old database; null when its row does not give one. */
+        name: z.string().nullable(),
+        originalStatus: text,
+        cause: TaskSettlementSchema.shape.cause,
+        blockCodes: z.array(text).readonly(),
+        parentTaskId: text.nullable(),
+      }),
+    )
+    .readonly(),
+  missingContent: z
+    .array(
+      z.strictObject({
+        table: text,
+        key,
+        column: text,
+        reference: z.string().nullable(),
+        state: text,
+        /** The task the content belongs to; absent for content that belongs to no task. */
+        taskId: text.optional(),
+      }),
+    )
+    .readonly(),
+  setAside: z
+    .array(
+      z.discriminatedUnion('stage', [
+        z.strictObject({
+          stage: z.literal('conversion'),
+          sourcePhase: phase,
+          sourceTable: text,
+          sourceKey: key,
+          code: text,
+        }),
+        z.strictObject({
+          stage: z.literal('finalize'),
+          targetTable: text,
+          targetKey: key,
+          foreignKey: text,
+          references: text,
+          /** `detached` and `substituted` keep the row; `set-aside` moved it to the archive. */
+          action: z.enum(['detached', 'substituted', 'set-aside']),
+          archive: archiveReference.nullable(),
+        }),
+      ]),
+    )
+    .readonly(),
+  /** Acknowledgements given in place of a person, by the code acknowledged. */
+  acknowledged: z.record(text, count),
+  kept: z.array(z.strictObject({ table: text, key, code: text })).readonly(),
+  /** Rows kept with a marker, by decision code; complete also when `kept` is cut off. */
+  keptByCode: z.record(text, count),
+  totals: z.strictObject({
+    settledTasks: count,
+    missingContent: count,
+    /** Source rows the conversion set aside. */
+    setAside: count,
+    /** References finalizing the target resolved, whatever the action. */
+    finalize: count,
+    acknowledged: count,
+    kept: count,
+  }),
+  listLimit: z.number().int().positive(),
+  recordsTable: text,
+})
+export type PlanResolutions = z.infer<typeof PlanResolutionsSchema>
 export const MigrationPlanDocumentPayloadSchema = z.strictObject({
   version: z.literal(1),
   operationId: EpochOperationIdSchema,
@@ -288,6 +384,8 @@ export const MigrationPlanDocumentPayloadSchema = z.strictObject({
   operatorDecisions: CanonicalOperatorDecisionsSchema,
   restrictions: z.array(MigrationRowDispositionSchema).readonly(),
   blocks: z.array(MigrationPlanBlockSchema).readonly(),
+  /** RFC-626: only on the plan of the actual result of an automatic upgrade. */
+  resolutions: PlanResolutionsSchema.optional(),
   unfinishedTasks: z.array(z.strictObject({ status: text, count })).readonly(),
   estimates: z.strictObject({
     sourceBytes: count.nullable(),
@@ -364,6 +462,9 @@ export function migrationPlanApprovalDigest(input: MigrationPlanDocumentPayload)
     operatorDecisions: stableSet(p.operatorDecisions),
     restrictions: stableSet(p.restrictions),
     blocks: stableSet(p.blocks),
+    // RFC-626: what the upgrade decided is material. Absent on every other plan, whose digest
+    // therefore stays what it was.
+    ...(p.resolutions ? { resolutions: p.resolutions } : {}),
     content: p.content,
     backup: { kind: p.backup.kind, destination: p.backup.destination },
     scratchProfileRef: p.scratchProfileRef,

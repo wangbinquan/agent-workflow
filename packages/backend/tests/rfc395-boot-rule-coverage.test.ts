@@ -64,6 +64,9 @@ test('six owner rules have exactly one claim for each boot source table and no T
     'content_objects',
     'content_bytes',
     'skill_content_entries',
+    // RFC-626 §3.4 row 3c: operation records are settled with the skill they belong to.
+    'skill_operations',
+    'skill_operation_locks',
   ])
 })
 test('final assembly replaces old content/alignment/generic claims and keeps existing seq/history rules', () => {
@@ -132,8 +135,13 @@ test('ordinary conversion and old restore use the shared runner environment chec
   const runner = readFileSync(join(root, 'runner.ts'), 'utf8')
   expect(runner).toContain('captureBootUpgradeFacts')
   expect(runner).toContain('assertBootEnvironment')
-  const frozenPlan = runner.indexOf('const frozenPlan = buildEpochPlan')
-  const createTarget = runner.indexOf('await deps.target.create({')
+  // RFC-626: the automatic single pass (`convertDirectly`, earlier in the file) creates its
+  // target without a rehearsal; the order locked here is the ordinary path's.
+  const ordinaryStart = runner.indexOf('export async function runEpochSwitch(')
+  expect(ordinaryStart).toBeGreaterThan(-1)
+  const ordinary = runner.slice(ordinaryStart)
+  const frozenPlan = ordinary.indexOf('const frozenPlan = buildEpochPlan')
+  const createTarget = ordinary.indexOf('await deps.target.create({')
   expect(frozenPlan).toBeGreaterThan(-1)
   expect(createTarget).toBeGreaterThan(-1)
   expect(frozenPlan).toBeLessThan(createTarget)

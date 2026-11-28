@@ -63,19 +63,28 @@ export function convertConsumedInputs(
       })
       continue
     }
-    const producer = runsInTask.get(entry.value)
-    const exists = producer !== undefined && producer.values.task_id === row.values.task_id
+    const found = runsInTask.get(entry.value)
+    const producer =
+      found !== undefined && found.values.task_id === row.values.task_id ? found : undefined
+    // RFC-626: the target requires the referenced producer to be the node the input names
+    // (`runSelection/table/probes.ts`). A producer of another node is no proof of this input,
+    // so it is treated as a missing producer: the reference is cleared and the evidence kept.
+    const recordedNodeId = producer === undefined ? null : text(producer, 'node_id')
+    const exists = producer !== undefined && recordedNodeId === entry.key
+    const mismatch: { readonly [name: string]: JsonValue } =
+      producer !== undefined && !exists ? { recordedNodeId } : {}
     const evidence = exists
       ? null
       : canonicalSchemaJson({
           code: 'v2-run-input-producer-missing',
           producerRunId: entry.value,
           producerNodeId: entry.key,
+          ...mismatch,
         })
     if (evidence !== null)
       decisions.push({
         code: 'v2-run-input-producer-missing',
-        detail: { producerRunId: entry.value, producerNodeId: entry.key },
+        detail: { producerRunId: entry.value, producerNodeId: entry.key, ...mismatch },
       })
     inputs.push({
       task_id: text(row, 'task_id'),
@@ -87,7 +96,9 @@ export function convertConsumedInputs(
       evidence_ref_json: evidence,
       input_kind: 'frame-input',
       producer_node_id: entry.key,
-      producer_shard_slot: producerShardSlot(exists ? nullableText(producer, 'shard_key') : null),
+      producer_shard_slot: producerShardSlot(
+        exists && producer !== undefined ? nullableText(producer, 'shard_key') : null,
+      ),
     })
   }
   return { inputs, recorded: true, decisions }

@@ -8,6 +8,8 @@ export function createAutoUpgradeProvisioning(
   const port: EpochTargetProvisioningPort = {
     prepare: (request) => database.prepare(request),
     retained: () => database.retained(),
+    // RFC-626 §3.5: the read-only question the session asks before it records anything.
+    ...(database.precheck ? { precheck: () => database.precheck!() } : {}),
     async nextTargetLocation(previous, next) {
       if (!next.payload.run || !next.payload.target.generationId)
         throw new Error('postgresql-next-generation-required')

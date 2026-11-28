@@ -1,5 +1,5 @@
 import { persistenceDialect } from '../../nativeDialect'
-import type { DatabaseProvider } from '../../databaseProviders'
+import { unhandledDatabaseProvider, type DatabaseProvider } from '../../databaseProviders'
 import type { ColumnDefinition, TableDefinition } from '../../schema/contribution'
 import type { SchemaRegistry } from '../../schema/registry'
 import { quoteSchemaIdentifier as quote } from '../../schema/expressions'
@@ -24,6 +24,33 @@ export function encodeTargetValue(
   if (column.codec === 'real') return dialect.real(value as number)
   // jsonDoc is already JSON text in V2; the dialect binds it as text and casts ::text::jsonb (see nativeDialect).
   return value
+}
+/**
+ * Rows one multi-row INSERT carries, each binding `columns` parameters. PostgreSQL binds up to
+ * 65,535 parameters a statement, so it takes 30,000 and up to 1,000 rows: `tasks`, at 70
+ * columns, loads 428 rows a statement instead of 12 (RFC-626 §4.6). SQLite keeps its batches.
+ * `cap` lowers the row limit further.
+ */
+export function targetStatementRows(
+  provider: DatabaseProvider,
+  columns: number,
+  cap?: number,
+): number {
+  let budget: { readonly parameters: number; readonly rows: number }
+  switch (provider) {
+    case 'sqlite':
+      budget = { parameters: 900, rows: 100 }
+      break
+    case 'postgresql':
+      budget = { parameters: 30_000, rows: 1_000 }
+      break
+    default:
+      return unhandledDatabaseProvider(provider)
+  }
+  return Math.min(
+    cap ?? budget.rows,
+    Math.max(1, Math.floor(budget.parameters / Math.max(1, columns))),
+  )
 }
 export function targetRowKey(table: TableDefinition, row: TargetRow) {
   return encodeMigrationKey(
@@ -68,8 +95,9 @@ export function createTargetLoader(input: {
   batchRows?: number
 }): TargetLoader {
   const tables = new Map(input.registry.tables.map((table) => [table.id, table]))
-  const batchRows = input.batchRows ?? 100
-  if (!Number.isSafeInteger(batchRows) || batchRows < 1) throw new Error('v3-loader-batch-rows')
+  const batchRows = input.batchRows
+  if (batchRows !== undefined && (!Number.isSafeInteger(batchRows) || batchRows < 1))
+    throw new Error('v3-loader-batch-rows')
   const insertRows = async (tx: HistoryConnection, name: string, rows: readonly TargetRow[]) => {
     if (tx.provider !== input.provider) throw new Error('v3-loader-provider-mismatch')
     const table = tables.get(name)
@@ -80,7 +108,7 @@ export function createTargetLoader(input: {
       )
       if (!columns.length || Object.keys(rows[start]!).length !== columns.length)
         throw new Error(`v3-loader-columns: ${name}`)
-      const limit = Math.min(batchRows, Math.max(1, Math.floor(900 / columns.length)))
+      const limit = targetStatementRows(input.provider, columns.length, batchRows)
       let end = start + 1
       while (
         end < rows.length &&

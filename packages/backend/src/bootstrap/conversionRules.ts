@@ -2,6 +2,7 @@ import { collectReadOnlyProbes } from '@/platform/persistence/migration/run/prob
 // RFC-395 II-b: CLI-only conversion assembly; the migration caller supplies the frozen source and sink.
 import { taskConversion, runConversion } from '@/modules/task-execution/composition/conversion'
 import { conversion as collaborationConversion } from '@/modules/collaboration/composition/conversion'
+import { conversion as systemOperationsConversion } from '@/modules/system-operations/composition/conversion'
 import {
   createSkillBootConversion,
   skillBootEnvironment,
@@ -49,6 +50,8 @@ export const conversionContributions = [
   taskConversion,
   runConversion,
   collaborationConversion,
+  // RFC-626: contributes no rule, only what ending a task rewrites in this module's tables.
+  systemOperationsConversion,
   resourceConversion,
   intentConversion,
   contentConversion,

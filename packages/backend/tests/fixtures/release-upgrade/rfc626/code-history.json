@@ -1,0 +1,45 @@
+{
+  "formatVersion": 1,
+  "scenario": "code-history",
+  "base": "v0.19.2",
+  "providers": [
+    "sqlite"
+  ],
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-626-upgrade-no-refusal-minimal-time/design.md §3.3「升级后的服务必须能启动」, §3.4 row 8, §9.8 T0-7, §9.9 旧代码历史第 8 行",
+      "packages/backend/db/migrations/0164_rfc304_code_findings.sql",
+      "packages/backend/src/platform/persistence/migration/archives/package.ts (historyRecordReadable)"
+    ],
+    "note": "Two rows of retired history tables that the frozen codec rejects. Each of the thirteen retired history tables is one conversion unit, so before RFC-626 one such row withheld the whole package of its table and the new daemon could not build its history query index. A code finding whose integer column holds text cannot be read back from a package, so it is set aside on its own and the package holds the other rows; only SQLite can hold it (the old PostgreSQL column is typed). A round stage whose JSON column holds text that does not parse still has its column's type, so it goes into the package as read and the decision is recorded."
+  },
+  "rows": [
+    {
+      "op": "clone",
+      "table": "code_findings",
+      "from": {
+        "id": "01K3980000C8C62B0FBBB57976"
+      },
+      "values": {
+        "id": "01K3986260CH00000000000001",
+        "fingerprint": "6260000000000000000000000000000000000000000000000000000000000c81",
+        "generation": "not-an-integer"
+      },
+      "why": "§9.9 row 8: text in an integer column does not read back from a package; the row is set aside on its own"
+    },
+    {
+      "op": "clone",
+      "table": "code_round_stages",
+      "from": {
+        "id": "01K39800006799A5AEC9E42E40"
+      },
+      "values": {
+        "id": "01K3986260CH00000000000002",
+        "stage_seq": 2,
+        "counts_json": "{\"findings\": "
+      },
+      "why": "§3.4 row 8 / §9.9: JSON text that does not parse keeps its column's type and goes into the package as read"
+    }
+  ]
+}

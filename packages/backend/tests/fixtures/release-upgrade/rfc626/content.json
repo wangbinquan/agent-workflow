@@ -1,0 +1,185 @@
+{
+  "formatVersion": 1,
+  "scenario": "content",
+  "base": "v0.19.2",
+  "providers": [
+    "sqlite",
+    "postgresql"
+  ],
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-626-upgrade-no-refusal-minimal-time/design.md §3.2.1 (必需内容), §3.4 rows 1 and 2b",
+      "design/RFC-626-upgrade-no-refusal-minimal-time/proposal.md §1.1 M3, §5 A1/A2, §6 item 2",
+      "packages/backend/db/migrations/0212_rfc333_human_gate_operations.sql"
+    ],
+    "note": "Content as an operator leaves it: a waiting review whose document file was deleted from runs/, a finished review whose document file was deleted, and a finished review gate whose registered document was edited on disk after the gate recorded its size and digest. The edited file holds the released skill text, so the bytes on disk differ from the registration (65 bytes, sha256 ae2960...)."
+  },
+  "rows": [
+    {
+      "op": "clone",
+      "table": "tasks",
+      "from": {
+        "id": "01K3980000085154084C742759"
+      },
+      "values": {
+        "id": "01K3986260CN00000000000001",
+        "name": "rfc626 waiting review whose document file is gone",
+        "status": "awaiting_review",
+        "finished_at": null,
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260CN00000000000001",
+        "execution_lineage_id": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "§3.4 row 1: required content missing for a task that could continue"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K3980000D3D6DE02630EDFDE"
+      },
+      "values": {
+        "id": "01K3986260CN00000000000101",
+        "task_id": "01K3986260CN00000000000001",
+        "envelope_nonce": "6260000000000000000000000000000000000000000000000000000000000c01",
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "provable done worker run: the content is the only reason to end the task"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K3980000289A7465F249D86E"
+      },
+      "values": {
+        "id": "01K3986260CN00000000000111",
+        "task_id": "01K3986260CN00000000000001",
+        "status": "awaiting_review",
+        "finished_at": null,
+        "exit_code": null,
+        "envelope_nonce": "6260000000000000000000000000000000000000000000000000000000000c11",
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "provable review run waiting for a decision"
+    },
+    {
+      "op": "clone",
+      "table": "doc_versions",
+      "from": {
+        "id": "01K39800003EF6C465BA1EE405"
+      },
+      "values": {
+        "id": "01K3986260CN00000000000401",
+        "task_id": "01K3986260CN00000000000001",
+        "review_node_run_id": "01K3986260CN00000000000111",
+        "body_path": "runs/01K3986260CN00000000000001/review/review/document/v1.md",
+        "decision": "pending",
+        "decision_reason": null,
+        "decided_at": null,
+        "decided_by": null,
+        "decided_by_role": null
+      },
+      "why": "pending document whose body file is not on disk (no content entry is written for it)"
+    },
+    {
+      "op": "clone",
+      "table": "tasks",
+      "from": {
+        "id": "01K3980000085154084C742759"
+      },
+      "values": {
+        "id": "01K3986260CN00000000000002",
+        "name": "rfc626 finished review whose document file is gone",
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260CN00000000000002",
+        "execution_lineage_id": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "§3.4 row 1: required content missing for a task that cannot continue (done)"
+    },
+    {
+      "op": "clone",
+      "table": "node_runs",
+      "from": {
+        "id": "01K3980000289A7465F249D86E"
+      },
+      "values": {
+        "id": "01K3986260CN00000000000112",
+        "task_id": "01K3986260CN00000000000002",
+        "continuation_slot_key": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "the finished review run"
+    },
+    {
+      "op": "clone",
+      "table": "doc_versions",
+      "from": {
+        "id": "01K39800003EF6C465BA1EE405"
+      },
+      "values": {
+        "id": "01K3986260CN00000000000402",
+        "task_id": "01K3986260CN00000000000002",
+        "review_node_run_id": "01K3986260CN00000000000112",
+        "body_path": "runs/01K3986260CN00000000000002/review/review/document/v1.md"
+      },
+      "why": "approved document whose body file is not on disk"
+    },
+    {
+      "op": "clone",
+      "table": "tasks",
+      "from": {
+        "id": "01K3980000085154084C742759"
+      },
+      "values": {
+        "id": "01K3986260CN00000000000003",
+        "name": "rfc626 finished review whose document was edited on disk",
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3986260CN00000000000003",
+        "execution_lineage_id": null,
+        "lineage_slot_path_json": null
+      },
+      "why": "§3.4 row 2b ①: the file is there and listed, but differs from the registered size and digest"
+    },
+    {
+      "op": "clone",
+      "table": "collaboration_gate_operations",
+      "from": {
+        "id": "01K398000002C3B88F137D374F"
+      },
+      "values": {
+        "id": "01K3986260CN00000000000603",
+        "task_id": "01K3986260CN00000000000003",
+        "gate_ref": "01K3986260CN00000000000403",
+        "idempotency_key": "rfc626-review-open-01K3986260CN00000000000003",
+        "request_hash": "6260000000000000000000000000000000000000000000000000000000000c03",
+        "manifest_json": "{\"version\":1,\"kind\":\"review-open\",\"docVersionId\":\"01K3986260CN00000000000403\"}",
+        "receipt_json": "{\"version\":1,\"docVersionId\":\"01K3986260CN00000000000403\"}"
+      },
+      "why": "the gate's completed open operation"
+    },
+    {
+      "op": "clone",
+      "table": "collaboration_gate_artifacts",
+      "from": {
+        "operation_id": "01K398000002C3B88F137D374F",
+        "artifact_key": "review-document"
+      },
+      "values": {
+        "operation_id": "01K3986260CN00000000000603",
+        "staged_path": "<AW_HOME>/runs/01K3986260CN00000000000003/review/review/document/v1.md",
+        "final_path": "<AW_HOME>/runs/01K3986260CN00000000000003/review/review/document/v1.md"
+      },
+      "why": "finalized artifact still registered as 65 bytes with sha256 ae2960... (copied from the ledger row)"
+    }
+  ],
+  "content": [
+    {
+      "path": "runs/01K3986260CN00000000000003/review/review/document/v1.md",
+      "utf8": "# Release upgrade skill\n\nKeep the historical document and review outcome.\n",
+      "sha256": "155a2f68503d1eeb9d60ec428d5669c9b7a913cac0975c7ff84390e7a07e7f38"
+    }
+  ]
+}

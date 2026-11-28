@@ -102,7 +102,11 @@ export async function materializedSourceDirectory(
   for (const entry of listing.files) {
     const path = join(root, entry.path)
     if (!existsSync(path)) throw new Error('source-artifact-file-missing')
-    utimesSync(path, entry.mtimeMs / 1000, entry.mtimeMs / 1000)
+    // RFC-626 §4.5: a file the artifact store holds by hard link is the registered file itself
+    // and still carries the time recorded here. Setting it again would be a write to an inode
+    // the store shares, for nothing; only a materialised copy needs its time put back.
+    if (Math.trunc(statSync(path).mtimeMs) !== entry.mtimeMs)
+      utimesSync(path, entry.mtimeMs / 1000, entry.mtimeMs / 1000)
   }
   return root
 }

@@ -40,6 +40,8 @@ const EXACT_TOKENS: Record<string, string> = {
   'daemon-restart': 'daemonRestart',
   'orphan-reconcile': 'orphanReconcile',
   'canceled by user': 'canceledByUser',
+  // RFC-626：升级到新的大版本结构时，旧版本的运行记录接不上的任务被结束。
+  'ended by upgrade': 'endedByUpgrade',
   'scheduler error': 'schedulerError',
   'dw-generate-exhausted': 'dwGenerateExhausted',
   'dw-reject-exhausted': 'dwRejectExhausted',

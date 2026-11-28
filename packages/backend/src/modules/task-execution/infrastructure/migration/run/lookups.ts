@@ -8,7 +8,14 @@ import { frozenRunDefinition, type FrozenRunDefinition } from './definitions'
 import { planRunSequences, type RunSequencePlan } from './sequence'
 import { backfillLegacyFrames } from './frames'
 import type { WriterEvidenceIndex } from './writers'
-import { integer, nullableText, text } from './source'
+import {
+  ALLOCATION_NUMBER_COLUMNS,
+  integer,
+  nullableText,
+  readableRun,
+  text,
+  unusableNumberColumns,
+} from './source'
 
 export const RUN_DEFINITIONS = lookupKey<FrozenRunDefinition>('task-execution/run-definitions', 2)
 export const WRITER_EVIDENCE = lookupKey<WriterEvidenceIndex>(
@@ -27,7 +34,7 @@ export const runDefinitions: LookupBuilder<FrozenRunDefinition> = {
         text(row, 'id'),
         frozenRunDefinition(
           typeof row.values.workflow_snapshot === 'string' ? row.values.workflow_snapshot : null,
-          staged.group('node_runs', 'task_id', text(row, 'id')).filter((run) => !run.codecFailure),
+          staged.group('node_runs', 'task_id', text(row, 'id')).filter(readableRun),
           lookups(TASK_FACTS).get(text(row, 'id')),
         ),
       )
@@ -44,7 +51,8 @@ export const runSequences: LookupBuilder<RunSequencePlan> = {
     )
     let highWater = 0
     for (const row of staged.rows('node_run_seq_allocations'))
-      if (!row.codecFailure) highWater = Math.max(highWater, integer(row, 'seq'))
+      if (!row.codecFailure && !unusableNumberColumns(row, ALLOCATION_NUMBER_COLUMNS).length)
+        highWater = Math.max(highWater, integer(row, 'seq'))
     for (const plan of plans.values()) highWater = Math.max(highWater, plan.observedHighWater)
     const count = plans.values().next().value?.allocationCount ?? 0
     for (const [taskId] of lookups(TASK_FACTS).entries())
@@ -96,7 +104,8 @@ export const runFrames: LookupBuilder<RunFrame> = {
   dependsOn: [RUN_DEFINITIONS, RUN_SEQUENCES],
   build(staged, put, lookups) {
     for (const taskId of staged.groupKeys('node_runs', 'task_id')) {
-      const rows = staged.group('node_runs', 'task_id', taskId).filter((row) => !row.codecFailure)
+      // RFC-626: rows the run rule sets aside have no frame; a run inside one is then unresolved.
+      const rows = staged.group('node_runs', 'task_id', taskId).filter(readableRun)
       const definition = lookups(RUN_DEFINITIONS).get(taskId)
       const sequences = lookups(RUN_SEQUENCES).get(taskId)
       const seqById = new Map(sequences?.runs.map((row) => [row.id, row.seq]))

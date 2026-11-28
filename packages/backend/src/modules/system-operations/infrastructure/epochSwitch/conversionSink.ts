@@ -1,8 +1,14 @@
 import { valueDigest } from '@/platform/persistence/migration/conversion/digest'
 import { encodeStagedValue } from '@/platform/persistence/migration/conversion/staging'
 import { decodeMigrationKey } from '@/platform/persistence/migration/conversion/migrationKey'
+import { isCollectedUnitOutput } from '@/platform/persistence/migration/conversion/receipts'
 import type { ConversionSink } from '@/platform/persistence/migration/conversion/sink'
-import type { ConversionBlock, UnitOutput } from '@/platform/persistence/migration/conversion/types'
+import type {
+  ConversionBlock,
+  ConversionResolution,
+  LoadRejectionDecision,
+  UnitOutput,
+} from '@/platform/persistence/migration/conversion/types'
 import type {
   ConversionTargetConnection,
   MigrationRunInit,
@@ -11,6 +17,7 @@ import type {
 } from '@/platform/persistence/migration/run/types'
 import { TargetLoadError, type TargetLoader } from '@/platform/persistence/migration/target/loader'
 import { collectMigrationRows, type MigrationMetaStore } from './metaStore'
+import { readLoadRejections } from './loadRejections'
 
 export function assertMigrationUnitDigest(output: UnitOutput): void {
   const { digest, ...receipt } = output.receipt
@@ -60,17 +67,29 @@ export function createTargetConversionSink(input: {
   now: () => number
   onUnit?: (progress: UnitProgress) => void
   fault?: (point: 'after-rows' | 'after-receipts' | 'before-ack') => void
+  /**
+   * RFC-626: with `automatic` a unit the target refuses is not recorded as load-blocked; the
+   * refused rows go back to the engine, which sets their source rows aside and commits again.
+   */
+  resolution?: ConversionResolution
 }): ConversionSink & { loadBlocks(): Promise<readonly ConversionBlock[]> } {
   let opened = false
+  const automatic = input.resolution === 'automatic'
   return {
     async open(binding) {
       const result = await input.target.transaction(async (tx) => {
         const meta = input.meta.withConnection(tx)
         await meta.openRun(input.run, binding)
+        // RFC-626: the refusals each committed unit set rows aside for, exactly as persisted.
+        // Only a decision that is replayed verbatim gives the unit its committed digest again.
+        const loadRejections = automatic
+          ? await readLoadRejections(meta, input.run.runId)
+          : new Map<string, readonly LoadRejectionDecision[]>()
         return {
           committedUnitIds: new Set(
             (await collectMigrationRows(meta.units(input.run.runId))).map((unit) => unit.unitId),
           ),
+          ...(automatic ? { loadRejections } : {}),
         }
       })
       opened = true
@@ -78,66 +97,81 @@ export function createTargetConversionSink(input: {
     },
     async commitUnit(output) {
       if (!opened) throw new Error('v3-sink-not-open')
-      assertMigrationUnitDigest(output)
-      const progress = await input.target.transaction(async (tx): Promise<UnitProgress> => {
-        const meta = input.meta.withConnection(tx)
-        const runId = input.run.runId
-        const unitId = output.receipt.unitId
-        const previous = await meta.unit(runId, unitId)
-        if (previous) {
-          if (previous.receipt.digest !== output.receipt.digest)
-            throw new Error('v3-sink-unit-conflict')
+      // RFC-626: an output this process collected carries the digest of this very object.
+      if (!isCollectedUnitOutput(output)) assertMigrationUnitDigest(output)
+      const progress = await input.target.transaction(
+        async (
+          tx,
+        ): Promise<UnitProgress | { readonly rejected: readonly TargetInsertRejection[] }> => {
+          const meta = input.meta.withConnection(tx)
+          const runId = input.run.runId
+          const unitId = output.receipt.unitId
+          const previous = await meta.unit(runId, unitId)
+          if (previous) {
+            if (previous.receipt.digest !== output.receipt.digest)
+              throw new Error('v3-sink-unit-conflict')
+            return {
+              runId,
+              unitId,
+              rule: output.receipt.rule,
+              outcome: previous.outcome,
+              rowsWritten: previous.rowsWritten,
+              replayed: true,
+            }
+          }
+          const run = await meta.migrationRun(runId)
+          if (!run || run.state !== 'open') throw new Error('v3-sink-run-finished')
+          let blocks: readonly ConversionBlock[] = []
+          await tx.execute('SAVEPOINT v3_unit_rows')
+          try {
+            await input.loader.insert(tx, output.rows)
+          } catch (error) {
+            await tx.execute('ROLLBACK TO SAVEPOINT v3_unit_rows')
+            if (!(error instanceof TargetLoadError)) throw error
+            const rejections = await input.loader.locate(tx, output.rows)
+            if (automatic) {
+              // Nothing of this unit is written. A refusal that cannot be pinned to a row has
+              // no source row to set aside, so it stays an error.
+              if (!rejections.length)
+                throw new Error(
+                  `v3-target-load-rejection-unlocated: ${unitId}: ${error.rejection.message}`,
+                )
+              return { rejected: rejections }
+            }
+            blocks = rejections.map((rejected) => loadBlock(output, rejected))
+            if (!blocks.length)
+              blocks = [
+                {
+                  code: 'v3-target-load-rejected',
+                  scope: 'global',
+                  sourceTable: null,
+                  sourceKey: null,
+                  taskId: null,
+                  runId: null,
+                  missingFields: [],
+                  detail: { unitId, ...error.rejection },
+                },
+              ]
+          } finally {
+            await tx.execute('RELEASE SAVEPOINT v3_unit_rows')
+          }
+          const outcome = blocks.length ? 'load-blocked' : 'committed'
+          if (!blocks.length) input.fault?.('after-rows')
+          await meta.writeUnit(runId, output, outcome, input.now(), blocks)
+          input.fault?.('after-receipts')
           return {
             runId,
             unitId,
             rule: output.receipt.rule,
-            outcome: previous.outcome,
-            rowsWritten: previous.rowsWritten,
-            replayed: true,
+            outcome,
+            rowsWritten: blocks.length
+              ? 0
+              : output.rows.reduce((sum, group) => sum + group.rows.length, 0),
+            replayed: false,
           }
-        }
-        const run = await meta.migrationRun(runId)
-        if (!run || run.state !== 'open') throw new Error('v3-sink-run-finished')
-        let blocks: readonly ConversionBlock[] = []
-        await tx.execute('SAVEPOINT v3_unit_rows')
-        try {
-          await input.loader.insert(tx, output.rows)
-        } catch (error) {
-          await tx.execute('ROLLBACK TO SAVEPOINT v3_unit_rows')
-          if (!(error instanceof TargetLoadError)) throw error
-          const rejections = await input.loader.locate(tx, output.rows)
-          blocks = rejections.map((rejected) => loadBlock(output, rejected))
-          if (!blocks.length)
-            blocks = [
-              {
-                code: 'v3-target-load-rejected',
-                scope: 'global',
-                sourceTable: null,
-                sourceKey: null,
-                taskId: null,
-                runId: null,
-                missingFields: [],
-                detail: { unitId, ...error.rejection },
-              },
-            ]
-        } finally {
-          await tx.execute('RELEASE SAVEPOINT v3_unit_rows')
-        }
-        const outcome = blocks.length ? 'load-blocked' : 'committed'
-        if (!blocks.length) input.fault?.('after-rows')
-        await meta.writeUnit(runId, output, outcome, input.now(), blocks)
-        input.fault?.('after-receipts')
-        return {
-          runId,
-          unitId,
-          rule: output.receipt.rule,
-          outcome,
-          rowsWritten: blocks.length
-            ? 0
-            : output.rows.reduce((sum, group) => sum + group.rows.length, 0),
-          replayed: false,
-        }
-      })
+        },
+      )
+      if ('rejected' in progress) return progress
       input.fault?.('before-ack')
       input.onUnit?.(progress)
     },

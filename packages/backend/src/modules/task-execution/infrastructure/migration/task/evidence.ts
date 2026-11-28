@@ -23,19 +23,22 @@ export function recordTaskIssues(
   ctx: RuleContext,
 ): void {
   for (const issue of issues)
-    if (issue.alwaysBlock || facts.execution === 'executable')
-      ctx.out.block(
+    if (issue.alwaysBlock)
+      ctx.out.block(rowBlock(issue.code, row, issue.detail, issue.missingFields))
+    // RFC-626 §3.2.1: the task could continue, so its records must be provable. With automatic
+    // resolution the task is ended instead; operator resolution keeps this exact block.
+    else if (facts.execution === 'executable')
+      ctx.out.blockExecutable(
+        { taskId: facts.taskId, status: facts.status },
         rowBlock(
           issue.code,
           row,
-          issue.alwaysBlock
-            ? issue.detail
-            : {
-                ...(issue.detail && typeof issue.detail === 'object' && !Array.isArray(issue.detail)
-                  ? issue.detail
-                  : { facts: issue.detail }),
-                executableTask: { taskId: facts.taskId, status: facts.status },
-              },
+          {
+            ...(issue.detail && typeof issue.detail === 'object' && !Array.isArray(issue.detail)
+              ? issue.detail
+              : { facts: issue.detail }),
+            executableTask: { taskId: facts.taskId, status: facts.status },
+          },
           issue.missingFields,
         ),
       )

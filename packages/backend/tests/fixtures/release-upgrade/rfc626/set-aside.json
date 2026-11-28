@@ -1,0 +1,85 @@
+{
+  "formatVersion": 1,
+  "scenario": "set-aside",
+  "base": "v0.19.2",
+  "providers": [
+    "sqlite",
+    "postgresql"
+  ],
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-626-upgrade-no-refusal-minimal-time/design.md §3.3 (封存, 悬空行, 旧库里本来就悬空的行), §3.4 rows 11, 11b, 17",
+      "design/RFC-626-upgrade-no-refusal-minimal-time/proposal.md §5 A4, A6",
+      "packages/backend/db/migrations/0018_rfc036_users.sql",
+      "packages/backend/db/migrations/0020_rfc036_task_collab.sql"
+    ],
+    "note": "Rows a v0.19.2 database can hold although they are not self-consistent. SQLite stores any value in any column, so an integer column can hold text; and its foreign keys are only checked when enforcement is on, so a row can refer to a task that is gone. Those two rows exist only on SQLite: the old PostgreSQL schema refuses both. users.created_by and task_collaborators.added_by have no foreign key in the old PostgreSQL schema, so their dangling values exist on both providers; the old SQLite schema declares both (ON DELETE SET NULL, db/migrations/0018_rfc036_users.sql, 0020_rfc036_task_collab.sql) without enforcing them, so on SQLite those two rows are foreign-key violations of the old database as well."
+  },
+  "rows": [
+    {
+      "op": "insert",
+      "table": "maintenance_state",
+      "values": {
+        "key": "rfc626:undecodable-row",
+        "value": "kept exactly as the old database wrote it",
+        "updated_at": "not-an-epoch-millisecond"
+      },
+      "providers": [
+        "sqlite"
+      ],
+      "why": "§3.4 row 17 v2-source-codec: text in an integer column cannot be decoded"
+    },
+    {
+      "op": "clone",
+      "table": "users",
+      "from": {
+        "id": "01K39800007DFB4CF67742CB06"
+      },
+      "values": {
+        "id": "01K3986260SA00000000000002",
+        "username": "rfc626_dangling_creator",
+        "email": "rfc626-dangling-creator@example.invalid",
+        "display_name": "RFC-626 dangling creator",
+        "role": "user",
+        "created_by": "01K3986260SA00000000000999"
+      },
+      "why": "§3.4 row 11: the creating user was removed"
+    },
+    {
+      "op": "clone",
+      "table": "task_collaborators",
+      "from": {
+        "task_id": "01K3980000085154084C742759",
+        "user_id": "01K39800007DFB4CF67742CB06",
+        "role": "owner"
+      },
+      "values": {
+        "user_id": "01K3986260SA00000000000002",
+        "role": "collaborator",
+        "added_by": "01K3986260SA00000000000998"
+      },
+      "why": "§3.4 row 11b: the user who added the collaborator was removed"
+    },
+    {
+      "op": "clone",
+      "table": "lifecycle_alerts",
+      "from": {
+        "id": "01K39800008D7ED84D75C867F0"
+      },
+      "values": {
+        "id": "01K3986260SA00000000000004",
+        "task_id": "01K3986260SA00000000000997"
+      },
+      "providers": [
+        "sqlite"
+      ],
+      "why": "§3.3 旧库里本来就悬空的行: an alert of a task that is no longer in the old database"
+    }
+  ],
+  "foreignKeyViolations": [
+    "lifecycle_alerts",
+    "task_collaborators",
+    "users"
+  ]
+}

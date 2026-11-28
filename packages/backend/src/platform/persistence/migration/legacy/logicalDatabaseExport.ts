@@ -23,6 +23,7 @@ import {
   type LogicalDatabaseArtifactManifest,
   type LogicalTableArtifactEntry,
   type LogicalTableChunk,
+  type LogicalValueRule,
 } from './logicalDatabaseArtifact'
 import type { VerifiedLogicalDatabaseArtifactSource } from './logicalDatabaseRestore'
 import {
@@ -248,7 +249,14 @@ export async function exportLogicalDatabaseArtifact(input: {
   readonly chunkRows?: number
   readonly now?: () => number
   readonly onProgress?: (progress: LogicalDatabaseExportProgress) => void
+  /**
+   * RFC-626 §3.3: the value rule the chunks are written and read back under. An automatic
+   * upgrade's backup uses `transport`; whoever reads the backup reads it under the rule its
+   * manifest records. Rows the strict rule accepts give the same files under both.
+   */
+  readonly valueRule?: LogicalValueRule
 }): Promise<LogicalDatabaseExportReceipt> {
+  const valueRule: LogicalValueRule = input.valueRule ?? 'strict'
   if (input.source.provider !== input.sourceProvider) {
     throw new LogicalDatabaseExportError(
       'logical-export-source-provider',
@@ -310,9 +318,10 @@ export async function exportLogicalDatabaseArtifact(input: {
       table,
       chunkIndex: index,
       rows,
+      valueRule,
     })
-    const path = writeLogicalTableChunk(input.artifactRoot, chunk)
-    const persisted = readLogicalTableChunk(path)
+    const path = writeLogicalTableChunk(input.artifactRoot, chunk, valueRule)
+    const persisted = readLogicalTableChunk(path, valueRule)
     chunksWritten += 1
     bytesWritten += Buffer.byteLength(canonicalSchemaJson(persisted), 'utf8')
     return persisted

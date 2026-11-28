@@ -136,16 +136,10 @@ describeV2Providers('RFC-395 V2-N sequence and generation', (h) => {
       const sink = new V2MemorySink()
       const summary = await runConversion(elevated, sink)
       expect(summary.blocks).toEqual([])
-      expect(sink.rows('task_execution_generations')).toEqual(
-        tasks.map((task) => ({
-          task_id: task.taskId,
-          generation_seq: 0,
-          cause: 'legacy-epoch1',
-          previous_generation_seq: null,
-          operation_ref: null,
-          created_at: 100,
-        })),
-      )
+      // RFC-626 §3.3: generation 0 of every task, including no-run tasks, moved to the task
+      // rule (task/generation.ts; see rfc626-task-rule-helpers and rfc395-v2-integration-mixed).
+      // The run rule converted here no longer emits it.
+      expect(sink.rows('task_execution_generations')).toEqual([])
       expect(sink.rows('node_runs').map((row) => [row.id, row.seq])).toEqual([
         ['a', -4],
         ['m', -3],

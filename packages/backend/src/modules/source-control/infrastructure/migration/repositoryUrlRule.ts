@@ -10,15 +10,22 @@ import {
   repositoryCacheFactKey,
   emitBootRow,
   blockBootRow,
+  bootRowArchive,
+  recordBootUpgradeEffect,
   createBootUpgradeFacts,
+  CONTRADICTED_URL_FACT_REASONS,
+  LINKABLE_UNREADABLE_URL_REASONS,
   type RepositoryUrlFact,
   type BootUpgradeFacts,
 } from '@/platform/persistence/migration/conversion/bootUpgradeFacts'
+import { ConversionContractError } from '@/platform/persistence/migration/conversion/blockCodes'
 import type { LookupBuilder } from '@/platform/persistence/migration/conversion/lookups'
 import type {
   ConversionContribution,
   ConversionRule,
+  RuleContext,
 } from '@/platform/persistence/migration/conversion/rule'
+import type { SourceRow } from '@/platform/persistence/migration/conversion/types'
 import {
   bootSourceRows,
   type BootUpgradeEnvironmentContribution,
@@ -34,6 +41,117 @@ const cachedFactSchema = z.strictObject({
   urlRedacted: z.string().nullable(),
   reason: z.string().nullable(),
 })
+/**
+ * RFC-626 §3.4 row 4: reasons a cached repository's address could not be read back while the
+ * row itself is consistent — the key is missing or another one, or a legacy escrow is damaged.
+ * The automatic upgrade keeps such a repository; tasks, mounts and schedules still link to it
+ * by URL hash, as v0.19.2 did at boot. The integration schedule rule keeps an equal list (a
+ * guard test compares them); modules do not import each other's migration code.
+ */
+export const KEPT_UNREADABLE_URL_REASONS = LINKABLE_UNREADABLE_URL_REASONS
+const CONTRADICTED_URL_FACTS = CONTRADICTED_URL_FACT_REASONS
+export const URL_KEPT_UNREADABLE = 'v2-boot-url-kept-unreadable'
+/**
+ * Whether the backup preparation of the new version can turn this legacy escrow into sealed
+ * ciphertext. It decodes every escrow on every backup and refuses the whole backup for one it
+ * cannot decode (`services/repoCredentials.ts` `decodeLegacyUrlEscrow`), so an escrow that fails
+ * here must not reach the new database.
+ */
+export function legacyUrlEscrowReadable(value: string): boolean {
+  if (!value.startsWith(prefix)) return false
+  const hex = value.slice(prefix.length)
+  if (!hex || hex.length % 2 || !/^[a-f0-9]+$/i.test(hex)) return false
+  try {
+    const plain = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(hex, 'hex'))
+    return plain.length > 0 && parseGitUrl(plain) !== null
+  } catch {
+    return false
+  }
+}
+/**
+ * RFC-626 §3.4 row 4, automatic resolution: the repository is converted although its address
+ * could not be read back. A sealed address stays as it is, so restoring the key makes it usable
+ * again. A legacy escrow the new version cannot decode is cleared, display form included: the
+ * product then shows the address as unavailable and refuses to refresh, which it decides by a
+ * NULL `url_redacted` (`repositoryMirrorCache.ts`); the original row goes to an archive.
+ */
+function keepUnreadableRepository(
+  ctx: RuleContext,
+  row: SourceRow,
+  reason: string,
+  factId: string,
+): void {
+  const stored = typeof row.values.url_enc === 'string' ? row.values.url_enc : null
+  const escrow = stored?.startsWith(prefix) ?? false
+  const cleared = escrow && !legacyUrlEscrowReadable(stored!)
+  const values = {
+    ...row.values,
+    ...(cleared ? { url_enc: null, url_redacted: null } : {}),
+    last_submodule_sync_error:
+      typeof row.values.last_submodule_sync_error === 'string'
+        ? redactSensitiveString(row.values.last_submodule_sync_error)
+        : (row.values.last_submodule_sync_error ?? null),
+  }
+  const fields = Object.keys(values).filter(
+    (column) => values[column as keyof typeof values] !== row.values[column],
+  )
+  const cacheId = String(row.values.id)
+  const targets = [{ table: row.table, key: ctx.target.key(row.table, values) }]
+  const archive = fields.length ? bootRowArchive(ctx, row) : null
+  const before = {
+    cacheId,
+    encoding: escrow ? 'escrow' : 'sealed',
+    display: typeof row.values.url_redacted === 'string' ? row.values.url_redacted : null,
+  }
+  const after = {
+    cacheId,
+    reason,
+    address: cleared ? 'cleared' : 'unchanged',
+    fields,
+    error:
+      typeof values.last_submodule_sync_error === 'string'
+        ? values.last_submodule_sync_error
+        : null,
+  }
+  // Recorded first: the decision names the row before the row's own outputs classify it.
+  ctx.out.record(
+    {
+      kind: 'decision',
+      code: URL_KEPT_UNREADABLE,
+      payload: {
+        automatic: 'kept',
+        sourceTable: row.table,
+        sourceKey: row.encodedKey,
+        cacheId,
+        reason,
+        encoding: before.encoding,
+        address: after.address,
+        archive,
+      },
+    },
+    row,
+  )
+  ctx.out.row(row.table, values, row)
+  if (archive)
+    ctx.out.exception({
+      sourceTable: row.table,
+      sourceKey: row.encodedKey,
+      sourcePhase: row.phase,
+      class: 'converted',
+      kind: 'conflict-resolved',
+      targets,
+      archive,
+      decision: { code: URL_KEPT_UNREADABLE, detail: after },
+    })
+  recordBootUpgradeEffect(ctx, ref, row, {
+    disposition: archive ? 'transformed' : 'copied',
+    targets,
+    before,
+    after,
+    reason: URL_KEPT_UNREADABLE,
+    factIds: [factId],
+  })
+}
 export interface RepositoryUrlKeyProvider {
   open(
     input: BootUpgradeCaptureInput,
@@ -45,7 +163,7 @@ export function repositoryUrlEnvironment(
   return {
     id: ref.id,
     async capture(input) {
-      const rows = await bootSourceRows(input.source, 'cached_repos')
+      const rows = await bootSourceRows(input.source, 'cached_repos', input)
       let key: Awaited<ReturnType<RepositoryUrlKeyProvider['open']>> = null
       let keyUnavailable = false
       try {
@@ -217,14 +335,16 @@ export function repositoryUrlConversion(facts: BootUpgradeFacts): ConversionCont
           .lookup(repositoryUrlFacts)
           .require(repositoryCacheFactKey(String(row.values.id)))
         if (!fact || lookupFact.state === 'blocked') {
-          blockBootRow(
-            ctx,
-            ref,
-            row,
-            lookupFact.reason ?? 'v2-boot-url-fact-missing',
-            { cacheId: String(row.values.id) },
-            [factId],
-          )
+          const reason = lookupFact.reason ?? 'v2-boot-url-fact-missing'
+          if (ctx.resolution === 'automatic') {
+            if (CONTRADICTED_URL_FACTS.includes(reason))
+              throw new ConversionContractError(reason, `cached_repos/${String(row.values.id)}`)
+            if (fact && KEPT_UNREADABLE_URL_REASONS.includes(reason)) {
+              keepUnreadableRepository(ctx, row, reason, factId)
+              continue
+            }
+          }
+          blockBootRow(ctx, ref, row, reason, { cacheId: String(row.values.id) }, [factId])
           continue
         }
         const values = {

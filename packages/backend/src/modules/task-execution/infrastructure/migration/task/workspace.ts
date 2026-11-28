@@ -23,6 +23,7 @@ export type MountScenario =
   | 'zero-mounts'
   | 'single-nonroot-member'
   | 'multi-repo'
+  | 'first-mount-unavailable'
 
 export interface MountDecision {
   readonly scenario: MountScenario
@@ -223,6 +224,14 @@ export function assignTaskRepositoryMounts(
       base_branch: baseBranch!,
       branch_state: branchState,
     })
+  }
+  // RFC-626: a task's mounts start at ordinal 0 (the target admission probe requires it). When
+  // ordinal 0 cannot be carried, the other mounts are not carried either — the shape a single
+  // repository task with a conflicting mount already has — and each dropped mount says why.
+  if (mounts.length && !mounts.some((mount) => mount.ordinal === 0)) {
+    for (const mount of mounts) note('first-mount-unavailable', mount.ordinal as number)
+    mounts.length = 0
+    repoKeys.clear()
   }
   if (number(task, 'repo_count') !== Math.max(1, sources.length))
     problem('v2-task-repo-count', null, [

@@ -40,6 +40,49 @@ export function decodeLegacySkillBytes(encoding: string, content: string): Legac
   }
 }
 
+/** The place the product itself keeps a skill tree when no other location is recorded. */
+export function canonicalSkillTreePath(skillId: string, tree: string): string {
+  return tree === 'live'
+    ? `skills/${skillId}/files`
+    : `skills/${skillId}/versions/v${tree.slice(8)}/files`
+}
+
+/**
+ * RFC-626 §3.4 row 3a: the reference a skill tree keeps when the automatic upgrade quarantines
+ * the skill instead of proving its bytes. A local tree names the directory where it was found,
+ * or its canonical place, so that a later boot finds a restored directory and lifts the
+ * quarantine; a database tree names its own identity. Nothing is read and no content object
+ * or receipt is produced. The shape is the one `convertFrozenSkillContent` gives a proven tree,
+ * which every reader of skill references accepts.
+ */
+export function unavailableSkillTreeColumns(input: {
+  readonly skillId: string
+  readonly tree: string
+  readonly source: 'local-file' | 'database-bytes'
+  readonly reference: string | null
+}): { readonly refJson: string; readonly inline: Uint8Array | null; readonly location: string } {
+  const local = input.source === 'local-file'
+  const path = input.reference ?? canonicalSkillTreePath(input.skillId, input.tree)
+  const ref: ContentRef = {
+    version: 1,
+    kind: local ? 'local-file' : 'database-bytes',
+    location: local
+      ? { codec: 'skill-path', value: path }
+      : { codec: 'skill-tree', value: { skillId: input.skillId, tree: input.tree } },
+    contentId: null,
+    contentVersion: null,
+    sha256: null,
+    size: null,
+    mediaType: null,
+  }
+  const columns = contentRefColumns.encode(ref)
+  return {
+    refJson: columns.json,
+    inline: columns.inlineBytes,
+    location: local ? path : canonicalSchemaJson({ skillId: input.skillId, tree: input.tree }),
+  }
+}
+
 /** Frozen tree locations remain explicit. Only a synthetic snapshot needs new
  * per-path database bytes; existing trees keep their original storage identity. */
 export async function convertFrozenSkillContent(
