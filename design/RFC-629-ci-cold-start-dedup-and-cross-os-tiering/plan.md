@@ -1,6 +1,6 @@
 # RFC-629 实施计划
 
-状态：In Progress（2026-11-28；用户 2026-11-27 明确回复「都做，你自己推进完成」；第一轮 7 P0 / 12 P1 / 4 P2 与第二轮 4 P0 / 5 P1 / 3 P2 独立功能设计门 findings 已全部采纳修订，现送第三轮设计门复审；通过后一次性完成全部开发与测试用例编写，再集中验证与过功能实现门）。
+状态：Done（2026-11-28；实现提交 `b6d9d8706` + `579c25668` + 12-shard 权重刷新 `5c5690032` + 回归锁 `ca0aca014`；三轮设计门、两轮实现门与全部托管端模式/夜间工作流实测验收通过，详见 `./acceptance.md`）。
 
 ## 1. 任务分解
 
@@ -21,7 +21,7 @@
 - [x] **设计门**：独立只读 subagent 检视三件套（只审功能，禁止碰安全），历经三轮（第一轮 7 P0 / 12 P1 / 4 P2，第二轮 4 P0 / 5 P1 / 3 P2，第三轮 `PASS WITH FINDINGS` 0 P0 / 2 P1 / 3 P2），全部 findings 均已采纳修订并收口通过。
 - [x] **集中功能验证（T1–T7 全部完成后一次性执行）**：`format:check` / `lint` / `depcheck` / `typecheck` / `schema-history --check` / `test:shared` / `test:system-mocks` (111/111) / 前端契约 (14/14) + 全量 `source-guards` & `dom` (898 文件 7814/7814) / 全部新增与受影响后端及架构守卫测试 / `build:binary:e2e` / 6 份修改 E2E (25/25) 全部通过。
 - [x] **实现门**：独立只读 subagent 检视完整实现与测试（只审功能），第一轮 `FAIL`（1 P0 / 1 P1 / 3 P2）全部修复复验后，第二轮 `PASS`（0 findings）。
-- [ ] **Hosted 实测验收**：全部适用模式、夜间工作流与 `ci-timings` 分支在 GitHub Actions 实测通过，实测数据写入 `acceptance.md` 并置 `Done`。
+- [x] **Hosted 实测验收**：全部适用模式（`mode=full` `46118495355` 19m17s、`mode=standard` `46120870375` 9m12s、`run_e2e=false` `46121855824` 6m30s、`mode=docs-only` 随本收尾提交门禁复核）、夜间工作流（`e2e-cross-os-nightly` `46115673947` 18m25s、`backend-full-nightly` `46123064795` 19m35s）、`windows-platform`（`46118495300` 10m34s）与 `ci-timings` 全分支（`core-ci` / `core-only-ci` / `cross-os-e2e-nightly` / `full-nightly`）实测通过，数据写入 `acceptance.md` 并置 `Done`。
 
 ## 3. 设计门记录
 

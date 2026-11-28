@@ -4,11 +4,18 @@
 - **范围**：`/observability` 由五个页签改为范围条 + 时间与对比 + 七个关注面；后端把 RFC-371 v2 的用量读路径并入 RFC-616 的过程引擎（范围装配、根的判定、限制到运行里的一部分、按维度分组），新增未结束单元、任务谱系、告警三项事实（告警由 system-operations 经新的中立合同提供）；读路由由十条变八条；不新增表、列、索引与后台作业，没有迁移。前端新增范围条、可排序表头两个公共组件，扩展时间轴、柱图、指标卡。口径变化列在 proposal §8.3，能力影响列在 §11。
 - **现状**：用户批准（「批准，设计门过了就完整实现直到完结，允许提交上库」），同日追加“时间范围可以自定义，四个固定范围作为快捷项”。设计门（subagent，只审功能）三轮：第 1 轮 11 条 P1、第 2 轮 3 条 P1，第 3 轮通过，记录在 design §15。第 1 轮后归属规则改为“每个任务只算在它自己的能力里”（发起方另列它调起的任务花了多少），各层相加逐层相等。实现进行中，顺序见 plan §3。
 
-## 2026-11-28 RFC-629 CI 冷启动修复、重复扫描与夹具去重及跨 OS 分层验证（In Progress，用户 2026-11-27 批准全部实施；`design/RFC-629-ci-cold-start-dedup-and-cross-os-tiering/`）
+## 2026-11-28 RFC-629 CI 冷启动修复、重复扫描与夹具去重及跨 OS 分层验证（Done；`b6d9d8706` / `579c25668` / `5c5690032` / `ca0aca014`；`design/RFC-629-ci-cold-start-dedup-and-cross-os-tiering/`）
 
 - **来由**：RFC-627 收口后，用户要求在质量防护不下降的前提下进一步压榨 CI 耗时并合并重复用例；审阅实测剖析与全部 9 项优化方案（Track A 零收缩提速/去重 + Track B 跨 OS E2E 与 Windows 前端分层）后回复「都做，你自己推进完成」。
 - **范围**：修复 `persistenceHead()` 93 MB / 60 个废弃 PG catalog 冷加载、`eachProvider` / `testDatabase` 懒加载与跨进程 SQLite 基线/PG `TEMPLATE` 库 + 静态快照/`installMockRuntime` 缓存、`rfc294Gates` $O(N^3)$ 索引化、预计算 `passwords` 常量哑哈希与 `userFixture` 缓存、消除 2 处 30s 硬编码睡眠并并发化慢测；扩展 RFC-624 共享语料守卫与新增 `rfc629-shared-program-guards`、前端纯 Node 守卫迁入 `source-guards`、E2E 同配置 daemon 复用与 `rfc396-*` 轮询/拆分；下线重复 `ci-feedback.yml`、ESLint/`.tsbuildinfo` 缓存、并行化 `depcheck` / `test-backend-postgresql` / `build-binary`、增量 `gitleaks` + 原生 `shellcheck`、`test-backend` 16→12 片、路径感知前端契约快通道与纯后端测试跳过 E2E；跨 OS E2E 分层（Linux 121 全量 + macOS/Windows 19 `OS_CORE_E2E_SPECS` + 每日 `e2e-cross-os-nightly.yml`），Windows 前端迁入 nightly 并把 `e2e-harness.test.ts` 接入 `windows-platform.yml`。
-- **现状**：三轮设计门、T1–T7 全量实现与测试、本地集中验证与两轮独立只读功能实现门（最终 `PASS` 0 findings）均已通过，正在推送 `main` 进入 Hosted CI 全模式与夜间工作流实测验收。
+- **验收结果（全模式与夜间工作流托管实测通过，详见 `design/RFC-629-ci-cold-start-dedup-and-cross-os-tiering/acceptance.md`）**：
+  - `mode=full`（`579c25668` / `CI` run `46118495355` attempt 2 全绿）：60 活跃作业，首轮墙钟 **19m 17s**（较 RFC-627 −32.6%）、累计 **283.63 runner-min**（−36.3%）；`ci-timings` run `46120550353`（`core-ci`）产出 12 片 2,771 核心文件权重（3,561s，较 RFC-627 5,779s **−38.4%**，已合入 `5c5690032`）。
+  - `mode=standard`（`5c5690032` / `CI` run `46120870375` 首次 30/30 全绿）：端到端 **9m 12s**（较 RFC-627 **−57.0%**、较 RFC-627 前 **−73.3%**），累计 **113.82 runner-min**（−54.1%）；14 文件前端契约快通道 **28s**，12 片后端核心 244–347s，`lint` 3m 06s，`scans` 33s，3 路并发真 PG 5m 15s，macOS/Windows `os-core` E2E 4m 03s–4m 28s；`ci-timings` run `46121582410`（`core-ci`）通过。
+  - `mode=standard` 纯后端测试 `run_e2e=false`（`ca0aca014` / `CI` run `46121855824` attempt 2 全绿）：20 活跃 / 8 跳过（全部 6 个 build/e2e 跳过，零 macOS/Windows runner），首轮墙钟 **6m 30s**（−69.6%），累计 **71.92 runner-min**（−71.0%），温缓存 `lint` 2m 17s；`ci-timings` run `46122935395`（**`core-only-ci`**）24s 通过。
+  - `e2e-cross-os-nightly`（`2b085aeb2` / run `46115673947` 首次 13/13 全绿）：端到端 **18m 25s**、累计 **80.03 runner-min**（Gitleaks 全历史 3m 23s + Windows 前端 3 片 + macOS 全量 3 片 536 条 + Windows 全量 4 片 530 条）；`ci-timings` run `46117137365`（**`cross-os-e2e-nightly`**）通过。
+  - `backend-full-nightly`（`ca0aca014` / run `46123064795` attempt 2 44/44 全绿）：首轮墙钟 **19m 35s**（较 RFC-627 **−31.2%**），单片 4m 59s–9m 38s（p50 7m 30s），累计 **320.13 runner-min**；`ci-timings` run `46125286860`（**`full-nightly`**）28s 通过。
+  - `windows-platform`（`579c25668` / run `46118495300` 首次全绿，10m 34s，含新接入 `e2e-harness.test.ts`）与伴随工作流全绿；`mode=docs-only` 随本收尾文档提交经 `docs-fast-gate` + `ci-required` 复核。
+  - **保留负样本**：首推 `b6d9d8706` / `2b085aeb2`（`46115475630` 与 `46115659994`）暴露 5 处本 RFC 缺陷（`build-binary` 源码锁、`main.ts` 入口函数清单、串行 spawn 超时、`persistenceHead()` 引用同一性），已全部于 `579c25668` 修复并在 `ca0aca014` 补齐回归锁；`rfc370-m2-observer-program.test.ts:86` 既有 2s 子进程抖动偶发 3 次（`--failed` 重跑均过，未宣称根治）。
 
 ## 2026-11-28 RFC-627 CI 吞吐、分层验证与排队治理（Done；`f74f5f370` / `44a1284ea` / `f601eed3c`；`design/RFC-627-ci-throughput-tiered-verification/`）
 
