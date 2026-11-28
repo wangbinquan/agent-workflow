@@ -1,8 +1,9 @@
 // RFC-627: fail-closed CI change classification, queue-coalescing range safety,
 // strict Markdown docs-only allowlist, and full-trigger invariants.
 import { describe, expect, test } from 'bun:test'
+import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { basename, dirname, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import {
   classifyChangedPaths,
   DOCS_ONLY_DIR_PREFIXES,
@@ -79,7 +80,7 @@ describe('RFC-627 change classification rules', () => {
       ['packages/backend/tests/helpers/rfc395Q1Parity/README.md', 'full'],
       ['e2e/README.md', 'standard'],
       ['.github/README.md', 'standard'],
-      ['evidence/notes.md', 'full'],
+      ['evidence/notes.md', 'standard'],
     ] as const) {
       expect(isDocsOnlyPath(path), path).toBe(false)
       expect(classifyChangedPaths([path]).mode, path).toBe(expectedMode)
@@ -131,7 +132,6 @@ describe('RFC-627 change classification rules', () => {
       'package.json',
       'bun.lock',
       'bunfig.toml',
-      'evidence/v0.19.3/manifest.json',
     ]) {
       expect(isFullTriggerPath(path), path).toBe(true)
       expect(classifyChangedPaths([path]).mode, path).toBe('full')
@@ -183,23 +183,40 @@ describe('RFC-627 change classification rules', () => {
     }
   })
 
-  test('every configured literal path and prefix exists in the repository (zero stale rules)', () => {
+  test('every configured literal path and prefix is tracked in git (zero stale or untracked-only rules)', () => {
+    const trackedFiles = execFileSync('git', ['ls-files', '-z'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    })
+      .split('\0')
+      .filter((entry) => entry.length > 0)
+    const trackedSet = new Set(trackedFiles)
+    const trackedDirs = new Set<string>()
+    for (const file of trackedFiles) {
+      const parts = file.split('/')
+      for (let depth = 1; depth < parts.length; depth++) {
+        trackedDirs.add(`${parts.slice(0, depth).join('/')}/`)
+      }
+    }
+
     for (const path of [
       ...DOCS_ONLY_EXACT_PATHS,
       ...DOCS_ONLY_EXCLUDED_PATHS,
-      ...DOCS_ONLY_DIR_PREFIXES,
       ...FULL_TRIGGER_EXACT_PATHS,
-      ...FULL_TRIGGER_DIR_PREFIXES,
     ]) {
-      expect(existsSync(resolve(ROOT, path)), `stale configured path: ${path}`).toBe(true)
+      expect(trackedSet.has(path), `stale or untracked configured file: ${path}`).toBe(true)
+    }
+
+    for (const dir of [...DOCS_ONLY_DIR_PREFIXES, ...FULL_TRIGGER_DIR_PREFIXES]) {
+      expect(trackedDirs.has(dir), `stale or untracked configured directory: ${dir}`).toBe(true)
     }
 
     for (const prefix of FULL_TRIGGER_FILE_PREFIXES) {
-      const parent = resolve(ROOT, dirname(prefix))
-      const stem = basename(prefix)
-      expect(existsSync(parent), `missing prefix directory for ${prefix}`).toBe(true)
-      const matches = readdirSync(parent).filter((name) => name.startsWith(stem))
-      expect(matches.length, `stale file prefix with zero matches: ${prefix}`).toBeGreaterThan(0)
+      const matches = trackedFiles.filter((file) => file.startsWith(prefix))
+      expect(
+        matches.length,
+        `stale file prefix with zero tracked matches: ${prefix}`,
+      ).toBeGreaterThan(0)
     }
   })
 

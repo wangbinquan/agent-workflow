@@ -70,21 +70,21 @@ concurrency:
     - **自动联动全部 `migration` 档测试文件**：直接调用 `scripts/ci/backend-shards.ts` 导出的 `isMigrationTierTest(path)`（同为零依赖模块），确保修改任何一个被划入 `migration` 档的测试文件必触发 `mode=full`，绝不会因落在 `standard` 而跳过该测试；
     - 持久化与迁移核心目录/Schema：
       - `packages/backend/src/platform/persistence/`
-      - `packages/backend/src/platform/content/migration/`（11 个内容迁移生产文件）
-      - `packages/backend/src/platform/contracts/migrationDecision.ts`
+      - `packages/backend/src/platform/content/migration/`（内容迁移生产文件）、`packages/backend/src/platform/content/inventory/`（内容盘点迁移实现）
+      - `packages/backend/src/platform/contracts/migrationDecision.ts`、`packages/backend/src/platform/contracts/historyRestriction.ts`
       - `packages/backend/src/modules/system-operations/`（涵盖 `application/epochSwitch/`、`domain/epochSwitch/`、`infrastructure/epochSwitch/`、`composition/` 及全部 `databaseMigration*` / `autoUpgrade*` / `schema*` / `sqliteMigrationSafetyBackup`）
       - `packages/backend/src/db/`、`packages/backend/db/`
       - 正则 `^packages/backend/src/(?:modules|platform)/[^/]+/(?:infrastructure/)?migration/`（同时涵盖模块与平台迁移目录）
-      - 正则 `^packages/backend/src/(?:modules|platform)/[^/]+/(?:composition|infrastructure/persistence)/schema\.ts$`（涵盖全仓全部模块与平台 38 个 `schema.ts`）
+      - 正则 `^packages/backend/src/(?:modules|platform)/[^/]+/composition/conversion\.ts$`（涵盖全部模块转换规则组合根）
+      - 正则 `^packages/backend/src/(?:modules|platform)/[^/]+/(?:composition|infrastructure/persistence)/[A-Za-z0-9_-]*[Ss]chema\.ts$`（涵盖全仓全部模块与平台 `schema.ts` 及 `historyQuerySchema.ts` 等 schema 贡献文件）
     - 引导与 CLI 迁移入口：
       - `packages/backend/src/bootstrap/` 下迁移/持久化相关文件：`conversionRules.ts`、`persistenceSchema.ts`、`persistenceHead.ts`、`persistenceBaseline.ts`、`migrate.ts`、`historyRestrictions.ts`、`targetColumnDestinations.json`、`targetSchemaRoster.json`、`daemonProviderBootstrap.ts`、`daemonProviderMigrationAdmission.ts`，以及前缀 `epochMigration` / `autoUpgrade`
       - `packages/backend/src/cli/` 下库与迁移命令：`epochMigration.ts`、`epochMigrationLegacy.ts`、`database.ts`、`dbCompact.ts`、`migrationReport.ts`、`backup.ts`、`restore.ts`
     - 迁移/双引擎测试夹具、脚本与契约文件：
-      - `packages/backend/tests/release-upgrade`、`packages/backend/tests/helpers/releaseUpgrade/`、`packages/backend/tests/migration-freeze.ts`
+      - `packages/backend/tests/release-upgrade`、`packages/backend/tests/fixtures/release-upgrade/`、`packages/backend/tests/fixtures/shipped-migrations/`、`packages/backend/tests/helpers/releaseUpgrade/`、`packages/backend/tests/migration-freeze.ts`
       - `packages/backend/tests/helpers/eachProvider.ts`、`packages/backend/tests/helpers/testDatabase.ts`、`packages/backend/tests/helpers/epoch1Protocol/`、`packages/backend/tests/helpers/epoch2`（前缀）、`packages/backend/tests/helpers/epochMigrationReachability.ts`
       - 正则 `^packages/backend/tests/(?:helpers/)?.*(?:rfc395|rfc398|rfc625|rfc626)`
       - `scripts/release-upgrade/`、`scripts/schema-history.ts`、`.github/scripts/release-upgrade.ts`
-      - `evidence/`
       - `design/RFC-395-database-target-schema-rebuild/table-mapping.md`、`design/RFC-349-postgresql-provider-one-click-migration/schema-contract.json`、`design/RFC-349-postgresql-provider-one-click-migration/schema-contract.md`
     - CI 拓扑、测试根配置与依赖锁：
       - `.github/workflows/ci.yml`、`.github/workflows/ci-work.yml`、`.github/workflows/backend-full-nightly.yml`、`.github/workflows/ci-timings.yml`、`.github/scripts/ci-postgresql-service.sh`、`scripts/ci/`

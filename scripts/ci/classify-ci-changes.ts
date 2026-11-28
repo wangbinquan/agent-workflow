@@ -107,7 +107,6 @@ export const FULL_TRIGGER_DIR_PREFIXES = Object.freeze([
   'packages/backend/tests/helpers/epoch1Protocol/',
   'scripts/release-upgrade/',
   'scripts/ci/',
-  'evidence/',
 ] as const)
 
 /** Filename prefixes (directory + leading filename stem) promoting CI to `mode=full`. */
