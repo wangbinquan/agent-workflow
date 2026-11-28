@@ -31,7 +31,9 @@ describe('RFC-311 P0-1 — off-thread backup vacuum', () => {
     // 额外入口进入该 helper，且两个产物都通过它构建。
     expect(src).toContain('entrypoints: [mainEntry, ...WORKER_ENTRIES]')
     expect(src).toContain("AW_COMPILED_BUILD: 'true'")
-    expect(src.match(/await buildDaemonBinary\(\{/g)).toHaveLength(2)
+    expect(src.match(/\bbuildDaemonBinary\(\{/g)?.length ?? 0).toBeGreaterThanOrEqual(2)
+    expect(src).toContain('e2e: false')
+    expect(src).toContain('e2e: true')
 
     const backup = readFileSync(
       resolve(

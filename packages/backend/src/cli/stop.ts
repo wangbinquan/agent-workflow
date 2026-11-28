@@ -30,6 +30,14 @@ import { Paths } from '@/platform/configuration/installationPaths'
 
 export const DEFAULT_STOP_TIMEOUT_MS = 30_000
 
+/** Parse `--timeout` for `agent-workflow stop`; returns null for non-positive or non-integer values. */
+export function parseStopTimeoutMs(raw: string): number | null {
+  if (!/^\d+$/.test(raw)) return null
+  const n = Number(raw)
+  if (!Number.isSafeInteger(n) || n <= 0) return null
+  return n
+}
+
 export interface StopOptions {
   /** Max time to wait for the daemon to exit after the request. Default 30s. */
   timeoutMs?: number

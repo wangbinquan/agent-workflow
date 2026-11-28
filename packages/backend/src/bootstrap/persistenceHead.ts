@@ -31,9 +31,15 @@ export function persistenceHistory(postgresqlMajor?: number): readonly HistoryVe
   if (cached) return cached
   const versions = readSchemaHistoryFiles(artifactFiles(), postgresqlMajor, EPOCH2_META_TABLES)
   if (!versions.length) throw new SchemaHistoryError('empty', 'embedded epoch-2 history is missing')
-  histories.set(postgresqlMajor, versions)
-  heads.set(postgresqlMajor, versions.at(-1)!)
-  return versions
+  const existingHead = heads.get(postgresqlMajor)
+  const normalized =
+    existingHead !== undefined &&
+    versions.at(-1)!.contract.version === existingHead.contract.version
+      ? Object.freeze([...versions.slice(0, -1), existingHead])
+      : versions
+  histories.set(postgresqlMajor, normalized)
+  if (existingHead === undefined) heads.set(postgresqlMajor, normalized.at(-1)!)
+  return normalized
 }
 export function persistenceHead(postgresqlMajor?: number): HistoryVersion {
   const cached = heads.get(postgresqlMajor) ?? histories.get(postgresqlMajor)?.at(-1)

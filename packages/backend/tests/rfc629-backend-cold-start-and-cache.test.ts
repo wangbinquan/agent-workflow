@@ -3,10 +3,10 @@
 // Argon2id dummy/fixture password hash caching, `stop --timeout` validation, and isolated
 // PostgreSQL gate slot execution.
 import { describe, expect, test } from 'bun:test'
-import { spawnSync } from 'node:child_process'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { parseStopTimeoutMs } from '@/cli/stop'
 import { persistenceHead } from '@/bootstrap/persistenceHead'
 import { EPOCH2_META_TABLES } from '@/modules/system-operations/composition/schema'
 import { persistenceSchema } from '@/bootstrap/persistenceSchema'
@@ -300,27 +300,38 @@ describe('RFC-629 T2 — rfc294Gates generics & cycles, Argon2id cache, and stop
     expect(await verifyPassword('rfc629-fixture-pass-123', hash1)).toBe(true)
   })
 
-  test('CLI `stop --timeout` rejects missing, zero, negative, and non-integer values with exit code 2', () => {
-    for (const args of [
+  test('CLI `stop --timeout` rejects missing, zero, negative, and non-integer values with exit code 2', async () => {
+    for (const bad of ['', '0', '-5', 'abc', '1.5', '9007199254740992']) {
+      expect(parseStopTimeoutMs(bad), bad).toBeNull()
+    }
+    expect(parseStopTimeoutMs('1')).toBe(1)
+    expect(parseStopTimeoutMs('30000')).toBe(30_000)
+
+    const cases = [
       ['stop', '--timeout'],
       ['stop', '--timeout', '0'],
       ['stop', '--timeout', '-5'],
       ['stop', '--timeout', 'abc'],
       ['stop', '--timeout=1.5'],
-    ]) {
-      const result = spawnSync(
-        process.execPath,
-        ['run', resolve(REPO_ROOT, 'packages/backend/src/main.ts'), ...args],
-        {
-          cwd: REPO_ROOT,
-          encoding: 'utf8',
-          timeout: 10_000,
-        },
-      )
-      expect(result.status, args.join(' ')).toBe(2)
-      expect(result.stderr, args.join(' ')).toContain('--timeout')
+    ]
+    const results = await Promise.all(
+      cases.map(async (args) => {
+        const proc = Bun.spawn(
+          [process.execPath, 'run', resolve(REPO_ROOT, 'packages/backend/src/main.ts'), ...args],
+          { cwd: REPO_ROOT, stdout: 'pipe', stderr: 'pipe' },
+        )
+        const [exitCode, stderr] = await Promise.all([
+          proc.exited,
+          new Response(proc.stderr).text(),
+        ])
+        return { args, exitCode, stderr }
+      }),
+    )
+    for (const { args, exitCode, stderr } of results) {
+      expect(exitCode, args.join(' ')).toBe(2)
+      expect(stderr, args.join(' ')).toContain('--timeout')
     }
-  })
+  }, 15_000)
 })
 
 describe('RFC-629 T5 — run-postgresql-gate.ts isolated slot databases and fail-closed skip check', () => {

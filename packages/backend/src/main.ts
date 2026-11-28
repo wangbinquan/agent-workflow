@@ -42,7 +42,7 @@ import {
   type DevelopmentDaemonState,
 } from './bootstrap/developmentReload'
 import { statusCommand, formatStatus } from './cli/status'
-import { stopCommand } from './cli/stop'
+import { parseStopTimeoutMs, stopCommand } from './cli/stop'
 import { packageCommand } from './cli/package'
 import { runUserCommand } from './cli/userBootstrap'
 import { authCommand } from './cli/auth'
@@ -91,21 +91,6 @@ function readPortFlag(argv: string[]): number | undefined {
   const n = Number(raw)
   if (!Number.isInteger(n) || n < 0 || n > 65535) {
     console.error(`invalid --port value: ${raw}`)
-    process.exit(2)
-  }
-  return n
-}
-
-function readPositiveIntFlag(argv: string[], name: string): number | undefined {
-  const raw = readFlag(argv, name)
-  if (raw === undefined) return undefined
-  if (!/^\d+$/.test(raw)) {
-    console.error(`invalid ${name} value: ${raw}`)
-    process.exit(2)
-  }
-  const n = Number(raw)
-  if (!Number.isSafeInteger(n) || n <= 0) {
-    console.error(`invalid ${name} value: ${raw}`)
     process.exit(2)
   }
   return n
@@ -201,7 +186,12 @@ async function main(): Promise<void> {
     }
 
     case 'stop': {
-      const timeoutMs = readPositiveIntFlag(Bun.argv, '--timeout')
+      const rawTimeout = readFlag(Bun.argv, '--timeout')
+      const timeoutMs = rawTimeout === undefined ? undefined : parseStopTimeoutMs(rawTimeout)
+      if (timeoutMs === null) {
+        console.error(`invalid --timeout value: ${rawTimeout}`)
+        process.exit(2)
+      }
       const result = await stopCommand(timeoutMs === undefined ? {} : { timeoutMs })
       process.stdout.write(result.message + '\n')
       // RFC-254 T7: `forced` means the daemon was killed rather than drained.
