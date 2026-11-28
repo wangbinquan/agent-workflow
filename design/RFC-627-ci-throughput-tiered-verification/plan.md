@@ -27,7 +27,7 @@
   - [x] `docs-fast-gate` 的 23 个后端文件（190 pass / 0 fail）与 2 个 shared 文件（19 pass / 0 fail，经 `--filter @agent-workflow/shared`）全部真实执行并通过。
 - [x] **实现门**：由本 session 派生只读 subagent 独立检视完整实现与测试（只审功能，禁止碰安全），结论 `PASS WITH FINDINGS`（0 P0 / 3 P1 / 2 P2）；已全部核实并修复 3 项 P1（补齐 `conversion.ts`/`*Schema.ts`/`fixtures/release-upgrade/`/`fixtures/shipped-migrations/`/`content/inventory/`/`historyRestriction.ts` 全量触发与结构不变量守卫、实证并新增真实 Bun 1.4.3 `--timings` 含 0 用例纯 PG 文件集成用例、`planBackendShards` 与 `runBackendShard` 空分片 fail-closed）及 2 项 P2（`ci-timings.yml` 收紧 `skip-docs-only` 为零 artifact + POSIX `grep -Ec`、`plan-backend-shards.ts` `--output` 缺参校验与文档口径同步）。
 - [ ] **Hosted 实测验收**：
-  - [ ] 实现提交本身自动触发 `mode=full` 并在主 CI 全绿通过。
+  - [x] 实现提交本身自动触发 `mode=full` 并在主 CI 全绿通过（SHA `f74f5f370f581e41285aa7746ef67b5cdbc243d5`，`CI` run `46085767786` 70/70 全绿、端到端约 28.9 分钟；`ci-timings` run `46088340261` 29 秒产出首份 2,768 文件 `backend-core-test-timings.json`，`unmeasured=[]`）。
   - [ ] 后续一次纯文档提交触发 `mode=docs-only` 绿灯通过，`ci-timings.yml` 干净跳过、`ci-feedback.yml` 不空跑。
   - [ ] 一次真实非迁移代码提交验证 `mode=standard` 16 片核心 + 增强 PG 门禁 + E2E（macOS 3 worker）全绿通过，并记录真实 runner-分钟与分片时长分布。
   - [ ] 手动触发一次 `backend-full-nightly.yml` 验证 44 片全量双引擎 + `--coverage` + Codecov 与 `ci-timings.yml` 收集通过。
