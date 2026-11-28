@@ -1,0 +1,13 @@
+{
+  "tier": "core",
+  "sourceRun": 46085767786,
+  "sourceSha": "f74f5f370f581e41285aa7746ef67b5cdbc243d5",
+  "sourceRepository": "wangbinquan/agent-workflow",
+  "sourceWorkflowPath": ".github/workflows/ci-work.yml",
+  "finalRunAttempt": 1,
+  "sourceShards": 16,
+  "sourceFiles": 2768,
+  "measuredMilliseconds": 5778724,
+  "unmeasured": [],
+  "removed": []
+}
