@@ -24,13 +24,13 @@
 
 | 编号 | 任务 | 主要文件 | 用例 |
 | --- | --- | --- | --- |
-| T3 | 事实合同：`units` 的 `kinds`、`activeUnits`（含已中断的个数）、`unit` 接受单代理并对内部宿主任务指向交办、`lineage`、`activeCases`、`casesOfRounds`、新的 `ProcessAlertFacts` | `packages/backend/src/platform/contracts/processFacts.ts` | 边界守卫更新（实现方清单、合同文件只有类型与两个常量） |
-| T4 | task-execution 的事实实现 | `packages/backend/src/modules/task-execution/infrastructure/processTaskFacts.ts` | 两种数据库：三种类型（含单代理）、未结束、已中断的个数、谱系（类型、来源能力、交办、可见、已删除）、内部宿主任务指向交办、当工具用的工作流任务正常返回 |
+| T3 | 事实合同：`units` 的 `kinds`、`activeUnits`（按 `phase` 取未结束的或已中断的）、`unit` 接受单代理并对内部宿主任务指向交办、`reactionHostTasks` 带主体类型、`lineage`、`activeCases`、`casesOfRounds`、新的 `ProcessAlertFacts` | `packages/backend/src/platform/contracts/processFacts.ts` | 边界守卫更新（实现方清单、合同文件只有类型与两个常量） |
+| T4 | task-execution 的事实实现 | `packages/backend/src/modules/task-execution/infrastructure/processTaskFacts.ts` | 两种数据库：三种类型（含单代理）、未结束与已中断各自的行、谱系（类型、来源能力、交办、可见、已删除）、宿主任务的主体类型、内部宿主任务指向交办、当工具用的工作流任务正常返回 |
 | T5 | digital-employee 的事实实现 | `packages/backend/src/modules/digital-employee/infrastructure/processEmployeeFacts.ts` | 两种数据库：未结束的交办、由轮查交办 |
 | T6 | system-operations 的告警事实与装配工厂 | `packages/backend/src/modules/system-operations/infrastructure/processAlertFacts.ts`（新）、`composition/processAlertFacts.ts`（新） | 两种数据库：三个方法；归属债不增加 |
-| T7 | 调用存储：`callSlices`、`modelSlices`（含调用数、失败、时长）、Agent 键与无任务的过滤、`aggregateModels` 的分组与过滤、分桶宽度参数、`callsOf`（先过滤再截取，分页与总数） | `packages/backend/src/modules/run-observability/application/ports/callStore.ts`、`infrastructure/callPersistence.ts` | 两种数据库：切片之和等于合计、过滤、分桶、上限 |
+| T7 | 调用存储：`callSlices`、`modelSlices`（含调用数、失败、时长）、Agent 键与无任务的过滤、`aggregateModels` 的分组与过滤、分桶宽度参数、`callsOf`（任务集合或没有任务的调用；节点执行、调用 ID、业务或系统、Agent、模型、系统类别的过滤；先过滤再截取，分页与总数）、`systemCalls` 带调用 ID；删除 `taskCalls`、`recentCalls`、`usageByNodeRun` | `packages/backend/src/modules/run-observability/application/ports/callStore.ts`、`infrastructure/callPersistence.ts` | 两种数据库：切片之和等于合计、过滤、分桶、上限 |
 | T8 | 领域：范围与粒度、限制到部分（含包装器）、一组度量、按维度分组（含不可点的行与“其余”）、分段、五类状态、单元的用量只含自己的并另存 `invoked`、人工介入不含继承副本、合计口径的“Token 花在哪里”、提示的挑选与单代理的规则 | `packages/backend/src/modules/run-observability/domain/process/`（`scope.ts`、`parts.ts`、`measures.ts`、`breakdown.ts`、`buckets.ts` 新；`model.ts`、`unitSummary.ts`、`stageSummary.ts`、`gateSummary.ts`、`hints.ts` 改） | 纯函数用例（design §13.1 第二行） |
-| T9 | 装配器：执行的起止、调用切片与模型切片进单元事实、用量不再折进子孙、单代理走工作流装配器、数字员工只取内部宿主任务自己的用量、各能力的目录 | `packages/backend/src/modules/run-observability/application/process/sources.ts`、`kinds/taskUnits.ts`、`kinds/workflow.ts`、`kinds/workgroup.ts`、`kinds/employee.ts` | 扩展 `rfc616-process-kinds`；新增单代理的用例 |
+| T9 | 装配器：执行的起止、调用切片与模型切片进单元事实、用量不再折进子孙并按调用节点另存 `invoked`、单代理走工作流装配器、数字员工只折入内部宿主任务（当工具用的工作流任务进继承副本与 `invoked`）、多能力的范围按能力分组装配 | `packages/backend/src/modules/run-observability/application/process/sources.ts`、`kinds/taskUnits.ts`、`kinds/workflow.ts`、`kinds/workgroup.ts`、`kinds/employee.ts` | 扩展 `rfc616-process-kinds`；新增单代理的用例 |
 | T10 | 应用层：范围装配、八个用例、期间实际消耗、当前 | `packages/backend/src/modules/run-observability/application/process/scopeLoader.ts`、`observationQueries.ts`、`actualSpend.ts`、`liveState.ts`（新） | 用假事实的查询用例；两种数据库的装配用例（design §13.1 第五行） |
 | T11 | 路由：八条新路由；价格路由移到单独文件；删除被替换的十条 | `packages/backend/src/modules/run-observability/inbound/http/observabilityRoutes.ts`（新）、`pricingRoutes.ts`（新）、`observationRoutes.ts`、`processRoutes.ts` | 路由用例（门、可见范围、422、404、409、旧路由不存在） |
 | T12 | 装配与启动：合并两份装配，绑定告警事实，去掉任务事实端口 | `packages/backend/src/modules/run-observability/composition/`、`packages/backend/src/bootstrap/daemonHttpComposition.ts` | `module-contract-run-observability`、`rfc390-neutral-http-binding` 改写 |
@@ -42,7 +42,7 @@
 | 编号 | 任务 | 主要文件 | 用例 |
 | --- | --- | --- | --- |
 | T15 | 公共组件：范围条、可排序表头（新）；时间轴、柱图、指标卡、填充色的扩展 | `packages/frontend/src/components/ScopeBar.tsx`、`SortHeaderCell.tsx`（新）；`ExecutionSwimlane.tsx`、`ColumnChart.tsx`、`MetricTile.tsx`、`SegmentedBar.tsx`、`styles.css` | 各组件的单测（design §13.2 第二行） |
-| T16 | 文案：一份观测文案（中英），注册；其它文件里的叫法 | `packages/frontend/src/i18n/observation.ts`（新）、`zh-CN.ts`、`en-US.ts`、`observationPricing.ts` | 中英键一致；文案键可解析 |
+| T16 | 文案：一份观测文案（中英），注册；其它文件里的叫法（节点抽屉、节点运行表、三个入口、设置页文本主题分析的说明） | `packages/frontend/src/i18n/observation.ts`（新）、`zh-CN.ts`、`en-US.ts`、`observationPricing.ts` | 中英键一致；文案键可解析 |
 | T17 | 格式化合并 | `packages/frontend/src/components/observability/observationFormat.ts` | 格式用例 |
 | T18 | 地址与链接：校验（含自定义时间范围）、三个跳转函数、`observationWindow`、`customRangeOf`、`observationLink` | `packages/frontend/src/components/observability/observationSearch.ts`（新）、`packages/frontend/src/routes/observability.tsx` | 校验、跳转、回顶、时间范围、链接 |
 | T19 | 数据层：客户端、查询键、时间范围的终点、各查询的钩子 | `packages/frontend/src/components/observability/observationClient.ts`、新的钩子文件 | 请求次数与定时器 |

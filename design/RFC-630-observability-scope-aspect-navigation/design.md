@@ -34,6 +34,8 @@
 | `descendants` 逐级走完全部层级 | `TE/infrastructure/processTaskFacts.ts:438-501` |
 | 人工门的统计不含继承来的轮次；人工介入次数含 | `RO/domain/process/gateSummary.ts:31-37`、`RO/domain/process/unitSummary.ts:122` |
 | 交办的执行是各轮，评审与反问取自各轮的宿主任务 | `RO/application/process/kinds/employee.ts:227-233,253-364` |
+| 一轮的宿主任务有两种主体：合成的数字员工宿主，或一个被当作工具的工作流；两种都带轮 ID，交办现在把两种的用量与人工门都折进来 | `TE/infrastructure/hostTaskLaunch.ts:122-160`、`TE/infrastructure/processTaskFacts.ts:603-626`、`RO/application/process/kinds/employee.ts:293-343` |
+| 用量读路径的任务计数只数公开的任务 | `TE/infrastructure/taskObservationFacts.ts:150-156` |
 | 工作组任务自己的三类人工门由工作组装配器按传入的任务读取 | `RO/application/process/kinds/workgroup.ts:223-232` |
 | 状态映射：已完成 → succeeded，失败、已取消各自对应，其余（含已中断）→ active | `RO/application/process/kinds/taskUnits.ts:39-46,58` |
 | “Token 花在哪里”是 Token 样本上每个单元的均值 | `RO/domain/process/unitSummary.ts:228-262` |
@@ -66,6 +68,7 @@
 | 公共的文本输入支持日期时间类型，价格编辑的生效时间在用 | `FE/components/Form.tsx:102`、`FE/components/observability/PriceEditor.tsx:87`、`FE/components/observability/priceDraft.ts` |
 | 没有面包屑、可排序表头、堆叠柱图 | `FE/components` 下无对应文件；`FE/styles.css` 无 `aria-sort` 相关样式 |
 | 节点抽屉有两个使用方 | `FE/routes/tasks.detail.tsx:1046-1063`、`FE/components/workgroup/room/WorkgroupRoom.tsx:28` |
+| 设置页文本主题分析的说明里用到“过程度量”“系统执行”“人的介入”，并有用例断言其中含观测页的页签名 | `FE/i18n/zh-CN.ts:9629-9646`、`packages/frontend/tests/rfc616-settings-process-insight.test.tsx:456` |
 | 两套格式化函数、两份文案 | `FE/components/observability/observationFormat.ts`、`FE/components/process-metrics/processFormat.ts`、`FE/i18n/runObservability.ts`、`FE/i18n/processMetrics.ts` |
 
 ## 3. 架构落位（RFC-294）
@@ -91,7 +94,8 @@ bounded context 仍是 `run-observability`。本 RFC 的代码按目标分层落
 | 合同 | 改动 | 实现方与位置 |
 | --- | --- | --- |
 | `ProcessTaskFacts.units` | `kind` 改为 `kinds[]`，可取工作流、工作组、单代理；行增加 `subjectKind`，单代理任务的 `subjectName` 取冻结的名称 | task-execution，`TE/infrastructure/processTaskFacts.ts` |
-| `ProcessTaskFacts.activeUnits` | 新增。未结束且不是已中断的任务，不带时间范围，按开始时间从新到旧，最多取上限加一行；另返回已中断的个数（一条计数查询） | 同上 |
+| `ProcessTaskFacts.activeUnits` | 新增。不带时间范围的未结束任务，只取三种单元类型并按能力过滤，按开始时间从新到旧，最多取上限加一行。`phase` 取 `open`（排队、运行中、等待评审、等待人工）或 `interrupted`（已中断），各自返回行 | 同上 |
+| `ProcessTaskFacts.reactionHostTasks` | 行增加宿主任务的主体类型，用来区分内部宿主任务与被当作工具的工作流任务 | 同上 |
 | `ProcessTaskFacts.unit` | 接受单代理；任务是数字员工的内部宿主任务（`subject_kind='digital-employee'`）时返回它所属交办的 ID，由调用方改查交办 | 同上 |
 | `ProcessTaskFacts.lineage` | 新增，取代没有使用方的 `taskSummaries`。按任务 ID 批量返回：类型、来源能力的 ID 与名称、开始时间、发起人、版本、来源、员工轮与交办 ID、对查看者是否可见、是否已删除 | 同上 |
 | `ProcessEmployeeFacts.activeCases`、`casesOfRounds` | 新增。未结束的交办；由轮 ID 查交办与它所属的员工 | digital-employee，`packages/backend/src/modules/digital-employee/infrastructure/processEmployeeFacts.ts` |
@@ -202,7 +206,9 @@ export const OBSERVATION_CALL_PAGE_SIZE = 50
 | 人工介入次数 | 含继承副本 | 只算自己的 |
 | 执行、节点执行、包装器 | 自己的 | 不变 |
 
-数字员工装配器同样只取各轮内部宿主任务自己的用量，不再把宿主任务的子孙折进来（那些子孙是它们自己能力的单元）。
+数字员工装配器只折入各轮的**内部**宿主任务（主体类型是数字员工宿主的）自己的用量、评审与反问。被当作工具的工作流任务是那个工作流的单元：它的评审与反问在交办里只作为继承副本（用于等人时间），它的调用合计进交办的 `invoked`。内部宿主任务的子孙同样不折进来（它们是自己能力的单元），进 `invoked`。
+
+`invoked` 另按调起它的环节拆分（子孙行带调用节点，`ProcessDescendantRow.callNodeId`；交办按工作项），供按环节看时调用节点那一行的“它调起的任务”一列。
 
 单个能力或单个单元的“它调起的任务另花了”：单元的 `invoked` 之和，按任务去重，并去掉本身就是这个范围里的单元的那些。它不进任何合计。
 
@@ -218,7 +224,8 @@ export const OBSERVATION_CALL_PAGE_SIZE = 50
 | 单个任务或交办 | 这一个单元，不带时间范围（现有 `unit()`，多了单代理） |
 | 任务之外的平台调用 | 没有单元。直接从调用账本按系统工作类别聚合，按调用开始时间；没有任务的调用只统计查看者自己发起的，能查看全部任务的账号统计全部 |
 
-- 三个装配器（任务类两个共用 `taskUnitFacts`，加数字员工）本来就按单元输出同一种事实（`RO/application/process/kinds/*.ts`），多类型的范围就是把它们的结果拼在一起。环节目录、工作组模式、数字员工清单只在单个能力时需要，取法不变（该能力最新一个单元的）。
+- 三个装配器（任务类两个共用 `taskUnitFacts`，加数字员工）本来就按单元输出同一种事实（`RO/application/process/kinds/*.ts`），多类型的范围就是把它们的结果拼在一起。
+- 装配器一批只读最新一个单元的定义（`RO/application/process/kinds/workflow.ts:83-86`），而定义里有循环的上限、脑图的分类与环节的名称。所以多能力的范围按能力分组装配：先取范围内的单元行（已截到上限），按能力分组，每组各跑一次对应的装配器，再拼起来。每个能力的环节目录、工作组模式、数字员工清单取法不变（该能力最新一个单元的）。
 - **全部范围里的平台调用**：成本、Token、调用数，以及按能力类型、Agent、模型、执行原因（归系统工作）、系统工作看的各行，都把它们加进来；按能力看时每个类别是平台类型下的一行；按来源、发起人看时合成“任务之外的平台调用”一行。数量与各类单元统计不含它们。
 - 各层相加相等由构造保证：每个调用属于一个任务，每个任务属于一个单元，每个单元属于一个能力与一个类型。
 
@@ -229,13 +236,15 @@ export const OBSERVATION_CALL_PAGE_SIZE = 50
 | 只看 | 留下的执行 | 留下的用量切片 | 留下的人工门 |
 | --- | --- | --- | --- |
 | 环节（普通） | 这个环节的 | 这个环节的 | 这个环节自己的，加上以它为评审对象的 |
-| 环节（包装器） | 它内部各环节的（按环节目录的父子关系），以及这个包装器自己的运行记录（历时、轮数或分片数） | 它内部各环节的 | 它内部各环节的 |
+| 环节（包装器） | 它内部各环节的（按环节目录的父子关系逐级包含嵌套的包装器），以及这个包装器自己的运行记录 | 它内部各环节的 | 它内部各环节的 |
 | 执行原因 | 这个原因的 | 这个原因的 | 无 |
 | Agent | 无（按调用统计） | 这个 Agent 的调用切片 | 评审它所在环节产出的评审，加上它所在环节提出的反问 |
 | 模型 | 无 | 这个运行时与模型的模型切片 | 无 |
 | 系统工作 | 这个类别的系统执行 | 这个类别的调用切片 | 无 |
 
 过滤之后重新聚合，现有的 `stageTotalsOf`、`reviewSummaryOf` 等函数不用改就能用在结果上。“Agent 所在的环节”由调用切片得出：有这个 Agent 调用的环节。
+
+只看包装器时，度量里的次数与时长取包装器自己的运行记录（每次运行的历时，现有的 `ProcessWrapperRun`），轮数或分片数另给；成本、Token、失败、人工门取它内部各环节的。
 
 ### 5.5 按维度分组
 
@@ -271,8 +280,8 @@ export const OBSERVATION_CALL_PAGE_SIZE = 50
 | `modelSlices(taskIds)` | 按任务、节点执行、Agent 键、运行时键、模型分组（从模型行连到调用）：四类 Token、成本，以及用到这个模型的调用数、其中失败或中断的、已结束的、调用时长之和 |
 | `aggregate` 的过滤 | 增加 `agentKey`（`coalesce(agent_id, '~' ‖ agent_name)`）与 `detached`（没有任务的调用）；按时间分桶的宽度改为参数 |
 | `aggregateModels` | 增加按时间桶、按任务分组与模型过滤 |
-| `callsOf(filter, page)` | 取代 `taskCalls`。条件：任务 ID 集合，加上可选的节点执行 ID 集合、Agent 键、运行时与模型、系统类别；先过滤再截取到上限，按开始时间排序，返回一页与总数。供单个单元的调用表与部分粒度的调用表 |
-| `recentCalls` | 保留，供平台调用的调用表 |
+| `callsOf(filter, page)` | 取代 `taskCalls` 与 `recentCalls`。条件：任务 ID 集合，或“没有任务的调用加时间范围”；加上可选的节点执行 ID 集合、调用 ID 集合、业务或系统、Agent 键、运行时与模型、系统类别；先过滤再截取到上限，按开始时间排序，返回一页与总数。供所有调用表 |
+| `systemCalls` | 行增加调用 ID，供把按时间归到反问环节的追问调用列进调用表 |
 
 两个切片分开，是因为调用一级的数（次数、时长、失败）按模型拆开会重复；只有 Token 与成本可以按模型精确拆分。引擎在模型以外的维度都用 `callSlices`，只在按模型看与只看模型时用 `modelSlices`，一次调用用到几个模型就在几个模型下各出现一次（proposal §5.3 的说明）。
 
@@ -287,10 +296,10 @@ export const OBSERVATION_CALL_PAGE_SIZE = 50
 | 路由 | 另外的参数 | 返回 |
 | --- | --- | --- |
 | `GET /api/observability/scopes` | 无 | 五种类型各自的单元数；每种类型下的能力（ID、名称、是否已删除或没有来源、单元数）；带 `capability` 时附最近 50 个单元（ID、名称、开始时间、状态），以及工作流或数字员工出现过的版本 |
-| `GET /api/observability/summary` | `compare`、`split` | `grain`、`runsAre`、各面是否适用及原因、`totals`、`baseline`、`invoked`（它调起的任务另花了，只在单个能力）、`trend`、`breakdowns`（当前范围下可用的每个维度）、各类人工门的细项（沿用 RFC-616 的形状）、单个能力时该类型的汇总（沿用 `ProcessWorkflowSummary`、`ProcessWorkgroupSummary`、`ProcessEmployeeSummary`：画布定义、环节行的循环扇出与包装器历时、轮次、成员、按角色、人发的消息与派单、结局、交付周期、工作项等）、`hints`、时间范围内已解决的告警 |
+| `GET /api/observability/summary` | `compare`、`split` | `grain`、`runsAre`、各面是否适用及原因、`totals`、`baseline`、`invoked`（它调起的任务另花了，合计与按环节，只在单个能力）、`trend`、`breakdowns`（当前范围下可用的每个维度）、各类人工门的细项（沿用 RFC-616 的形状）、单个能力时该类型的汇总（沿用 `ProcessWorkflowSummary`、`ProcessWorkgroupSummary`、`ProcessEmployeeSummary`：画布定义、环节行的循环扇出与包装器历时、轮次、成员、按角色、人发的消息与派单、结局、交付周期、工作项等）、`hints`、时间范围内已解决的告警 |
 | `GET /api/observability/units` | `status`、`q`、`sort`、`page` | 单元行：范围引用、名称、五类状态与对象自己的状态、来源、发起人、起止、总历时与三段时间、调用数、四类 Token、成本、人工介入、是否一次通过、类型特有的列；`total` |
 | `GET /api/observability/calls` | `page` | 调用行（部分粒度或平台调用）：所属单元、环节、第几次执行、执行原因、Agent、运行时、模型、状态、起止、用量状态、四类 Token、成本、系统类别；`total`、是否截断 |
-| `GET /api/observability/units/:type/:unitId` | `onlyKind`、`only` | 单元的基本情况、一份度量、`invoked` 与各子任务的引用、按环节、Agent、模型、执行原因、系统工作的分组（与 `summary` 相同的结构）、各环节的类型特有列、全过程（每个环节的执行与等待，带起止、原因、状态、失败码、Agent、模型、Token、成本；调用节点带子任务的引用）、人工门的每一轮、人的操作、告警、恢复记录 |
+| `GET /api/observability/units/:type/:unitId` | `onlyKind`、`only` | 单元的基本情况、一份度量、`invoked`（合计、按环节、各子任务的引用）、按环节、Agent、模型、执行原因、系统工作的分组（与 `summary` 相同的结构）、各环节的类型特有列、全过程（每个环节的执行与等待，带起止、原因、状态、失败码、Agent、模型、Token、成本；调用节点带子任务的引用与子任务里的等待）、人工门的每一轮（继承来的标明在哪个子任务里）、人的操作、告警、恢复记录 |
 | `GET /api/observability/units/:type/:unitId/calls` | `onlyKind`、`only`、`page` | 这个单元自己的调用行，最多 2,000 条 |
 | `GET /api/observability/live` | 无时间参数 | 运行中、等人处理、已中断、未解决告警的个数与最久的等待；还在等的人工门（最多 50 条：单元、能力、环节、种类、轮次、开始等待的时间、处理人或空）；未解决的告警（最近 50 条与总数）；是否截断 |
 | `GET /api/observability/actual` | 无 | 按调用开始时间：成本、四类 Token、调用数、失败或中断的调用数；其中来自更早开始的单元的成本与单元数；各分段；范围是全部时另给已删除或已停用类型的任务的那一部分（计入合计） |
@@ -298,10 +307,10 @@ export const OBSERVATION_CALL_PAGE_SIZE = 50
 细节：
 
 - `summary` 把各个维度的分组一起返回，不单设分组接口：一次装配之后在内存里分组很便宜，而每换一个维度就重新装配 2,000 个单元不便宜（现有引擎不做结果缓存）。按任务与交办看不在 `breakdowns` 里，由 `units` 按成本排序提供。单个能力时沿用该类型的现有汇总形状，是为了让搬家的卡片（人工门细项、轮次、成员、职责图、环节的循环扇出）不用改数据接口。
-- `units`：`status` 为 `all`、`succeeded`、`failed`、`canceled` 时按时间范围取；`running`、`waiting`、`interrupted` 不带时间范围，读 `activeUnits` 与 `activeCases`（`running` 与 `waiting` 的区分见 `live`）。`q` 在取到的行上按名称或 ID 匹配。排序与翻页都在取到的行上做（最多上限那么多），页码从 1 起，每页 25 个；按成本或人工介入排序时先对全部行做列表深度的装配。
-- `calls`：平台调用用 `recentCalls`。其它情况先按范围装配单元；“只看”是 Agent、模型、系统工作时把条件传给 `callsOf`，是环节或执行原因时把装配结果里符合条件的节点执行 ID 传给 `callsOf`；都是先过滤再截取到 5,000。环节、第几次执行、执行原因由节点执行的事实对上。
+- `units`：`status` 为 `all`、`succeeded`、`failed`、`canceled` 时按时间范围取；`running`、`waiting` 不带时间范围，读 `activeUnits` 的 `open` 与 `activeCases`，两者的区分见 `live`；`interrupted` 读 `activeUnits` 的 `interrupted`（交办没有这个状态）。未结束的列表各自最多取上限（500）那么多。`q` 在取到的行上按名称或 ID 匹配。排序与翻页都在取到的行上做（最多上限那么多），页码从 1 起，每页 25 个；按成本或人工介入排序时先对全部行做列表深度的装配。
+- `calls`：都用 `callsOf`。平台调用取没有任务的调用加时间范围。其它情况先按范围装配单元；“只看”是 Agent、模型、系统工作时把条件传给 `callsOf`；是环节时传符合条件的节点执行 ID，反问环节另加按时间归到它的追问调用的 ID；是执行原因时传该原因的节点执行 ID，原因是系统工作时改按“系统”标记过滤（含没有节点执行的系统调用）。都是先过滤再截取到 5,000。环节、第几次执行、执行原因由节点执行的事实对上。
 - `units/:type/:unitId`：任务是数字员工的内部宿主任务时，返回 409 与所属交办的引用，前端据此跳到交办。数字员工当工具用的工作流任务是工作流的单元，正常返回。找不到或不可见返回 404，与不存在同形。
-- `live`：单元集合是范围内未结束且不是已中断的任务单元与未结束的交办，按开始时间从新到旧取到上限；按列表深度装配，取其中单元自己的、还没关闭的人工门轮次（不取继承副本，所以每一轮只列一次）。等人处理的个数是有这种轮次的单元数，其余算运行中。已中断的个数来自 `activeUnits` 的计数。告警：`openAlerts` 取未解决的与总数，用 `lineage` 留下可见且在范围内的。带“只看”运行内部切面的请求返回 422（proposal §5.5 规定这时不显示此刻的数字）。
+- `live`：单元集合是范围内 `open` 的任务单元与未结束的交办，按开始时间从新到旧取到上限；按列表深度装配，取其中单元自己的、还没关闭的人工门轮次（不取继承副本，所以每一轮只列一次）。等人处理 = 任务状态是等待评审或等待人工，或者有这种轮次；其余算运行中。已中断的个数是 `interrupted` 取到的行数。运行属性的“只看”（来源、发起人、版本）在取到的行上过滤，所以计数与列表一致；取满上限时响应标明截断。告警：`openAlerts` 取未解决的与总数，用 `lineage` 留下可见且在范围内的。带“只看”运行内部切面的请求返回 422（proposal §5.5 规定这时不显示此刻的数字）。
 - `actual` 的算法见 §8。范围是单个单元、或“只看”是环节与执行原因时返回 422。
 - 旧路由删除：`/api/observability/overview`、`/tasks`、`/tasks/:id`、`/agents`、`/models`、`/system`，以及 `/api/observability/process/subjects`、`/process/subjects/:kind/:subjectId`、`/process/subjects/:kind/:subjectId/units`、`/process/units/:kind/:unitId`。文本主题分析的两条与价格的三条保留，路径不变。
 
@@ -336,7 +345,7 @@ export const OBSERVATION_CALL_PAGE_SIZE = 50
 - 旧地址里新页面不认识的参数（`tab`、`task`、`kind`、`subject`、`view`）不读；同名的参数（`range`、`q`、`status`、`compare`、`split`）按上表校验。带旧含义的 `unit` 而没有 `type` 的链接，按“`unit` 需要 `type`”落到全部 › 概况。
 - 三个纯函数处理跳转：`withPosition`、`withOnly`、`withAspect`，各自先按上表丢掉不再有效的参数再归一（换范围或面时 `page` 回到 1）。`scrollResets(prev, next)`：面、类型、能力、单元、只看变化时回到顶部。
 - 一个链接函数 `observationLink(target)` 供所有入口与页内跳转使用，取代 `processMetricsLink`。
-- 时间范围 `observationWindow(search, anchor)`：快捷项是 `[anchor − 长度, anchor)`；自定义是 `[from, min(to, anchor))`。`anchor` 的规则见 §9.4。
+- 时间范围 `observationWindow(search, anchor)`：快捷项是 `[anchor − 长度, anchor)`；自定义是 `[from, min(to, anchor))`，截到现在之后开始不早于结束的（整个范围在将来），按近 30 天处理并在时间行提示。`anchor` 的规则见 §9.4。
 
 ### 9.2 组件
 
@@ -399,7 +408,7 @@ export const OBSERVATION_CALL_PAGE_SIZE = 50
 ### 9.5 文案与格式
 
 - 一份文案 `FE/i18n/observation.ts`（中文、类型、英文），取代 `runObservability.ts` 与 `processMetrics.ts`，在 `zh-CN.ts` 与 `en-US.ts` 里各注册一次。结构按 proposal §7 的词表组织，指标的名称与说明按指标 ID 建一份字典，指标卡、表头、变化图的选项共用同一个名字。
-- 其它文件里要改的标签（AC-11 的范围）：节点抽屉统计页签的四个 Token 标签、执行原因的标签、“耗时”；任务详情页节点运行表的“耗时”表头；三个原有入口的标签与提示语。设置页用到的 `builtinRuntime` 移到价格的文案文件。交办页与任务列表不改文案。
+- 其它文件里要改的标签（AC-11 的范围）：节点抽屉统计页签的四个 Token 标签、执行原因的标签、“耗时”；任务详情页节点运行表的“耗时”表头；三个原有入口的标签与提示语。设置页用到的 `builtinRuntime` 移到价格的文案文件。设置页文本主题分析的说明（`FE/i18n/zh-CN.ts:9629-9646` 与英文的对应处）改用新的页面名与面的名字。交办页与任务列表不改文案。
 - 一个格式化模块 `observationFormat.ts`：收进 `processFormat.ts` 的百分比、小数、计数、Token 缩写、成本、时长与分位数、时间拆分；保留时间范围与调用成本；新增完整数字。变化的写法改为比率给百分点、其余给百分比，好坏方向取 `OBSERVATION_METRIC_BETTER`。
 
 ### 9.6 入口
@@ -422,7 +431,7 @@ export const OBSERVATION_CALL_PAGE_SIZE = 50
 
 | 位置 | 删除 |
 | --- | --- |
-| 后端 | `RO/application/observationQueries.ts`（旧）、`RO/application/ports/taskFacts.ts`、`RO/application/process/processQueries.ts`、`TE/infrastructure/taskObservationFacts.ts`、`TE/composition/taskObservationFacts.ts`、`RO/public/queries.ts` 里任务事实端口的导出、调用存储的 `taskCalls` 与 `usageByNodeRun` |
+| 后端 | `RO/application/observationQueries.ts`（旧）、`RO/application/ports/taskFacts.ts`、`RO/application/process/processQueries.ts`、`TE/infrastructure/taskObservationFacts.ts`、`TE/composition/taskObservationFacts.ts`、`RO/public/queries.ts` 里任务事实端口的导出、调用存储的 `taskCalls`、`recentCalls` 与 `usageByNodeRun` |
 | 共享 | `SH/schemas/observation.ts` 里的时间范围查询、任务页、系统查询与总览、任务、Agent、模型、系统执行的响应类型；`SH/schemas/processMetrics.ts` 里的能力列表、汇总查询、单元分页的查询与响应、`PROCESS_HINT_TARGETS` |
 | 前端 | §9.2 表里标为删除的文件 |
 | 后端测试 | `rfc371-v2-observation-http.test.ts`、`rfc371-v2-observation-queries.test.ts`、`rfc616-process-http.test.ts`、`rfc616-process-queries.test.ts`（场景改写进新的用例文件） |
@@ -432,7 +441,7 @@ export const OBSERVATION_CALL_PAGE_SIZE = 50
 
 - 后端用例与助手：`rfc371-v2-observation-store.test.ts`、`rfc616-process-assembled.test.ts`、`rfc616-process-stores.test.ts`、`rfc616-process-task-facts.test.ts`、`rfc616-process-kinds.test.ts`、`module-contract-run-observability.test.ts`、`helpers/processMetricsFakes.ts`；`rfc395-q1-dto-parity.test.ts` 与 `helpers/rfc395Q1Parity/compare.ts`（对比面里有被删的任务下钻路由）；`rfc395-run-mint-identities.test.ts:369` 与 `rfc395-w2fix-nb-regressions.test.ts:549-555`（用了被删的 `attempts()`，改用节点执行的事实读取）。
 - 后端账本与守卫：`packages/backend/tests/architecture/rfc319-endpoint-coverage.test.ts:52-70`、`rfc329McpSurfaceLedger.ts:172-233`、`packages/backend/tests/contracts/registry.ts:943-1140`、`rfc390-neutral-http-binding.test.ts:29`、`rfc616-process-metrics-boundaries.test.ts:34-44`。
-- 前端用例与助手：`rfc371-execution-swimlane-layout.test.tsx`、`rfc616-process-format.test.ts`、`rfc371-v2-observation-format.test.ts`、`rfc616-chart-primitives.test.tsx`、`rfc616-heat.helpers.ts`、`tab-callsite-contract.test.ts:168-170`、`route-ux-inventory.test.ts:552-557`。
+- 前端用例与助手：`rfc371-execution-swimlane-layout.test.tsx`、`rfc616-process-format.test.ts`、`rfc371-v2-observation-format.test.ts`、`rfc616-chart-primitives.test.tsx`、`rfc616-heat.helpers.ts`、`rfc616-settings-process-insight.test.tsx:456`、`tab-callsite-contract.test.ts:168-170`、`route-ux-inventory.test.ts:552-557`。
 - 端到端与 CI：`e2e/rfc371-run-observability.spec.ts`、`e2e/process-metrics.spec.ts`、`e2e/a11y.spec.ts:471-495`、`.github/e2e-test-timings.json` 里对应的条目。
 
 ## 11. 失败模式
@@ -440,7 +449,7 @@ export const OBSERVATION_CALL_PAGE_SIZE = 50
 | 情况 | 处理 |
 | --- | --- |
 | 范围里的单元超过上限 | 只装配最近的 2,000 个，`note.partial` 为真，页面顶部说明 |
-| 未结束的单元超过 500 | 运行中、等人处理的个数与还在等的人工门都只来自最近的 500 个，响应标明截断，页面注明；已中断的个数是精确的 |
+| 未结束的单元超过上限 | 运行中、等人处理的个数与还在等的人工门都只来自最近的 500 个；已中断同样最多 500 个。响应标明截断，页面注明 |
 | 未解决的告警超过 50 条 | 列出最近的 50 条并给出总数 |
 | 时间范围内有调用的任务超过 20,000（期间实际消耗） | 沿用现有的 `partial` 标记，卡上注明只统计了一部分 |
 | 能力、任务、交办不存在或不可见 | 404，与不存在同形；页面显示提示与通向上一层的链接 |
@@ -470,8 +479,8 @@ export const OBSERVATION_CALL_PAGE_SIZE = 50
 | 共享定义 | 请求的解析；`observationOnlyAllowed` 对 proposal §4.3 整张表；两个分段函数在各个临界长度上的取值，以及四个快捷项的结果；模型键的编码与解码（运行时键与模型名里含冒号、斜杠）；提示到关注面的映射穷尽 14 个 ID |
 | 纯函数（`domain/process`） | 五类状态与成功率的分母；已中断的任务总历时算到现在；单元的用量只含自己的、`invoked` 不进任何合计；人工介入次数不含继承副本，时间拆分的等人含；`restrictToPart` 对普通环节、包装器与另外四种只看各自留下什么；度量的可加性（各维度的行加“其余”等于合计；“Token 花在哪里”六项之和等于合计；全部等于各类型之和、类型等于各能力之和、能力等于各单元之和）；按模型时次数不可加而 Token 与成本可加；已有只看时运行内部维度的行标为不可点；分段的边界、时区偏移与周一对齐；对比的方向；提示的挑选（每个能力一条、每种一条、共四条；单代理只开通用规则；跨能力时与能力自己的范围结果相同） |
 | 调用存储（两种数据库） | `callSlices` 各组之和等于按任务的合计；`modelSlices` 的 Token 与成本之和等于调用合计，多模型的调用在每个模型下各算一次；Agent 键与模型的过滤；没有任务的调用；按小时、3 小时、天分桶；`callsOf` 先过滤再截取、按节点执行 ID 过滤、分页与总数 |
-| 事实（两种数据库） | `units` 取三种类型（含单代理）、带上限；`activeUnits` 不含已中断并给出已中断的个数；`lineage` 的类型、来源能力、交办、可见、已删除；`unit` 对内部宿主任务指向交办、对当工具用的工作流任务正常返回；`activeCases`、`casesOfRounds`；`ProcessAlertFacts` 三个方法与总数 |
-| 装配（两种数据库） | 有调用节点时：被调起的任务只算在自己的能力里，父任务的成本不含它，父任务的 `invoked` 等于它的成本，全部的合计不重复；被调起的工作组的完成确认在“全部”里算得到且只算一次；同一个能力嵌套调用时各行相加仍等于合计；单代理能力的汇总（含反问）；平台调用的汇总，以及它在“全部”各维度里的那一行；期间实际消耗、来自更早开始的部分、已删除任务的一行计入合计；`live` 里父任务在跑、子任务在等评审时各算一个，等的那一轮只列一次 |
+| 事实（两种数据库） | `units` 取三种类型（含单代理）、带上限；`activeUnits` 不含已中断并给出已中断的个数；`lineage` 的类型、来源能力、交办、可见、已删除；`unit` 对内部宿主任务指向交办、对当工具用的工作流任务正常返回；`reactionHostTasks` 带主体类型；`activeUnits` 的两种 `phase` 各自返回行；`activeCases`、`casesOfRounds`；`ProcessAlertFacts` 三个方法与总数 |
+| 装配（两种数据库） | 有调用节点时：被调起的任务只算在自己的能力里，父任务的成本不含它，父任务的 `invoked` 等于它的成本，全部的合计不重复；被调起的工作组的完成确认在“全部”里算得到且只算一次；同一个能力嵌套调用时各行相加仍等于合计；单代理能力的汇总（含反问）；平台调用的汇总，以及它在“全部”各维度里的那一行；期间实际消耗、来自更早开始的部分、已删除任务的一行计入合计；数字员工把工作流当工具时，那个任务只算在工作流名下，交办的成本与评审不含它、`invoked` 含它、等人时间含它；调用节点那一行的 `invoked` 等于子任务的成本；多个工作流同在一个范围时各用自己的定义（循环上限、环节名）；`live` 里父任务在跑、子任务在等评审时各算一个，等的那一轮只列一次；已中断的列表与个数一致；只看反问环节时调用表含按时间归到它的追问调用，只看执行原因为系统工作时含没有节点执行的系统调用；平台调用表的页码与总数 |
 | 路由 | 门与可见范围；按人的字段对只能查看自己任务的账号不返回；只看的可用性与不支持的切面返回 422；找不到返回 404；内部宿主任务返回 409；无效的时间范围返回 422；旧路由不存在 |
 | 架构守卫 | 事实合同的实现方清单；合同文件仍只有类型与两个常量；run-observability 不 import 拥有方；归属债不增加 |
 | 性能 | 2,000 个单元的夹具：`summary` 与 `live` 的耗时 |
@@ -480,7 +489,7 @@ export const OBSERVATION_CALL_PAGE_SIZE = 50
 
 | 层 | 必写的用例 |
 | --- | --- |
-| 纯函数 | 地址校验（默认值、逐字段、位置与只看的可用性、自定义范围的有效与无效、不认识的旧参数被忽略而同名的按新规则校验）；三个跳转函数与回顶规则；`observationWindow` 对快捷项与自定义；`customRangeOf`（结束不晚于开始、超过最长、结束晚于现在）；链接函数对各个入口的输出，并能原样通过校验；`aspectSpec`（每个面每种粒度每种类型的卡不超过六张、列与 proposal §5.3 一致、可用维度、着色指标）；格式化（缩写与完整数字、三种时长形式、没有样本是“—”不是 0、“¥x 起”与“未定价”、百分点与百分比、好坏方向）；`nextSort` |
+| 纯函数 | 地址校验（默认值、逐字段、位置与只看的可用性、自定义范围的有效与无效、不认识的旧参数被忽略而同名的按新规则校验）；三个跳转函数与回顶规则；`observationWindow` 对快捷项与自定义，整个范围在将来时回到近 30 天；`customRangeOf`（结束不晚于开始、超过最长、结束晚于现在）；链接函数对各个入口的输出，并能原样通过校验；`aspectSpec`（每个面每种粒度每种类型的卡不超过六张、列与 proposal §5.3 一致、可用维度、着色指标）；格式化（缩写与完整数字、三种时长形式、没有样本是“—”不是 0、“¥x 起”与“未定价”、百分点与百分比、好坏方向）；`nextSort` |
 | 公共组件 | 范围条（角色、选择、取消只看、窄屏换行）；可排序表头（`aria-sort`、切换）；时间轴（并行的执行、未结束、等待的斜纹、失败的标记、数据表）；柱图（堆叠之和、缺口不是 0）；指标卡的链接 |
 | 页面（按角色查询） | 七个页签；换面与换维度不重取汇总（数请求次数）；点一行收窄范围；已有只看时运行内部维度的行不可点、位置类的行可点并保留只看；取消只看；自定义时间范围的应用、出错提示与回到快捷项；平台调用下质量与人工介入显示不适用；30 秒轮询只在指定的面与未结束的单元（假时钟）；刷新更新截至时间；只能查看自己任务的账号没有发起人与处理人、等谁处理显示“任务成员”；明细的搜索、七项状态、排序、列集与页码 |
 | 入口与叫法 | 各入口文件各恰好一处 `observationLink(`、标签的文案键、门；源码守卫：被替换的旧叫法不出现在观测文案、节点抽屉与节点运行表的文案和入口文件里，没有 `processMetricsLink`、没有对 `process-metrics/` 的引用 |
@@ -521,3 +530,14 @@ export const OBSERVATION_CALL_PAGE_SIZE = 50
 | P2 的 20 条 | 平台调用在各维度里单独成行、不提供按发起人看；部分粒度不显示此刻的数字；告警的上限与总数；运行内部维度用部分粒度的列；单代理可以有反问、适用哪些提示规则；周一对齐与已删除一行计入合计；旧参数的说法；翻页用现有的页码组件，不新增游标翻页；工作组房间的节点抽屉；删改清单补全；`taskUnits.ts:58`；第几次执行的来源；“其余”的截取标准；AC-11 的范围；调用表先过滤再截取；单元接口返回同样的分组；模型键的编码；两条待核实项已由检视确认。逐条落在本文与 proposal 的对应位置 |
 
 同一轮里并入了用户追加的要求：时间范围可以自定义，四个固定范围作为快捷项（proposal §5.1、AC-23，§4.1、§9.1、§9.2）。
+
+### 15.2 第 2 轮（2026-11-27）：不通过
+
+没有 P0，3 条 P1，14 条 P2。检视确认新的归属规则自洽、按现有引擎可以实现，自定义时间范围的设计完整。处置如下。
+
+| 发现 | 处置 |
+| --- | --- |
+| P1-A 数字员工当工具用的工作流任务被交办与工作流同时计入 | 宿主任务的事实行带主体类型；数字员工装配器只折入内部宿主任务；当工具用的工作流任务在交办里只作继承副本并进 `invoked`（§3.2、§5.2）；对交办数字的影响列进 proposal §8.3 |
+| P1-B 明细的“已中断”取不到列表 | `activeUnits` 按 `phase` 分别返回未结束的行与已中断的行，计数来自取到的行（§3.2、§7） |
+| P1-C 调用节点那一行的子任务花费看不到了 | `invoked` 按调起它的环节拆分，成本面按环节看时调用节点那一行多一列，不计入合计（§5.2，proposal §5.3、§8.3） |
+| P2 的 14 条 | 多能力的范围按能力分组装配；继承来的人工门轮次在单元里标明后列出；等人处理的判定统一为“状态是等待，或有未处理的人工门”；`activeUnits` 的过滤与计数；调用表补上追问调用与没有节点执行的系统调用，平台调用表也用 `callsOf`；未结束列表的上限写进 proposal；设置页的说明与用例；目标里去掉交办页；归属的开头限定为统计；整个范围在将来时回到近 30 天；可加性在没有截断时成立；只看包装器的定义；数量的统计对象变化列进 proposal §8.3。逐条落在本文与 proposal 的对应位置 |
